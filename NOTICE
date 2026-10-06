@@ -1,0 +1,30 @@
+Rekta Design — provenance notice
+
+1. Token values
+   Some colour, spacing, radius, motion and focus values in
+   tokens/rekta.tokens.json are derived from the Porsche Design
+   System's source code (styles/scss/lib), which is published under the
+   Apache License 2.0. Only numeric/colour *values* were taken; no code,
+   no build tooling, and no files from that project are included here.
+
+   Porsche Design System source: https://github.com/porsche-design-system/porsche-design-system
+   Licence: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+
+2. Typeface
+   The type-scale examples and screenshots in docs/images/ use Barlow,
+   licensed under the SIL Open Font License 1.1.
+
+   Barlow: https://github.com/jpt/barlow
+   Licence: SIL Open Font License 1.1 (https://scripts.sil.org/OFL)
+
+   No font files are included in this repository; projects adopting
+   Rekta Design choose their own typeface and may or may not use Barlow.
+
+3. What is explicitly NOT included
+   - No Porsche fonts, icons, logos, marks, or any other Porsche-owned
+     assets. Porsche's own assets are licensed "on behalf of Porsche"
+     only and are not redistributable here.
+   - "Porsche" is not part of this project's name, branding, or any
+     identifier in this repository, and must not become one.
+   - This project is independent of, and not endorsed by, Dr. Ing. h.c.
+     F. Porsche AG or the Porsche Design System project.

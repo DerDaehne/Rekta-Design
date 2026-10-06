@@ -1,0 +1,114 @@
+{
+  "$description": "Rekta Design tokens, W3C Design Tokens Community Group (DTCG) format. Values are taken from the kabai studio 'Metro × Porsche v3' prototype. Fixed sizes use the DTCG dimension shape {value, unit}. A few type-scale tokens are fluid (CSS clamp()), which the dimension type cannot express; those use $type \"fluidSize\" with a raw CSS string value as a documented, non-standard extension.",
+  "color": {
+    "$description": "Light and dark are two independent token sets, not light/dark variants of one token, so a platform can pick a set without a theming layer.",
+    "light": {
+      "bg": { "$type": "color", "$value": "#ffffff" },
+      "surface": { "$type": "color", "$value": "#eeeff2" },
+      "surface-2": { "$type": "color", "$value": "#e4e5e9", "$description": "Hover step of surface." },
+      "text": {
+        "primary": { "$type": "color", "$value": "#010205" },
+        "contrast-low": { "$type": "color", "$value": "#d8d8db", "$description": "Hairlines, disabled borders." },
+        "contrast-medium": { "$type": "color", "$value": "#6b6d70", "$description": "Secondary borders, placeholder text." },
+        "contrast-high": { "$type": "color", "$value": "#535457", "$description": "Secondary text. AA on bg and surface." }
+      },
+      "status": {
+        "$description": "Each status has a full saturated value (for small marks: tag dots, ticker squares, sparklines, progress) and a tile value (a fill, dampened toward the ground, meant to hold the primary text colour at AA on top).",
+        "info": { "full": { "$type": "color", "$value": "#2762ec" }, "soft": { "$type": "color", "$value": "#d3e1ff" }, "tile": { "$type": "color", "$value": "#7da1f4" } },
+        "success": { "full": { "$type": "color", "$value": "#197e10" }, "soft": { "$type": "color", "$value": "#e4ffec" }, "tile": { "$type": "color", "$value": "#75b270" } },
+        "warning": { "full": { "$type": "color", "$value": "#f3be00" }, "soft": { "$type": "color", "$value": "#fff4d2" }, "tile": { "$type": "color", "$value": "#f8d866" } },
+        "error": { "full": { "$type": "color", "$value": "#cc1922" }, "soft": { "$type": "color", "$value": "#ffe2e4" }, "tile": { "$type": "color", "$value": "#e0757a" } }
+      },
+      "focus": { "$type": "color", "$value": "#1a44ea" },
+      "hover": { "$type": "color", "$value": "rgba(148, 149, 152, 0.18)" },
+      "disabled": { "$type": "color", "$value": "#949598" },
+      "shading": { "$type": "color", "$value": "rgba(1, 2, 5, 0.67)", "$description": "Backdrop behind a sheet/dialog." },
+      "glass": { "$type": "color", "$value": "rgba(255, 255, 255, 0.82)", "$description": "Frosted-glass surfaces (nav bar, app bar), used with a blur." }
+    },
+    "dark": {
+      "bg": { "$type": "color", "$value": "#0e0e12" },
+      "surface": { "$type": "color", "$value": "#212225" },
+      "surface-2": { "$type": "color", "$value": "#2a2b2f" },
+      "text": {
+        "primary": { "$type": "color", "$value": "#fbfcff" },
+        "contrast-low": { "$type": "color", "$value": "#404044" },
+        "contrast-medium": { "$type": "color", "$value": "#88898c" },
+        "contrast-high": { "$type": "color", "$value": "#afb0b3" }
+      },
+      "status": {
+        "info": { "full": { "$type": "color", "$value": "#178bff" }, "soft": { "$type": "color", "$value": "#04294e" }, "tile": { "$type": "color", "$value": "#244592" } },
+        "success": { "full": { "$type": "color", "$value": "#09d087" }, "soft": { "$type": "color", "$value": "#003320" }, "tile": { "$type": "color", "$value": "#1d5519" } },
+        "warning": { "full": { "$type": "color", "$value": "#f7cb47" }, "soft": { "$type": "color", "$value": "#362b0a" }, "tile": { "$type": "color", "$value": "#7f6814" } },
+        "error": { "full": { "$type": "color", "$value": "#fc4040" }, "soft": { "$type": "color", "$value": "#3a0f0f" }, "tile": { "$type": "color", "$value": "#7f1d23" } }
+      },
+      "focus": { "$type": "color", "$value": "#178bff" },
+      "hover": { "$type": "color", "$value": "rgba(148, 149, 152, 0.18)" },
+      "disabled": { "$type": "color", "$value": "#7e7f82" },
+      "shading": { "$type": "color", "$value": "rgba(38, 38, 41, 0.67)" },
+      "glass": { "$type": "color", "$value": "rgba(14, 14, 18, 0.82)" }
+    }
+  },
+  "typography": {
+    "font-family": {
+      "base": { "$type": "fontFamily", "$value": ["Barlow", "Arial Narrow", "Arial", "sans-serif"] }
+    },
+    "weight": {
+      "light": { "$type": "fontWeight", "$value": 300, "$description": "Panorama/pivot titles: a place name is large and light, never bold." },
+      "regular": { "$type": "fontWeight", "$value": 400 },
+      "medium": { "$type": "fontWeight", "$value": 500, "$description": "Tabular figures: stat numbers, counts." },
+      "semibold": { "$type": "fontWeight", "$value": 600, "$description": "The one bold title per page (e.g. a record's own title), and small UI words." },
+      "bold": { "$type": "fontWeight", "$value": 700 }
+    },
+    "size": {
+      "$description": "Fixed roles use the DTCG dimension shape. Fluid roles (clamp()) use $type \"fluidSize\" since dimension cannot hold a CSS function; see docs/typography.md for the rendered px range per breakpoint.",
+      "xxs": { "$type": "dimension", "$value": { "value": 12, "unit": "px" } },
+      "xs": { "$type": "dimension", "$value": { "value": 13, "unit": "px" } },
+      "s": { "$type": "dimension", "$value": { "value": 15, "unit": "px" }, "$description": "Body text size." },
+      "m": { "$type": "dimension", "$value": { "value": 18, "unit": "px" } },
+      "l": { "$type": "fluidSize", "$value": "clamp(22px, 1.5vw, 28px)" },
+      "xl": { "$type": "fluidSize", "$value": "clamp(26px, 2vw, 34px)" },
+      "xxl": { "$type": "fluidSize", "$value": "clamp(30px, 2.6vw, 44px)" },
+      "nav-active": { "$type": "fluidSize", "$value": "clamp(40px, 4.2vw, 72px)", "$description": "Level 1: the place you are at, in the top-level nav." },
+      "nav-inactive": { "$type": "fluidSize", "$value": "clamp(22px, 1.9vw, 32px)" },
+      "pivot-active": { "$type": "fluidSize", "$value": "clamp(28px, 2.6vw, 42px)", "$description": "Level 2: the active facet within a place." },
+      "pivot-inactive": { "$type": "fluidSize", "$value": "clamp(20px, 1.6vw, 26px)" },
+      "group": { "$type": "fluidSize", "$value": "clamp(22px, 1.7vw, 30px)", "$description": "Section/group headings inside a view." },
+      "title": { "$type": "fluidSize", "$value": "clamp(30px, 2.8vw, 48px)", "$description": "Level 3: a record's own bold title (e.g. a ticket)." }
+    }
+  },
+  "spacing": {
+    "xs": { "$type": "dimension", "$value": { "value": 4, "unit": "px" } },
+    "s": { "$type": "dimension", "$value": { "value": 8, "unit": "px" } },
+    "m": { "$type": "dimension", "$value": { "value": 16, "unit": "px" } },
+    "l": { "$type": "dimension", "$value": { "value": 32, "unit": "px" } },
+    "xl": { "$type": "dimension", "$value": { "value": 48, "unit": "px" } }
+  },
+  "radius": {
+    "s": { "$type": "dimension", "$value": { "value": 4, "unit": "px" } },
+    "m": { "$type": "dimension", "$value": { "value": 8, "unit": "px" } },
+    "l": { "$type": "dimension", "$value": { "value": 12, "unit": "px" } },
+    "tile": { "$type": "dimension", "$value": { "value": 2, "unit": "px" }, "$description": "0–2px. Tiles are tiles, not cards: sharp enough to read as Metro, soft enough to read as refined." }
+  },
+  "motion": {
+    "duration": {
+      "short": { "$type": "duration", "$value": "250ms", "$description": "Hover/border/colour state changes, sheets, toasts." },
+      "moderate": { "$type": "duration", "$value": "400ms", "$description": "Place change (turnstile), tile build-in, FLIP reflow, pivot title grow." },
+      "long": { "$type": "duration", "$value": "600ms", "$description": "Live drawing: line charts, growing bars." }
+    },
+    "easing": {
+      "base": { "$type": "cubicBezier", "$value": [0.25, 0.1, 0.25, 1], "$description": "Default for state changes: nothing snaps, everything glides briefly." },
+      "in": { "$type": "cubicBezier", "$value": [0, 0, 0.2, 1] },
+      "out": { "$type": "cubicBezier", "$value": [0.4, 0, 0.5, 1] }
+    },
+    "turnstile-angle": { "$type": "fluidSize", "$value": "40deg", "$description": "Rotation of a place-change transition around its leading edge." },
+    "slide-distance": { "$type": "dimension", "$value": { "value": 24, "unit": "px" }, "$description": "Horizontal travel of a facet (pivot) transition." }
+  },
+  "breakpoint": {
+    "$description": "Rekta Design targets these four widths explicitly (see docs/layout.md); platforms without a viewport (native desktop) map them to window-size classes instead.",
+    "mobile": { "$type": "dimension", "$value": { "value": 375, "unit": "px" } },
+    "sideways-scroll-min": { "$type": "dimension", "$value": { "value": 760, "unit": "px" }, "$description": "Below this, navigation and panoramas never scroll sideways — only vertically." },
+    "desktop": { "$type": "dimension", "$value": { "value": 1440, "unit": "px" } },
+    "wide": { "$type": "dimension", "$value": { "value": 1920, "unit": "px" } },
+    "ultrawide": { "$type": "dimension", "$value": { "value": 2560, "unit": "px" } }
+  }
+}
