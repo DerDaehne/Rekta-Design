@@ -10,12 +10,21 @@ and after the active one.
 
 Changing the active title does **not** reorder the strip and does
 **not** slide the new active title to the front. Instead, the whole
-strip scrolls so the newly active title sits at the strip's left edge —
-titles that come before it in the fixed order scroll off-screen to the
-left. A trailing spacer after the last title means even the last title
-in the order can still reach the left edge. The active title's font
-size transitions (grow/shrink) over `motion.duration.moderate`; its
-position is adjusted after that transition finishes, not during it.
+strip glides so the newly active title sits at the strip's left edge —
+titles that come before it in the fixed order visibly scroll off-screen
+to the left, the same way the panels below do; nothing clips them out
+of view early. A trailing spacer after the last title means even the
+last title in the order can still reach the left edge. Selecting a
+title (including a nested pivot's) also moves the content it names to
+the same flush-left position, never centred or right-aligned.
+
+Two motions play at once, not one after the other: the strip's glide
+uses a pronounced ease-in-out with clear acceleration and deceleration;
+the active title's size change uses a lighter, quicker ease-in-out.
+Only the previously active and newly active titles ever change size —
+every other title stays exactly as it was. The strip's height never
+depends on which title is active: a title is sized from a fixed line
+box (scaled from its own baseline), never by changing its `font-size`.
 
 This is deliberately *not* a tab bar with an underline, and deliberately
 *not* "MRU" reordering (most-recently-used first) — a fixed order means

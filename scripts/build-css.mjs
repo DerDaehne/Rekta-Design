@@ -6,7 +6,7 @@
 // WCAG AA (>= 4.5:1) in both themes.
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -15,13 +15,13 @@ const tokensPath = join(root, 'tokens', 'rekta.tokens.json');
 const outPath = join(root, 'dist', 'rekta.css');
 const prefix = 'rekta';
 
-function loadTokens() {
+export function loadTokens() {
   return JSON.parse(readFileSync(tokensPath, 'utf8'));
 }
 
 // Walks the token tree. Calls onToken(dottedPath, tokenNode) for every leaf
 // (a node carrying $value), skipping $-prefixed metadata keys.
-function walk(node, path, onToken) {
+export function walk(node, path, onToken) {
   for (const [key, value] of Object.entries(node)) {
     if (key.startsWith('$')) continue;
     const nextPath = [...path, key];
@@ -37,7 +37,7 @@ function cssVarName(path) {
   return `--${prefix}-${path.join('-')}`;
 }
 
-function cssValue(token) {
+export function cssValue(token) {
   const { $type: type, $value: value } = token;
   switch (type) {
     case 'color':
@@ -200,12 +200,16 @@ function runCheck(tokens) {
   console.log('\nall tokens present, all AA pairs pass');
 }
 
-const tokens = loadTokens();
-
-if (process.argv.includes('--check')) {
-  runCheck(tokens);
-} else {
+export function writeCss(tokens = loadTokens()) {
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, buildCss(tokens));
   console.log(`wrote ${outPath}`);
+  return outPath;
+}
+
+// Run only when executed directly, so scripts/build-site.mjs can import the helpers.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const tokens = loadTokens();
+  if (process.argv.includes('--check')) runCheck(tokens);
+  else writeCss(tokens);
 }

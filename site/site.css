@@ -1,0 +1,261 @@
+/* Showcase site styles. Every colour, size, duration and easing comes from rekta.css;
+   {{…}} placeholders are filled from the tokens by scripts/build-site.mjs. Mobile first. */
+
+@font-face { font-family: Barlow; font-style: normal; font-weight: 300; font-display: swap; src: url(fonts/barlow/barlow-latin-300-normal.woff2) format('woff2'); }
+@font-face { font-family: Barlow; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/barlow/barlow-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: Barlow; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/barlow/barlow-latin-500-normal.woff2) format('woff2'); }
+@font-face { font-family: Barlow; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/barlow/barlow-latin-600-normal.woff2) format('woff2'); }
+@font-face { font-family: Barlow; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/barlow/barlow-latin-700-normal.woff2) format('woff2'); }
+
+:root {
+  --pad: var(--rekta-spacing-m);
+  --unit: 150px;
+  --gap: var(--rekta-spacing-s);
+  --appbar-h: 56px;
+  --stagger: 30ms;
+  --hair: 1px solid var(--rekta-color-text-contrast-low);
+  --state: var(--rekta-motion-duration-short) var(--rekta-motion-easing-base);
+  /* Pivot glide: the strip's own scroll to bring a newly active title to the left edge. */
+  --pivot-glide-duration: 500ms;
+  --pivot-glide-easing: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Pivot size change: lighter and faster than the glide above. */
+  --pivot-size-duration: 220ms;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding-bottom: calc(var(--appbar-h) + env(safe-area-inset-bottom));
+  background: var(--rekta-color-bg);
+  color: var(--rekta-color-text-primary);
+  font-family: var(--rekta-typography-font-family-base);
+  font-size: var(--rekta-typography-size-s);
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+h1, h2, h3, p, ul, ol, pre { margin: 0; }
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; transition: text-decoration-thickness var(--state); }
+a:hover { text-decoration-thickness: 2px; }
+code, pre { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: var(--rekta-typography-size-xs); }
+pre { overflow-x: auto; padding: var(--rekta-spacing-s) 0 var(--rekta-spacing-s) var(--rekta-spacing-m); border-left: 2px solid var(--rekta-color-text-contrast-low); margin-top: var(--rekta-spacing-s); }
+:focus-visible { outline: 2px solid var(--rekta-color-focus); outline-offset: 2px; }
+.skip { position: absolute; left: -999px; top: var(--rekta-spacing-s); z-index: 50; padding: var(--rekta-spacing-s) var(--rekta-spacing-m); background: var(--rekta-color-bg); }
+.skip:focus { left: var(--pad); }
+
+/* Three title levels, plus group headings inside a view. */
+.kicker { font-size: var(--rekta-typography-size-xs); font-weight: var(--rekta-typography-weight-semibold); color: var(--rekta-color-text-contrast-high); letter-spacing: 0.02em; }
+.title { font-size: var(--rekta-typography-size-title); font-weight: var(--rekta-typography-weight-semibold); line-height: 1.1; }
+.facts, .note, .hex { color: var(--rekta-color-text-contrast-high); }
+.facts, .note { font-size: var(--rekta-typography-size-xs); }
+.hex { font-size: var(--rekta-typography-size-xxs); font-variant-numeric: tabular-nums; font-weight: var(--rekta-typography-weight-regular); }
+h2 { font-size: var(--rekta-typography-size-group); font-weight: var(--rekta-typography-weight-regular); line-height: 1.15; }
+h3 { font-size: var(--rekta-typography-size-m); font-weight: var(--rekta-typography-weight-semibold); }
+.light { font-weight: var(--rekta-typography-weight-light); }
+
+/* Header: brand (level-1 navigation) and the section pivot. */
+.top { position: sticky; top: 0; z-index: 10; padding: var(--rekta-spacing-s) var(--pad) var(--rekta-spacing-xs); background: var(--rekta-color-bg); border-bottom: var(--hair); }
+.brand { display: inline-block; font-size: var(--rekta-typography-size-l); font-weight: var(--rekta-typography-weight-light); line-height: 1; text-decoration: none; }
+.brand b { font-weight: var(--rekta-typography-weight-semibold); }
+
+.pivot { position: relative; display: flex; align-items: baseline; gap: var(--rekta-spacing-l); overflow-x: auto; white-space: nowrap; scrollbar-width: none; scroll-behavior: smooth; }
+.pivot::-webkit-scrollbar { display: none; }
+.top > .pivot { margin-inline: calc(-1 * var(--pad)); padding-inline: var(--pad); } /* scroll out to the screen edge, not the header padding */
+/* Fixed line box at the active (larger) size; inactive titles scale down from it, so the
+   strip's height never depends on which title is active. transform-origin pins the scale
+   to each title's own baseline, so growing/shrinking never shifts the row's layout height. */
+.pivot > a, .pivot > button {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: var(--rekta-typography-size-pivot-active); font-weight: var(--rekta-typography-weight-light); line-height: 1.3;
+  color: var(--rekta-color-text-contrast-medium); text-decoration: none;
+  transform: scale(var(--pivot-inactive-scale, 0.6));
+  transform-origin: left bottom;
+  transition: transform var(--pivot-size-duration) ease-in-out, color var(--state);
+}
+.pivot > :hover { color: var(--rekta-color-text-primary); }
+.pivot > [aria-current], .pivot > [aria-selected='true'] { transform: scale(1); color: var(--rekta-color-text-primary); }
+.pivot-end { flex: 0 0 100%; }
+
+/* Panorama: vertical on mobile, sideways from the structural breakpoint up. */
+.panorama { padding-inline: var(--pad); }
+.panorama:focus-visible { outline-offset: -2px; }
+.sec { padding-block: var(--rekta-spacing-l); scroll-margin-top: var(--header-h, 6rem); }
+.sec + .sec { border-top: var(--hair); }
+.sec:target:focus { outline: none; } /* reached by a pivot link, not by Tab */
+.sec > * + * { margin-top: var(--rekta-spacing-m); }
+.sec > .kicker + * { margin-top: var(--rekta-spacing-xs); }
+.sec > h3 { margin-top: var(--rekta-spacing-l); }
+.sec > .title + .facts { margin-top: var(--rekta-spacing-s); }
+
+/* Hairline rows: content over chrome. */
+.rows { list-style: none; padding: 0; }
+.rows > li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 var(--rekta-spacing-m); padding: var(--rekta-spacing-s) 0; border-top: var(--hair); }
+.rows > li:last-child { border-bottom: var(--hair); }
+.rows b { flex: 1 0 100%; font-weight: var(--rekta-typography-weight-semibold); }
+.rows--numbered { counter-reset: row; }
+.rows--numbered > li::before { counter-increment: row; content: counter(row, decimal-leading-zero); flex: 1 0 100%; font-size: var(--rekta-typography-size-xs); font-weight: var(--rekta-typography-weight-medium); color: var(--rekta-color-text-contrast-high); font-variant-numeric: tabular-nums; }
+
+.timeline { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; }
+.timeline li { display: flex; flex-direction: column; padding: var(--rekta-spacing-s); min-height: 76px; background: var(--fill, var(--rekta-color-surface)); border-radius: var(--rekta-radius-tile); font-size: var(--rekta-typography-size-xs); line-height: 1.25; }
+.timeline b { font-size: var(--rekta-typography-size-m); font-weight: var(--rekta-typography-weight-medium); font-variant-numeric: tabular-nums; }
+
+/* Status fills: one rule per status, used by tiles, rows and the FLIP list. */
+[data-status='info'] { --fill: var(--rekta-color-status-info-tile); }
+[data-status='success'] { --fill: var(--rekta-color-status-success-tile); }
+[data-status='warning'] { --fill: var(--rekta-color-status-warning-tile); }
+[data-status='error'] { --fill: var(--rekta-color-status-error-tile); }
+
+/* Tiles: a full fill, 0-2px radius, no border, no shadow. */
+.tiles { display: grid; grid-template-columns: repeat(2, 1fr); grid-auto-rows: minmax(var(--unit), auto); gap: var(--gap); grid-auto-flow: dense; }
+.tile {
+  position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--rekta-spacing-s);
+  padding: 12px; border: 0; border-radius: var(--rekta-radius-tile);
+  background-color: var(--fill, var(--rekta-color-surface));
+  background-image: linear-gradient(var(--tint, transparent), var(--tint, transparent));
+  color: var(--rekta-color-text-primary); font: inherit; font-size: var(--rekta-typography-size-xs); text-align: left; text-decoration: none; line-height: 1.35;
+  transition: background-color var(--state);
+  animation: build-in var(--rekta-motion-duration-moderate) var(--rekta-motion-easing-in) calc(min(var(--i, 0), 10) * var(--stagger)) both;
+}
+a.tile, button.tile { cursor: pointer; }
+a.tile:hover, button.tile:hover { --tint: var(--rekta-color-hover); }
+.tile:focus-visible, .flip button:focus-visible { outline: 2px solid currentColor; outline-offset: -5px; }
+.tile-word { position: absolute; top: 10px; right: 12px; font-size: var(--rekta-typography-size-xs); font-weight: var(--rekta-typography-weight-semibold); }
+.stat b { display: block; font-size: var(--rekta-typography-size-xxl); font-weight: var(--rekta-typography-weight-medium); font-variant-numeric: tabular-nums; line-height: 1; }
+.tile-msg { font-size: var(--rekta-typography-size-s); line-height: 1.35; }
+.w2 { grid-column: span 2; }
+.h2 { grid-row: span 2; }
+.tile .hex, .tile .forms { color: inherit; font-size: var(--rekta-typography-size-xxs); }
+.forms i { display: inline-block; width: 10px; height: 10px; margin: 0 2px 0 6px; vertical-align: -1px; box-shadow: 0 0 0 1px var(--rekta-color-text-primary); }
+.forms i:first-child { margin-left: 0; }
+.tiles--small { grid-template-columns: repeat(4, 1fr); grid-auto-rows: 72px; }
+@keyframes build-in { from { opacity: 0; transform: translateY(6px); } }
+
+.spark { display: block; width: 100%; height: auto; overflow: visible; }
+.spark polyline { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-dasharray: 1; animation: draw var(--rekta-motion-duration-long) var(--rekta-motion-easing-in) both; }
+@keyframes draw { from { stroke-dashoffset: 1; } }
+.tile[data-status='success'] .spark { display: none; }
+progress { appearance: none; display: block; width: 100%; height: 4px; border: 0; color: inherit; background: color-mix(in srgb, currentColor 20%, transparent); }
+progress::-webkit-progress-bar { background: transparent; }
+progress::-webkit-progress-value { background: currentColor; }
+progress::-moz-progress-bar { background: currentColor; }
+
+/* Colour and type specimens. */
+.swatches { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: var(--rekta-spacing-s) var(--rekta-spacing-m); }
+.swatch { display: flex; flex-direction: column; font-size: var(--rekta-typography-size-xxs); }
+.swatch-fill { height: 32px; border-radius: var(--rekta-radius-tile); box-shadow: inset 0 0 0 1px var(--rekta-color-text-contrast-low); margin-bottom: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: var(--rekta-typography-size-xs); }
+th, td { padding: 5px var(--rekta-spacing-s) 5px 0; border-top: var(--hair); text-align: left; vertical-align: top; }
+th { font-weight: var(--rekta-typography-weight-semibold); color: var(--rekta-color-text-contrast-high); }
+[data-contrast] { font-weight: var(--rekta-typography-weight-medium); font-variant-numeric: tabular-nums; }
+.levels { padding: var(--rekta-spacing-m) 0; border-block: var(--hair); }
+.levels > * + * { margin-top: var(--rekta-spacing-xs); }
+.scale { list-style: none; padding: 0; display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--rekta-spacing-s) var(--rekta-spacing-l); }
+.scale li { display: flex; flex-direction: column; font-size: var(--rekta-typography-size-xxs); }
+.ts-sample { font-size: var(--rekta-typography-size-l); line-height: 1.1; }
+.scale--weights { margin-top: var(--rekta-spacing-m); }
+
+/* Controls. */
+.btn {
+  min-height: 44px; padding: 0 var(--rekta-spacing-m); border: 2px solid currentColor; border-radius: var(--rekta-radius-s);
+  background: transparent; color: inherit; font: inherit; font-weight: var(--rekta-typography-weight-semibold); cursor: pointer;
+  transition: background-color var(--state);
+}
+.btn:hover { background-color: var(--rekta-color-hover); }
+.btn--primary { background: var(--rekta-color-text-primary); border-color: var(--rekta-color-text-primary); color: var(--rekta-color-bg); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rekta-spacing-s); }
+.switch { display: inline-flex; align-items: center; gap: var(--rekta-spacing-s); min-height: 44px; font-weight: var(--rekta-typography-weight-semibold); cursor: pointer; }
+.switch input { width: 20px; height: 20px; margin: 0; accent-color: var(--rekta-color-text-primary); }
+
+/* Motion demos. */
+.demos { display: grid; gap: var(--rekta-spacing-l); }
+.demos > div > * + * { margin-top: var(--rekta-spacing-s); }
+.turn-stage { perspective: 800px; border-block: var(--hair); padding: var(--rekta-spacing-s) 0; }
+.turn { display: flex; flex-direction: column; transform-origin: left center; }
+.turn b { font-size: var(--rekta-typography-size-nav-inactive); font-weight: var(--rekta-typography-weight-light); line-height: 1.2; }
+.turn.in { animation: turnstile var(--rekta-motion-duration-moderate) var(--rekta-motion-easing-out) both; }
+@keyframes turnstile { from { opacity: 0; transform: rotateY(var(--rekta-motion-turnstile-angle)); } }
+.flip { list-style: none; padding: 0; display: grid; gap: 2px; }
+.flip button {
+  display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 44px; padding: 0 12px;
+  border: 0; border-radius: var(--rekta-radius-tile); background: var(--fill, var(--rekta-color-surface)); color: var(--rekta-color-text-primary);
+  font: inherit; cursor: pointer; position: relative;
+}
+.flip .tile-word { position: static; }
+.facet { padding-top: var(--rekta-spacing-m); }
+.facet > * + * { margin-top: var(--rekta-spacing-s); }
+
+/* App bar: bottom at every width, frosted glass, labelled controls. */
+.appbar {
+  position: fixed; inset: auto 0 0; z-index: 20; display: flex; align-items: center; gap: var(--rekta-spacing-xs);
+  height: calc(var(--appbar-h) + env(safe-area-inset-bottom)); padding: 0 var(--pad) env(safe-area-inset-bottom);
+  background: var(--rekta-color-glass); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-top: var(--hair);
+}
+.ab {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 48px; min-height: 48px; padding: 0 10px;
+  border: 0; border-radius: var(--rekta-radius-s); background: none; color: inherit; cursor: pointer;
+  font: inherit; font-size: var(--rekta-typography-size-xs); font-weight: var(--rekta-typography-weight-semibold);
+  transition: background-color var(--state);
+}
+.ab:hover { background-color: var(--rekta-color-hover); }
+.ab b { font-weight: inherit; }
+.ab svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.ab-back { order: -1; }
+.ab-status { display: inline-flex; align-items: center; gap: var(--rekta-spacing-s); margin-right: auto; font-size: var(--rekta-typography-size-xs); color: var(--rekta-color-text-contrast-high); }
+.pulse { width: 8px; height: 8px; background: var(--rekta-color-status-success-full); animation: pulse 1.4s ease-in-out infinite; }
+.paused .pulse { background: var(--rekta-color-status-warning-full); animation: none; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+.ab-k { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Sheet from the top edge, toast from the top. */
+.sheet {
+  margin: 0 auto auto; width: min(32rem, 100%); max-width: 100%; padding: var(--rekta-spacing-l) var(--pad);
+  border: 0; border-bottom: var(--hair); border-radius: 0 0 var(--rekta-radius-m) var(--rekta-radius-m);
+  background: var(--rekta-color-bg); color: var(--rekta-color-text-primary);
+}
+.sheet[open] { animation: from-top var(--rekta-motion-duration-short) var(--rekta-motion-easing-in) both; }
+.sheet::backdrop { background: var(--rekta-color-shading); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.sheet form > * + * { margin-top: var(--rekta-spacing-m); }
+@keyframes from-top { from { opacity: 0; transform: translateY(-16px); } }
+.toast {
+  position: fixed; top: var(--rekta-spacing-m); left: 50%; translate: -50% 0; z-index: 30;
+  display: flex; align-items: center; gap: var(--rekta-spacing-m); padding: 6px 6px 6px var(--rekta-spacing-m);
+  background: var(--rekta-color-text-primary); color: var(--rekta-color-bg); border-radius: var(--rekta-radius-s);
+  animation: toast-in var(--rekta-motion-duration-short) var(--rekta-motion-easing-in) both;
+}
+.toast[hidden] { display: none; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-12px); } }
+
+@media (min-width: {{breakpoint.sideways-scroll-min}}) {
+  :root { --pad: var(--rekta-spacing-xl); }
+  body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+  .top { position: static; padding-top: var(--rekta-spacing-m); border-bottom: 0; }
+  .brand { font-size: var(--rekta-typography-size-nav-active); }
+  .panorama {
+    flex: 1; min-height: 0; display: flex; gap: var(--rekta-spacing-xl);
+    overflow-x: auto; overflow-y: hidden; scroll-padding-inline: var(--pad); scroll-behavior: smooth;
+    scrollbar-width: thin; scrollbar-color: var(--rekta-color-text-contrast-low) transparent;
+  }
+  .sec { flex: 0 0 var(--w, 34rem); overflow-y: auto; scrollbar-width: thin; padding-right: var(--rekta-spacing-s); }
+  .sec + .sec { border-top: 0; }
+  /* Lets the last section reach the left edge, like the pivot's trailing spacer. */
+  .panorama-end { flex: 0 0 max(0px, calc(100vw - 34rem - 2 * var(--pad) - var(--rekta-spacing-xl))); }
+  .tiles { grid-template-columns: repeat(auto-fill, var(--unit)); grid-auto-rows: var(--unit); }
+  .tiles--small { grid-template-columns: repeat(4, 72px); grid-auto-rows: 72px; }
+  .demos { grid-template-columns: 1fr 1fr; }
+  .ab-back { display: none; }
+  .ab-k { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
+}
+
+@media (min-width: {{breakpoint.ultrawide}}) {
+  :root { --unit: 170px; }
+}
+
+/* Reduced motion: rekta.css zeroes the durations; these are the non-token parts.
+   Last in the file so they win over the desktop scroll-behavior above. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --stagger: 0ms; --pivot-glide-duration: 0ms; --pivot-size-duration: 0ms; }
+  .panorama, .pivot { scroll-behavior: auto; }
+  .pulse { animation: none; }
+}
+:root[data-motion='off'] { --stagger: 0ms; --pivot-glide-duration: 0ms; --pivot-size-duration: 0ms; }
+:root[data-motion='off'] .panorama, :root[data-motion='off'] .pivot { scroll-behavior: auto; }
+:root[data-motion='off'] .pulse { animation: none; }

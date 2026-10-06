@@ -71,11 +71,33 @@ APIs no one has used yet.
 
 ## Repo
 
-Local only, no remote. This repo may be made public later; until then,
+This repo may be made public later; until then,
 treat it as a draft.
 
-## Licence
+## Showcase site
 
-**All rights reserved, licence to be decided.** See [NOTICE](NOTICE) for
-the provenance of token values and the typeface, and what is explicitly
-*not* included.
+`site/` is a static website built in Rekta Design that explains the
+design language with live examples. No dependencies, no framework, and no
+external requests (fonts are self-hosted, no CDN, no analytics).
+
+```sh
+node scripts/build-site.mjs          # builds dist/rekta.css, then _site/
+node scripts/build-site.mjs --serve  # same, then serves on http://127.0.0.1:4199
+```
+
+Swatches, contrast pairs and the type scale on the site are generated from
+`tokens/rekta.tokens.json` at build time. `.github/workflows/pages.yml`
+deploys `_site/` to GitHub Pages; it only runs when triggered by hand.
+
+## License
+
+- **Code, design tokens, scripts and CSS** (`tokens/`, `scripts/`,
+  `site/` source, generated `dist/rekta.css`): [MIT](LICENSE).
+- **Documentation and images** (this README and `docs/`, including
+  `docs/images/`): [CC BY 4.0](LICENSE-docs). Suggested attribution:
+  "Rekta Design by DerDaehne, CC BY 4.0".
+- **Barlow** (bundled with the site in `site/fonts/barlow/`): SIL Open
+  Font License 1.1, see [`site/fonts/barlow/OFL.txt`](site/fonts/barlow/OFL.txt).
+
+See [NOTICE](NOTICE) for the provenance of token values and the typeface,
+and what is explicitly *not* included.

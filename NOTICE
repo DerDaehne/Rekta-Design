@@ -17,8 +17,10 @@ Rekta Design — provenance notice
    Barlow: https://github.com/jpt/barlow
    Licence: SIL Open Font License 1.1 (https://scripts.sil.org/OFL)
 
-   No font files are included in this repository; projects adopting
-   Rekta Design choose their own typeface and may or may not use Barlow.
+   The showcase site bundles Barlow as woff2 files in site/fonts/barlow/,
+   together with the full licence text (site/fonts/barlow/OFL.txt).
+   Projects adopting Rekta Design choose their own typeface and may or
+   may not use Barlow.
 
 3. What is explicitly NOT included
    - No Porsche fonts, icons, logos, marks, or any other Porsche-owned
@@ -28,3 +30,6 @@ Rekta Design — provenance notice
      identifier in this repository, and must not become one.
    - This project is independent of, and not endorsed by, Dr. Ing. h.c.
      F. Porsche AG or the Porsche Design System project.
+   - No Microsoft fonts (such as Segoe), logos, icons or other assets.
+     Rekta Design is inspired by ideas of Microsoft's Metro design
+     language and is not affiliated with or endorsed by Microsoft.

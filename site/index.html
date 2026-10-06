@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Rekta Design, a platform-neutral design language of panoramas, pivots, full-colour live tiles and meaningful motion, explained in itself.">
+<title>Rekta Design</title>
+<link rel="stylesheet" href="rekta.css">
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
+</head>
+<body>
+<a class="skip" href="#panorama">skip to content</a>
+
+<header class="top">
+  <a class="brand" href="#overview"><b>rekta</b> design</a>
+  <nav class="pivot" aria-label="sections" data-sideways>
+    <a href="#overview" aria-current="true">overview</a>
+    <a href="#roots">roots</a>
+    <a href="#principles">principles</a>
+    <a href="#colour">colour</a>
+    <a href="#typography">typography</a>
+    <a href="#tiles">tiles</a>
+    <a href="#panorama-pivot">panorama &amp; pivot</a>
+    <a href="#motion">motion</a>
+    <a href="#accessibility">accessibility</a>
+    <a href="#platforms">platforms</a>
+    <a href="#get-started">get started</a>
+    <span class="pivot-end" aria-hidden="true"></span>
+  </nav>
+</header>
+
+<main id="panorama" class="panorama" tabindex="0" aria-label="Rekta Design panorama" data-sideways>
+
+<section id="overview" class="sec" style="--w:40rem">
+  <p class="kicker">a design language · v0 · web and native desktop</p>
+  <h1 class="title">Straight lines, live tiles, sideways motion.</h1>
+  <p class="facts">no cards · two independent themes · four status fills · every value a token</p>
+  <p>Rekta Design is a platform-neutral design language; the name comes from Latin <i>recta</i>, the straight line. This site is built in it: you are inside a <b>panorama</b>, the <b>pivot</b> above names its sections in a fixed order, and the <b>app bar</b> below holds the global controls.</p>
+  <div class="tiles">
+    <a class="tile" data-status="info" href="#get-started" style="--i:0"><span class="tile-word">active</span><span class="stat"><b>v0</b><span>tokens, docs, this site</span></span></a>
+    <a class="tile" data-status="success" href="#colour" style="--i:1"><span class="tile-word">done</span><span class="stat"><b>AA</b><span>text on every fill</span></span></a>
+    <div class="tile" data-status="success" style="--i:2"><span class="tile-word">done</span><span class="stat"><b>0</b><span>external requests</span></span></div>
+    <div class="tile" data-status="warning" style="--i:3"><span class="tile-word">waiting</span><span class="stat"><b>lib</b><span>components, later</span></span></div>
+  </div>
+  <p class="note">Move sideways with the mouse wheel, a trackpad swipe, or ← → once the panorama has focus. On a phone, just scroll down.</p>
+</section>
+
+<section id="roots" class="sec">
+  <p class="kicker">roots</p>
+  <h2>Inspired by Metro.</h2>
+  <p>Rekta Design is inspired by Microsoft's <b>Metro</b> design language, to us one of the best UX designs ever shipped, from Zune and Windows Phone 7 (2010) to Windows 8 (2012). We find it a pity that no major product uses it today, so Rekta Design takes up its ideas in its own form: its own tokens, typography and components.</p>
+  <ol class="timeline">
+    <li><b>2000s</b><span>Media Center, Zune</span></li>
+    <li><b>2010</b><span>Windows Phone 7</span></li>
+    <li><b>2012</b><span>Windows 8</span></li>
+    <li data-status="info"><b>today</b><span>inspired: Rekta Design</span></li>
+  </ol>
+  <ul class="rows">
+    <li><b>content over chrome</b>The information is the interface. Nothing gets a box just to look tidy.</li>
+    <li><b>authentically digital</b>No imitation leather or paper: type, colour and motion that belong to a screen.</li>
+    <li><b>type as structure</b>Rooted in the Swiss International Typographic Style and in the wayfinding signage of public transport: large, plain, readable at a glance.</li>
+  </ul>
+  <p>Its token values are derived from the source code of the <b>Porsche Design System</b> (Apache-2.0): numbers and colours only, no code, fonts or marks.</p>
+  <p class="note">sources: <a href="https://en.wikipedia.org/wiki/Metro_(design_language)" rel="noreferrer">Metro (design language)</a> · <a href="https://en.wikipedia.org/wiki/International_Typographic_Style" rel="noreferrer">International Typographic Style</a> · <a href="https://github.com/porsche-design-system/porsche-design-system" rel="noreferrer">Porsche Design System</a></p>
+  <p class="note">Rekta Design is independent and not affiliated with or endorsed by Microsoft or Porsche.</p>
+</section>
+
+<section id="principles" class="sec" style="--w:32rem">
+  <p class="kicker">principles</p>
+  <h2>Nothing is decoration.</h2>
+  <ol class="rows rows--numbered">
+    <li><b>content over chrome</b>No cards, no boxed panels. Information sits on the ground, grouped by hairlines and whitespace.</li>
+    <li><b>motion as guidance</b>Every transition answers a question: where am I, which facet, what just happened.</li>
+    <li><b>information-dense live tiles</b>A tile's size follows importance; its fill colour is its status.</li>
+    <li><b>panorama and pivot</b>One place, wider than the screen, moved through sideways; its facets in a fixed order.</li>
+    <li><b>refined precision</b>Hairlines, tabular figures, calm large areas, vivid small accents.</li>
+  </ol>
+</section>
+
+<section id="colour" class="sec" style="--w:40rem">
+  <p class="kicker">colour</p>
+  <h2>Status is a fill, not an accent.</h2>
+  <p>Neutral ground, no brand hue. Four status colours carry meaning and only meaning: large fills use the dampened <code>tile</code> form, small marks the saturated <code>full</code> form. Primary text sits on every fill and must clear AA; the ratios are measured live in the current theme.</p>
+  <div class="tiles"><!--@status--></div>
+  <h3>Neutral surfaces <span class="hex">light · dark</span></h3>
+  <!--@swatches-->
+  <h3>Contrast on neutral ground</h3>
+  <!--@pairs-->
+</section>
+
+<section id="typography" class="sec" style="--w:38rem">
+  <p class="kicker">typography</p>
+  <h2>Three levels, one bold title.</h2>
+  <div class="levels" role="img" aria-label="Example of the three title levels: a kicker, a bold title, a fact line">
+    <p class="kicker">board · updated 2 min ago</p>
+    <p class="title">Migrate the nightly import</p>
+    <p class="facts">3 of 5 steps · failed at the schema check · 4 comments</p>
+  </div>
+  <p>Level 1, a quiet kicker. Level 2, the one semibold title per screen. Level 3, a fact line. Navigation titles, like the pivot above, are large and <span class="light">light</span>: they name a place, not a thing. UI words are lowercase; content keeps its own case.</p>
+  <h3>Scale and weights</h3>
+  <!--@typescale-->
+  <p class="note">Body text is Barlow at {{typography.size.s}}, self-hosted under the SIL Open Font License.</p>
+</section>
+
+<section id="tiles" class="sec" style="--w:40rem">
+  <p class="kicker">tiles</p>
+  <h2>Tiles, not cards.</h2>
+  <p>A tile's whole area is one fill, and the fill is its status. Size follows importance. Content follows a few patterns: stat pair, sparkline, progress, status word. Click a tile to change its status. The data is invented and updates live.</p>
+  <div class="tiles" id="live-tiles">
+    <button class="tile w2 h2" data-cycle data-status="error" style="--i:0">
+      <span class="tile-word">failed</span>
+      <span class="stat"><b>3 / 5</b><span>nightly import steps</span></span>
+      <span class="tile-msg">Stopped at the schema check: column “due” is missing. Run the migration, then retry.</span>
+      <progress max="5" value="3">3 of 5</progress>
+    </button>
+    <button class="tile w2" data-cycle data-status="info" data-live="queue" style="--i:1">
+      <span class="tile-word">active</span>
+      <span class="stat"><b data-v>12</b><span>jobs in the build queue</span></span>
+      <svg class="spark" viewBox="0 0 200 28" role="img" aria-label="build queue"><polyline pathLength="1" points="0,14 200,14"/></svg>
+    </button>
+    <button class="tile" data-cycle data-status="warning" style="--i:2">
+      <span class="tile-word">waiting</span>
+      <span class="stat"><b>7</b><span>awaiting review</span></span>
+      <progress max="10" value="4">4 of 10</progress>
+    </button>
+    <button class="tile" data-cycle data-status="success" style="--i:3">
+      <span class="tile-word">done</span>
+      <span class="stat"><b>38</b><span>deploys today</span></span>
+    </button>
+    <button class="tile w2" data-cycle data-live="coverage" style="--i:4">
+      <span class="tile-word">idle</span>
+      <span class="stat"><b data-v>87.4%</b><span>test coverage</span></span>
+      <svg class="spark" viewBox="0 0 200 28" role="img" aria-label="test coverage"><polyline pathLength="1" points="0,14 200,14"/></svg>
+    </button>
+  </div>
+  <p class="note">Finished tiles drop their sparkline: stillness means done. Every chart has a text equivalent for screen readers.</p>
+</section>
+
+<section id="panorama-pivot" class="sec">
+  <p class="kicker">panorama &amp; pivot</p>
+  <h2>One place, wider than the screen.</h2>
+  <p>A <b>panorama</b> is one place laid out sideways. On desktop a plain mouse wheel moves it sideways, except where something can still scroll vertically; horizontal input is left alone, and at either end the wheel falls through. Below {{breakpoint.sideways-scroll-min}} everything stacks vertically.</p>
+  <p>A <b>pivot</b> is one place's facets in a fixed order. The active title is large; the strip scrolls so it sits at the left edge, never reordered. Try it:</p>
+  <div class="facets" data-facets>
+    <div class="pivot pivot--demo" role="tablist" aria-label="example facets" data-sideways>
+      <button role="tab" id="tab-0" aria-controls="facet-0" aria-selected="true">summary</button>
+      <button role="tab" id="tab-1" aria-controls="facet-1" aria-selected="false" tabindex="-1">activity</button>
+      <button role="tab" id="tab-2" aria-controls="facet-2" aria-selected="false" tabindex="-1">files</button>
+      <button role="tab" id="tab-3" aria-controls="facet-3" aria-selected="false" tabindex="-1">settings</button>
+      <span class="pivot-end" aria-hidden="true"></span>
+    </div>
+    <div class="facet" role="tabpanel" id="facet-0" aria-labelledby="tab-0"><p class="facts">4 open · 2 waiting · 1 failed</p><ul class="rows"><li>Nightly import<span class="hex">failed</span></li><li>Release notes<span class="hex">waiting</span></li></ul></div>
+    <div class="facet" role="tabpanel" id="facet-1" aria-labelledby="tab-1" hidden><ul class="rows"><li>Import retried<span class="hex">2 min ago</span></li><li>Review requested<span class="hex">1 h ago</span></li><li>Deploy finished<span class="hex">3 h ago</span></li></ul></div>
+    <div class="facet" role="tabpanel" id="facet-2" aria-labelledby="tab-2" hidden><ul class="rows"><li>schema.sql<span class="hex">4 kB</span></li><li>import.log<span class="hex">18 kB</span></li></ul></div>
+    <div class="facet" role="tabpanel" id="facet-3" aria-labelledby="tab-3" hidden><ul class="rows"><li>Retry on failure<span class="hex">on</span></li><li>Notify on done<span class="hex">off</span></li></ul></div>
+  </div>
+  <p class="note">This site's header is the same component: scroll the panorama and watch it follow.</p>
+</section>
+
+<section id="motion" class="sec" style="--w:44rem">
+  <p class="kicker">motion</p>
+  <h2>Every transition means one thing.</h2>
+  <table>
+    <thead><tr><th>transition</th><th>timing</th><th>means</th></tr></thead>
+    <tbody>
+      <tr><td>place change</td><td>{{motion.duration.moderate}}, turnstile {{motion.turnstile-angle}}</td><td>you are somewhere else</td></tr>
+      <tr><td>facet change</td><td>0.75 × {{motion.duration.moderate}}, {{motion.slide-distance}} slide</td><td>same place, other facet</td></tr>
+      <tr><td>panorama scroll</td><td>native smooth scroll</td><td>same place, looking sideways</td></tr>
+      <tr><td>tiles build in</td><td>{{motion.duration.moderate}}, 30ms stagger, 6px rise</td><td>assembling from live data</td></tr>
+      <tr><td>reorder (FLIP)</td><td>{{motion.duration.moderate}}</td><td>this moved because of you</td></tr>
+      <tr><td>sheet</td><td>{{motion.duration.short}}, 16px from the top</td><td>a short question from above</td></tr>
+      <tr><td>toast</td><td>{{motion.duration.short}}, 12px from the top</td><td>something happened</td></tr>
+      <tr><td>live drawing</td><td>{{motion.duration.long}}</td><td>this is updating right now</td></tr>
+      <tr><td>state change</td><td>{{motion.duration.short}}</td><td>a calm reaction to pointer and focus</td></tr>
+    </tbody>
+  </table>
+  <p class="note">easing: base {{motion.easing.base}} · in {{motion.easing.in}} · out {{motion.easing.out}}</p>
+  <div class="demos">
+    <div>
+      <div class="turn-stage"><p class="turn" id="turn"><span class="kicker">place</span><b>inbox</b></p></div>
+      <button class="btn" data-action="turn">next place</button>
+    </div>
+    <div>
+      <ol class="flip" id="flip" aria-label="click an item to finish it">
+        <li><button data-status="info"><span>import data</span><span class="tile-word">active</span></button></li>
+        <li><button data-status="info"><span>write release notes</span><span class="tile-word">active</span></button></li>
+        <li><button data-status="success"><span>fix login</span><span class="tile-word">done</span></button></li>
+      </ol>
+      <p class="note">click an item to finish or reopen it</p>
+    </div>
+  </div>
+  <p class="actions">
+    <button class="btn" data-action="sheet">open sheet</button>
+    <button class="btn" data-action="toast">archive</button>
+    <button class="btn" data-action="replay">replay build-in</button>
+    <label class="switch"><input type="checkbox" id="motion-check"> reduce motion</label>
+  </p>
+  <p class="note">Reduced motion zeroes every duration: transitions become instant, never skipped, and live values keep updating.</p>
+</section>
+
+<section id="accessibility" class="sec">
+  <p class="kicker">accessibility</p>
+  <h2>Checked, not assumed.</h2>
+  <ul class="rows">
+    <li><b>keyboard first</b>Tab through the pivot, focus the panorama and use ← →, change tiles with Enter.</li>
+    <li><b>focus on fills</b>The ring is drawn inset in the current text colour, so it survives every status fill. Tab into the tiles below.</li>
+    <li><b>colour is never the only signal</b>Every tile spells out its status; every chart has a text equivalent.</li>
+    <li><b>contrast is measured</b>Primary text clears AA on every fill in both themes, enforced by <code>build-css.mjs --check</code>.</li>
+    <li><b>reduced motion</b>Follows the system setting and the switch in the app bar.</li>
+    <li><b>44px targets</b>Every control in the app bar is at least 44 × 44px.</li>
+  </ul>
+  <div class="tiles tiles--small">
+    <button class="tile" data-cycle data-status="info"><span class="tile-word">active</span></button>
+    <button class="tile" data-cycle data-status="warning"><span class="tile-word">waiting</span></button>
+    <button class="tile" data-cycle data-status="error"><span class="tile-word">failed</span></button>
+    <button class="tile" data-cycle data-status="success"><span class="tile-word">done</span></button>
+  </div>
+</section>
+
+<section id="platforms" class="sec" style="--w:44rem">
+  <p class="kicker">platforms</p>
+  <h2>Same numbers, different plumbing.</h2>
+  <p>The tokens are platform-neutral. Only units and OS integration points differ between the web and a native desktop app.</p>
+  <table>
+    <thead><tr><th>concept</th><th>web</th><th>native desktop</th></tr></thead>
+    <tbody>
+      <tr><td>units</td><td>CSS px; fluid sizes as <code>clamp()</code> against <code>vw</code></td><td>logical pixels; interpolate the same min/preferred/max triple against window width</td></tr>
+      <tr><td>breakpoints</td><td>media queries on viewport width</td><td>window-size classes at the same thresholds, never monitor size</td></tr>
+      <tr><td>sideways wheel</td><td>vertical <code>wheel</code> delta redirected on the panorama</td><td>native wheel event, same rule; trackpad pans left alone</td></tr>
+      <tr><td>keyboard</td><td>DOM key events, <code>:focus-visible</code></td><td>native focus traversal; same behaviours</td></tr>
+      <tr><td>reduced motion</td><td><code>prefers-reduced-motion</code> plus <code>data-motion="off"</code></td><td>the OS setting plus the same in-app switch; durations become 0</td></tr>
+      <tr><td>theme</td><td><code>prefers-color-scheme</code> plus <code>data-theme</code></td><td>the OS appearance plus an in-app switch; two independent token sets</td></tr>
+      <tr><td>focus rings</td><td>inset outline in <code>currentColor</code></td><td>native focus drawing, same rule: text colour, inset</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="get-started" class="sec">
+  <p class="kicker">get started</p>
+  <h2>Tokens first, CSS on the web.</h2>
+  <ol class="rows rows--numbered">
+    <li><b>take the tokens</b><a href="rekta.tokens.json" download>rekta.tokens.json</a> holds every value in W3C Design Tokens (DTCG) format. Native apps read it directly.</li>
+    <li><b>build the CSS</b>Or download <a href="rekta.css" download>rekta.css</a>.
+<pre><code>node scripts/build-css.mjs          # writes dist/rekta.css
+node scripts/build-css.mjs --check  # tokens present, AA on every fill</code></pre></li>
+    <li><b>use the variables</b>
+<pre><code>&lt;link rel="stylesheet" href="rekta.css"&gt;
+
+.tile {
+  background: var(--rekta-color-status-info-tile);
+  color: var(--rekta-color-text-primary);
+  border-radius: var(--rekta-radius-tile);
+}</code></pre></li>
+    <li><b>pick a theme</b>Light and dark follow the system; <code>data-theme="dark"</code> on the root forces one, <code>data-motion="off"</code> turns motion off.</li>
+  </ol>
+  <p class="note">Code, tokens and CSS: MIT. Docs and images: CC BY 4.0. Barlow: <a href="fonts/barlow/OFL.txt">SIL Open Font License 1.1</a>. Not affiliated with or endorsed by Microsoft or Porsche.</p>
+</section>
+
+<span class="panorama-end" aria-hidden="true"></span>
+</main>
+
+<div class="appbar" role="region" aria-label="app bar">
+  <button class="ab ab-back" data-action="back"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg><span>back</span></button>
+  <span class="ab-status"><i class="pulse" aria-hidden="true"></i><span class="ab-k" id="live-word">live demo data</span></span>
+  <button class="ab" data-action="pause" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12"/></svg><span>pause</span></button>
+  <button class="ab" data-action="theme"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 4a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span><span class="ab-k">theme </span><b id="theme-word">system</b></span></button>
+  <button class="ab" data-action="motion" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10h4l2-5 3 10 2-5h5"/></svg><span><span class="ab-k">motion </span><b id="motion-word">on</b></span></button>
+</div>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title">
+  <form method="dialog">
+    <p class="kicker">sheet</p>
+    <h2 id="sheet-title">Reset the demo data?</h2>
+    <p>Everything behind this sheet stays exactly where it was.</p>
+    <p class="actions"><button class="btn" value="cancel">cancel</button><button class="btn btn--primary" value="reset">reset</button></p>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden><span>tile archived</span><button class="btn" data-action="undo">undo · <span id="toast-count">5</span></button></div>
+</body>
+</html>
