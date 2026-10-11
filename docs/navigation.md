@@ -46,6 +46,44 @@ render all its facets side by side as a panorama instead of one at a
 time, with the pivot strip still present below them for narrower
 viewports or as a jump list.
 
+## Places, history and back
+
+A **place** is one screen of the app: one `<main>`, named by its title.
+Places form a tree: the top place (a board, a home), and below it the
+places its tiles and links open, each with one parent.
+
+- **Every place has an address.** A place can be bookmarked, shared,
+  reloaded and opened in a new tab or window. On the web that is a path
+  or a hash; in a native app, a route the app can restore.
+- **Only a place change makes a history entry.** Choosing a facet,
+  jumping to a section or scrolling replaces nothing and adds nothing:
+  one back always means one place back.
+- **One back for everything.** The app bar's back, the crumb, Escape,
+  the browser's back, the system's back (Android's gesture, the mouse
+  back button, Alt+Left) all do the same thing: go back one place, with
+  the back turnstile, to the scroll position, facet and focus the user
+  left. Focus returns to the link or tile that opened the place.
+- **Back stays in the app.** A cold entry (a deep link, a reload, a
+  shared address) below the top puts the parent place underneath, so the
+  first back goes to the parent, never out of the app.
+- **Navigation is never refused.** A navigation that comes while a
+  place change is still turning finishes that turn and goes; nothing
+  waits for an animation.
+- **Modifier clicks are the platform's.** Ctrl/Cmd/Shift and middle
+  clicks on a link to a place open it where the platform opens links (a
+  new tab, a new window); only a plain click turns the place.
+- **The title names the place**: the window or tab title is
+  "Place · App".
+
+### Crumb
+
+Every place below the top starts with a crumb: a small link up to its
+parent (`rk-crumb`, an arrow and the parent's name). It is a real link
+to the parent's address. When the parent is the place below in history,
+the crumb goes back (and plays the back turnstile); otherwise it goes
+forward to the parent. Sideways, the app bar has no back button, so the
+crumb is the visible way up.
+
 ## App bar
 
 A fixed bar anchored to the **bottom** of the viewport, at every width
@@ -55,22 +93,47 @@ carries the small set of commands that must be reachable from
 actions (in the source product: pause, emergency stop, a command
 palette, a keyboard-shortcut reference). Each is a labelled control (an
 icon plus a word, never an icon alone), because the app bar is reachable
-without having read a manual.
+without having read a manual. Its controls are 48px in every density.
 
-On mobile, a "back" control is the leading item in the same bar — it is
+The live status is a square and a word, and the word is always visible
+(`live`, or the banner state's word such as `halted`): the square's
+colour is never the only signal.
+
+In the compact window-size class, a "back" control is the leading item
+in the same bar, within the thumb's reach, hidden at the top place. It is
 the one navigational concession the bottom bar makes; everywhere else,
-navigation lives in the pivot, not the app bar.
+navigation lives in the pivot and the crumb, not the app bar.
 
-A command entry surface (e.g. a command palette) opens as a sheet that
-rises from above this bar, not as a page overlay centred on the screen —
-it visually belongs to the bar that triggered it.
+A command entry surface (e.g. a command palette, the places list) rises
+from this bar at every width, not as a page overlay centred on the
+screen: it visually belongs to the bar that triggered it.
 
-## Back on mobile
+## Keyboard
 
-Below `breakpoint.sideways-scroll-min` (760px), "back" is an explicit,
-always-reachable control (the leading app-bar item), not just a
-platform/browser gesture — users at this width are assumed to be using
-the product one-handed, so the control sits in the thumb-reachable
-bottom bar, with a touch target that meets the minimum in
-[accessibility.md](accessibility.md). It navigates browser/app history
-when there is any, and otherwise falls back to the top-level place.
+Every pointer action has a keyboard path.
+
+| Where | Keys | Does |
+|---|---|---|
+| A focused panorama (sideways) | ← → PageUp PageDown | The previous or next section, aligned flush left |
+| | Home End | The first or last section |
+| A section strip | Enter on a title | Aligns the section and moves focus to its heading |
+| A facet pivot (tabs) | ← → Home End | The previous, next, first or last facet; focus follows |
+| A tile | Enter (Space on a button tile) | Presses it; release activates |
+| Anywhere | Escape | Closes the innermost thing that is open (see below) |
+| Anywhere but a text field | Ctrl/Cmd+Z | Undoes the action of the open toast |
+
+### Who gets a key
+
+Keys are layered: the innermost thing that is open gets the key first,
+and once it uses it nothing else does.
+
+1. A floating surface (menu, palette, a combobox's list), a modal sheet
+   or a popover: Escape closes it.
+2. A toast that has focus: Escape dismisses it.
+3. The open toast's undo window: Ctrl/Cmd+Z undoes, except in a text
+   field, where it is the field's own undo.
+4. A selection: Escape clears it.
+5. The place: Escape goes back.
+
+Escape never goes back while focus is in a text field or a list that
+uses it, and no shortcut fires while an input method is composing.

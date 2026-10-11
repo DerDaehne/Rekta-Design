@@ -1,114 +1,928 @@
 {
-  "$description": "Rekta Design tokens, W3C Design Tokens Community Group (DTCG) format. Values are taken from the kabai studio 'Metro × Porsche v3' prototype. Fixed sizes use the DTCG dimension shape {value, unit}. A few type-scale tokens are fluid (CSS clamp()), which the dimension type cannot express; those use $type \"fluidSize\" with a raw CSS string value as a documented, non-standard extension.",
+  "$description": "Rekta Design tokens: the single source. W3C Design Tokens (DTCG) format. Dimensions are logical pixels (CSS px, Android dp, Apple pt); the web build converts type, control and tile sizes to rem. Colour comes in two independent sets (light, dark) and control sizes in two densities (comfortable, compact). Fluid sizes use $type \"fluidDimension\" (a documented extension): min and max in logical px plus the share of the hosting box's width between them. Every token's usage text is its $description. Generated outputs: dist/rekta.tokens.css (web, --rk- prefix), dist/rekta.tokens.json (resolved, platform-neutral). See docs/platforms.md.",
   "color": {
-    "$description": "Light and dark are two independent token sets, not light/dark variants of one token, so a platform can pick a set without a theming layer.",
+    "$description": "Light and dark are two independent sets, not variants of one token. Status colours are corrected from the prototype for contrast and colour blindness (see CHANGELOG).",
     "light": {
-      "bg": { "$type": "color", "$value": "#ffffff" },
-      "surface": { "$type": "color", "$value": "#eeeff2" },
-      "surface-2": { "$type": "color", "$value": "#e4e5e9", "$description": "Hover step of surface." },
+      "bg": {
+        "$type": "color",
+        "$value": "#ffffff",
+        "$description": "Page ground. Everything sits directly on it; text-primary reads on it."
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#eeeff2",
+        "$description": "Neutral secondary ground: rows, inputs, tiles with no status. text-primary and text-contrast-high read on it."
+      },
+      "surface-2": {
+        "$type": "color",
+        "$value": "#e4e5e9",
+        "$description": "Hover step of surface."
+      },
       "text": {
-        "primary": { "$type": "color", "$value": "#010205" },
-        "contrast-low": { "$type": "color", "$value": "#d8d8db", "$description": "Hairlines, disabled borders." },
-        "contrast-medium": { "$type": "color", "$value": "#6b6d70", "$description": "Secondary borders, placeholder text." },
-        "contrast-high": { "$type": "color", "$value": "#535457", "$description": "Secondary text. AA on bg and surface." }
+        "primary": {
+          "$type": "color",
+          "$value": "#010205",
+          "$description": "Primary text on bg, surface, surface-2 and on every status-*-tile fill (checked AA)."
+        },
+        "contrast-low": {
+          "$type": "color",
+          "$value": "#d8d8db",
+          "$description": "Hairlines (1–2px) and disabled borders. Decorative separator, not for text."
+        },
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#6b6d70",
+          "$description": "Secondary borders and placeholder text on bg."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#535457",
+          "$description": "Secondary text on bg and surface (AA). Never on a status tile."
+        }
+      },
+      "accent": {
+        "$type": "color",
+        "$value": "{color.light.text.primary}",
+        "$description": "Optional product accent slot: primary button fill, checked controls, a link colour if the product wants one. Defaults to ink, so Rekta stays neutral until a product overrides it per theme. Never a large fill, never a tile, never a status. Must hold 3:1 on bg and surface and stay clearly apart from every status-*-full hue."
+      },
+      "on-accent": {
+        "$type": "color",
+        "$value": "{color.light.bg}",
+        "$description": "Text and icons on accent. Override together with accent so the pair holds 4.5:1."
       },
       "status": {
-        "$description": "Each status has a full saturated value (for small marks: tag dots, ticker squares, sparklines, progress) and a tile value (a fill, dampened toward the ground, meant to hold the primary text colour at AA on top).",
-        "info": { "full": { "$type": "color", "$value": "#2762ec" }, "soft": { "$type": "color", "$value": "#d3e1ff" }, "tile": { "$type": "color", "$value": "#7da1f4" } },
-        "success": { "full": { "$type": "color", "$value": "#197e10" }, "soft": { "$type": "color", "$value": "#e4ffec" }, "tile": { "$type": "color", "$value": "#75b270" } },
-        "warning": { "full": { "$type": "color", "$value": "#f3be00" }, "soft": { "$type": "color", "$value": "#fff4d2" }, "tile": { "$type": "color", "$value": "#f8d866" } },
-        "error": { "full": { "$type": "color", "$value": "#cc1922" }, "soft": { "$type": "color", "$value": "#ffe2e4" }, "tile": { "$type": "color", "$value": "#e0757a" } }
+        "info": {
+          "full": {
+            "$type": "color",
+            "$value": "#2762ec",
+            "$description": "Info (active / in progress). Small marks only: tag square, pulse, sparkline, progress bar. At least 3:1 on bg and surface in both themes."
+          },
+          "soft": {
+            "$type": "color",
+            "$value": "#d3e1ff",
+            "$description": "Info (active / in progress). Tint behind a status label in running text (rk-tag--soft); text-primary on it."
+          },
+          "tile": {
+            "$type": "color",
+            "$value": "#7da1f4",
+            "$description": "Info (active / in progress). The only large fill (a tile's whole background); text-primary on it at AA in both themes."
+          }
+        },
+        "success": {
+          "full": {
+            "$type": "color",
+            "$value": "#007b5d",
+            "$description": "Success (done). Small marks only: tag square, pulse, sparkline, progress bar. At least 3:1 on bg and surface in both themes. Jade (hue shifted from green toward blue) so it never reads as error under red–green colour blindness."
+          },
+          "soft": {
+            "$type": "color",
+            "$value": "#e1fff2",
+            "$description": "Success (done). Tint behind a status label in running text (rk-tag--soft); text-primary on it."
+          },
+          "tile": {
+            "$type": "color",
+            "$value": "#61caa6",
+            "$description": "Success (done). The only large fill (a tile's whole background); text-primary on it at AA in both themes. Lighter than status-error-tile in both themes."
+          }
+        },
+        "warning": {
+          "full": {
+            "$type": "color",
+            "$value": "#a37e00",
+            "$description": "Warning (waiting / paused). Small marks only: tag square, pulse, sparkline, progress bar. At least 3:1 on bg and surface in both themes. Light value darkened from the source #f3be00 (1.7:1) to pass 3:1."
+          },
+          "soft": {
+            "$type": "color",
+            "$value": "#fff4d2",
+            "$description": "Warning (waiting / paused). Tint behind a status label in running text (rk-tag--soft); text-primary on it."
+          },
+          "tile": {
+            "$type": "color",
+            "$value": "#f8d866",
+            "$description": "Warning (waiting / paused). The only large fill (a tile's whole background); text-primary on it at AA in both themes."
+          }
+        },
+        "error": {
+          "full": {
+            "$type": "color",
+            "$value": "#aa0013",
+            "$description": "Error (failed). Small marks only: tag square, pulse, sparkline, progress bar. At least 3:1 on bg and surface in both themes. In light it is the darkest status mark, so it parts from success by lightness too."
+          },
+          "soft": {
+            "$type": "color",
+            "$value": "#ffe2e4",
+            "$description": "Error (failed). Tint behind a status label in running text (rk-tag--soft); text-primary on it."
+          },
+          "tile": {
+            "$type": "color",
+            "$value": "#c86065",
+            "$description": "Error (failed). The only large fill (a tile's whole background); text-primary on it at AA in both themes. Always the darkest status fill in both themes: failed reads apart from done without hue."
+          }
+        }
       },
-      "focus": { "$type": "color", "$value": "#1a44ea" },
-      "hover": { "$type": "color", "$value": "rgba(148, 149, 152, 0.18)" },
-      "disabled": { "$type": "color", "$value": "#949598" },
-      "shading": { "$type": "color", "$value": "rgba(1, 2, 5, 0.67)", "$description": "Backdrop behind a sheet/dialog." },
-      "glass": { "$type": "color", "$value": "rgba(255, 255, 255, 0.82)", "$description": "Frosted-glass surfaces (nav bar, app bar), used with a blur." }
+      "focus": {
+        "$type": "color",
+        "$value": "#1a44ea",
+        "$description": "Focus ring on neutral surfaces (bg, surface), 3:1 or better in both themes. On a status tile use the tile's own text colour as an inset ring instead."
+      },
+      "hover": {
+        "$type": "color",
+        "$value": "rgba(148, 149, 152, 0.18)",
+        "$description": "Translucent neutral overlay laid on top of any fill for pointer hover."
+      },
+      "disabled": {
+        "$type": "color",
+        "$value": "#949598",
+        "$description": "Flat grey for disabled text and borders. Never a fill."
+      },
+      "shading": {
+        "$type": "color",
+        "$value": "rgba(1, 2, 5, 0.67)",
+        "$description": "Backdrop behind a sheet or dialog."
+      },
+      "glass": {
+        "$type": "color",
+        "$value": "rgba(255, 255, 255, 0.82)",
+        "$description": "Frosted surfaces (nav bar, app bar); use with a backdrop blur."
+      }
     },
     "dark": {
-      "bg": { "$type": "color", "$value": "#0e0e12" },
-      "surface": { "$type": "color", "$value": "#212225" },
-      "surface-2": { "$type": "color", "$value": "#2a2b2f" },
+      "bg": {
+        "$type": "color",
+        "$value": "#0e0e12",
+        "$description": "Page ground. Everything sits directly on it; text-primary reads on it."
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#212225",
+        "$description": "Neutral secondary ground: rows, inputs, tiles with no status. text-primary and text-contrast-high read on it."
+      },
+      "surface-2": {
+        "$type": "color",
+        "$value": "#2a2b2f",
+        "$description": "Hover step of surface."
+      },
       "text": {
-        "primary": { "$type": "color", "$value": "#fbfcff" },
-        "contrast-low": { "$type": "color", "$value": "#404044" },
-        "contrast-medium": { "$type": "color", "$value": "#88898c" },
-        "contrast-high": { "$type": "color", "$value": "#afb0b3" }
+        "primary": {
+          "$type": "color",
+          "$value": "#fbfcff",
+          "$description": "Primary text on bg, surface, surface-2 and on every status-*-tile fill (checked AA)."
+        },
+        "contrast-low": {
+          "$type": "color",
+          "$value": "#404044",
+          "$description": "Hairlines (1–2px) and disabled borders. Decorative separator, not for text."
+        },
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#88898c",
+          "$description": "Secondary borders and placeholder text on bg."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#afb0b3",
+          "$description": "Secondary text on bg and surface (AA). Never on a status tile."
+        }
+      },
+      "accent": {
+        "$type": "color",
+        "$value": "{color.dark.text.primary}",
+        "$description": "Optional product accent slot: primary button fill, checked controls, a link colour if the product wants one. Defaults to ink, so Rekta stays neutral until a product overrides it per theme. Never a large fill, never a tile, never a status. Must hold 3:1 on bg and surface and stay clearly apart from every status-*-full hue."
+      },
+      "on-accent": {
+        "$type": "color",
+        "$value": "{color.dark.bg}",
+        "$description": "Text and icons on accent. Override together with accent so the pair holds 4.5:1."
       },
       "status": {
-        "info": { "full": { "$type": "color", "$value": "#178bff" }, "soft": { "$type": "color", "$value": "#04294e" }, "tile": { "$type": "color", "$value": "#244592" } },
-        "success": { "full": { "$type": "color", "$value": "#09d087" }, "soft": { "$type": "color", "$value": "#003320" }, "tile": { "$type": "color", "$value": "#1d5519" } },
-        "warning": { "full": { "$type": "color", "$value": "#f7cb47" }, "soft": { "$type": "color", "$value": "#362b0a" }, "tile": { "$type": "color", "$value": "#7f6814" } },
-        "error": { "full": { "$type": "color", "$value": "#fc4040" }, "soft": { "$type": "color", "$value": "#3a0f0f" }, "tile": { "$type": "color", "$value": "#7f1d23" } }
+        "info": {
+          "full": {
+            "$type": "color",
+            "$value": "#178bff",
+            "$description": "Info (active / in progress). Small marks only: tag square, pulse, sparkline, progress bar. At least 3:1 on bg and surface in both themes."
+          },
+          "soft": {
+            "$type": "color",
+            "$value": "#04294e",
+            "$description": "Info (active / in progress). Tint behind a status label in running text (rk-tag--soft); text-primary on it."
+          },
+          "tile": {
+            "$type": "color",
+            "$value": "#244592",
+            "$description": "Info (active / in progress). The only large fill (a tile's whole background); text-primary on it at AA in both themes."
+          }
+        },
+        "success": {
+          "full": {
+            "$type": "color",
+            "$value": "#00ce9d",
+            "$description": "Success (done). Small marks only: tag square, pulse, sparkline, progress bar. At least 3:1 on bg and surface in both themes. Jade (hue shifted from green toward blue) so it never reads as error under red–green colour blindness."
+          },
+          "soft": {
+            "$type": "color",
+            "$value": "#003324",
+            "$description": "Success (done). Tint behind a status label in running text (rk-tag--soft); text-primary on it."
+          },
+          "tile": {
+            "$type": "color",
+            "$value": "#337a62",
+            "$description": "Success (done). The only large fill (a tile's whole background); text-primary on it at AA in both themes. Lighter than status-error-tile in both themes."
+          }
+        },
+        "warning": {
+          "full": {
+            "$type": "color",
+            "$value": "#f7cb47",
+            "$description": "Warning (waiting / paused). Small marks only: tag square, pulse, sparkline, progress bar. At least 3:1 on bg and surface in both themes. Light value darkened from the source #f3be00 (1.7:1) to pass 3:1."
+          },
+          "soft": {
+            "$type": "color",
+            "$value": "#362b0a",
+            "$description": "Warning (waiting / paused). Tint behind a status label in running text (rk-tag--soft); text-primary on it."
+          },
+          "tile": {
+            "$type": "color",
+            "$value": "#6e5900",
+            "$description": "Warning (waiting / paused). The only large fill (a tile's whole background); text-primary on it at AA in both themes."
+          }
+        },
+        "error": {
+          "full": {
+            "$type": "color",
+            "$value": "#fc4040",
+            "$description": "Error (failed). Small marks only: tag square, pulse, sparkline, progress bar. At least 3:1 on bg and surface in both themes. In light it is the darkest status mark, so it parts from success by lightness too."
+          },
+          "soft": {
+            "$type": "color",
+            "$value": "#3a0f0f",
+            "$description": "Error (failed). Tint behind a status label in running text (rk-tag--soft); text-primary on it."
+          },
+          "tile": {
+            "$type": "color",
+            "$value": "#76171f",
+            "$description": "Error (failed). The only large fill (a tile's whole background); text-primary on it at AA in both themes. Always the darkest status fill in both themes: failed reads apart from done without hue."
+          }
+        }
       },
-      "focus": { "$type": "color", "$value": "#178bff" },
-      "hover": { "$type": "color", "$value": "rgba(148, 149, 152, 0.18)" },
-      "disabled": { "$type": "color", "$value": "#7e7f82" },
-      "shading": { "$type": "color", "$value": "rgba(38, 38, 41, 0.67)" },
-      "glass": { "$type": "color", "$value": "rgba(14, 14, 18, 0.82)" }
+      "focus": {
+        "$type": "color",
+        "$value": "#178bff",
+        "$description": "Focus ring on neutral surfaces (bg, surface), 3:1 or better in both themes. On a status tile use the tile's own text colour as an inset ring instead."
+      },
+      "hover": {
+        "$type": "color",
+        "$value": "rgba(148, 149, 152, 0.18)",
+        "$description": "Translucent neutral overlay laid on top of any fill for pointer hover."
+      },
+      "disabled": {
+        "$type": "color",
+        "$value": "#7e7f82",
+        "$description": "Flat grey for disabled text and borders. Never a fill."
+      },
+      "shading": {
+        "$type": "color",
+        "$value": "rgba(38, 38, 41, 0.67)",
+        "$description": "Backdrop behind a sheet or dialog."
+      },
+      "glass": {
+        "$type": "color",
+        "$value": "rgba(14, 14, 18, 0.82)",
+        "$description": "Frosted surfaces (nav bar, app bar); use with a backdrop blur."
+      }
     }
   },
   "typography": {
     "font-family": {
-      "base": { "$type": "fontFamily", "$value": ["Barlow", "Arial Narrow", "Arial", "sans-serif"] }
+      "sans": {
+        "$type": "fontFamily",
+        "$value": [
+          "Barlow",
+          "Arial Narrow",
+          "Arial",
+          "sans-serif"
+        ],
+        "$description": "The one family. Ship the font files with the app (fonts/), never from a CDN."
+      },
+      "mono": {
+        "$type": "fontFamily",
+        "$value": [
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Consolas",
+          "monospace"
+        ],
+        "$description": "Machine text: IDs, code, logs."
+      }
     },
     "weight": {
-      "light": { "$type": "fontWeight", "$value": 300, "$description": "Panorama/pivot titles: a place name is large and light, never bold." },
-      "regular": { "$type": "fontWeight", "$value": 400 },
-      "medium": { "$type": "fontWeight", "$value": 500, "$description": "Tabular figures: stat numbers, counts." },
-      "semibold": { "$type": "fontWeight", "$value": 600, "$description": "The one bold title per page (e.g. a record's own title), and small UI words." },
-      "bold": { "$type": "fontWeight", "$value": 700 }
+      "light": {
+        "$type": "fontWeight",
+        "$value": 300,
+        "$description": "Navigation titles and a status banner's state word: large and light, never bold."
+      },
+      "regular": {
+        "$type": "fontWeight",
+        "$value": 400
+      },
+      "medium": {
+        "$type": "fontWeight",
+        "$value": 500,
+        "$description": "Tabular figures: stat numbers, counts."
+      },
+      "semibold": {
+        "$type": "fontWeight",
+        "$value": 600,
+        "$description": "The one bold title per page (e.g. a record's own title), and small UI words."
+      },
+      "bold": {
+        "$type": "fontWeight",
+        "$value": 700
+      }
     },
     "size": {
-      "$description": "Fixed roles use the DTCG dimension shape. Fluid roles (clamp()) use $type \"fluidSize\" since dimension cannot hold a CSS function; see docs/typography.md for the rendered px range per breakpoint.",
-      "xxs": { "$type": "dimension", "$value": { "value": 12, "unit": "px" } },
-      "xs": { "$type": "dimension", "$value": { "value": 13, "unit": "px" } },
-      "s": { "$type": "dimension", "$value": { "value": 15, "unit": "px" }, "$description": "Body text size." },
-      "m": { "$type": "dimension", "$value": { "value": 18, "unit": "px" } },
-      "l": { "$type": "fluidSize", "$value": "clamp(22px, 1.5vw, 28px)" },
-      "xl": { "$type": "fluidSize", "$value": "clamp(26px, 2vw, 34px)" },
-      "xxl": { "$type": "fluidSize", "$value": "clamp(30px, 2.6vw, 44px)" },
-      "nav-active": { "$type": "fluidSize", "$value": "clamp(40px, 4.2vw, 72px)", "$description": "Level 1: the place you are at, in the top-level nav." },
-      "nav-inactive": { "$type": "fluidSize", "$value": "clamp(22px, 1.9vw, 32px)" },
-      "pivot-active": { "$type": "fluidSize", "$value": "clamp(28px, 2.6vw, 42px)", "$description": "Level 2: the active facet within a place." },
-      "pivot-inactive": { "$type": "fluidSize", "$value": "clamp(20px, 1.6vw, 26px)" },
-      "group": { "$type": "fluidSize", "$value": "clamp(22px, 1.7vw, 30px)", "$description": "Section/group headings inside a view." },
-      "title": { "$type": "fluidSize", "$value": "clamp(30px, 2.8vw, 48px)", "$description": "Level 3: a record's own bold title (e.g. a ticket)." }
+      "$description": "Fixed sizes for text that should not grow with the window; fluid sizes interpolate between min and max with the width of the box that hosts the view.",
+      "xxs": {
+        "$type": "dimension",
+        "$value": {
+          "value": 12,
+          "unit": "px"
+        },
+        "$description": "Captions, metadata, hex values (rk-meta)."
+      },
+      "xs": {
+        "$type": "dimension",
+        "$value": {
+          "value": 13,
+          "unit": "px"
+        },
+        "$description": "Kickers, facts, labels, tags, tile words."
+      },
+      "s": {
+        "$type": "dimension",
+        "$value": {
+          "value": 15,
+          "unit": "px"
+        },
+        "$description": "Body text."
+      },
+      "m": {
+        "$type": "dimension",
+        "$value": {
+          "value": 18,
+          "unit": "px"
+        },
+        "$description": "Sub-headings, emphasised labels."
+      },
+      "l": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 22,
+            "unit": "px"
+          },
+          "max": {
+            "value": 28,
+            "unit": "px"
+          },
+          "viewport": 0.015
+        },
+        "$description": "Fluid size role."
+      },
+      "xl": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 26,
+            "unit": "px"
+          },
+          "max": {
+            "value": 34,
+            "unit": "px"
+          },
+          "viewport": 0.02
+        },
+        "$description": "Fluid size role."
+      },
+      "xxl": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 30,
+            "unit": "px"
+          },
+          "max": {
+            "value": 44,
+            "unit": "px"
+          },
+          "viewport": 0.026
+        },
+        "$description": "Fluid size role."
+      },
+      "nav-active": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 40,
+            "unit": "px"
+          },
+          "max": {
+            "value": 72,
+            "unit": "px"
+          },
+          "viewport": 0.042
+        },
+        "$description": "Level 1: the place you are at, in the top-level nav."
+      },
+      "nav-inactive": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 22,
+            "unit": "px"
+          },
+          "max": {
+            "value": 32,
+            "unit": "px"
+          },
+          "viewport": 0.019
+        },
+        "$description": "Fluid size role."
+      },
+      "pivot-active": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 28,
+            "unit": "px"
+          },
+          "max": {
+            "value": 42,
+            "unit": "px"
+          },
+          "viewport": 0.026
+        },
+        "$description": "Level 2: the active facet within a place."
+      },
+      "pivot-inactive": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 20,
+            "unit": "px"
+          },
+          "max": {
+            "value": 26,
+            "unit": "px"
+          },
+          "viewport": 0.016
+        },
+        "$description": "Fluid size role."
+      },
+      "group": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 22,
+            "unit": "px"
+          },
+          "max": {
+            "value": 30,
+            "unit": "px"
+          },
+          "viewport": 0.017
+        },
+        "$description": "Section/group headings inside a view."
+      },
+      "title": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 30,
+            "unit": "px"
+          },
+          "max": {
+            "value": 48,
+            "unit": "px"
+          },
+          "viewport": 0.028
+        },
+        "$description": "Level 3: a record's own bold title (e.g. a ticket)."
+      }
+    },
+    "line-height": {
+      "body": {
+        "$type": "number",
+        "$value": 1.5,
+        "$description": "Running text and controls."
+      },
+      "compact": {
+        "$type": "number",
+        "$value": 1.35,
+        "$description": "Tiles, tags, toasts: short lines in tight boxes."
+      },
+      "tight": {
+        "$type": "number",
+        "$value": 1.15,
+        "$description": "Group headings, banner words."
+      },
+      "title": {
+        "$type": "number",
+        "$value": 1.1,
+        "$description": "The one bold title."
+      },
+      "nav": {
+        "$type": "number",
+        "$value": 1.3,
+        "$description": "Pivot titles (their fixed line box)."
+      }
     }
   },
   "spacing": {
-    "xs": { "$type": "dimension", "$value": { "value": 4, "unit": "px" } },
-    "s": { "$type": "dimension", "$value": { "value": 8, "unit": "px" } },
-    "m": { "$type": "dimension", "$value": { "value": 16, "unit": "px" } },
-    "l": { "$type": "dimension", "$value": { "value": 32, "unit": "px" } },
-    "xl": { "$type": "dimension", "$value": { "value": 48, "unit": "px" } }
+    "xs": {
+      "$type": "dimension",
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      },
+      "$description": "Tight gaps between inline elements."
+    },
+    "s": {
+      "$type": "dimension",
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      },
+      "$description": "Grid gap between tiles; padding inside rows."
+    },
+    "m": {
+      "$type": "dimension",
+      "$value": {
+        "value": 16,
+        "unit": "px"
+      },
+      "$description": "Page padding below 760px; default block gap; button padding."
+    },
+    "l": {
+      "$type": "dimension",
+      "$value": {
+        "value": 32,
+        "unit": "px"
+      },
+      "$description": "Section padding."
+    },
+    "xl": {
+      "$type": "dimension",
+      "$value": {
+        "value": 48,
+        "unit": "px"
+      },
+      "$description": "Page padding from 760px up; gap between panorama sections."
+    }
   },
   "radius": {
-    "s": { "$type": "dimension", "$value": { "value": 4, "unit": "px" } },
-    "m": { "$type": "dimension", "$value": { "value": 8, "unit": "px" } },
-    "l": { "$type": "dimension", "$value": { "value": 12, "unit": "px" } },
-    "tile": { "$type": "dimension", "$value": { "value": 2, "unit": "px" }, "$description": "0–2px. Tiles are tiles, not cards: sharp enough to read as Metro, soft enough to read as refined." }
+    "s": {
+      "$type": "dimension",
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      },
+      "$description": "Buttons, fields, app-bar controls, toasts."
+    },
+    "m": {
+      "$type": "dimension",
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      },
+      "$description": "Bottom corners of a sheet."
+    },
+    "l": {
+      "$type": "dimension",
+      "$value": {
+        "value": 12,
+        "unit": "px"
+      },
+      "$description": "Larger dialogs."
+    },
+    "tile": {
+      "$type": "dimension",
+      "$value": {
+        "value": 2,
+        "unit": "px"
+      },
+      "$description": "0–2px. Tiles are tiles, not cards: sharp enough to read as Metro, soft enough to read as refined."
+    }
+  },
+  "size": {
+    "tile-unit": {
+      "$type": "dimension",
+      "$value": {
+        "value": 150,
+        "unit": "px"
+      },
+      "$description": "Tile grid cell from 760px up; tiles span 1 or 2 units."
+    },
+    "tile-unit-ultrawide": {
+      "$type": "dimension",
+      "$value": {
+        "value": 170,
+        "unit": "px"
+      },
+      "$description": "Tile grid cell from 2560px up."
+    },
+    "appbar-height": {
+      "$type": "dimension",
+      "$value": {
+        "value": 56,
+        "unit": "px"
+      },
+      "$description": "Height of the bottom app bar, plus the safe-area inset."
+    },
+    "touch-target": {
+      "$type": "dimension",
+      "$value": {
+        "value": 44,
+        "unit": "px"
+      },
+      "$description": "Minimum height and width of any control reached by touch. The app bar's controls use 48px in every density."
+    }
+  },
+  "density": {
+    "$description": "Two control densities. comfortable is the default for touch; compact applies when the primary pointer is fine and no coarse pointer is present, or when the user picks it. Touch size follows the input, never the breakpoint. Never below 24px (WCAG 2.5.8).",
+    "comfortable": {
+      "control-height": {
+        "$type": "dimension",
+        "$value": {
+          "value": 44,
+          "unit": "px"
+        },
+        "$description": "Buttons, fields, switches, toast actions."
+      },
+      "row-height": {
+        "$type": "dimension",
+        "$value": {
+          "value": 44,
+          "unit": "px"
+        },
+        "$description": "Interactive rows (menus, tables, selectable lists). Reading rows keep their natural height."
+      },
+      "control-padding": {
+        "$type": "dimension",
+        "$value": {
+          "value": 16,
+          "unit": "px"
+        },
+        "$description": "Inline padding of a button."
+      }
+    },
+    "compact": {
+      "control-height": {
+        "$type": "dimension",
+        "$value": {
+          "value": 32,
+          "unit": "px"
+        },
+        "$description": "Buttons, fields, switches, toast actions."
+      },
+      "row-height": {
+        "$type": "dimension",
+        "$value": {
+          "value": 32,
+          "unit": "px"
+        },
+        "$description": "Interactive rows (menus, tables, selectable lists)."
+      },
+      "control-padding": {
+        "$type": "dimension",
+        "$value": {
+          "value": 12,
+          "unit": "px"
+        },
+        "$description": "Inline padding of a button."
+      }
+    }
   },
   "motion": {
+    "$description": "Every transition has one meaning (see the motion table in README.md). Under reduced motion every motion.duration becomes 0: transitions go instant, never skipped. timing.* is wall time and stays.",
     "duration": {
-      "short": { "$type": "duration", "$value": "250ms", "$description": "Hover/border/colour state changes, sheets, toasts." },
-      "moderate": { "$type": "duration", "$value": "400ms", "$description": "Place change (turnstile), tile build-in, FLIP reflow, pivot title grow." },
-      "long": { "$type": "duration", "$value": "600ms", "$description": "Live drawing: line charts, growing bars." }
+      "press": {
+        "$type": "duration",
+        "$value": "100ms",
+        "$description": "A pressed tile sinking back under the pointer or key; it comes back over duration-short. 0s under reduced motion, where the press is a flat, instant sink."
+      },
+      "short": {
+        "$type": "duration",
+        "$value": "250ms",
+        "$description": "Hover/border/colour state changes, sheets, toasts, and each unit leaving in a place change."
+      },
+      "moderate": {
+        "$type": "duration",
+        "$value": "400ms",
+        "$description": "Place change (the arriving place of the turnstile), tile build-in, FLIP reflow, pivot title grow."
+      },
+      "long": {
+        "$type": "duration",
+        "$value": "600ms",
+        "$description": "Live drawing: line charts, growing bars, the toast's undo line."
+      },
+      "pivot-glide": {
+        "$type": "duration",
+        "$value": "500ms",
+        "$description": "The pivot strip gliding so the newly active title sits at the left edge. Used with ease-pivot-glide."
+      },
+      "pivot-size": {
+        "$type": "duration",
+        "$value": "220ms",
+        "$description": "The active pivot title growing and the previous one shrinking (ease-in-out); lighter and quicker than the glide."
+      },
+      "stagger": {
+        "$type": "duration",
+        "$value": "30ms",
+        "$description": "Delay per tile index when tiles build in, and between the rows of a place leaving in a place change (both capped at 10)."
+      },
+      "pulse": {
+        "$type": "duration",
+        "$value": "1400ms",
+        "$description": "One cycle of the live pulse in the app bar. Only for genuinely live data."
+      }
     },
     "easing": {
-      "base": { "$type": "cubicBezier", "$value": [0.25, 0.1, 0.25, 1], "$description": "Default for state changes: nothing snaps, everything glides briefly." },
-      "in": { "$type": "cubicBezier", "$value": [0, 0, 0.2, 1] },
-      "out": { "$type": "cubicBezier", "$value": [0.4, 0, 0.5, 1] }
+      "base": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.25,
+          0.1,
+          0.25,
+          1.0
+        ],
+        "$description": "Default for state changes: nothing snaps, everything glides briefly."
+      },
+      "in": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.0,
+          0.0,
+          0.2,
+          1.0
+        ],
+        "$description": "Things arriving: tile build-in, sheets, toasts, live line drawing."
+      },
+      "out": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.4,
+          0.0,
+          0.5,
+          1.0
+        ],
+        "$description": "Navigation: place change (turnstile) and facet change (pivot slide)."
+      },
+      "pivot-glide": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.65,
+          0.0,
+          0.35,
+          1.0
+        ],
+        "$description": "Pronounced ease-in-out of the pivot strip glide."
+      }
     },
-    "turnstile-angle": { "$type": "fluidSize", "$value": "40deg", "$description": "Rotation of a place-change transition around its leading edge." },
-    "slide-distance": { "$type": "dimension", "$value": { "value": 24, "unit": "px" }, "$description": "Horizontal travel of a facet (pivot) transition." }
+    "transform": {
+      "turnstile-angle": {
+        "$type": "number",
+        "$value": 40,
+        "$description": "Place change: a place turns this far around its leading edge while it fades. Forward, the old place swings toward the viewer and the new one swings in from the back; back, the other way round. Degrees.",
+        "$extensions": {
+          "rekta": {
+            "unit": "deg"
+          }
+        }
+      },
+      "turnstile-perspective": {
+        "$type": "dimension",
+        "$value": {
+          "value": 800,
+          "unit": "px"
+        },
+        "$description": "Perspective of a pressed tile, and the base perspective of the turnstile (the script adds distance from the axis)."
+      },
+      "slide-distance": {
+        "$type": "dimension",
+        "$value": {
+          "value": 24,
+          "unit": "px"
+        },
+        "$description": "Facet change: how far the incoming facet travels from its side of the pivot."
+      },
+      "tile-tilt": {
+        "$type": "number",
+        "$value": 8,
+        "$description": "How far a tile tilts at the edge where it is pressed; pressed in the middle it does not tilt. Degrees.",
+        "$extensions": {
+          "rekta": {
+            "unit": "deg"
+          }
+        }
+      },
+      "tile-press-scale": {
+        "$type": "number",
+        "$value": 0.97,
+        "$description": "How far a pressed tile sinks back."
+      }
+    }
+  },
+  "timing": {
+    "$description": "Wall-clock timings for input and feedback. Not motion: reduced motion leaves them alone.",
+    "toast": {
+      "$type": "duration",
+      "$value": "5000ms",
+      "$description": "How long a toast stays, and the undo window it counts down in whole seconds (the source's 5). Wall time, not motion: it is never zeroed under reduced motion. Hover or focus on the toast holds it. Undo in a toast is a shortcut, never the only way back: the action stays reversible where its result went, so the window limits no function."
+    },
+    "wheel-latch": {
+      "$type": "duration",
+      "$value": "200ms",
+      "$description": "Wheel events closer than this form one gesture; a gesture latches to one scroller (panorama rule 1b)."
+    },
+    "tap-delay": {
+      "$type": "duration",
+      "$value": "100ms",
+      "$description": "On touch, a tile presses only after this long without movement, so the start of a scroll never sinks it."
+    }
+  },
+  "layer": {
+    "$description": "Stacking order of Rekta's fixed and sticky layers. Dialogs, sheets and popovers use the browser's top layer and need no value.",
+    "sticky": {
+      "$type": "number",
+      "$value": 10,
+      "$description": "Sticky strips inside a place (the section pivot on a phone)."
+    },
+    "appbar": {
+      "$type": "number",
+      "$value": 20,
+      "$description": "The bottom app bar."
+    },
+    "banner": {
+      "$type": "number",
+      "$value": 30,
+      "$description": "The status banner."
+    },
+    "toast": {
+      "$type": "number",
+      "$value": 40,
+      "$description": "The toast region, above the banner and the app bar."
+    }
   },
   "breakpoint": {
-    "$description": "Rekta Design targets these four widths explicitly (see docs/layout.md); platforms without a viewport (native desktop) map them to window-size classes instead.",
-    "mobile": { "$type": "dimension", "$value": { "value": 375, "unit": "px" } },
-    "sideways-scroll-min": { "$type": "dimension", "$value": { "value": 760, "unit": "px" }, "$description": "Below this, navigation and panoramas never scroll sideways — only vertically." },
-    "desktop": { "$type": "dimension", "$value": { "value": 1440, "unit": "px" } },
-    "wide": { "$type": "dimension", "$value": { "value": 1920, "unit": "px" } },
-    "ultrawide": { "$type": "dimension", "$value": { "value": 2560, "unit": "px" } }
+    "$description": "Explicit design targets. The sideways layout needs width >= sideways-scroll-min AND height > short-height (the window-size class \"sideways\"); everything else is \"compact\".",
+    "mobile": {
+      "$type": "dimension",
+      "$value": {
+        "value": 375,
+        "unit": "px"
+      },
+      "$description": "Explicit design target width."
+    },
+    "sideways-scroll-min": {
+      "$type": "dimension",
+      "$value": {
+        "value": 760,
+        "unit": "px"
+      },
+      "$description": "Below this, navigation and panoramas never scroll sideways — only vertically."
+    },
+    "short-height": {
+      "$type": "dimension",
+      "$value": {
+        "value": 480,
+        "unit": "px"
+      },
+      "$description": "A viewport height. Up to this tall (400% zoom, a landscape phone) nothing sticks to the top: the status banner scrolls away with the page."
+    },
+    "desktop": {
+      "$type": "dimension",
+      "$value": {
+        "value": 1440,
+        "unit": "px"
+      },
+      "$description": "Explicit design target width."
+    },
+    "wide": {
+      "$type": "dimension",
+      "$value": {
+        "value": 1920,
+        "unit": "px"
+      },
+      "$description": "Explicit design target width."
+    },
+    "ultrawide": {
+      "$type": "dimension",
+      "$value": {
+        "value": 2560,
+        "unit": "px"
+      },
+      "$description": "Explicit design target width."
+    }
   }
 }

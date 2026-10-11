@@ -7,10 +7,11 @@ one; it should never be "add some animation because it feels nice."
 
 | Transition | Duration · easing | Meaning |
 |---|---|---|
-| **Place change** | `motion.duration.moderate` (400ms) · `motion.easing.out`, rotated `motion.turnstile-angle` (40°) around the leading edge, with a fade | "You are now at a different place." Reserved for real navigation between top-level places, never for a facet change within one place. |
+| **Press** | `motion.duration.press` (100ms) in, `motion.duration.short` (250ms) out · tilt up to `motion.transform.tile-tilt` (8°) towards the pressed point, scale `tile-press-scale` | "This tile heard you." Only on tiles that open something; a quick tap still shows the whole sink. |
+| **Place change** | Leaving: each unit `motion.duration.short` · `motion.easing.out`, rotated `motion.transform.turnstile-angle` (40°) around the leading edge of the box that clips it, a row at a time `duration-stagger` apart, the pressed tile last. Arriving: `motion.duration.moderate` (400ms), the same angle from the other side, with a fade | "You are now at a different place." Reserved for real navigation between places (a history entry), never for a facet or section change. Back runs it the other way round; a place you return to does not build in again. |
 | **Facet change (pivot)** | 0.75 × `motion.duration.moderate` (300ms) · `motion.easing.out`, travels `motion.slide-distance` (24px) from the trailing edge, with a fade | "Same place, different facet." The direction of travel matches the facet's position in the pivot's fixed order. |
 | **Panorama scroll** | native smooth scroll; an active section indicator transitions over `motion.duration.short` (250ms) | "Same place, you're looking sideways." Not a place change and not a facet change — nothing about the current facet or place has changed, only the scroll position. |
-| **Tiles building in** | `motion.duration.moderate` per tile, staggered ~30ms × index (capped around 10 tiles) · `motion.easing.in`, 6px rise | "This view is assembling itself from live data right now" — a first paint should not look like a static printed page. |
+| **Tiles building in** | `motion.duration.moderate` per tile, staggered ~30ms × index (capped around 10 tiles) · `motion.easing.in`, 6px rise | "This view is assembling itself from live data right now" — a first paint should not look like a static printed page. Only on arrival (first paint, or a place a tile opened): a re-render of live data never replays it. |
 | **Reordering (FLIP)** | `motion.duration.moderate` (400ms), computed per-element (first/last/invert/play) | "Something just moved because of what you did" — an item leaving, arriving, or changing group should be *seen* moving, not just appear/disappear, so cause and effect stay visible. |
 | **Sheets (dialogs, command entry)** | `motion.duration.short` (250ms) · `motion.easing.in`, 16px from the top edge, with a shaded + blurred backdrop | "A short question, from above; everything behind it stays exactly where it was." Sheets enter from the top edge, never scale in from the center. |
 | **Toast** | `motion.duration.short` (250ms), 12px from the top | "Something happened"; a toast with an undo action shows a countdown rather than just vanishing, so the user can see their window closing. |
@@ -21,8 +22,9 @@ one; it should never be "add some animation because it feels nice."
 ## Reduced motion
 
 `prefers-reduced-motion: reduce` (or an explicit in-app motion-off
-setting) sets all three duration tokens
-(`motion.duration.short/moderate/long`) to `0s`. This must make every
+setting) sets every `motion.duration.*` token to `0s`. The `timing.*`
+tokens stay: the toast's undo window is wall time the user needs, not
+motion. A press under reduced motion only shrinks; it does not tilt. This must make every
 transition in the table above instant, never skipped — the *end state*
 each transition reaches (new place, new facet, reordered item, open
 sheet) must still be reachable and still happen; only the perceptible

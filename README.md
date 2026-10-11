@@ -34,65 +34,82 @@ Full write-ups: [docs/principles.md](docs/principles.md),
 [docs/typography.md](docs/typography.md), [docs/colour.md](docs/colour.md),
 [docs/tiles.md](docs/tiles.md), [docs/motion.md](docs/motion.md),
 [docs/accessibility.md](docs/accessibility.md),
-[docs/platforms.md](docs/platforms.md).
+[docs/platforms.md](docs/platforms.md),
+[docs/behaviour.md](docs/behaviour.md).
 
-## Using the tokens
+## What's in the box
 
-[`tokens/rekta.tokens.json`](tokens/rekta.tokens.json) holds every
-value — colour (light/dark, status fills, text), typography, spacing,
-radius, motion (durations, easing), breakpoints — in
-[W3C Design Tokens (DTCG)](https://tr.designtokens.org/format/) format,
-so any tool that reads that format can consume it directly.
+Rekta has no dependencies on any framework. It ships three layers, and
+each one is usable without the next:
 
-For a web project, build plain CSS custom properties from it:
+| Layer | Files | For |
+|---|---|---|
+| **Tokens** | `tokens/rekta.tokens.json` (source, [DTCG](https://tr.designtokens.org/format/)), `dist/rekta.tokens.json` (resolved, platform-neutral), `dist/rekta.tokens.css` (`--rk-` custom properties) | Every platform. Another party can implement Rekta for WinUI, Qt, SwiftUI, Compose, Flutter or anything else from these: see [docs/platforms.md](docs/platforms.md). |
+| **Components** | `dist/rekta.css`, `dist/rekta.fonts.css` with `dist/fonts/` | The web: tiles, rows, tags, buttons, fields, pivots, panoramas, the app bar, sheets, toasts, the status banner, the crumb and the place change. Classes `.rk-*`, nothing global. |
+| **Behaviour** | `dist/rekta.js` (ES module), `dist/rekta.global.js` (classic script, `window.Rekta`) | The web, with any framework or none: press, the turnstile, routes and back, the panorama's wheel and keyboard, pivots, toasts with undo, the banner, sheets, prefs. See [docs/behaviour.md](docs/behaviour.md). |
 
-```sh
-node scripts/build-css.mjs          # writes dist/rekta.css
-node scripts/build-css.mjs --check  # self-check: no deps, no network
+## Using it on the web
+
+```html
+<link rel="stylesheet" href="rekta.tokens.css">
+<link rel="stylesheet" href="rekta.fonts.css">
+<link rel="stylesheet" href="rekta.css">
+<script type="module">
+  import * as Rekta from './rekta.js';
+  Rekta.start();                                   // prefs, press, sheets, first-paint build-in
+  Rekta.places({ home: 'board' });                 // places, addresses, back
+  Rekta.panorama(document.querySelector('.rk-panorama'), { pivot: document.querySelector('.rk-pivot') });
+</script>
 ```
 
-`dist/rekta.css` defines `:root` custom properties for the light
-theme, a `prefers-color-scheme: dark` block plus a `[data-theme="dark"]`
-override for the dark theme, and zeroes motion durations under
-`prefers-reduced-motion: reduce` or `[data-motion="off"]`.
+Theme, density and motion follow the system and can be overridden on
+the root element (`data-theme`, `data-density`, `data-motion`) or with
+`Rekta.prefs.set()`. Script state lives in `data-rk-*` attributes, never
+in classes, so a framework that owns `className` keeps working. The
+whole contract, with every hook, attribute and event, is in
+[docs/behaviour.md](docs/behaviour.md).
 
-For a native app (including a future native desktop client), read the
-token JSON directly — there is no CSS dependency, see
-[docs/platforms.md](docs/platforms.md) for how the same tokens and
-behaviours map onto non-web platforms.
+## Building and checking
+
+```sh
+node scripts/build.mjs           # writes dist/ (no dependencies, no network)
+node scripts/build.mjs --check   # contrast, colour-blind separation, every --rk- read defined
+node scripts/build-site.mjs      # dist/ plus the demo site in _site/
+node scripts/build-site.mjs --serve
+PLAYWRIGHT=/path/to/playwright/index.mjs node test/smoke.mjs   # clicks through the demo in Chromium
+```
+
+Node 20 or later. The smoke test needs Playwright, which the repository
+does not depend on.
+
+## Demo site
+
+`site/` is **Rekta Board**, a small app built on `dist/`: a board of
+live tiles that open their own places with a turnstile, rows with
+switches and actions, a facet pivot, fields, the status banner with
+four states, toasts with undo, and the theme, density and motion
+switches. `.github/workflows/pages.yml` builds it and deploys it to
+GitHub Pages on every push to `main` (and by hand).
 
 ## Status
 
-**v0 — documentation and tokens only.** There is no component library
-yet. The plan is to extract one later from an application that has
-already built the Metro × Porsche components against real product
-requirements — building a library ahead of that would mean guessing at
-APIs no one has used yet.
+**0.2: tokens, components and behaviour.** The foundation is in place:
+one token source for every platform, the component stylesheet and a
+framework-free behaviour script, with routes and back, window-size
+classes, density and a keyboard model. Next are the components that
+data-heavy desktop apps need: data states, menus and other floating
+surfaces, a table with selection, split views, a command palette, search
+and filters, and forms. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Repo
 
-This repo may be made public later; until then,
-treat it as a draft.
-
-## Showcase site
-
-`site/` is a static website built in Rekta Design that explains the
-design language with live examples. No dependencies, no framework, and no
-external requests (fonts are self-hosted, no CDN, no analytics).
-
-```sh
-node scripts/build-site.mjs          # builds dist/rekta.css, then _site/
-node scripts/build-site.mjs --serve  # same, then serves on http://127.0.0.1:4199
-```
-
-Swatches, contrast pairs and the type scale on the site are generated from
-`tokens/rekta.tokens.json` at build time. `.github/workflows/pages.yml`
-deploys `_site/` to GitHub Pages; it only runs when triggered by hand.
+This repo may be made public later; until then, treat it as a draft.
 
 ## License
 
-- **Code, design tokens, scripts and CSS** (`tokens/`, `scripts/`,
-  `site/` source, generated `dist/rekta.css`): [MIT](LICENSE).
+- **Code, design tokens, scripts, CSS and JavaScript** (`tokens/`,
+  `src/`, `scripts/`, `site/` source, `test/`, everything generated in
+  `dist/`): [MIT](LICENSE).
 - **Documentation and images** (this README and `docs/`, including
   `docs/images/`): [CC BY 4.0](LICENSE-docs). Suggested attribution:
   "Rekta Design by DerDaehne, CC BY 4.0".

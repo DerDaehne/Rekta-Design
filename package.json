@@ -1,0 +1,22 @@
+{
+  "name": "rekta-design",
+  "version": "0.2.0",
+  "description": "Rekta Design: a platform-neutral design language with design tokens, a component stylesheet and a framework-free behaviour script.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./tokens.json": "./dist/rekta.tokens.json",
+    "./tokens.css": "./dist/rekta.tokens.css",
+    "./rekta.css": "./dist/rekta.css",
+    "./fonts.css": "./dist/rekta.fonts.css",
+    ".": "./dist/rekta.js"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/build.mjs --check",
+    "site": "node scripts/build-site.mjs",
+    "serve": "node scripts/build-site.mjs --serve"
+  },
+  "engines": { "node": ">=20" }
+}

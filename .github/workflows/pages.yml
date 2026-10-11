@@ -1,8 +1,10 @@
-# Builds the showcase site and deploys it to GitHub Pages.
-# Manual only for now: the repository is private and Pages is not enabled yet.
+# Builds the demo site (Rekta Board) on dist/ and deploys it to GitHub Pages: on every push to main, and by hand.
+# A run from another branch deploys only if the github-pages environment allows that branch.
 name: pages
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -27,9 +29,9 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - name: Check tokens
-        run: node scripts/build-css.mjs --check
-      - name: Build CSS and site
+      - name: Check tokens, stylesheet and script
+        run: node scripts/build.mjs --check
+      - name: Build dist and the demo site
         run: node scripts/build-site.mjs
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

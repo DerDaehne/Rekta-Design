@@ -59,3 +59,41 @@ A tile combines at most two or three of these — a tile that tries to
 show a stat pair, a sparkline, a progress meter and a long status
 description all at once has stopped being a tile and become a page that
 needs its own screen.
+
+## What a tile does
+
+A tile **opens** something, or it is only information. It never changes
+data.
+
+- **A tile that opens** is a link (to a place) or a button (that opens a
+  sheet). It nudges back where it is pressed, and a link turns the place
+  (see [motion.md](motion.md)). There is no arrow glyph on it: the press
+  and the turn say that it goes somewhere.
+- **A tile that only informs** is not a control. It does not press and
+  takes no focus.
+- **A tile never toggles, cycles or deletes.** A tile's status changes
+  because its data changed, never because it was clicked: a click that
+  changes what the tile shows would make every tile a potential
+  accident on a board people tap to look closer.
+
+Rows follow the same split, one control per meaning:
+
+| In a row | Is | Does |
+|---|---|---|
+| The title | A link, when the row opens a place | Opens it |
+| A state | A switch or checkbox | Sets the state (done, enabled) |
+| An action | A button with a verb | Acts on the row (approve, retry) |
+
+A row is never a single button that does one of these by surprise.
+
+## Press
+
+A tile that opens something tilts back towards where it is pressed, by
+up to `motion.transform.tile-tilt` (8°), and shrinks to
+`tile-press-scale` over `duration-press`; pressed in the middle it sinks
+straight back. It comes back over `duration-short`. A quick tap still
+shows the whole sink. While pressed, its hit area grows by `space-m`, so
+a release on the edge that moved away still lands. Dragging, or
+selecting text in the tile, never activates it. On touch, the press
+waits `timing.tap-delay` (100ms) and gives up on 8px of movement, so the
+start of a scroll never sinks a tile.
