@@ -43,9 +43,9 @@ colour on top of **every** tile fill, in both themes — never a
 status-specific text colour. This is a hard constraint, not a
 convenience: every tile fill was chosen so that primary-on-tile clears
 WCAG AA (≥ 4.5:1) for normal text, in both the light and dark token
-sets. `scripts/build-css.mjs --check` verifies exactly these eight pairs
-(four statuses × two themes) and fails the build if a future token edit
-breaks one.
+sets. `node scripts/build.mjs --check` verifies these eight pairs (four
+statuses × two themes), together with every other text, mark, focus and
+soft-tint pair, and fails the build if a future token edit breaks one.
 
 Secondary text (`color.*.text.contrast-high`) is used on neutral
 surfaces, never on a status tile — its contrast was only checked against
@@ -69,3 +69,33 @@ contrast on at least one surface in testing. `hover` is a translucent
 neutral overlay (same rgba value in both themes, since it is applied on
 top of the theme's own surface colour). `disabled` is a single flat grey
 per theme, used for text and borders, never as a fill.
+
+## Status vocabulary
+
+Four statuses and their absence, each with one fixed word. The word is
+always shown with the colour (a tile's status word, a tag's word, the
+banner's word), and the same state uses the same word everywhere in a
+product.
+
+| `data-status` | Word | Means |
+|---|---|---|
+| `info` | active | Running, in progress, live |
+| `warning` | waiting | Paused, queued, waiting for someone |
+| `error` | failed | Stopped by a fault; needs action |
+| `success` | done | Finished as intended |
+| none | idle | Nothing is happening; no status |
+
+A product may add words for its own states (offline, halted, read-only
+in a banner) but maps each onto one of these colours and never reuses a
+word for two states. A status is never decoration: no status colour for
+emphasis, selection, branding or a chart series.
+
+## Selection and floating surfaces
+
+- **Selected rows** take the `surface` fill and a checkbox at the leading
+  edge. Selection is never a status colour and never the accent as a
+  fill: a selected failed job still reads as failed.
+- **Floating surfaces** (menus, the command palette, the places list, a
+  combobox's list) are `bg` with a 1px `text-contrast-medium` edge and
+  `radius-s`. No shadow: the edge parts them from what is below in both
+  themes, and in forced colours.

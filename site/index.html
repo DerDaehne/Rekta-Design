@@ -2,283 +2,385 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
-<meta name="referrer" content="no-referrer">
-<meta name="description" content="Rekta Design, a platform-neutral design language of panoramas, pivots, full-colour live tiles and meaningful motion, explained in itself.">
-<title>Rekta Design</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Rekta Board</title>
+<link rel="stylesheet" href="rekta.tokens.css">
+<link rel="stylesheet" href="rekta.fonts.css">
 <link rel="stylesheet" href="rekta.css">
-<link rel="stylesheet" href="site.css">
-<script src="site.js"></script>
+<link rel="stylesheet" href="board.css">
+<!-- Prefs go on the root before first paint, so a remembered theme never flashes. -->
+<script src="rekta.global.js"></script>
+<script>Rekta.prefs.restore(); try { if (localStorage.getItem('rekta-board-accent') === 'plum') document.documentElement.dataset.accent = 'plum'; } catch (e) { /* per visit only */ }</script>
 </head>
 <body>
-<a class="skip" href="#panorama">skip to content</a>
-
-<header class="top">
-  <a class="brand" href="#overview"><b>rekta</b> design</a>
-  <nav class="pivot" aria-label="sections" data-sideways>
-    <a href="#overview" aria-current="true">overview</a>
-    <a href="#roots">roots</a>
-    <a href="#principles">principles</a>
-    <a href="#colour">colour</a>
-    <a href="#typography">typography</a>
-    <a href="#tiles">tiles</a>
-    <a href="#panorama-pivot">panorama &amp; pivot</a>
-    <a href="#motion">motion</a>
-    <a href="#accessibility">accessibility</a>
-    <a href="#platforms">platforms</a>
-    <a href="#get-started">get started</a>
-    <span class="pivot-end" aria-hidden="true"></span>
-  </nav>
-</header>
-
-<main id="panorama" class="panorama" tabindex="0" aria-label="Rekta Design panorama" data-sideways>
-
-<section id="overview" class="sec" style="--w:40rem">
-  <p class="kicker">a design language · v0 · web and native desktop</p>
-  <h1 class="title">Straight lines, live tiles, sideways motion.</h1>
-  <p class="facts">no cards · two independent themes · four status fills · every value a token</p>
-  <p>Rekta Design is a platform-neutral design language; the name comes from Latin <i>recta</i>, the straight line. This site is built in it: you are inside a <b>panorama</b>, the <b>pivot</b> above names its sections in a fixed order, and the <b>app bar</b> below holds the global controls.</p>
-  <div class="tiles">
-    <a class="tile" data-status="info" href="#get-started" style="--i:0"><span class="tile-word">active</span><span class="stat"><b>v0</b><span>tokens, docs, this site</span></span></a>
-    <a class="tile" data-status="success" href="#colour" style="--i:1"><span class="tile-word">done</span><span class="stat"><b>AA</b><span>text on every fill</span></span></a>
-    <div class="tile" data-status="success" style="--i:2"><span class="tile-word">done</span><span class="stat"><b>0</b><span>external requests</span></span></div>
-    <div class="tile" data-status="warning" style="--i:3"><span class="tile-word">waiting</span><span class="stat"><b>lib</b><span>components, later</span></span></div>
+<div class="rk app" id="app">
+  <div class="rk-banner" id="banner" data-rk-phase="clear">
+    <div class="rk-banner-live"><p role="alert"></p><p role="status"></p></div>
+    <p class="rk-actions"><button class="rk-btn" id="remedy" type="button">release stop</button></p>
   </div>
-  <p class="note">Move sideways with the mouse wheel, a trackpad swipe, or ← → once the panorama has focus. On a phone, just scroll down.</p>
-</section>
 
-<section id="roots" class="sec">
-  <p class="kicker">roots</p>
-  <h2>Inspired by Metro.</h2>
-  <p>Rekta Design is inspired by Microsoft's <b>Metro</b> design language, to us one of the best UX designs ever shipped, from Zune and Windows Phone 7 (2010) to Windows 8 (2012). We find it a pity that no major product uses it today, so Rekta Design takes up its ideas in its own form: its own tokens, typography and components.</p>
-  <ol class="timeline">
-    <li><b>2000s</b><span>Media Center, Zune</span></li>
-    <li><b>2010</b><span>Windows Phone 7</span></li>
-    <li><b>2012</b><span>Windows 8</span></li>
-    <li data-status="info"><b>today</b><span>inspired: Rekta Design</span></li>
-  </ol>
-  <ul class="rows">
-    <li><b>content over chrome</b>The information is the interface. Nothing gets a box just to look tidy.</li>
-    <li><b>authentically digital</b>No imitation leather or paper: type, colour and motion that belong to a screen.</li>
-    <li><b>type as structure</b>Rooted in the Swiss International Typographic Style and in the wayfinding signage of public transport: large, plain, readable at a glance.</li>
-  </ul>
-  <p>Its token values are derived from the source code of the <b>Porsche Design System</b> (Apache-2.0): numbers and colours only, no code, fonts or marks.</p>
-  <p class="note">sources: <a href="https://en.wikipedia.org/wiki/Metro_(design_language)" rel="noreferrer">Metro (design language)</a> · <a href="https://en.wikipedia.org/wiki/International_Typographic_Style" rel="noreferrer">International Typographic Style</a> · <a href="https://github.com/porsche-design-system/porsche-design-system" rel="noreferrer">Porsche Design System</a></p>
-  <p class="note">Rekta Design is independent and not affiliated with or endorsed by Microsoft or Porsche.</p>
-</section>
+  <!-- The board: the home place. Its section strip is a direct child, so it sticks on a phone. -->
+  <main class="rk-place place-board" data-rk-place="board" aria-labelledby="overview-title">
+    <header class="top">
+      <p class="brand"><b>Rekta</b> Board</p>
+      <p class="rk-facts">demo with invented data · from 760px wide it moves sideways: the wheel, a swipe, or ← → once the panorama has focus</p>
+    </header>
+    <nav class="rk-pivot" id="nav" aria-label="sections">
+      <a href="#overview" aria-current="location">overview</a><a href="#jobs">jobs</a><a href="#facets">facets</a><a href="#controls">controls</a><a href="#system">system</a><a href="#look">look</a>
+      <span class="rk-pivot-end" aria-hidden="true"></span>
+    </nav>
 
-<section id="principles" class="sec" style="--w:32rem">
-  <p class="kicker">principles</p>
-  <h2>Nothing is decoration.</h2>
-  <ol class="rows rows--numbered">
-    <li><b>content over chrome</b>No cards, no boxed panels. Information sits on the ground, grouped by hairlines and whitespace.</li>
-    <li><b>motion as guidance</b>Every transition answers a question: where am I, which facet, what just happened.</li>
-    <li><b>information-dense live tiles</b>A tile's size follows importance; its fill colour is its status.</li>
-    <li><b>panorama and pivot</b>One place, wider than the screen, moved through sideways; its facets in a fixed order.</li>
-    <li><b>refined precision</b>Hairlines, tabular figures, calm large areas, vivid small accents.</li>
-  </ol>
-</section>
+    <div class="rk-panorama" id="pan" tabindex="0" role="region" aria-label="board, sections side by side">
+      <!-- 1 · overview: tiles open places; live tiles and sparklines -->
+      <section class="rk-sec sec-wide" id="overview" aria-labelledby="overview-title">
+        <p class="rk-kicker">overview · live</p>
+        <h1 class="rk-title" id="overview-title">Release 1.8</h1>
+        <p class="rk-facts" id="facts">1 failed · 3 waiting · 12 running · updated every 2 s</p>
+        <div class="rk-tiles" id="tiles">
+          <a class="rk-tile rk-w2 rk-h2" href="#import" data-status="error" id="tile-import" style="--rk-i:0">
+            <span class="rk-tile-word">failed</span>
+            <span class="rk-stat"><b>3 / 5</b><span>nightly import steps</span></span>
+            <span class="rk-tile-msg">Stopped at the schema check: column “due” is missing. Run the migration, then retry.</span>
+            <progress class="rk-progress" max="5" value="3" aria-hidden="true">3 of 5</progress>
+          </a>
+          <a class="rk-tile rk-w2" href="#queue" data-status="info" data-live="queue" id="tile-queue" style="--rk-i:1">
+            <span class="rk-tile-word">active</span>
+            <span class="rk-stat"><b data-v>12</b><span>jobs in the build queue</span></span>
+            <svg class="rk-spark" viewBox="0 0 200 28" role="img" aria-label="build queue"><polyline pathLength="1" points="0,14 200,14"/></svg>
+          </a>
+          <a class="rk-tile" href="#reviews" data-status="warning" id="tile-reviews" style="--rk-i:2">
+            <span class="rk-tile-word">waiting</span>
+            <span class="rk-stat"><b id="reviews-open">3</b><span>awaiting review</span></span>
+            <progress class="rk-progress" id="reviews-progress" max="5" value="2" aria-hidden="true">2 of 5</progress>
+          </a>
+          <a class="rk-tile" href="#runs" data-status="success" id="tile-runs" style="--rk-i:3">
+            <span class="rk-tile-word">done</span>
+            <span class="rk-stat"><b>38</b><span>deploys today</span></span>
+          </a>
+          <div class="rk-tile rk-w2" data-live="coverage" style="--rk-i:4">
+            <span class="rk-tile-word">idle</span>
+            <span class="rk-stat"><b data-v>87.4%</b><span>test coverage</span></span>
+            <svg class="rk-spark" viewBox="0 0 200 28" role="img" aria-label="test coverage"><polyline pathLength="1" points="0,14 200,14"/></svg>
+          </div>
+          <div class="rk-tile" style="--rk-i:5">
+            <span class="rk-tile-word">idle</span>
+            <span class="rk-stat"><b>4 / 4</b><span>hosts reachable</span></span>
+          </div>
+          <div class="rk-tile" style="--rk-i:6">
+            <span class="rk-tile-word">idle</span>
+            <span class="rk-stat"><b>0</b><span>incidents open</span></span>
+          </div>
+        </div>
+        <p class="note">Press a tile and it nudges back where you press it. Tiles open things: the failed import, the build queue, the reviews and today's deploys each turn to their own place, and back turns the board in again. A tile never changes data; its status changes because the data does. Finished tiles drop their sparkline: stillness means done.</p>
+        <ul class="rk-rows trend">
+          <li><b>build queue</b><span class="rk-meta" data-trend-v="queue">12 jobs</span><svg class="rk-spark" data-status="info" viewBox="0 0 200 28" role="img" aria-label="build queue trend" data-trend="queue"><polyline pathLength="1" points="0,14 200,14"/></svg></li>
+          <li><b>failed imports</b><span class="rk-meta">4 today</span><svg class="rk-spark rk-spark--static" data-status="error" viewBox="0 0 200 28" role="img" aria-label="4 failed imports today, rising"><polyline pathLength="1" points="0,24 9,23 17,22 26,22 35,21 43,20 52,21 61,19 70,19 78,18 87,17 96,17 104,16 113,15 122,14 130,14 139,12 148,12 157,11 165,9 174,9 183,7 191,6 200,5"/></svg></li>
+        </ul>
+      </section>
 
-<section id="colour" class="sec" style="--w:40rem">
-  <p class="kicker">colour</p>
-  <h2>Status is a fill, not an accent.</h2>
-  <p>Neutral ground, no brand hue. Four status colours carry meaning and only meaning: large fills use the dampened <code>tile</code> form, small marks the saturated <code>full</code> form. Primary text sits on every fill and must clear AA; the ratios are measured live in the current theme.</p>
-  <div class="tiles"><!--@status--></div>
-  <h3>Neutral surfaces <span class="hex">light · dark</span></h3>
-  <!--@swatches-->
-  <h3>Contrast on neutral ground</h3>
-  <!--@pairs-->
-</section>
+      <!-- 2 · jobs: rows with a title link, a switch for state, FLIP between groups, archive with undo -->
+      <section class="rk-sec" id="jobs" aria-labelledby="jobs-title">
+        <p class="rk-kicker">jobs</p>
+        <div class="sec-head"><h2 class="rk-group" id="jobs-title">Tonight</h2><p class="rk-actions"><button class="rk-btn" id="archive" type="button">archive done</button><button class="rk-btn" id="jobs-more" type="button">more</button></p></div>
+        <div id="jobs-menu">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="refresh">refresh<span class="rk-menu-key">R</span></button>
+          <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="true" type="button" data-act="show-done">show done jobs</button>
+          <hr class="rk-menu-sep">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="export">export as CSV</button>
+          <button class="rk-menu-item" role="menuitem" type="button" aria-disabled="true" data-act="print">print (needs a printer)</button>
+        </div>
+        <p class="note">A row's title opens it, its switch sets its state, a button acts. Mark a job done and it moves to its group. Archive the done jobs, then undo within 5 seconds (or press Ctrl/⌘+Z). Hover or focus the toast to hold it. More → refresh shows the loading line; try it while offline.</p>
+        <p class="rk-kicker group-label" id="open-label">open</p>
+        <div class="rk-region" id="jobs-region">
+        <ul class="rk-rows jobs" id="open" aria-labelledby="open-label">
+          <li data-orig="error"><a class="job-name" href="#import">Nightly import</a><span class="rk-meta">3 of 5 steps</span><span class="rk-tag" data-status="error">failed</span><label class="rk-switch"><input type="checkbox" aria-label="Nightly import done"> done</label></li>
+          <li data-orig="warning"><a class="job-name" href="#reviews">Release notes</a><span class="rk-meta">review requested</span><span class="rk-tag" data-status="warning">waiting</span><label class="rk-switch"><input type="checkbox" aria-label="Release notes done"> done</label></li>
+          <li data-orig="info"><b class="job-name">Search reindex</b><span class="rk-meta">62%</span><span class="rk-tag" data-status="info">active</span><label class="rk-switch"><input type="checkbox" aria-label="Search reindex done"> done</label></li>
+        </ul>
+        <p class="rk-kicker group-label" id="done-label">done</p>
+        <ul class="rk-rows jobs" id="done" aria-labelledby="done-label">
+          <li data-orig="success"><b class="job-name">Report export</b><span class="rk-meta">41 s</span><span class="rk-tag" data-status="success">done</span><label class="rk-switch"><input type="checkbox" checked aria-label="Report export done"> done</label></li>
+          <li data-orig="success"><b class="job-name">Deploy 2026.10.11-2</b><span class="rk-meta">3 min</span><span class="rk-tag" data-status="success">done</span><label class="rk-switch"><input type="checkbox" checked aria-label="Deploy 2026.10.11-2 done"> done</label></li>
+        </ul>
+        </div>
+      </section>
 
-<section id="typography" class="sec" style="--w:38rem">
-  <p class="kicker">typography</p>
-  <h2>Three levels, one bold title.</h2>
-  <div class="levels" role="img" aria-label="Example of the three title levels: a kicker, a bold title, a fact line">
-    <p class="kicker">board · updated 2 min ago</p>
-    <p class="title">Migrate the nightly import</p>
-    <p class="facts">3 of 5 steps · failed at the schema check · 4 comments</p>
-  </div>
-  <p>Level 1, a quiet kicker. Level 2, the one semibold title per screen. Level 3, a fact line. Navigation titles, like the pivot above, are large and <span class="light">light</span>: they name a place, not a thing. UI words are lowercase; content keeps its own case.</p>
-  <h3>Scale and weights</h3>
-  <!--@typescale-->
-  <p class="note">Body text is Barlow at {{typography.size.s}}, self-hosted under the SIL Open Font License.</p>
-</section>
+      <!-- 3 · facets: a pivot inside a place -->
+      <section class="rk-sec" id="facets" aria-labelledby="facets-title">
+        <p class="rk-kicker">facets</p>
+        <h2 class="rk-group" id="facets-title">Nightly import</h2>
+        <p class="note">A pivot inside a place: the strip keeps its order and glides the chosen facet to the left edge. A facet replaces what shows; it adds nothing to history. Use the arrow keys once a facet has focus.</p>
+        <div class="rk-pivot" role="tablist" aria-label="facets of nightly import" id="facet-strip">
+          <button role="tab" id="tab-0" aria-selected="true" aria-controls="facet-0" type="button">summary</button>
+          <button role="tab" id="tab-1" aria-selected="false" aria-controls="facet-1" tabindex="-1" type="button">activity</button>
+          <button role="tab" id="tab-2" aria-selected="false" aria-controls="facet-2" tabindex="-1" type="button">files</button>
+          <button role="tab" id="tab-3" aria-selected="false" aria-controls="facet-3" tabindex="-1" type="button">settings</button>
+          <span class="rk-pivot-end" aria-hidden="true"></span>
+        </div>
+        <div class="facet" role="tabpanel" id="facet-0" aria-labelledby="tab-0"><p class="rk-facts">5 steps · 3 done · stopped at the schema check</p><ul class="rk-rows"><li>Schema check<span class="rk-tag" data-status="error">failed</span></li><li>Load<span class="rk-tag">idle</span></li></ul></div>
+        <div class="facet" role="tabpanel" id="facet-1" aria-labelledby="tab-1" hidden><ul class="rk-rows"><li>Import retried<span class="rk-meta">02:14</span></li><li>Review requested<span class="rk-meta">01:20</span></li><li>Deploy finished<span class="rk-meta">yesterday 23:05</span></li></ul></div>
+        <div class="facet" role="tabpanel" id="facet-2" aria-labelledby="tab-2" hidden><ul class="rk-rows"><li>schema.sql<span class="rk-meta">4 kB</span></li><li>import.log<span class="rk-meta">18 kB</span></li></ul></div>
+        <div class="facet" role="tabpanel" id="facet-3" aria-labelledby="tab-3" hidden><ul class="rk-rows"><li>Retry on failure<span class="rk-meta">on</span></li><li>Notify on done<span class="rk-meta">off</span></li></ul></div>
+      </section>
 
-<section id="tiles" class="sec" style="--w:40rem">
-  <p class="kicker">tiles</p>
-  <h2>Tiles, not cards.</h2>
-  <p>A tile's whole area is one fill, and the fill is its status. Size follows importance. Content follows a few patterns: stat pair, sparkline, progress, status word. Click a tile to change its status. The data is invented and updates live.</p>
-  <div class="tiles" id="live-tiles">
-    <button class="tile w2 h2" data-cycle data-status="error" style="--i:0">
-      <span class="tile-word">failed</span>
-      <span class="stat"><b>3 / 5</b><span>nightly import steps</span></span>
-      <span class="tile-msg">Stopped at the schema check: column “due” is missing. Run the migration, then retry.</span>
-      <progress max="5" value="3">3 of 5</progress>
-    </button>
-    <button class="tile w2" data-cycle data-status="info" data-live="queue" style="--i:1">
-      <span class="tile-word">active</span>
-      <span class="stat"><b data-v>12</b><span>jobs in the build queue</span></span>
-      <svg class="spark" viewBox="0 0 200 28" role="img" aria-label="build queue"><polyline pathLength="1" points="0,14 200,14"/></svg>
-    </button>
-    <button class="tile" data-cycle data-status="warning" style="--i:2">
-      <span class="tile-word">waiting</span>
-      <span class="stat"><b>7</b><span>awaiting review</span></span>
-      <progress max="10" value="4">4 of 10</progress>
-    </button>
-    <button class="tile" data-cycle data-status="success" style="--i:3">
-      <span class="tile-word">done</span>
-      <span class="stat"><b>38</b><span>deploys today</span></span>
-    </button>
-    <button class="tile w2" data-cycle data-live="coverage" style="--i:4">
-      <span class="tile-word">idle</span>
-      <span class="stat"><b data-v>87.4%</b><span>test coverage</span></span>
-      <svg class="spark" viewBox="0 0 200 28" role="img" aria-label="test coverage"><polyline pathLength="1" points="0,14 200,14"/></svg>
-    </button>
-  </div>
-  <p class="note">Finished tiles drop their sparkline: stillness means done. Every chart has a text equivalent for screen readers.</p>
-</section>
+      <!-- 4 · controls: buttons, fields, switches, tags -->
+      <section class="rk-sec" id="controls" aria-labelledby="controls-title">
+        <p class="rk-kicker">controls</p>
+        <h2 class="rk-group" id="controls-title">Schedule</h2>
+        <form class="fields" id="schedule-form" novalidate>
+          <div class="rk-field">
+            <label class="rk-label" for="f-name">project name</label>
+            <input class="rk-input" id="f-name" value="Nightly import" aria-describedby="h-name">
+            <span class="rk-hint" id="h-name">Shown on every tile of this project.</span>
+          </div>
+          <div class="rk-field" id="time-field">
+            <label class="rk-label" for="f-time">start time</label>
+            <input class="rk-input" id="f-time" value="25:00" inputmode="numeric" aria-describedby="h-time">
+            <span class="rk-hint" id="h-time">Daily, in 24-hour time.</span>
+          </div>
+          <div class="rk-field">
+            <label class="rk-label" for="f-owner">owner</label>
+            <input class="rk-input" id="f-owner" value="kabai studio" disabled>
+          </div>
+          <label class="rk-switch"><input type="checkbox" id="f-retry" checked> retry on failure</label>
+          <p class="rk-actions"><button class="rk-btn rk-btn--primary" id="save" type="submit" data-rk-pending-label="saving schedule…">save schedule</button><button class="rk-btn" id="revert" type="button">revert</button><button class="rk-btn" type="button" disabled>delete</button></p>
+        </form>
+        <p class="note">Tags on the ground, and soft tags in running text:</p>
+        <p class="rk-actions tag-row"><span class="rk-tag" data-status="info">active</span><span class="rk-tag" data-status="warning">waiting</span><span class="rk-tag" data-status="error">failed</span><span class="rk-tag" data-status="success">done</span><span class="rk-tag">idle</span></p>
+        <p>The nightly import is <span class="rk-tag rk-tag--soft" data-status="error">failed</span> and the release notes are <span class="rk-tag rk-tag--soft" data-status="warning">waiting</span> for review.</p>
+      </section>
 
-<section id="panorama-pivot" class="sec">
-  <p class="kicker">panorama &amp; pivot</p>
-  <h2>One place, wider than the screen.</h2>
-  <p>A <b>panorama</b> is one place laid out sideways. On desktop a plain mouse wheel moves it sideways, except where something can still scroll vertically; horizontal input is left alone, and at either end the wheel falls through. Below {{breakpoint.sideways-scroll-min}} everything stacks vertically.</p>
-  <p>A <b>pivot</b> is one place's facets in a fixed order. The active title is large; the strip scrolls so it sits at the left edge, never reordered. Try it:</p>
-  <div class="facets" data-facets>
-    <div class="pivot pivot--demo" role="tablist" aria-label="example facets" data-sideways>
-      <button role="tab" id="tab-0" aria-controls="facet-0" aria-selected="true">summary</button>
-      <button role="tab" id="tab-1" aria-controls="facet-1" aria-selected="false" tabindex="-1">activity</button>
-      <button role="tab" id="tab-2" aria-controls="facet-2" aria-selected="false" tabindex="-1">files</button>
-      <button role="tab" id="tab-3" aria-controls="facet-3" aria-selected="false" tabindex="-1">settings</button>
-      <span class="pivot-end" aria-hidden="true"></span>
+      <!-- 5 · system: status banner states, precedence, toasts -->
+      <section class="rk-sec" id="system" aria-labelledby="system-title">
+        <p class="rk-kicker">system</p>
+        <h2 class="rk-group" id="system-title">State</h2>
+        <p class="note">A lasting state takes the banner on top. One banner at a time, the most severe wins: halted, then offline, then paused, then read-only. An ending state is an event, so a toast reports it. Stop and pause also live in the app bar.</p>
+        <div class="fields">
+          <label class="rk-switch"><input type="checkbox" id="s-halted"> emergency stop (halted)</label>
+          <label class="rk-switch"><input type="checkbox" id="s-offline"> lose the connection (offline)</label>
+          <label class="rk-switch"><input type="checkbox" id="s-paused"> pause intake (paused)</label>
+          <label class="rk-switch"><input type="checkbox" id="s-readonly"> database maintenance (read-only)</label>
+        </div>
+        <ul class="rk-rows">
+          <li>banner now<span class="rk-meta" id="state-now">none</span></li>
+          <li>live data<span class="rk-meta" id="data-now">updating</span></li>
+        </ul>
+        <p class="rk-actions"><button class="rk-btn" id="event" type="button">raise an event toast</button></p>
+      </section>
+
+      <!-- 6 · look: theme, density, motion, accent slot, sheet -->
+      <section class="rk-sec" id="look" aria-labelledby="look-title">
+        <p class="rk-kicker">look</p>
+        <h2 class="rk-group" id="look-title">Theme, density and motion</h2>
+        <div class="fields">
+          <fieldset class="rk-choices"><legend class="rk-label">theme</legend>
+            <label class="rk-switch"><input type="radio" name="theme" value="system"> system</label>
+            <label class="rk-switch"><input type="radio" name="theme" value="light"> light</label>
+            <label class="rk-switch"><input type="radio" name="theme" value="dark"> dark</label>
+          </fieldset>
+          <fieldset class="rk-choices"><legend class="rk-label">density</legend>
+            <label class="rk-switch"><input type="radio" name="density" value="auto"> by pointer</label>
+            <label class="rk-switch"><input type="radio" name="density" value="comfortable"> comfortable</label>
+            <label class="rk-switch"><input type="radio" name="density" value="compact"> compact</label>
+          </fieldset>
+          <span class="rk-hint">By pointer: 32px controls with a mouse or trackpad, 44px as soon as a touch screen is present. The app bar stays 48px.</span>
+          <fieldset class="rk-choices"><legend class="rk-label">motion</legend>
+            <label class="rk-switch"><input type="radio" name="motion" value="system"> system</label>
+            <label class="rk-switch"><input type="radio" name="motion" value="on"> on</label>
+            <label class="rk-switch"><input type="radio" name="motion" value="off"> off</label>
+          </fieldset>
+          <span class="rk-hint">Off makes every transition instant, never skipped. Live figures keep updating.</span>
+          <fieldset class="rk-choices"><legend class="rk-label">accent slot</legend>
+            <label class="rk-switch"><input type="radio" name="accent" value="ink"> ink (default)</label>
+            <label class="rk-switch"><input type="radio" name="accent" value="plum"> plum (an example product)</label>
+          </fieldset>
+          <span class="rk-hint">The accent fills the primary button and checked controls. It never colours a tile or a status.</span>
+          <p class="rk-actions"><button class="rk-btn" id="reset" type="button">reset the demo</button></p>
+        </div>
+      </section>
+      <span class="rk-panorama-end" aria-hidden="true"></span>
     </div>
-    <div class="facet" role="tabpanel" id="facet-0" aria-labelledby="tab-0"><p class="facts">4 open · 2 waiting · 1 failed</p><ul class="rows"><li>Nightly import<span class="hex">failed</span></li><li>Release notes<span class="hex">waiting</span></li></ul></div>
-    <div class="facet" role="tabpanel" id="facet-1" aria-labelledby="tab-1" hidden><ul class="rows"><li>Import retried<span class="hex">2 min ago</span></li><li>Review requested<span class="hex">1 h ago</span></li><li>Deploy finished<span class="hex">3 h ago</span></li></ul></div>
-    <div class="facet" role="tabpanel" id="facet-2" aria-labelledby="tab-2" hidden><ul class="rows"><li>schema.sql<span class="hex">4 kB</span></li><li>import.log<span class="hex">18 kB</span></li></ul></div>
-    <div class="facet" role="tabpanel" id="facet-3" aria-labelledby="tab-3" hidden><ul class="rows"><li>Retry on failure<span class="hex">on</span></li><li>Notify on done<span class="hex">off</span></li></ul></div>
-  </div>
-  <p class="note">This site's header is the same component: scroll the panorama and watch it follow.</p>
-</section>
+  </main>
 
-<section id="motion" class="sec" style="--w:44rem">
-  <p class="kicker">motion</p>
-  <h2>Every transition means one thing.</h2>
-  <table>
-    <thead><tr><th>transition</th><th>timing</th><th>means</th></tr></thead>
-    <tbody>
-      <tr><td>place change</td><td>{{motion.duration.moderate}}, turnstile {{motion.turnstile-angle}}</td><td>you are somewhere else</td></tr>
-      <tr><td>facet change</td><td>0.75 × {{motion.duration.moderate}}, {{motion.slide-distance}} slide</td><td>same place, other facet</td></tr>
-      <tr><td>panorama scroll</td><td>native smooth scroll</td><td>same place, looking sideways</td></tr>
-      <tr><td>tiles build in</td><td>{{motion.duration.moderate}}, 30ms stagger, 6px rise</td><td>assembling from live data</td></tr>
-      <tr><td>reorder (FLIP)</td><td>{{motion.duration.moderate}}</td><td>this moved because of you</td></tr>
-      <tr><td>sheet</td><td>{{motion.duration.short}}, 16px from the top</td><td>a short question from above</td></tr>
-      <tr><td>toast</td><td>{{motion.duration.short}}, 12px from the top</td><td>something happened</td></tr>
-      <tr><td>live drawing</td><td>{{motion.duration.long}}</td><td>this is updating right now</td></tr>
-      <tr><td>state change</td><td>{{motion.duration.short}}</td><td>a calm reaction to pointer and focus</td></tr>
-    </tbody>
-  </table>
-  <p class="note">easing: base {{motion.easing.base}} · in {{motion.easing.in}} · out {{motion.easing.out}}</p>
-  <div class="demos">
-    <div>
-      <div class="turn-stage"><p class="turn" id="turn"><span class="kicker">place</span><b>inbox</b></p></div>
-      <button class="btn" data-action="turn">next place</button>
+  <!-- A place opened by the failed tile and the job's title -->
+  <main class="rk-place place-detail" data-rk-place="import" data-rk-parent="board" aria-labelledby="import-title" hidden>
+    <header class="top">
+      <a class="rk-crumb" href="#" data-rk-back><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg>board</a>
+      <p class="rk-kicker">job</p>
+      <h1 class="rk-title" id="import-title">Nightly import</h1>
+      <p class="rk-facts" id="import-facts">failed at step 3 of 5 · started 02:00 · ran 3 min</p>
+    </header>
+    <div class="detail">
+      <div class="rk-tiles">
+        <div class="rk-tile rk-w2" data-status="error" id="import-step" style="--rk-i:0"><span class="rk-tile-word">failed</span><span class="rk-stat"><b>3 / 5</b><span>schema check</span></span><span class="rk-tile-msg">Column “due” is missing in the target table.</span></div>
+        <div class="rk-tile" style="--rk-i:1"><span class="rk-tile-word">idle</span><span class="rk-stat"><b id="import-retries">2</b><span>retries left</span></span></div>
+        <div class="rk-tile" style="--rk-i:2"><span class="rk-tile-word">idle</span><span class="rk-stat"><b>18 kB</b><span>import.log</span></span></div>
+      </div>
+      <p class="rk-kicker group-label">steps</p>
+      <ul class="rk-rows" id="import-steps">
+        <li><b>Extract</b><span class="rk-tag" data-status="success">done</span></li>
+        <li><b>Transform</b><span class="rk-tag" data-status="success">done</span></li>
+        <li><b>Schema check</b><span class="rk-tag" data-status="error">failed</span></li>
+        <li><b>Load</b><span class="rk-tag">idle</span></li>
+        <li><b>Notify</b><span class="rk-tag">idle</span></li>
+      </ul>
+      <p class="rk-actions"><button class="rk-btn rk-btn--primary" id="retry" type="button">retry from step 3</button></p>
     </div>
-    <div>
-      <ol class="flip" id="flip" aria-label="click an item to finish it">
-        <li><button data-status="info"><span>import data</span><span class="tile-word">active</span></button></li>
-        <li><button data-status="info"><span>write release notes</span><span class="tile-word">active</span></button></li>
-        <li><button data-status="success"><span>fix login</span><span class="tile-word">done</span></button></li>
-      </ol>
-      <p class="note">click an item to finish or reopen it</p>
+  </main>
+
+  <!-- A place opened by the build queue tile -->
+  <main class="rk-place place-detail" data-rk-place="queue" data-rk-parent="board" aria-labelledby="queue-title" hidden>
+    <header class="top">
+      <a class="rk-crumb" href="#" data-rk-back><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg>board</a>
+      <p class="rk-kicker">queue · live</p>
+      <h1 class="rk-title" id="queue-title">Build queue</h1>
+      <p class="rk-facts" id="queue-facts">12 jobs · 3 running · oldest waiting 4 min</p>
+    </header>
+    <div class="detail">
+      <div class="queue-trend">
+        <svg class="rk-spark" data-status="info" viewBox="0 0 200 28" role="img" aria-label="build queue" data-trend="queue-big" preserveAspectRatio="none"><polyline pathLength="1" points="0,14 200,14"/></svg>
+      </div>
+      <p class="rk-kicker group-label" id="running-label">running</p>
+      <div class="rk-region" id="queue-region">
+        <ul class="rk-rows" id="running" aria-labelledby="running-label">
+          <li aria-hidden="true"><span class="rk-ghost" style="width:7em"></span><span class="rk-ghost" style="width:4em"></span></li>
+          <li aria-hidden="true"><span class="rk-ghost" style="width:9em"></span><span class="rk-ghost" style="width:4em"></span></li>
+          <li aria-hidden="true"><span class="rk-ghost" style="width:6em"></span><span class="rk-ghost" style="width:4em"></span></li>
+        </ul>
+      </div>
+      <p class="rk-kicker group-label">waiting</p>
+      <ul class="rk-rows">
+        <li><b>Build #4184</b><span class="rk-meta">web</span><span class="rk-tag" data-status="warning">waiting</span></li>
+        <li><b>Build #4185</b><span class="rk-meta">mobile</span><span class="rk-tag" data-status="warning">waiting</span></li>
+      </ul>
+    </div>
+  </main>
+
+  <!-- A place opened by the reviews tile: rows with actions -->
+  <main class="rk-place place-detail" data-rk-place="reviews" data-rk-parent="board" aria-labelledby="reviews-title" hidden>
+    <header class="top">
+      <a class="rk-crumb" href="#" data-rk-back><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg>board</a>
+      <p class="rk-kicker">reviews</p>
+      <h1 class="rk-title" id="reviews-title">Awaiting review</h1>
+      <p class="rk-facts" id="reviews-facts">3 of 5 waiting · release 1.8</p>
+    </header>
+    <div class="detail">
+      <p class="note">Each row acts with its own button. Approve one and the board's tile follows; undo from the toast within 5 seconds.</p>
+      <ul class="rk-rows reviews" id="review-list">
+        <li data-review="notes"><b>Release notes</b><span class="rk-meta">Ada · 1.2 kB</span><span class="rk-tag" data-status="warning">waiting</span><button class="rk-btn" type="button" data-approve aria-label="approve release notes">approve</button></li>
+        <li data-review="migration"><b>Schema migration</b><span class="rk-meta">Lin · 3 files</span><span class="rk-tag" data-status="warning">waiting</span><button class="rk-btn" type="button" data-approve aria-label="approve schema migration">approve</button></li>
+        <li data-review="flags"><b>Feature flags</b><span class="rk-meta">Sam · 2 flags</span><span class="rk-tag" data-status="warning">waiting</span><button class="rk-btn" type="button" data-approve aria-label="approve feature flags">approve</button></li>
+        <li data-review="deps"><b>Dependency update</b><span class="rk-meta">Kai · 14 packages</span><span class="rk-tag" data-status="success">done</span></li>
+        <li data-review="docs"><b>API docs</b><span class="rk-meta">Noor · 6 pages</span><span class="rk-tag" data-status="success">done</span></li>
+      </ul>
+    </div>
+  </main>
+
+  <!-- A place with a split: the runs as a table, the current run beside it (one at a time on a phone) -->
+  <main class="rk-place place-detail place-runs" data-rk-place="runs" data-rk-parent="board" aria-labelledby="runs-title" hidden>
+    <header class="top">
+      <a class="rk-crumb" href="#" data-rk-back><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg>board</a>
+      <p class="rk-kicker">deploys</p>
+      <h1 class="rk-title" id="runs-title">Runs today</h1>
+      <p class="rk-facts" id="runs-facts">12 runs · 1 failed</p>
+    </header>
+    <div class="rk-split runs-split" id="runs-split">
+      <section class="rk-split-list" id="runs-list" aria-label="runs">
+        <p class="note runs-note">Search and filter (both stay in the address); sort by a column; tick rows to act on several at once (Shift for a range, Ctrl/⌘+A for all, Escape to clear). A run's number opens it beside the list; drag the divider, or focus it and use ← →.</p>
+        <div class="rk-filters runs-filters">
+          <div class="rk-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13 13 4 4"/></svg><input class="rk-input" type="search" id="runs-q" placeholder="search runs" aria-label="search runs"></div>
+          <button class="rk-btn" type="button" id="f-status">status</button>
+          <div id="f-status-menu">
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="error">failed</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="warning">waiting</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="info">active</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="success">done</button>
+          </div>
+          <button class="rk-btn" type="button" id="f-target">target</button>
+          <div id="f-target-menu">
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="web">web</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="api">api</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="docs">docs</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="mobile">mobile</button>
+          </div>
+          <button class="rk-btn rk-btn--quiet" type="button" id="f-clear" hidden>clear filters</button>
+        </div>
+        <div class="rk-region rk-table-wrap">
+          <table class="rk-table" id="runs-table">
+            <thead><tr>
+              <th scope="col" class="rk-check"><input type="checkbox" aria-label="select all runs"></th>
+              <th scope="col" aria-sort="none"><button class="rk-sort" type="button">run</button></th>
+              <th scope="col" aria-sort="none"><button class="rk-sort" type="button">status</button></th>
+              <th scope="col">target</th>
+              <th scope="col" class="rk-num" aria-sort="none"><button class="rk-sort" type="button">duration</button></th>
+              <th scope="col" class="rk-num" aria-sort="descending"><button class="rk-sort" type="button">started</button></th>
+            </tr></thead>
+            <tbody id="runs-body"></tbody>
+          </table>
+          <div class="rk-empty" id="runs-none" hidden><p>No runs match the search and filters.</p><p class="rk-actions"><button class="rk-btn" type="button" data-clear-filters>clear filters</button></p></div>
+        </div>
+      </section>
+      <div class="rk-split-handle" aria-label="width of the list of runs"></div>
+      <section class="rk-split-detail" id="runs-detail" aria-label="run">
+        <a class="rk-crumb rk-split-back" href="#runs" data-rk-back><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg>runs</a>
+        <div id="run-detail"></div>
+      </section>
+    </div>
+  </main>
+
+  <div class="rk-toasts" id="toasts" role="status" aria-atomic="false"></div>
+
+  <div class="rk-appbar" id="bar" role="region" aria-label="app bar">
+    <button class="rk-ab rk-ab-back" id="back" type="button" data-rk-back hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg><span>back</span></button>
+    <span class="rk-ab-status"><i class="rk-pulse" aria-hidden="true"></i><span class="rk-ab-k" id="live">live</span></span>
+    <button class="rk-ab" id="ab-goto" type="button" data-rk-priority="2" aria-keyshortcuts="Control+K Meta+K"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13 13 4 4"/></svg><span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl K</span></button>
+    <button class="rk-ab" id="ab-pause" type="button" data-rk-priority="3"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12"/></svg><span>pause</span></button>
+    <button class="rk-ab" id="ab-stop" type="button" data-rk-priority="3"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5h10v10H5z"/></svg><span>stop</span></button>
+    <button class="rk-ab" id="ab-theme" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 4a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span><span class="rk-ab-k">theme </span><b id="theme-word">system</b></span></button>
+    <button class="rk-ab" id="ab-motion" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10h4l2-5 3 10 2-5h5"/></svg><span><span class="rk-ab-k">motion </span><b id="motion-word">on</b></span></button>
+    <button class="rk-ab rk-ab-more" id="ab-more" type="button" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h.01M10 10h.01M16 10h.01" stroke-width="3" stroke-linecap="round"/></svg><span>more</span></button>
+    <div class="rk-ab-selection" role="group" aria-label="selected runs">
+      <span class="rk-ab-count" role="status">0 selected</span>
+      <button class="rk-ab" id="sel-export" type="button"><span>export</span></button>
+      <button class="rk-ab" id="sel-archive" type="button"><span>archive</span></button>
+      <button class="rk-ab" type="button" data-rk-clear><span>clear</span></button>
     </div>
   </div>
-  <p class="actions">
-    <button class="btn" data-action="sheet">open sheet</button>
-    <button class="btn" data-action="toast">archive</button>
-    <button class="btn" data-action="replay">replay build-in</button>
-    <label class="switch"><input type="checkbox" id="motion-check"> reduce motion</label>
-  </p>
-  <p class="note">Reduced motion zeroes every duration: transitions become instant, never skipped, and live values keep updating.</p>
-</section>
 
-<section id="accessibility" class="sec">
-  <p class="kicker">accessibility</p>
-  <h2>Checked, not assumed.</h2>
-  <ul class="rows">
-    <li><b>keyboard first</b>Tab through the pivot, focus the panorama and use ← →, change tiles with Enter.</li>
-    <li><b>focus on fills</b>The ring is drawn inset in the current text colour, so it survives every status fill. Tab into the tiles below.</li>
-    <li><b>colour is never the only signal</b>Every tile spells out its status; every chart has a text equivalent.</li>
-    <li><b>contrast is measured</b>Primary text clears AA on every fill in both themes, enforced by <code>build-css.mjs --check</code>.</li>
-    <li><b>reduced motion</b>Follows the system setting and the switch in the app bar.</li>
-    <li><b>44px targets</b>Every control in the app bar is at least 44 × 44px.</li>
-  </ul>
-  <div class="tiles tiles--small">
-    <button class="tile" data-cycle data-status="info"><span class="tile-word">active</span></button>
-    <button class="tile" data-cycle data-status="warning"><span class="tile-word">waiting</span></button>
-    <button class="tile" data-cycle data-status="error"><span class="tile-word">failed</span></button>
-    <button class="tile" data-cycle data-status="success"><span class="tile-word">done</span></button>
+  <!-- Go to a place or run a command: rises from the app bar (Ctrl/⌘+K) -->
+  <div class="rk-palette" id="palette" aria-label="go to a place or run a command">
+    <input class="rk-input" type="text" placeholder="go to a place or run a command" aria-label="go to a place or run a command">
+    <ul></ul>
   </div>
-</section>
 
-<section id="platforms" class="sec" style="--w:44rem">
-  <p class="kicker">platforms</p>
-  <h2>Same numbers, different plumbing.</h2>
-  <p>The tokens are platform-neutral. Only units and OS integration points differ between the web and a native desktop app.</p>
-  <table>
-    <thead><tr><th>concept</th><th>web</th><th>native desktop</th></tr></thead>
-    <tbody>
-      <tr><td>units</td><td>CSS px; fluid sizes as <code>clamp()</code> against <code>vw</code></td><td>logical pixels; interpolate the same min/preferred/max triple against window width</td></tr>
-      <tr><td>breakpoints</td><td>media queries on viewport width</td><td>window-size classes at the same thresholds, never monitor size</td></tr>
-      <tr><td>sideways wheel</td><td>vertical <code>wheel</code> delta redirected on the panorama</td><td>native wheel event, same rule; trackpad pans left alone</td></tr>
-      <tr><td>keyboard</td><td>DOM key events, <code>:focus-visible</code></td><td>native focus traversal; same behaviours</td></tr>
-      <tr><td>reduced motion</td><td><code>prefers-reduced-motion</code> plus <code>data-motion="off"</code></td><td>the OS setting plus the same in-app switch; durations become 0</td></tr>
-      <tr><td>theme</td><td><code>prefers-color-scheme</code> plus <code>data-theme</code></td><td>the OS appearance plus an in-app switch; two independent token sets</td></tr>
-      <tr><td>focus rings</td><td>inset outline in <code>currentColor</code></td><td>native focus drawing, same rule: text colour, inset</td></tr>
-    </tbody>
-  </table>
-</section>
+  <dialog class="rk-sheet" id="keys-sheet" aria-labelledby="keys-title">
+    <form method="dialog">
+      <p class="rk-kicker">help</p>
+      <h2 class="rk-group" id="keys-title">Keyboard shortcuts</h2>
+      <ul class="rk-rows keys-list">
+        <li>go to a place or run a command<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">K</kbd></span></li>
+        <li>this list<span><kbd class="rk-key">?</kbd></span></li>
+        <li>back, or close what is open<span><kbd class="rk-key">Esc</kbd></span></li>
+        <li>previous or next section (panorama focused)<span><kbd class="rk-key">←</kbd> <kbd class="rk-key">→</kbd></span></li>
+        <li>first or last section<span><kbd class="rk-key">Home</kbd> <kbd class="rk-key">End</kbd></span></li>
+        <li>undo what the toast reports<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd></span></li>
+        <li>select all rows (table focused)<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">A</kbd></span></li>
+        <li>select a range of rows<span><kbd class="rk-key">Shift</kbd> + click</span></li>
+      </ul>
+      <p class="rk-actions"><button class="rk-btn rk-btn--primary" value="ok">close</button></p>
+    </form>
+  </dialog>
 
-<section id="get-started" class="sec">
-  <p class="kicker">get started</p>
-  <h2>Tokens first, CSS on the web.</h2>
-  <ol class="rows rows--numbered">
-    <li><b>take the tokens</b><a href="rekta.tokens.json" download>rekta.tokens.json</a> holds every value in W3C Design Tokens (DTCG) format. Native apps read it directly.</li>
-    <li><b>build the CSS</b>Or download <a href="rekta.css" download>rekta.css</a>.
-<pre><code>node scripts/build-css.mjs          # writes dist/rekta.css
-node scripts/build-css.mjs --check  # tokens present, AA on every fill</code></pre></li>
-    <li><b>use the variables</b>
-<pre><code>&lt;link rel="stylesheet" href="rekta.css"&gt;
-
-.tile {
-  background: var(--rekta-color-status-info-tile);
-  color: var(--rekta-color-text-primary);
-  border-radius: var(--rekta-radius-tile);
-}</code></pre></li>
-    <li><b>pick a theme</b>Light and dark follow the system; <code>data-theme="dark"</code> on the root forces one, <code>data-motion="off"</code> turns motion off.</li>
-  </ol>
-  <p class="note">Code, tokens and CSS: MIT. Docs and images: CC BY 4.0. Barlow: <a href="fonts/barlow/OFL.txt">SIL Open Font License 1.1</a>. Not affiliated with or endorsed by Microsoft or Porsche.</p>
-</section>
-
-<span class="panorama-end" aria-hidden="true"></span>
-</main>
-
-<div class="appbar" role="region" aria-label="app bar">
-  <button class="ab ab-back" data-action="back"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg><span>back</span></button>
-  <span class="ab-status"><i class="pulse" aria-hidden="true"></i><span class="ab-k" id="live-word">live demo data</span></span>
-  <button class="ab" data-action="pause" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12"/></svg><span>pause</span></button>
-  <button class="ab" data-action="theme"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 4a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span><span class="ab-k">theme </span><b id="theme-word">system</b></span></button>
-  <button class="ab" data-action="motion" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10h4l2-5 3 10 2-5h5"/></svg><span><span class="ab-k">motion </span><b id="motion-word">on</b></span></button>
+  <dialog class="rk-sheet" id="sheet" aria-labelledby="sheet-title">
+    <form method="dialog">
+      <p class="rk-kicker">sheet</p>
+      <h2 class="rk-group" id="sheet-title">Reset the demo?</h2>
+      <p>Jobs, tiles, reviews, the schedule and every state go back to the start. Theme, density and motion stay as you set them.</p>
+      <p class="rk-actions"><button class="rk-btn" value="cancel">cancel</button><button class="rk-btn rk-btn--primary" value="reset">reset</button></p>
+    </form>
+  </dialog>
 </div>
-
-<dialog class="sheet" id="sheet" aria-labelledby="sheet-title">
-  <form method="dialog">
-    <p class="kicker">sheet</p>
-    <h2 id="sheet-title">Reset the demo data?</h2>
-    <p>Everything behind this sheet stays exactly where it was.</p>
-    <p class="actions"><button class="btn" value="cancel">cancel</button><button class="btn btn--primary" value="reset">reset</button></p>
-  </form>
-</dialog>
-
-<div class="toast" id="toast" role="status" hidden><span>tile archived</span><button class="btn" data-action="undo">undo · <span id="toast-count">5</span></button></div>
+<script src="board.js"></script>
 </body>
 </html>

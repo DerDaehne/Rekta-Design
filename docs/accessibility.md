@@ -5,9 +5,11 @@
 Every action reachable by pointer is reachable by keyboard, not the
 other way around — keyboard support is not an add-on layered onto a
 mouse-first design. Panoramas and pivots both have a keyboard model for
-moving along them (arrow keys and/or a small set of mnemonic shortcuts
-in the source product); a sideways-scrolling panorama that can only be
-driven by a mouse wheel or drag is not a complete implementation of it.
+moving along them (see [navigation.md](navigation.md#keyboard)); a
+sideways-scrolling panorama that can only be driven by a mouse wheel or
+drag is not a complete implementation of it. A jump to a section moves
+focus to its heading; a place change moves focus to the new place's
+title, and back returns it to the control that opened the place.
 
 ## Focus on fills
 
@@ -40,14 +42,31 @@ in a thumb-reachable bottom bar on narrow viewports (see
 rather than the minimum, since they're deliberately placed for one-handed
 reach.
 
+## Pointer and touch
+
+- **Hover is never the only way.** Hover tints exist only where hover
+  exists (`(hover: hover)`); on touch they would stick after a tap.
+- **Dragging never activates.** A drag that starts on a tile or row, or
+  a text selection inside one, cancels the click. A fine pointer can
+  select text in tiles and rows; touch gets no selection and no
+  long-press callout on them.
+- **Fields stay at 16px on touch**, so a phone never zooms the page
+  when a field takes focus.
+- **Sheets keep the page still.** The page behind a sheet does not
+  scroll, and a tap on the shading cancels the sheet unless it holds
+  unsaved input.
+
 ## Also non-negotiable (carried from the source product, kept general)
 
 - **Colour is never the only signal.** Every status tile also states its
-  status as a word (see [tiles.md](tiles.md)); every chart has a text
+  status as a word (see [tiles.md](tiles.md)), the app bar's live square
+  always has its word beside it, and every chart has a text
   equivalent (an accessible name/description stating the current value
   and trend in words, not just a line).
 - **Contrast is checked, not assumed.** See [colour.md](colour.md) and
-  `scripts/build-css.mjs --check`.
+  `node scripts/build.mjs --check`, which fails the build when a text,
+  mark, focus or soft pair drops below its minimum, or when two statuses
+  come closer than 0.09 (OKLab) under protanopia or deuteranopia.
 - **Errors state cause and remedy together**, at the point of the error
   — not just "something went wrong," and not in a location disconnected
   from the control that caused it.
