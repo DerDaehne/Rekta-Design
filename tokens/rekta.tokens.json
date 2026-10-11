@@ -646,6 +646,14 @@
         "unit": "px"
       },
       "$description": "Minimum height and width of any control reached by touch. The app bar's controls use 48px in every density."
+    },
+    "pane-min": {
+      "$type": "dimension",
+      "$value": {
+        "value": 240,
+        "unit": "px"
+      },
+      "$description": "The narrowest a pane of a split view may be dragged; below twice this plus the handle the split shows one pane at a time."
     }
   },
   "density": {

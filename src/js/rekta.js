@@ -18,6 +18,8 @@
      busy       a data region loads: the line after busy-delay, never a flash
      pending    a button's action runs: it says what it is doing, at the same width
      menu       a menu button with a floating list, placed next to its control
+     table      sorting, selection with the app bar carrying it, labels for the stacked layout
+     split      a list and its current item: a draggable divider sideways, one pane at a time compact
      start      the defaults for a page: prefs, press, sheets, arrival build-in
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
@@ -28,6 +30,8 @@ const docEl = document.documentElement;
 function css(name, el = docEl) { return getComputedStyle(el).getPropertyValue(name).trim(); }
 function ms(name, el) { const v = css(name, el); return (parseFloat(v) || 0) * (/ms$/.test(v) ? 1 : 1000); }
 function num(name, el) { return parseFloat(css(name, el)) || 0; }
+// A length token in px, whatever unit it is written in (rem follows the root's font size).
+function px(name, el) { const v = css(name, el), n = parseFloat(v) || 0; return /rem$/.test(v) ? n * (parseFloat(getComputedStyle(docEl).fontSize) || 16) : n; }
 function bezier(name) {
   const m = /cubic-bezier\(([^)]+)\)/.exec(css(name));
   const [x1, y1, x2, y2] = m ? m[1].split(',').map(Number) : [0.25, 0.1, 0.25, 1];
@@ -39,7 +43,7 @@ function bezier(name) {
 }
 // Read a token where it applies: tokens.value('--rk-accent'), tokens.ms('--rk-duration-short') (0 under reduced
 // motion), tokens.number('--rk-space-m').
-export const tokens = { value: css, ms, number: num };
+export const tokens = { value: css, ms, number: num, px };
 const openLayer = (sel) => { try { return !!document.querySelector(sel); } catch { return false; } };
 const later = (fn, wait) => (wait > 0 ? setTimeout(fn, wait) : (queueMicrotask(fn), 0));
 const isEditable = (t) => !!t && (t.isContentEditable || (t.matches && t.matches('textarea, select, input:not([type=checkbox], [type=radio], [type=range], [type=color], [type=file], [type=button], [type=submit], [type=reset], [type=image])')));
@@ -328,29 +332,41 @@ export const turn = {
 // reload) puts the parent place underneath, so back stays in the app. Plain primary clicks on links to places turn
 // the place; Ctrl/Cmd/Shift/Alt and middle clicks are the browser's. A navigation is never refused: one that comes
 // while a turn runs finishes that turn first.
+// A place can show one item at a time (the run a split shows): #name/item. onItem(place, fn, { push }) hears it.
+// Choosing an item replaces the address, unless push() says it should be a step of its own (a split in the compact
+// class, where the item replaces the list); then back returns to the list.
 export function places({ root = document, mode = 'hash', base = '', home, title = document.title, onChange } = {}) {
   const all = () => [...root.querySelectorAll('[data-rk-place]')];
   const byName = (name) => (name ? root.querySelector(`[data-rk-place="${CSS.escape(name)}"]`) : null);
   home = home || (all()[0] && all()[0].dataset.rkPlace);
-  const urlOf = (name) => (mode === 'hash' ? (name === home ? location.pathname + location.search : `#${encodeURIComponent(name)}`) : `${base}/${name === home ? '' : encodeURIComponent(name)}`);
-  const nameOf = (href) => {
+  const enc = encodeURIComponent;
+  const urlOf = (name, item = null) => (mode === 'hash'
+    ? (name === home && !item ? location.pathname + location.search : `#${enc(name)}${item ? `/${enc(item)}` : ''}`)
+    : `${base}/${name === home && !item ? '' : enc(name)}${item ? `/${enc(item)}` : ''}`);
+  // An address's place and item, or null when it names no place here.
+  const parse = (href) => {
     const u = new URL(href, location.href);
     if (u.origin !== location.origin) return null;
     if (mode === 'hash' && (u.pathname !== location.pathname || u.search !== location.search)) return null;
     if (mode === 'path' && !(u.pathname === base || u.pathname.startsWith(`${base}/`))) return null;
-    const name = decodeURIComponent(mode === 'hash' ? u.hash.slice(1) : u.pathname.slice(base.length).replace(/^\/|\/$/g, '')) || home;
-    return byName(name) ? name : null;
+    const raw = mode === 'hash' ? u.hash.slice(1) : u.pathname.slice(base.length).replace(/^\/|\/$/g, '');
+    const [first, ...rest] = raw.split('/');
+    const name = decodeURIComponent(first || '') || home, item = rest.length ? decodeURIComponent(rest.join('/')) : null;
+    return byName(name) ? { name, item } : null;
   };
+  const nameOf = (href) => { const p = parse(href); return p && p.name; };
   const parentOf = (name) => { const p = byName(name) && byName(name).dataset.rkParent; return byName(p) ? p : home; };
   const titleOf = (name) => { const h = byName(name).querySelector('.rk-title'); const t = h && h.textContent.trim(); return name === home || !t ? title : `${t} · ${title}`; };
   // Everything that scrolls in a place keeps its offset while the place is away.
-  const scrollers = (el) => [el, ...el.querySelectorAll('.rk-panorama, .rk-sec, [data-rk-scroll]')];
-  let current = home, index = 0, below = null, busy = Promise.resolve();
+  const scrollers = (el) => [el, ...el.querySelectorAll('.rk-panorama, .rk-sec, .rk-split-list, .rk-split-detail, [data-rk-scroll]')];
+  let current = home, item = null, index = 0, below = null, pushedItem = false, busy = Promise.resolve();
+  const watchers = new Map();
   const backButtons = () => document.querySelectorAll('.rk-ab-back[data-rk-back]');
   const showBack = () => backButtons().forEach((b) => { b.hidden = current === home && index === 0; });
+  const rk = () => (history.state && history.state.rk) || {};
   function snapshot(opener) {
-    const el = byName(current), prev = (history.state && history.state.rk) || {};
-    return { ...(history.state || {}), rk: { ...prev, place: current, index, below, scrollY, scroll: scrollers(el).map((s) => [s.scrollLeft, s.scrollTop]), opener: opener || prev.opener || null } };
+    const el = byName(current), prev = rk();
+    return { ...(history.state || {}), rk: { ...prev, place: current, index, below, item, pushedItem, scrollY, scroll: scrollers(el).map((s) => [s.scrollLeft, s.scrollTop]), opener: opener || prev.opener || null } };
   }
   function restore(el, state) {
     const offsets = (state && state.scroll) || [];
@@ -366,17 +382,24 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     if (!t.hasAttribute('tabindex') && !t.matches('a, button, input, select, textarea')) t.setAttribute('tabindex', '-1');
     return t;
   }
+  // The place's item changed: tell its watcher, which may name it for the title.
+  function setItem(next, opts = {}) {
+    item = next || null;
+    const w = watchers.get(current), named = w ? w.fn(item, opts) : null;
+    document.title = typeof named === 'string' && named ? `${named} · ${titleOf(current)}` : titleOf(current);
+  }
   function show(name, state, { instant = false, back = false, pressed = null } = {}) {
     const prev = current, from = byName(prev), to = byName(name);
     current = name;
-    below = (state && state.below) || (history.state && history.state.rk && history.state.rk.below) || null;
-    document.title = titleOf(name);
+    below = state ? state.below || null : null;
+    pushedItem = !!(state && state.pushedItem);
     showBack();
     const run = async () => {
       if (from && from !== to) {
         if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed });
       }
       to.hidden = false;
+      setItem(state && state.item, { back, place: true });
       restore(to, state);
       const f = focusTarget(to, state, back);
       if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f });
@@ -386,20 +409,46 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     return busy;
   }
   function navigate(target, { replace = false, pressed = null } = {}) {
-    const name = byName(target) ? target : nameOf(target);
-    if (!name || name === current) return Promise.resolve();
+    const p = byName(target) ? { name: target, item: null } : parse(target);
+    if (!p) return Promise.resolve();
+    if (p.name === current) { if (p.item !== item) open(p.item); return Promise.resolve(); }
     turn.finish();
     history.replaceState(snapshot(pressed && pressed.getAttribute('href')), '');
-    const entry = { rk: { place: name, index: replace ? index : index + 1, below: replace ? below : current } };
-    if (replace) history.replaceState(entry, '', urlOf(name)); else history.pushState(entry, '', urlOf(name));
+    const entry = { rk: { place: p.name, index: replace ? index : index + 1, below: replace ? below : current, item: p.item, pushedItem: false } };
+    if (replace) history.replaceState(entry, '', urlOf(p.name, p.item)); else history.pushState(entry, '', urlOf(p.name, p.item));
     index = entry.rk.index;
-    return show(name, entry.rk, { pressed });
+    return show(p.name, entry.rk, { pressed });
+  }
+  // open(item): show an item of the current place (null: none). It replaces the address unless the watcher's push()
+  // says it is a step of its own.
+  function open(next, { replace } = {}) {
+    next = next || null;
+    if (next === item) return;
+    const w = watchers.get(current);
+    const push = replace === undefined ? !!(next && !pushedItem && w && w.push && w.push()) : !replace;
+    if (push) {
+      history.replaceState(snapshot(), '');
+      index += 1; pushedItem = true;
+      history.pushState({ rk: { place: current, index, below, item: next, pushedItem: true } }, '', urlOf(current, next));
+    } else {
+      const s = snapshot();
+      history.replaceState({ ...s, rk: { ...s.rk, item: next } }, '', urlOf(current, next));
+    }
+    setItem(next, { back: false });
   }
   // back(): one step back in history; at the bottom of the app's history, up to the parent place instead.
-  // back(name): up to that place, by history when it is the place below.
+  // back(name): up to that place, by history when it is the place below (or, for an item, the list beneath it).
   function back(target) {
+    if (target && target === current) {
+      if (item && pushedItem && index > 0) { turn.finish(); history.back(); } else open(null, { replace: true });
+      return true;
+    }
     if (target && target !== below) { navigate(target); return true; }
-    if (index > 0) { turn.finish(); history.replaceState(snapshot(), ''); history.back(); return true; }
+    if (index > 0) {
+      turn.finish(); history.replaceState(snapshot(), '');
+      if (target && pushedItem && index > 1) history.go(-2); else history.back();
+      return true;
+    }
     if (current === home) return false;
     const up = target || parentOf(current);
     history.replaceState({ rk: { place: up, index: 0, below: null } }, '', urlOf(up));
@@ -408,13 +457,20 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
   }
   const pop = (e) => {
     const state = e.state && e.state.rk;
-    const name = (state && byName(state.place) && state.place) || nameOf(location.href);
-    if (!name) return;
+    const p = state && byName(state.place) ? { name: state.place, item: state.item || null } : parse(location.href);
+    if (!p) return;
     turn.finish();
     const to = state ? state.index : 0, backward = to < index, jump = Math.abs(to - index);
     index = to;
-    if (name === current) { below = state ? state.below : null; restore(byName(name), state); showBack(); return; }
-    show(name, state, { back: backward, instant: jump > 1 || e.hasUAVisualTransition });
+    if (p.name === current) {
+      below = state ? state.below || null : null;
+      pushedItem = !!(state && state.pushedItem);
+      if (p.item !== item) setItem(p.item, { back: backward });
+      restore(byName(current), state);
+      showBack();
+      return;
+    }
+    show(p.name, state || { item: p.item }, { back: backward, instant: jump > 1 || e.hasUAVisualTransition });
   };
   const click = (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -426,36 +482,56 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     }
     const a = e.target.closest && e.target.closest('a[href]');
     if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return;
-    const name = nameOf(a.href);
-    if (!name) return;
+    const p = parse(a.href);
+    if (!p) return;
     e.preventDefault();
-    navigate(name, { pressed: a.matches('.rk-tile') ? a : null });
+    if (p.name === current) open(p.item);
+    else navigate(a.href, { pressed: a.matches('.rk-tile') ? a : null });
   };
   const offKeys = keys.on(10, (e) => {
-    if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (current === home && index === 0) || !keys.escapeIsFree(e)) return false;
+    if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (current === home && index === 0 && !item) || !keys.escapeIsFree(e)) return false;
+    if (index === 0 && item) { open(null, { replace: true }); return true; }
     return back();
   });
-  // Start on the place the address names. A cold entry below the top puts its parent underneath.
-  const startName = nameOf(location.href) || home;
-  const st = history.state && history.state.rk;
-  if (st && st.place === startName) { index = st.index || 0; below = st.below || null; }
-  else if (startName !== home) {
-    const parent = parentOf(startName);
-    history.replaceState({ ...(history.state || {}), rk: { place: parent, index: 0, below: null } }, '', urlOf(parent));
-    history.pushState({ rk: { place: startName, index: 1, below: parent } }, '', urlOf(startName));
-    index = 1; below = parent;
-  } else history.replaceState({ ...(history.state || {}), rk: { place: home, index: 0, below: null } }, '');
-  for (const el of all()) el.hidden = el.dataset.rkPlace !== startName;
-  current = startName;
+  // Start on the place and item the address names. A cold entry puts the parent place underneath, and the place's
+  // list beneath an item, so back stays in the app.
+  const start = parse(location.href) || { name: home, item: null };
+  const st = rk();
+  if (st.place === start.name && (st.item || null) === start.item) {
+    index = st.index || 0; below = st.below || null; pushedItem = !!st.pushedItem;
+  } else {
+    const chain = [];
+    if (start.name !== home) chain.push({ place: parentOf(start.name), item: null, below: null });
+    const placeBelow = start.name !== home ? parentOf(start.name) : null;
+    if (start.item) chain.push({ place: start.name, item: null, below: placeBelow });
+    chain.push({ place: start.name, item: start.item, below: placeBelow, pushedItem: !!start.item });
+    chain.forEach((c, i) => {
+      const entry = { rk: { place: c.place, index: i, below: c.below, item: c.item, pushedItem: !!c.pushedItem } };
+      if (i === 0) history.replaceState({ ...(history.state || {}), ...entry }, '', urlOf(c.place, c.item));
+      else history.pushState(entry, '', urlOf(c.place, c.item));
+    });
+    index = chain.length - 1; below = placeBelow; pushedItem = !!start.item;
+  }
+  for (const el of all()) el.hidden = el.dataset.rkPlace !== start.name;
+  current = start.name;
+  item = start.item;
   document.title = titleOf(current);
   showBack();
-  if (st && st.place === startName) requestAnimationFrame(() => restore(byName(current), st));
+  if (st.place === start.name) requestAnimationFrame(() => restore(byName(current), st));
   addEventListener('popstate', pop);
   document.addEventListener('click', click);
   return {
     get current() { return current; },
+    get item() { return item; },
     get below() { return below; },
-    navigate, back, urlOf,
+    navigate, back, open, urlOf,
+    // onItem(place, fn, { push }): fn(item | null, { back, initial }) whenever that place's item changes; it may
+    // return a name for the window title. push() decides whether choosing an item is a history step of its own.
+    onItem(place, fn, { push } = {}) {
+      watchers.set(place, { fn, push });
+      if (place === current) setItem(item, { initial: true });
+      return () => watchers.delete(place);
+    },
     destroy() { removeEventListener('popstate', pop); document.removeEventListener('click', click); offKeys(); },
   };
 }
@@ -1012,6 +1088,178 @@ export function menu(trigger, el, { onSelect } = {}) {
       trigger.removeEventListener('click', click); trigger.removeEventListener('keydown', triggerKey);
       el.removeEventListener('keydown', key); el.removeEventListener('click', choose); el.removeEventListener('toggle', toggle);
       document.removeEventListener('pointerdown', outside, true); removeEventListener('resize', reflow); removeEventListener('scroll', reflow, true);
+    },
+  };
+}
+
+// Table ------------------------------------------------------------------------------------------------------------
+// table(el, { onSort, appbar, onSelect }): a .rk-table. A sort button in a head cell sorts by its column, ascending
+// then descending, with the rows moving to their new places (FLIP); onSort takes over for data sorted elsewhere.
+// Rows with a .rk-check checkbox are selectable: Shift+click selects a range, the head checkbox all or none,
+// Ctrl/Cmd+A all while focus is in the table, Escape clears. A selected row gets data-rk-selected. With an appbar,
+// the bar carries the selection (data-rk-selecting, .rk-ab-count, a [data-rk-clear] button). Cells get data-label
+// from their head for the stacked layout of a narrow place.
+export function table(el, { onSort, appbar = null, onSelect } = {}) {
+  const head = () => (el.tHead ? [...el.tHead.rows[0].cells] : []);
+  const rows = () => (el.tBodies[0] ? [...el.tBodies[0].rows] : []);
+  const box = (row) => row.querySelector('.rk-check input[type=checkbox]');
+  const all = () => el.tHead && el.tHead.querySelector('.rk-check input[type=checkbox]');
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  let anchor = null, shift = false;
+  function label() {
+    const names = head().map((th) => th.textContent.trim());
+    for (const r of rows()) [...r.cells].forEach((c, i) => { if (!c.hasAttribute('data-label') && !c.classList.contains('rk-check') && names[i]) c.dataset.label = names[i]; });
+  }
+  const value = (cell) => (cell ? (cell.dataset.sort !== undefined ? cell.dataset.sort : cell.textContent.trim()) : '');
+  function sortRows(column, dir) {
+    const list = rows(), body = el.tBodies[0];
+    const before = list.length <= 200 ? new Map(list.map((r) => [r, r.getBoundingClientRect().top])) : null;
+    const sign = dir === 'descending' ? -1 : 1;
+    list.sort((a, b) => {
+      const x = value(a.cells[column]), y = value(b.cells[column]), nx = Number(x), ny = Number(y);
+      return sign * (x !== '' && y !== '' && Number.isFinite(nx) && Number.isFinite(ny) ? nx - ny : collator.compare(x, y));
+    }).forEach((r) => body.appendChild(r));
+    const d = ms('--rk-duration-moderate');
+    if (before && d) for (const r of list) {
+      const dy = before.get(r) - r.getBoundingClientRect().top;
+      if (dy) r.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') });
+    }
+  }
+  function sort(th, dir) {
+    for (const h of head()) if (h !== th && h.hasAttribute('aria-sort')) h.setAttribute('aria-sort', 'none');
+    th.setAttribute('aria-sort', dir);
+    if (onSort) onSort({ column: th.cellIndex, dir, th }); else sortRows(th.cellIndex, dir);
+  }
+  const selected = () => rows().filter((r) => r.hasAttribute('data-rk-selected'));
+  function sync() {
+    const list = rows().filter(box), count = list.filter((r) => box(r).checked).length;
+    for (const r of list) r.toggleAttribute('data-rk-selected', box(r).checked);
+    const a = all();
+    if (a) { a.checked = !!count && count === list.length; a.indeterminate = !!count && count < list.length; }
+    if (appbar) {
+      appbar.toggleAttribute('data-rk-selecting', count > 0);
+      const c = appbar.querySelector('.rk-ab-count');
+      if (c) c.textContent = `${count} selected`;
+    }
+    if (onSelect) onSelect(selected());
+    el.dispatchEvent(new CustomEvent('rk:selectionchange', { bubbles: true, detail: { count, rows: selected() } }));
+  }
+  function setAll(on) { for (const r of rows()) { const b = box(r); if (b && !b.disabled) b.checked = on; } sync(); }
+  function clear({ focus = true } = {}) {
+    const hadFocus = appbar && appbar.contains(document.activeElement);
+    setAll(false);
+    if (focus && hadFocus) { const t = all() || (rows()[0] && box(rows()[0])); if (t) t.focus(); }
+  }
+  const click = (e) => {
+    const sorter = e.target.closest('.rk-sort');
+    if (sorter) { const th = sorter.closest('th'); sort(th, th.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending'); return; }
+    if (e.target.matches('.rk-check input[type=checkbox]')) shift = e.shiftKey;
+  };
+  const change = (e) => {
+    const b = e.target;
+    if (!b.matches('.rk-check input[type=checkbox]')) return;
+    if (b === all()) { setAll(b.checked); return; }
+    const row = b.closest('tr');
+    if (shift && anchor && anchor.isConnected) {
+      const list = rows(), [i, j] = [list.indexOf(anchor), list.indexOf(row)].sort((m, n) => m - n);
+      list.slice(i, j + 1).forEach((r) => { const x = box(r); if (x && !x.disabled) x.checked = b.checked; });
+    }
+    anchor = row; shift = false;
+    sync();
+  };
+  const key = (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a' && !isEditable(e.target) && rows().some(box)) { e.preventDefault(); setAll(true); }
+  };
+  const offEsc = keys.on(20, (e) => {
+    if (e.key !== 'Escape' || !selected().length || isEditable(e.target)) return false;
+    if (!el.contains(e.target) && !(appbar && appbar.contains(e.target))) return false;
+    clear(); return true;
+  });
+  const clearClick = (e) => { if (e.target.closest('[data-rk-clear]')) clear(); };
+  el.addEventListener('click', click);
+  el.addEventListener('change', change);
+  el.addEventListener('keydown', key);
+  if (appbar) appbar.addEventListener('click', clearClick);
+  label();
+  sync();
+  return {
+    selected, clear, selectAll: () => setAll(true), sort: (column, dir = 'ascending') => sort(head()[column], dir),
+    refresh() { label(); sync(); },
+    destroy() { el.removeEventListener('click', click); el.removeEventListener('change', change); el.removeEventListener('keydown', key); if (appbar) appbar.removeEventListener('click', clearClick); offEsc(); },
+  };
+}
+
+// Split ------------------------------------------------------------------------------------------------------------
+// split(el, { key }): a .rk-split of .rk-split-list, .rk-split-handle and .rk-split-detail. Sideways both panes show;
+// the handle drags the list's width (--rk-split-w), ← → move it by space-m (Shift: four times), Home End to the
+// limits, a double click resets it; the width is remembered under key. Compact, one pane shows at a time:
+// show('detail') turns to the detail, show('list') back to the list, with the turnstile. sideways says which.
+export function split(el, { key = null } = {}) {
+  const list = el.querySelector(':scope > .rk-split-list'), detail = el.querySelector(':scope > .rk-split-detail');
+  const handle = el.querySelector(':scope > .rk-split-handle');
+  const isSideways = () => getComputedStyle(el).display === 'grid';
+  let showing = 'list', was = null;
+  const store = { get() { try { return key && parseFloat(localStorage.getItem(key)); } catch { return NaN; } }, set(v) { try { if (key) localStorage.setItem(key, String(v)); } catch { /* this visit only */ } } };
+  function limits() { const min = px('--rk-pane-min') || 240; return [min, Math.max(min, el.clientWidth - min - 1)]; }
+  function setWidth(px, remember = true) {
+    const [min, max] = limits(), w = Math.round(Math.min(max, Math.max(min, px)));
+    el.style.setProperty('--rk-split-w', `${w}px`);
+    if (handle) { handle.setAttribute('aria-valuenow', String(w)); handle.setAttribute('aria-valuemin', String(Math.round(min))); handle.setAttribute('aria-valuemax', String(Math.round(max))); }
+    if (remember) store.set(w);
+  }
+  function sync() {
+    const now = isSideways();
+    if (now === was) return;
+    was = now;
+    turn.finish();
+    if (now) { list.hidden = false; detail.hidden = false; }
+    else { list.hidden = showing !== 'list'; detail.hidden = showing !== 'detail'; }
+  }
+  // show(which, { focus }): compact, turns to that pane (the list comes back as a back turn); sideways, nothing moves.
+  async function show(which, { focus = null, animate = true } = {}) {
+    if (which === showing) return;
+    showing = which;
+    if (isSideways()) return;
+    const from = which === 'detail' ? list : detail, to = which === 'detail' ? detail : list, back = which === 'list';
+    if (animate && !from.hidden) { await turn.leave(from, { back }); await turn.enter(to, { back, focus, arriving: false }); }
+    else { from.hidden = true; to.hidden = false; if (focus) focus.focus({ preventScroll: true }); }
+  }
+  // reveal(dir): sideways, the detail's new item slides in from its side, as a facet does.
+  function reveal(dir = 1) {
+    const d = ms('--rk-duration-moderate') * 0.75;
+    if (d && isSideways()) detail.animate([{ transform: `translateX(${dir * num('--rk-slide-distance')}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: d, easing: css('--rk-ease-out') });
+  }
+  let drag = null;
+  const down = (e) => { if (e.button > 0) return; drag = { x: e.clientX, w: list.getBoundingClientRect().width }; handle.setPointerCapture(e.pointerId); handle.setAttribute('data-rk-dragging', ''); e.preventDefault(); };
+  const move = (e) => { if (drag) setWidth(drag.w + (e.clientX - drag.x), false); };
+  const up = () => { if (!drag) return; drag = null; handle.removeAttribute('data-rk-dragging'); setWidth(list.getBoundingClientRect().width); };
+  const keydown = (e) => {
+    const [min, max] = limits(), w = list.getBoundingClientRect().width, step = num('--rk-space-m') * (e.shiftKey ? 4 : 1);
+    const to = { ArrowLeft: w - step, ArrowRight: w + step, Home: min, End: max }[e.key];
+    if (to === undefined) return;
+    e.preventDefault(); setWidth(to);
+  };
+  const reset = () => { el.style.removeProperty('--rk-split-w'); if (key) try { localStorage.removeItem(key); } catch { /* ignore */ } setWidth(list.getBoundingClientRect().width, false); };
+  if (handle) {
+    handle.setAttribute('role', 'separator'); handle.setAttribute('aria-orientation', 'vertical');
+    if (!handle.hasAttribute('tabindex')) handle.tabIndex = 0;
+    if (list.id) handle.setAttribute('aria-controls', list.id);
+    handle.addEventListener('pointerdown', down); handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up);
+    handle.addEventListener('keydown', keydown); handle.addEventListener('dblclick', reset);
+  }
+  const ro = new ResizeObserver(() => { sync(); if (isSideways() && handle) setWidth(list.getBoundingClientRect().width, false); });
+  ro.observe(el);
+  const saved = store.get();
+  if (saved) el.style.setProperty('--rk-split-w', `${saved}px`);
+  sync();
+  return {
+    show, reveal,
+    get sideways() { return isSideways(); },
+    get showing() { return showing; },
+    destroy() {
+      ro.disconnect();
+      if (handle) { handle.removeEventListener('pointerdown', down); handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); handle.removeEventListener('keydown', keydown); handle.removeEventListener('dblclick', reset); }
     },
   };
 }

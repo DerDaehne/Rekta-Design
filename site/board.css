@@ -43,12 +43,22 @@ html, body { margin: 0; background: var(--rk-bg); color: var(--rk-text-primary);
 @media (prefers-color-scheme: dark) { :root[data-accent='plum']:not([data-theme='light']) { --rk-accent: #c38aed; --rk-on-accent: #0e0e12; } }
 :root[data-accent='plum'][data-theme='dark'] { --rk-accent: #c38aed; --rk-on-accent: #0e0e12; }
 
+/* Runs: a split under the place's header. */
+.runs-split { padding-inline: var(--rk-space-m); padding-bottom: var(--rk-space-l); }
+.runs-note { margin-bottom: var(--rk-space-m); }
+.rk-split-detail > * + * { margin-top: var(--rk-space-m); }
+.rk-split-detail .rk-rows { margin-top: var(--rk-space-xs); }
+
 @media (min-width: 760px) and (min-height: 481px) {
   html, body { height: 100%; }
   .app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .top { padding-inline: var(--rk-space-xl); }
   .rk-place { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
   .place-detail { overflow-y: auto; }
+  .place-runs { overflow: hidden; }
+  .runs-split { flex: 1 1 auto; padding: 0 var(--rk-space-xl); }
+  .runs-split > .rk-split-list { padding: 0 var(--rk-space-m) var(--rk-space-l) 0; }
+  .runs-split > .rk-split-detail { padding: 0 0 var(--rk-space-l) var(--rk-space-l); }
   .detail { padding-inline: var(--rk-space-xl); }
   .rk-panorama { flex: 1 1 auto; }
   .sec-wide { --rk-sec-w: calc(4 * var(--rk-tile-unit) + 4 * var(--rk-space-s)); }

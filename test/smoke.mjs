@@ -251,6 +251,47 @@ ok((await text(p, '#reviews-open')) === '2', 'approving updates the board tile')
 ok((await focused(p)) === 'rk-btn', 'focus moves to the next row\'s action', await focused(p));
 await p.keyboard.press('Control+z'); await p.waitForTimeout(400);
 ok((await text(p, '#reviews-open')) === '3', 'Ctrl+Z restores the review');
+
+// Runs: a sortable, selectable table in a split; the current run is part of the address.
+await p.evaluate(() => window.board.router.navigate('runs')); await p.waitForTimeout(TURN);
+const runIds = () => p.evaluate(() => [...document.querySelectorAll('#runs-body tr')].map((tr) => tr.dataset.run));
+ok((await runIds()).length === 12, 'runs table has 12 rows');
+await p.click('#runs-table thead th:nth-child(5) .rk-sort'); await p.waitForTimeout(500);
+ok((await p.getAttribute('#runs-table thead th:nth-child(5)', 'aria-sort')) === 'ascending' && (await runIds())[0] === '4184', 'sort ascending by duration');
+ok((await p.getAttribute('#runs-table thead th:nth-child(6)', 'aria-sort')) === 'none', 'the other column lets go of its sort');
+await p.click('#runs-table thead th:nth-child(5) .rk-sort'); await p.waitForTimeout(500);
+ok((await runIds())[0] === '4178', 'sort descending by duration');
+await p.click('#runs-body tr:nth-child(1) .rk-check input');
+await p.click('#runs-body tr:nth-child(4) .rk-check input', { modifiers: ['Shift'] }); await p.waitForTimeout(200);
+ok((await p.evaluate(() => document.querySelectorAll('#runs-body tr[data-rk-selected]').length)) === 4, 'Shift+click selects a range');
+ok(await p.evaluate(() => document.querySelector('#bar').hasAttribute('data-rk-selecting')) && (await text(p, '.rk-ab-count')) === '4 selected', 'the app bar carries the selection');
+ok(await p.evaluate(() => document.querySelector('#runs-table thead .rk-check input').indeterminate), 'the head checkbox shows a partial selection');
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+ok((await p.evaluate(() => document.querySelectorAll('#runs-body tr[data-rk-selected]').length)) === 0 && await p.evaluate(() => !document.querySelector('#bar').hasAttribute('data-rk-selecting')), 'Escape clears the selection, not the place');
+ok(await visible(p, 'runs'), 'Escape with a selection stays in the place');
+await p.focus('#runs-body tr:nth-child(2) .rk-check input'); await p.keyboard.press('Control+a'); await p.waitForTimeout(200);
+ok((await p.evaluate(() => document.querySelectorAll('#runs-body tr[data-rk-selected]').length)) === 12, 'Ctrl+A selects all');
+await p.click('[data-rk-clear]'); await p.waitForTimeout(200);
+await p.click('#runs-body tr:nth-child(2) .rk-check input'); await p.click('#runs-body tr:nth-child(3) .rk-check input');
+await p.click('#sel-archive'); await p.waitForTimeout(300);
+ok((await runIds()).length === 10 && (await toast(p)).startsWith('2 runs archived'), 'archive the selection, with undo');
+await p.keyboard.press('Control+z'); await p.waitForTimeout(600);
+ok((await runIds()).length === 12 && (await runIds())[0] === '4178', 'undo puts them back in sort order');
+const hist = await p.evaluate(() => history.length);
+await p.click('#runs-body tr:nth-child(3) th a'); await p.waitForTimeout(500);
+const third = (await runIds())[2];
+ok((await p.evaluate(() => location.hash)) === `#runs/${third}`, 'a run has an address', await p.evaluate(() => location.hash));
+ok((await p.evaluate(() => history.length)) === hist, 'sideways, choosing a run replaces the address');
+ok((await p.getAttribute(`#runs-body tr[data-run="${third}"]`, 'aria-current')) === 'true' && (await text(p, '#run-title')) === `Run #${third}`, 'the current run shows beside the list');
+ok((await p.title()).startsWith(`Run #${third} · `), 'the title names the run');
+const w0 = await p.evaluate(() => document.querySelector('#runs-list').getBoundingClientRect().width);
+await p.focus('.rk-split-handle'); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(100);
+const w1 = await p.evaluate(() => document.querySelector('#runs-list').getBoundingClientRect().width);
+ok(Math.round(w1 - w0) === 16, 'the divider moves with the keyboard', `${w0} → ${w1}`);
+const hb = await p.evaluate(() => { const r = document.querySelector('.rk-split-handle').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 200 }; });
+await p.mouse.move(hb.x, hb.y); await p.mouse.down(); await p.mouse.move(hb.x + 100, hb.y, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(100);
+const w2 = await p.evaluate(() => document.querySelector('#runs-list').getBoundingClientRect().width);
+ok(Math.abs(w2 - w1 - 100) <= 2, 'the divider drags', `${w1} → ${w2}`);
 await p.close();
 
 // Deep link: a cold entry puts the parent underneath, so back stays in the app.
@@ -260,6 +301,11 @@ ok((await d.evaluate(() => history.state.rk.index)) === 1, 'the parent is undern
 await d.keyboard.press('Escape'); await d.waitForTimeout(TURN);
 ok(await visible(d, 'board') && (await d.evaluate(() => location.hash)) === '', 'back from a deep link lands on the board');
 await d.close();
+const d2 = await open({}, '#runs/4179');
+ok((await text(d2, '#run-title')) === 'Run #4179' && (await d2.evaluate(() => history.state.rk.index)) === 2, 'a deep link to a run puts the place and its list underneath');
+await d2.keyboard.press('Escape'); await d2.waitForTimeout(600);
+ok((await d2.evaluate(() => location.hash)) === '#runs' && await visible(d2, 'runs'), 'back from a deep-linked run shows the list');
+await d2.close();
 
 // Phone: sticky strip, toasts from the app bar, the app bar's back, touch press.
 const m = await open({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
@@ -285,6 +331,15 @@ await m.screenshot({ path: join(shots, 'phone-place.png') });
 await m.tap('#back'); await m.waitForTimeout(TURN);
 ok(await visible(m, 'board'), 'phone: app bar back returns');
 ok((await m.evaluate(() => Math.round(document.querySelector('#reset').getBoundingClientRect().height))) === 44, 'touch: 44px controls');
+await m.evaluate(() => window.board.router.navigate('runs')); await m.waitForTimeout(TURN);
+ok((await m.evaluate(() => getComputedStyle(document.querySelector('#runs-body tr')).display)) === 'flex', 'phone: table rows stack');
+ok((await m.evaluate(() => getComputedStyle(document.querySelector('#runs-body td:nth-child(4)'), '::before').content)) === '"target "', 'phone: cells carry their column\'s label');
+await m.tap('#runs-body tr:nth-child(6) th a'); await m.waitForTimeout(TURN);
+ok(await m.evaluate(() => document.querySelector('#runs-list').hidden && !document.querySelector('#runs-detail').hidden), 'phone: the run replaces the list');
+ok((await m.evaluate(() => document.activeElement.id)) === 'run-title', 'phone: focus on the run');
+await m.goBack(); await m.waitForTimeout(TURN);
+ok(await m.evaluate(() => !document.querySelector('#runs-list').hidden && document.querySelector('#runs-detail').hidden) && (await m.evaluate(() => location.hash)) === '#runs', 'phone: back returns to the list');
+ok((await m.evaluate(() => document.activeElement.textContent)) === '#4179', 'phone: focus back on the run it opened', await m.evaluate(() => document.activeElement.textContent));
 await m.close();
 
 // Reduced motion: a place change is instant, never skipped.

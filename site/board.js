@@ -292,6 +292,67 @@
     });
   }
 
+  /* ---------- runs: a table in a split, the current run in the address (#runs/4182) ---------- */
+  const RUN_WORD = { info: 'active', warning: 'waiting', error: 'failed', success: 'done' };
+  const RUNS = [
+    [4184, 'warning', 'mobile', 0, '02:31'], [4183, 'info', 'api', 64, '02:29'], [4182, 'info', 'web', 128, '02:27'],
+    [4181, 'success', 'docs', 41, '02:20'], [4180, 'success', 'web', 190, '02:12'], [4179, 'error', 'api', 380, '02:05'],
+    [4178, 'success', 'mobile', 512, '01:58'], [4177, 'success', 'web', 175, '01:44'], [4176, 'success', 'docs', 38, '01:31'],
+    [4175, 'success', 'api', 96, '01:20'], [4174, 'success', 'web', 201, '01:02'], [4173, 'success', 'mobile', 488, '00:47'],
+  ].map(([id, status, target, secs, at]) => ({ id: String(id), status, target, secs, at }));
+  const dur = (s) => (!s ? '–' : s < 60 ? `${s} s` : `${Math.round(s / 60)} min`);
+  const runsHtml = RUNS.map((r) => `<tr data-run="${r.id}"><td class="rk-check"><input type="checkbox" aria-label="select run #${r.id}"></td>`
+    + `<th scope="row"><a href="#runs/${r.id}">#${r.id}</a></th><td><span class="rk-tag" data-status="${r.status}">${RUN_WORD[r.status]}</span></td>`
+    + `<td>${r.target}</td><td class="rk-num" data-sort="${r.secs}">${dur(r.secs)}</td><td class="rk-num" data-sort="${r.at.replace(':', '')}">${r.at}</td></tr>`).join('');
+  $('#runs-body').innerHTML = runsHtml;
+  const runsTable = Rekta.table($('#runs-table'), { appbar: $('#bar') });
+  const runsSplit = Rekta.split($('#runs-split'), { key: 'rekta-board-runs-split' });
+  function runsFacts() {
+    const rows = $$('#runs-body tr'), failed = rows.filter((tr) => $('.rk-tag', tr).dataset.status === 'error').length;
+    $('#runs-facts').textContent = `${rows.length} runs · ${failed} failed`;
+  }
+  function renderRun(id) {
+    const r = RUNS.find((x) => x.id === id);
+    if (!r) { $('#run-detail').innerHTML = '<p class="rk-empty">Choose a run to see its steps.</p>'; return; }
+    const steps = ['checkout', 'build', 'test', 'deploy'], at = { error: 2, info: 1, warning: 0 }[r.status] ?? 4;
+    $('#run-detail').innerHTML = `<p class="rk-kicker">run · ${r.target}</p><h2 class="rk-group" id="run-title" tabindex="-1">Run #${r.id}</h2>`
+      + `<p class="rk-facts">${RUN_WORD[r.status]} · started ${r.at} · ran ${dur(r.secs)}</p><ul class="rk-rows">`
+      + steps.map((s, i) => { const st = i < at ? 'success' : i === at ? r.status : null; return `<li><b>${s}</b><span class="rk-tag"${st ? ` data-status="${st}"` : ''}>${st ? RUN_WORD[st] : 'idle'}</span></li>`; }).join('')
+      + '</ul>';
+  }
+  let lastRun = null;
+  router.onItem('runs', (id, { initial }) => {
+    $$('#runs-body tr').forEach((tr) => { if (tr.dataset.run === id) tr.setAttribute('aria-current', 'true'); else tr.removeAttribute('aria-current'); });
+    renderRun(id);
+    if (id) {
+      if (!initial) runsSplit.reveal();
+      runsSplit.show('detail', { focus: $('#run-title'), animate: !initial });
+      lastRun = id;
+    } else {
+      const link = lastRun && $(`#runs-body tr[data-run="${lastRun}"] a`);
+      runsSplit.show('list', { focus: link, animate: !initial });
+    }
+    return id ? `Run #${id}` : null;
+  }, { push: () => !runsSplit.sideways });
+  $('#sel-export').addEventListener('click', () => toasts.show(`Exported ${runsTable.selected().length} runs as runs.csv.`, { key: 'export-runs', from: $('#sel-export') }));
+  $('#sel-archive').addEventListener('click', () => {
+    const rows = runsTable.selected();
+    if (!rows.length) return;
+    rows.forEach((tr) => tr.remove());
+    if (rows.some((tr) => tr.dataset.run === router.item)) router.open(null, { replace: true });
+    runsTable.refresh(); runsFacts();
+    $('#runs-table .rk-check input').focus();
+    toasts.show(rows.length === 1 ? `Run #${rows[0].dataset.run} archived` : `${rows.length} runs archived`, {
+      key: 'archive-runs', from: $('#runs-table .rk-check input'),
+      undo() {
+        rows.forEach((tr) => { $('.rk-check input', tr).checked = false; $('#runs-body').appendChild(tr); });
+        const th = $('#runs-table thead th[aria-sort="ascending"], #runs-table thead th[aria-sort="descending"]');
+        if (th) runsTable.sort(th.cellIndex, th.getAttribute('aria-sort'));
+        runsTable.refresh(); runsFacts();
+      },
+    });
+  });
+
   /* ---------- sheet and reset ---------- */
   const sheet = $('#sheet'), resetBtn = $('#reset');
   resetBtn.addEventListener('click', () => sheet.showModal());
@@ -310,6 +371,7 @@
     $('#tiles').innerHTML = start.tiles; seed();
     $('[data-rk-place=import]').innerHTML = start.importPlace;
     $('#review-list').innerHTML = start.reviews; paintReviews();
+    $('#runs-body').innerHTML = runsHtml; runsTable.refresh(); runsFacts();
     $('#revert').click();
     facets.select(0);
     board.goTo('overview', { focus: false });

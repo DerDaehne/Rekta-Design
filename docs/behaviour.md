@@ -55,6 +55,9 @@ paint: load `rekta.global.js` in `<head>` and call
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
 | `aria-busy` | a `.rk-region` | Loading (`busy()`). |
+| `data-rk-selected` | a table row | Its checkbox is checked (`table()`). |
+| `data-rk-selecting` | the app bar | Rows are selected; the bar carries the selection. |
+| `data-rk-dragging` | a split handle | Being dragged. |
 | `data-theme`, `data-density`, `data-motion` | the root | Prefs overrides (see `prefs`). |
 
 ### Public hooks
@@ -63,6 +66,7 @@ paint: load `rekta.global.js` in `<head>` and call
 |---|---|---|
 | `--rk-i` | the page | A tile's build-in order (0–10). |
 | `--rk-sec-w` | the page | A panorama section's width when sideways. |
+| `--rk-split-w` | the page, `split()` | The width of a split's list pane; the handle writes it while dragged. |
 | `--rk-banner-h` | `banner()` | `scroll-padding`, the sticky strip, toasts without anchor positioning. |
 | `--rk-pivot-h` | `panorama()` | `scroll-padding` under a sticky section strip. |
 | `--rk-pivot-scale` | `pivot()`, `panorama()` | The inactive pivot titles' scale. |
@@ -73,6 +77,7 @@ paint: load `rekta.global.js` in `<head>` and call
 |---|---|---|
 | `rk:prefs` | `document` | `{ name, value }` after `prefs.set`. |
 | `rk:bannerchange` | the banner (bubbles) | `{ state }`, the state now shown or `null`. |
+| `rk:selectionchange` | a table (bubbles) | `{ count, rows }` after the selection changes. |
 
 ## API
 
@@ -164,7 +169,14 @@ A small router for places mounted in the page as
   place underneath, so back stays in the app.
 - `document.title` becomes `Place title · title`.
 
-Returns `{ current, below, navigate(name, { replace, pressed }), back(name?), urlOf(name), destroy }`.
+- A place can show one item at a time, addressed as `#name/item`.
+  `onItem(place, fn, { push })` hears it: `fn(item | null, { back, initial })`
+  runs whenever that place's item changes and may return a name for the
+  window title; `push()` says whether choosing an item is a history step
+  of its own (a split in the compact class). `open(item)` shows an item
+  of the current place; a link to `#name/item` does the same.
+
+Returns `{ current, item, below, navigate(name, { replace, pressed }), open(item, { replace }), back(name?), onItem, urlOf(name, item), destroy }`.
 
 ### `panorama(el, { pivot })`
 
@@ -266,6 +278,29 @@ A menu button. `el` holds `.rk-menu-item` buttons (`role` `menuitem`,
 item or picks a radio item, closes the menu, returns focus to the
 trigger and calls `onSelect(item)`. Returns `{ open(index), close(), destroy }`.
 
+### `table(el, { onSort, appbar, onSelect })`
+
+`el` is a `.rk-table`. A `.rk-sort` button in a head cell sorts by its
+column (ascending, then descending; `aria-sort`), moving the rows with
+FLIP; with `onSort({ column, dir, th })` the app sorts instead. Rows
+with a `.rk-check` checkbox are selectable (Shift+click ranges, the head
+checkbox, Ctrl/Cmd+A, Escape at key layer 20); a selected row gets
+`data-rk-selected`. With `appbar`, the bar gets `data-rk-selecting`, its
+`.rk-ab-count` the count, and its `[data-rk-clear]` button clears. Cells
+get `data-label` from their head for the stacked layout. Fires
+`rk:selectionchange`. Returns `{ selected(), clear(), selectAll(), sort(column, dir), refresh(), destroy }`
+(`refresh` after adding or removing rows).
+
+### `split(el, { key })`
+
+`el` is a `.rk-split` of `.rk-split-list`, `.rk-split-handle` and
+`.rk-split-detail`. Sideways, the handle drags `--rk-split-w` (and
+moves with ← → Home End, resets on a double click, remembers the width
+under `key`). Compact, `show('detail' | 'list', { focus })` turns
+between the panes. `reveal(dir)` slides a new item into the detail
+sideways. Returns `{ show, reveal, sideways, showing, destroy }`. Pair
+it with `places().onItem(place, fn, { push: () => !split.sideways })`.
+
 ### `place(el, anchor)`
 
 Places a fixed floating surface below `anchor`, or above it when there
@@ -273,7 +308,7 @@ is no room; writes `data-rk-side`. For your own floating surfaces.
 
 ### `tokens`
 
-`tokens.value(name)`, `tokens.ms(name)`, `tokens.number(name)`: a token
+`tokens.value(name)`, `tokens.ms(name)`, `tokens.number(name)`, `tokens.px(name)` (a length in px, rem resolved): a token
 as it applies right now, for an app's own animations.
 
 ## Versions

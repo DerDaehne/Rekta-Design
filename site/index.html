@@ -54,10 +54,10 @@
             <span class="rk-stat"><b id="reviews-open">3</b><span>awaiting review</span></span>
             <progress class="rk-progress" id="reviews-progress" max="5" value="2" aria-hidden="true">2 of 5</progress>
           </a>
-          <div class="rk-tile" data-status="success" style="--rk-i:3">
+          <a class="rk-tile" href="#runs" data-status="success" id="tile-runs" style="--rk-i:3">
             <span class="rk-tile-word">done</span>
             <span class="rk-stat"><b>38</b><span>deploys today</span></span>
-          </div>
+          </a>
           <div class="rk-tile rk-w2" data-live="coverage" style="--rk-i:4">
             <span class="rk-tile-word">idle</span>
             <span class="rk-stat"><b data-v>87.4%</b><span>test coverage</span></span>
@@ -72,7 +72,7 @@
             <span class="rk-stat"><b>0</b><span>incidents open</span></span>
           </div>
         </div>
-        <p class="note">Press a tile and it nudges back where you press it. Tiles open things: the failed import, the build queue and the reviews each turn to their own place, and back turns the board in again. A tile never changes data; its status changes because the data does. Finished tiles drop their sparkline: stillness means done.</p>
+        <p class="note">Press a tile and it nudges back where you press it. Tiles open things: the failed import, the build queue, the reviews and today's deploys each turn to their own place, and back turns the board in again. A tile never changes data; its status changes because the data does. Finished tiles drop their sparkline: stillness means done.</p>
         <ul class="rk-rows trend">
           <li><b>build queue</b><span class="rk-meta" data-trend-v="queue">12 jobs</span><svg class="rk-spark" data-status="info" viewBox="0 0 200 28" role="img" aria-label="build queue trend" data-trend="queue"><polyline pathLength="1" points="0,14 200,14"/></svg></li>
           <li><b>failed imports</b><span class="rk-meta">4 today</span><svg class="rk-spark rk-spark--static" data-status="error" viewBox="0 0 200 28" role="img" aria-label="4 failed imports today, rising"><polyline pathLength="1" points="0,24 9,23 17,22 26,22 35,21 43,20 52,21 61,19 70,19 78,18 87,17 96,17 104,16 113,15 122,14 130,14 139,12 148,12 157,11 165,9 174,9 183,7 191,6 200,5"/></svg></li>
@@ -277,6 +277,39 @@
     </div>
   </main>
 
+  <!-- A place with a split: the runs as a table, the current run beside it (one at a time on a phone) -->
+  <main class="rk-place place-detail place-runs" data-rk-place="runs" data-rk-parent="board" aria-labelledby="runs-title" hidden>
+    <header class="top">
+      <a class="rk-crumb" href="#" data-rk-back><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg>board</a>
+      <p class="rk-kicker">deploys</p>
+      <h1 class="rk-title" id="runs-title">Runs today</h1>
+      <p class="rk-facts" id="runs-facts">12 runs · 1 failed</p>
+    </header>
+    <div class="rk-split runs-split" id="runs-split">
+      <section class="rk-split-list" id="runs-list" aria-label="runs">
+        <p class="note runs-note">Sort by a column; tick rows to act on several at once (Shift for a range, Ctrl/⌘+A for all, Escape to clear). A run's number opens it beside the list; drag the divider, or focus it and use ← →.</p>
+        <div class="rk-region rk-table-wrap">
+          <table class="rk-table" id="runs-table">
+            <thead><tr>
+              <th scope="col" class="rk-check"><input type="checkbox" aria-label="select all runs"></th>
+              <th scope="col" aria-sort="none"><button class="rk-sort" type="button">run</button></th>
+              <th scope="col" aria-sort="none"><button class="rk-sort" type="button">status</button></th>
+              <th scope="col">target</th>
+              <th scope="col" class="rk-num" aria-sort="none"><button class="rk-sort" type="button">duration</button></th>
+              <th scope="col" class="rk-num" aria-sort="descending"><button class="rk-sort" type="button">started</button></th>
+            </tr></thead>
+            <tbody id="runs-body"></tbody>
+          </table>
+        </div>
+      </section>
+      <div class="rk-split-handle" aria-label="width of the list of runs"></div>
+      <section class="rk-split-detail" id="runs-detail" aria-label="run">
+        <a class="rk-crumb rk-split-back" href="#runs" data-rk-back><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg>runs</a>
+        <div id="run-detail"></div>
+      </section>
+    </div>
+  </main>
+
   <div class="rk-toasts" id="toasts" role="status" aria-atomic="false"></div>
 
   <div class="rk-appbar" id="bar" role="region" aria-label="app bar">
@@ -286,6 +319,12 @@
     <button class="rk-ab" id="ab-stop" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5h10v10H5z"/></svg><span>stop</span></button>
     <button class="rk-ab ab-wide" id="ab-theme" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 4a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span><span class="rk-ab-k">theme </span><b id="theme-word">system</b></span></button>
     <button class="rk-ab ab-wide" id="ab-motion" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10h4l2-5 3 10 2-5h5"/></svg><span><span class="rk-ab-k">motion </span><b id="motion-word">on</b></span></button>
+    <div class="rk-ab-selection" role="group" aria-label="selected runs">
+      <span class="rk-ab-count" role="status">0 selected</span>
+      <button class="rk-ab" id="sel-export" type="button"><span>export</span></button>
+      <button class="rk-ab" id="sel-archive" type="button"><span>archive</span></button>
+      <button class="rk-ab" type="button" data-rk-clear><span>clear</span></button>
+    </div>
   </div>
 
   <dialog class="rk-sheet" id="sheet" aria-labelledby="sheet-title">

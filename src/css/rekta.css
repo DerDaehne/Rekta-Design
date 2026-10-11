@@ -6,7 +6,8 @@
    - Rekta defines only .rk-* classes and --rk-* properties. data-status, data-theme, data-density and data-motion
      apply on .rk and inside it; the theme, density and motion switches go on the root element.
    - Hide with the hidden attribute: Rekta's display rules never override it.
-   - Public hooks a page may set: --rk-i (build-in index of a tile, 0-10), --rk-sec-w (width of a panorama section).
+   - Public hooks a page may set: --rk-i (build-in index of a tile, 0-10), --rk-sec-w (width of a panorama section),
+     --rk-split-w (width of a split's list pane; rekta.js writes it while the handle is dragged).
      Public hooks rekta.js writes and a page may read: --rk-banner-h, --rk-pivot-h, --rk-pivot-scale.
      Everything named --_rk-* is internal.
    - State that rekta.js writes lives in data-rk-* attributes (data-rk-pressed, data-rk-phase, data-rk-turn,
@@ -233,6 +234,50 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-btn[data-rk-pending] { cursor: progress; }
 .rk-btn[data-rk-pending]::after { inset: auto 0 -6px; }
 
+/* Table ---------------------------------------------------------------------------------------------------------- */
+/* Hairlines and the density's row height; the head in the kicker's voice, sticking to the top of what scrolls; the
+   sorted column in text-primary with a triangle; numbers right-aligned in tabular figures. The row's main cell is a
+   <th scope="row">. A selected row takes surface and its checkbox (.rk-check); the current row (the one a split
+   shows, aria-current="true") a 2px ink bar at its leading edge. Narrower than 760px, rows stack (below). */
+.rk-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.rk-table :is(th, td) { padding: var(--rk-space-xs) var(--rk-space-s); text-align: left; vertical-align: middle; }
+.rk-table thead th {
+  position: sticky; top: 0; z-index: 1; padding-block: var(--rk-space-s); background: var(--rk-bg); border-bottom: 1px solid var(--rk-text-contrast-low);
+  font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-high); white-space: nowrap;
+}
+.rk-table thead th:is([aria-sort='ascending'], [aria-sort='descending']) { color: var(--rk-text-primary); }
+.rk-table tbody tr { border-top: 1px solid var(--rk-text-contrast-low); }
+.rk-table tbody tr:last-child { border-bottom: 1px solid var(--rk-text-contrast-low); }
+.rk-table tbody :is(th, td) { height: var(--rk-row-height); }
+.rk-table tbody th { font-weight: var(--rk-font-weight-semibold); }
+.rk-table .rk-num { text-align: right; }
+.rk-table .rk-check { width: calc(20px + 2 * var(--rk-space-s)); }
+.rk-table .rk-check input { display: block; width: 20px; height: 20px; margin: 0; accent-color: var(--rk-accent); }
+.rk-table tr[data-rk-selected] { background-color: var(--rk-surface); }
+.rk-table tbody tr[aria-current='true'] > :first-child { box-shadow: inset 2px 0 0 var(--rk-text-primary); }
+.rk-sort {
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--rk-control-height); margin-block: calc(-1 * var(--rk-space-s)); padding: 0;
+  border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: inherit;
+}
+/* Borders draw the triangle, so forced colours keep it. */
+.rk-table th[aria-sort='ascending'] .rk-sort::after, .rk-table th[aria-sort='descending'] .rk-sort::after { content: ''; border: 4px solid transparent; }
+.rk-table th[aria-sort='ascending'] .rk-sort::after { border-top-width: 0; border-bottom-color: currentColor; }
+.rk-table th[aria-sort='descending'] .rk-sort::after { border-bottom-width: 0; border-top-color: currentColor; }
+.rk-table-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
+
+/* Selection: while rows are selected the app bar carries the selection's count and actions instead of its own. */
+.rk-ab-selection { display: none; flex: 1 1 auto; align-items: center; gap: var(--rk-space-xs); min-width: 0; }
+.rk-appbar[data-rk-selecting] > :not(.rk-ab-selection) { display: none; }
+.rk-appbar[data-rk-selecting] > .rk-ab-selection { display: flex; }
+.rk-ab-count { margin-right: auto; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); white-space: nowrap; }
+
+/* Split ---------------------------------------------------------------------------------------------------------- */
+/* A list and the detail of its current item. Sideways, side by side: each pane scrolls itself, divided by a hairline
+   with an invisible 9px handle (role="separator") that thickens while hovered, focused or dragged. Compact, one pane
+   at a time: rekta.js hides the other. */
+.rk-split-handle { display: none; }
+.rk-split-detail .rk-split-back { display: inline-flex; }
+
 /* Floating surfaces ---------------------------------------------------------------------------------------------- */
 /* Menus and lists that float next to their control: bg, a 1px text-contrast-medium edge, radius-s, no shadow. They
    live in the top layer (popover); rekta.js places them below the control, or above when there is no room. */
@@ -420,6 +465,9 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-ab:hover { background-color: var(--rk-hover); }
   .rk-crumb:hover { color: var(--rk-text-primary); }
   .rk-menu-item:hover:not([aria-disabled='true']) { background-color: var(--rk-hover); }
+  .rk-table tbody tr:has(a, input, button):hover { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+  .rk-sort:hover { color: var(--rk-text-primary); }
+  .rk-split-handle:hover::after { width: 2px; background-color: var(--rk-text-contrast-medium); }
   .rk-toast-act:hover { background-color: var(--rk-hover); }
 }
 /* A fine pointer can select text inside tiles and rows (dragging never activates them: rekta.js); touch gets no
@@ -435,6 +483,9 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-region[aria-busy='true']::before, .rk-btn[data-rk-pending]::after, .rk-empty[data-status='error'] > :first-child::before { forced-color-adjust: none; background: CanvasText; }
   .rk-ghost { forced-color-adjust: none; background: GrayText; }
   .rk-float { border-color: CanvasText; }
+  .rk-table tbody tr[aria-current='true'] > :first-child { border-left: 2px solid CanvasText; }
+  .rk-table tr[data-rk-selected] { outline: 1px solid Highlight; outline-offset: -1px; }
+  .rk-split-handle::after { background: CanvasText; }
 }
 
 /* Window-size classes -------------------------------------------------------------------------------------------- */
@@ -460,6 +511,29 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 }
 /* The live state's word shows at every width. */
 .rk-ab-status .rk-ab-k { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
+/* Narrow place: table rows stack. Check (if any), main cell and status on the first line, the other cells as
+   "label value" below, labelled from data-label (rekta.js fills it from the head). The head becomes a row of sort
+   buttons. Decided by the place's width, not the viewport's height: a wide, short window still has room. */
+@container rk (max-width: 759.98px) {
+  .rk-table, .rk-table :is(thead, tbody, tr, th, td) { display: block; }
+  .rk-table tr { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--rk-space-m); }
+  .rk-table tr:has(> .rk-check) { padding-left: calc(20px + var(--rk-space-m)); }
+  .rk-table .rk-check { position: absolute; left: 0; top: var(--rk-space-s); width: auto; padding: 0; }
+  .rk-table thead tr { padding-block: var(--rk-space-xs); border-bottom: 1px solid var(--rk-text-contrast-low); }
+  .rk-table thead th { position: static; padding: 0; border: 0; background: none; }
+  .rk-table thead th:not([aria-sort]):not(.rk-check) { display: none; }
+  .rk-table thead .rk-check { top: 50%; transform: translateY(-50%); }
+  .rk-table tbody tr { padding-block: var(--rk-space-s); }
+  .rk-table tbody tr[aria-current='true'] { box-shadow: inset 2px 0 0 var(--rk-text-primary); }
+  .rk-table tbody tr[aria-current='true'] > :first-child { box-shadow: none; }
+  .rk-table tbody :is(th, td) { height: auto; padding: 0; }
+  .rk-table tbody th { order: 1; flex: 1 1 0; min-width: 50%; }
+  .rk-table tbody td:has(> .rk-tag) { order: 2; margin-left: auto; }
+  .rk-table tbody tr::before { content: ''; order: 3; flex: 0 0 100%; }
+  .rk-table tbody td:not(.rk-check):not(:has(> .rk-tag)) { order: 4; font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); text-align: left; }
+  .rk-table tbody td[data-label]:not(.rk-check):not(:has(> .rk-tag))::before { content: attr(data-label) ' '; color: var(--rk-text-contrast-medium); }
+}
+
 /* Sideways place: decided by the place's own width (a pane in a split decides by its pane) and the viewport height. */
 @container rk (min-width: 760px) {
   @media (min-height: 481px) {
@@ -476,6 +550,20 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
     .rk-panorama-end { flex: 0 0 max(0px, calc(100% - var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))) - var(--rk-space-xl))); }
     .rk-panorama[data-rk-fit] > .rk-panorama-end { display: none; }
     .rk-place > .rk-pivot { position: static; padding-inline: var(--rk-space-xl); background: none; border-bottom: 0; }
+    .rk-split {
+      display: grid; min-height: 0;
+      grid-template-columns: minmax(var(--rk-pane-min), var(--rk-split-w, calc(4 * var(--rk-tile-unit) + 3 * var(--rk-space-s)))) 1px minmax(var(--rk-pane-min), 1fr);
+    }
+    .rk-split > :is(.rk-split-list, .rk-split-detail) { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .rk-split-handle { display: block; position: relative; z-index: 2; width: 9px; margin-inline: -4px; cursor: col-resize; touch-action: none; }
+    .rk-split-handle::after {
+      content: ''; position: absolute; inset: 0 auto 0 50%; width: 1px; transform: translateX(-50%); background: var(--rk-text-contrast-low);
+      transition: width var(--rk-duration-short) var(--rk-ease-base), background-color var(--rk-duration-short) var(--rk-ease-base);
+    }
+    .rk-split-handle:focus-visible::after, .rk-split-handle[data-rk-dragging]::after { width: 2px; background-color: var(--rk-text-contrast-medium); }
+    .rk-split-handle:focus-visible { outline-offset: -2px; }
+    .rk-split-detail .rk-split-back { display: none; }
+    .rk-table-wrap { overflow-x: visible; }
   }
 }
 @media (min-width: 2560px) {

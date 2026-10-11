@@ -73,7 +73,12 @@ places its tiles and links open, each with one parent.
   clicks on a link to a place open it where the platform opens links (a
   new tab, a new window); only a plain click turns the place.
 - **The title names the place**: the window or tab title is
-  "Place · App".
+  "Place · App" ("Item · Place · App" when an item shows).
+- **An item can be part of the address.** A place that shows one item at
+  a time (a split view's current run) adds it: `#runs/4182`. Choosing an
+  item replaces the address while the list stays in view, and is a step
+  of its own where the item replaces the list (compact); see
+  [collections.md](collections.md#split-view).
 
 ### Crumb
 

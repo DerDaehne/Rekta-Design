@@ -21,6 +21,20 @@ it; each entry says how.
   `motion.duration.float`, `layer.float`.
 - [docs/states.md](docs/states.md): data states, pending, floating
   surfaces, layers.
+- Tables (`rk-table`): kicker head that sticks, sorting with FLIP
+  (`rk-sort`, `aria-sort`), numbers in `rk-num`, rows that stack as
+  "label value" in a narrow place. `Rekta.table()`.
+- Selection: `rk-check` checkboxes, `rk-surface` on selected rows, Shift
+  ranges, Ctrl/Cmd+A, Escape; the app bar carries the count and actions
+  (`rk-ab-selection`, `rk-ab-count`, `data-rk-clear`).
+- Split views (`rk-split`): a hairline with an invisible, focusable
+  handle sideways (`--rk-split-w`, `size.pane-min`), one pane at a time
+  compact. `Rekta.split()`. The current row has a 2px ink bar.
+- Items in addresses: `#place/item`, `places().onItem()`, `open()`;
+  replaced sideways, a history step compact; deep links put the list
+  underneath.
+- `tokens.px()` reads a length token in px.
+- [docs/collections.md](docs/collections.md).
 
 ### Fixed
 

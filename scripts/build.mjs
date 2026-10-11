@@ -61,7 +61,7 @@ export function tokenName(path) {
 
 // Sizes that should follow the user's text size go out as rem on the web.
 const REM = (path) => (path[0] === 'typography' && path[1] === 'size')
-  || (path[0] === 'size' && ['tile-unit', 'tile-unit-ultrawide', 'touch-target', 'appbar-height'].includes(path[1]))
+  || (path[0] === 'size' && ['tile-unit', 'tile-unit-ultrawide', 'touch-target', 'appbar-height', 'pane-min'].includes(path[1]))
   || (path[0] === 'density' && ['control-height', 'row-height'].includes(path[2]));
 
 const rem = (px) => `${+(px / 16).toFixed(4)}rem`;
@@ -253,7 +253,7 @@ function check(tokens) {
   for (const g of ['color']) walk(tokens.color.light, ['color', 'light'], (p) => defined.add(tokenName(p)));
   for (const g of ['typography', 'spacing', 'radius', 'size', 'motion', 'timing', 'layer', 'breakpoint']) walk(tokens[g], [g], (p) => defined.add(tokenName(p)));
   walk(tokens.density.comfortable, ['density', 'comfortable'], (p) => defined.add(tokenName(p)));
-  const HOOKS = new Set(['i', 'sec-w', 'banner-h', 'pivot-scale', 'pivot-h']);
+  const HOOKS = new Set(['i', 'sec-w', 'split-w', 'banner-h', 'pivot-scale', 'pivot-h']);
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }
