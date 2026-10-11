@@ -20,6 +20,7 @@
   const home = Rekta.panorama($('#pan'), { pivot: $('#nav') });
   const facets = Rekta.pivot($('#facet-strip'));
   const toasts = Rekta.toaster($('#toasts'));
+  const hist = Rekta.undoStack({ toaster: toasts });
 
   /* ---------- colour: contrast measured live, in the theme on screen ---------- */
   const probe = document.createElement('i');
@@ -200,20 +201,31 @@
     ['Split', 'layout', 'success', '0.2'], ['Palette', 'navigation', 'success', '0.2'], ['Filters', 'forms', 'success', '0.2'], ['Form summary', 'forms', 'info', '0.2'],
     ['Live contract', 'feedback', 'warning', 'next'], ['Combobox', 'forms', 'warning', 'next'], ['Undo history', 'feedback', 'warning', 'next'],
   ];
-  const compHtml = COMPONENTS.map(([name, group, status, since]) => `<tr data-name="${name}" data-status-v="${status}"><td class="rk-check"></td><th scope="row">${name}</th><td>${group}</td><td><span class="rk-tag" data-status="${status}">${WORD[status]}</span></td><td class="rk-num" data-sort="${since === 'next' ? 9 : since}">${since}</td></tr>`).join('');
+  const compHtml = COMPONENTS.map(([name, group, status, since]) => `<tr data-name="${name}" data-status-v="${status}"><td class="rk-check"></td><th scope="row">${name}</th><td data-rk-edit data-rk-tip="double-click or F2 to edit">${group}</td><td><span class="rk-tag" data-status="${status}">${WORD[status]}</span></td><td class="rk-num" data-sort="${since === 'next' ? 9 : since}">${since}</td></tr>`).join('');
   $('#comp-body').innerHTML = compHtml;
+  const setGroup = (row, g) => { row.cells[2].textContent = g; const c = COMPONENTS.find((x) => x[0] === row.dataset.name); if (c) c[1] = g; };
   const compTable = Rekta.table($('#comp-table'), {
     appbar: $('#bar'),
+    columns: { key: 'rekta-site-comp-cols' },
+    edit: {
+      onCommit: (row, td, value, old) => wait(500).then(() => {
+        if (!value) throw new Error('A component needs a group.');
+        if (value.length > 16) throw new Error('Keep a group to 16 letters or fewer.');
+        const c = COMPONENTS.find((x) => x[0] === row.dataset.name); if (c) c[1] = value;
+        hist.do({ label: `Moved ${row.dataset.name} to “${value}”`, run: () => {}, undo: () => setGroup(row, old), redo: () => setGroup(row, value) });
+      }),
+    },
     onShow(row) { const [n, g, s, v] = COMPONENTS.find((c) => c[0] === row.dataset.name); $('#comp-shown').textContent = `Shown: ${n} · ${g} · ${WORD[s]} · since ${v}`; },
     onSelect(rows, { mode }) { if (mode) $('#comp-shown').textContent = `${rows.length} selected · the app bar carries them`; else if (!rows.length) $('#comp-shown').textContent = 'Nothing selected.'; },
   });
   function compFilter() {
     const q = $('#comp-q').value.trim().toLowerCase(), st = $$('#comp-status-menu [aria-checked="true"]').map((i) => i.dataset.v);
     let shown = 0;
-    for (const tr of $$('#comp-body tr')) { const keep = (!q || tr.textContent.toLowerCase().includes(q)) && (!st.length || st.includes(tr.dataset.statusV)); tr.hidden = !keep; if (keep) shown += 1; }
+    for (const tr of $$('#comp-body tr')) { const keep = !tr.hasAttribute('data-archived') && (!q || tr.textContent.toLowerCase().includes(q)) && (!st.length || st.includes(tr.dataset.statusV)); tr.hidden = !keep; if (keep) shown += 1; }
     $('#comp-none').hidden = shown > 0;
     $('#comp-clear').hidden = !(q || st.length);
-    $('#comp-facts').textContent = `${COMPONENTS.length} components${shown < COMPONENTS.length ? ` · showing ${shown}` : ''} · ${COMPONENTS.filter((c) => c[2] === 'warning').length} waiting`;
+    const archived = $$('#comp-body tr[data-archived]').length;
+    $('#comp-facts').textContent = `${COMPONENTS.length} components${shown < COMPONENTS.length ? ` · showing ${shown}` : ''}${archived ? ` · ${archived} archived` : ''} · ${COMPONENTS.filter((c) => c[2] === 'warning').length} waiting`;
     compTable.refresh();
   }
   const compStatus = Rekta.menu($('#comp-status'), $('#comp-status-menu'), { summary: 'status', onSelect: compFilter });
@@ -233,6 +245,33 @@
         });
     },
   });
+  // Archive: rows leave the table; the history takes them back.
+  function archive(rows) {
+    rows = rows.filter((r) => !r.hasAttribute('data-archived'));
+    if (!rows.length) return;
+    hist.do({
+      label: rows.length === 1 ? `Archived ${rows[0].dataset.name}` : `Archived ${rows.length} components`,
+      run: () => { rows.forEach((r) => r.setAttribute('data-archived', '')); compTable.clear(); compFilter(); },
+      undo: () => { rows.forEach((r) => r.removeAttribute('data-archived')); compFilter(); },
+    });
+  }
+  $('#sel-archive').addEventListener('click', () => { if (compTable.mode) archive(compTable.selected()); else toasts.show('Archive works on the components in “lists & tables”.', { key: 'archive-where' }); });
+  // Columns: a menu shows and hides them; their edges size them.
+  const colMenu = Rekta.menu($('#comp-cols'), $('#comp-cols-menu'), { onSelect(item) { const i = +item.dataset.col; if (item.getAttribute('aria-checked') === 'true') compTable.show(i); else compTable.hide(i); } });
+  colMenu.set((i) => !compTable.hidden().includes(+i.dataset.col));
+  // A context menu on each row: the selection follows the row it opens on.
+  Rekta.contextMenu($('#comp-body'), $('#comp-ctx'), {
+    target: 'tr',
+    onOpen(row) { if (row.getAttribute('aria-selected') !== 'true') compTable.only(row, { show: false }); },
+    async onSelect(item, row) {
+      const act = item.dataset.act;
+      if (act === 'show') compTable.only(row);
+      else if (act === 'edit') compTable.edit(row.querySelector('td[data-rk-edit]'));
+      else if (act === 'copy') { let ok = true; try { await navigator.clipboard.writeText(row.dataset.name); } catch { ok = false; } toasts.show(ok ? `Copied “${row.dataset.name}”.` : 'Copying needs clipboard access.', { key: 'copy' }); }
+      else if (act === 'archive') archive(compTable.mode ? compTable.selected() : [row]);
+    },
+  });
+
   // The same selection on plain rows.
   const pick = Rekta.select($('#pick-rows'), {
     appbar: $('#bar'),
@@ -303,8 +342,8 @@
   }, { push: () => !tokSplit.sideways });
   // The app bar carries whichever list is in its selection mode.
   $('#sel-copy').addEventListener('click', async (e) => {
-    const from = [tokTable, compTable, pick].find((s) => s.mode) || compTable, rows = from.selected();
-    const text = from === tokTable ? rows.map((r) => `var(--rk-${r.dataset.name})`).join('\n') : rows.map((r) => r.dataset.name).join(', ');
+    const from = [tokTable, compTable, pick, logList].find((s) => s.mode) || compTable, rows = from.selected();
+    const text = from === tokTable ? rows.map((r) => `var(--rk-${r.dataset.name})`).join('\n') : from === logList ? rows.map((k) => { const l = logLine(logMap[k]); return `${l.time} ${WORD[l.level]} ${l.msg}`; }).join('\n') : rows.map((r) => r.dataset.name).join(', ');
     let ok = true;
     try { await navigator.clipboard.writeText(text); } catch { ok = false; }
     toasts.show(ok ? `Copied ${rows.length === 1 ? '1 name' : `${rows.length} names`}.` : `Copying needs clipboard access; ${rows.length} selected.`, { key: 'copy', from: e.currentTarget });
@@ -384,6 +423,122 @@
   });
   if (customAccent) { $('#a-name').value = customAccent.name; $('#a-light').value = customAccent.light; $('#a-dark').value = customAccent.dark || ''; accentGuard.clean(); }
 
+  /* ---------- desktop: a tree, tooltips, context menus, a sortable list, ten thousand lines ---------- */
+  const rowText = (li) => li.querySelector(':scope > .rk-tree-row').textContent.trim();
+  const pathOf = (li) => { const p = []; for (let x = li; x; x = x.parentElement.closest('[role=treeitem]')) p.unshift(rowText(x)); return p; };
+  const files = Rekta.tree($('#tree'), {
+    onShow(li) {
+      const p = pathOf(li), kids = li.querySelectorAll(':scope > ul > li').length;
+      $('#file-path').textContent = p.length > 1 ? p.slice(0, -1).join(' / ') : 'Rekta Design';
+      $('#file-name').textContent = p[p.length - 1];
+      $('#file-about').textContent = li.dataset.about || `A folder of ${kids === 1 ? 'one item' : `${kids} items`}. → opens it, ← closes it.`;
+    },
+  });
+  async function copyPath(li) {
+    if (!li) { toasts.show('Choose a file first.', { key: 'copy' }); return; }
+    const path = pathOf(li).join('/');
+    let ok = true; try { await navigator.clipboard.writeText(path); } catch { ok = false; }
+    toasts.show(ok ? `Copied ${path}.` : `Copying needs clipboard access: ${path}`, { key: 'copy' });
+  }
+  $('#tree-open').addEventListener('click', () => files.expandAll(true));
+  $('#tree-close').addEventListener('click', () => files.expandAll(false));
+  $('#tree-copy').addEventListener('click', () => copyPath(files.selected()));
+  $('#tree').addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && e.target.matches('[role=treeitem]')) { e.preventDefault(); copyPath(e.target); } });
+  Rekta.contextMenu($('#tree'), $('#tree-menu'), {
+    target: '[role=treeitem]',
+    onOpen(li) { files.select(li); },
+    onSelect(item, li) {
+      if (item.dataset.act === 'show') files.select(li);
+      else if (item.dataset.act === 'copy') copyPath(li);
+      else if (item.dataset.act === 'open') files.expandAll(true);
+    },
+  });
+  let replaying = false;
+  const steps = Rekta.sortable($('#steps'), {
+    onMove(from, to, item) {
+      if (replaying) return;
+      const name = item.querySelector('b').textContent, again = (i) => { replaying = true; steps.move(item, i); replaying = false; };
+      hist.do({ label: `Moved “${name}” to step ${to + 1}`, run: () => {}, undo: () => again(from), redo: () => again(to) });
+    },
+  });
+  const STEP_ORDER = $$('#steps > li').map((li) => li.querySelector('b').textContent);
+  // Ten thousand log lines, made up the same way every time.
+  const LOG_N = 10000;
+  const MSGS = ['build started', 'tests passed', 'cache warmed', 'schema check failed: column “due” is missing', 'retry scheduled in 30 s', 'deploy finished', 'token check passed', 'waiting for a free runner', 'artifact uploaded', 'smoke test passed', 'contrast check passed', 'review requested'];
+  const rnd = (i) => { const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+  function logLine(i) {
+    const r = rnd(i), s = i * 7, level = r < 0.03 ? 'error' : r < 0.13 ? 'warning' : r < 0.55 ? 'info' : 'success';
+    const msg = level === 'error' ? MSGS[3] : level === 'warning' ? MSGS[i % 2 ? 4 : 7] : MSGS[[0, 1, 2, 5, 6, 8, 9, 10, 11][Math.floor(rnd(i + 1) * 9)]];
+    return { n: i + 1, time: [Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60, s % 60].map((v) => String(v).padStart(2, '0')).join(':'), level, msg };
+  }
+  let logMap = Array.from({ length: LOG_N }, (_, i) => i);
+  const logList = Rekta.virtual($('#log'), {
+    count: LOG_N, label: 'log lines', appbar: $('#bar'),
+    render(k, row) {
+      const l = logLine(logMap[k]);
+      row.innerHTML = `<span class="rk-meta">#${String(l.n).padStart(5, '0')}</span><span class="rk-tag" data-status="${l.level}">${WORD[l.level]}</span><span></span><span class="rk-meta">${l.time}</span>`;
+      row.children[2].textContent = l.msg;
+    },
+    onShow(k) { const l = logLine(logMap[k]); $('#log-shown').textContent = `Line ${l.n} · ${l.time} · ${WORD[l.level]} · ${l.msg}`; },
+    onChange(list, { mode }) { if (mode) $('#log-shown').textContent = `${list.length} lines selected · the app bar carries them`; },
+  });
+  function logFilter() {
+    const f = ($$('input[name=log-f]').find((r) => r.checked) || {}).value || 'all';
+    logMap = f === 'all' ? Array.from({ length: LOG_N }, (_, i) => i) : Array.from({ length: LOG_N }, (_, i) => i).filter((i) => logLine(i).level === f);
+    logList.clear(); logList.refresh(logMap.length); $('#log').scrollTop = 0;
+    $('#log-facts').textContent = `${logMap.length.toLocaleString('en')} of ${LOG_N.toLocaleString('en')} lines · ${$$('#log .rk-virtual-row').length} in the page`;
+  }
+  $$('input[name=log-f]').forEach((r) => r.addEventListener('change', logFilter));
+  logFilter();
+
+  /* ---------- live and undo ---------- */
+  const feed = Rekta.live($('#live-region'), { stale: 8000 });
+  const EVENTS_LIVE = [['Build #4190 finished', 'success'], ['A runner joined the pool', 'info'], ['Review waiting on Ada', 'warning'], ['Nightly import retried', 'info'], ['Deploy to staging finished', 'success'], ['Disk at 81% on runner 3', 'warning']];
+  let rps = 118, queue = 14, doneToday = 312, tickN = 0;
+  const rpsSeries = [];
+  function pushEvent([text, status]) {
+    const list = $('#lv-events'), li = document.createElement('li');
+    li.innerHTML = `<span></span><span class="rk-tag" data-status="${status}">${WORD[status]}</span>`;
+    li.firstChild.textContent = text;
+    list.prepend(li);
+    while (list.children.length > 4) list.lastChild.remove();
+  }
+  function liveTick() {
+    if (!$('#lv-feed').checked || !$('#lv-online').checked || !live()) return;
+    tickN += 1;
+    rps = Math.max(40, Math.min(220, Math.round(rps + (rnd(tickN) - 0.5) * 30)));
+    queue = Math.max(0, Math.min(40, queue + Math.round((rnd(tickN + 7) - 0.55) * 4)));
+    doneToday += Math.round(rnd(tickN + 3) * 3);
+    rpsSeries.push(rps); if (rpsSeries.length > 24) rpsSeries.shift();
+    feed.update(() => { $('#lv-rps').textContent = rps; $('#live-region .rk-spark polyline').setAttribute('points', points(rpsSeries)); }, 'rps');
+    feed.update(() => { $('#lv-queue').textContent = queue; }, 'queue');
+    feed.update(() => { $('#lv-done').textContent = doneToday; }, 'done');
+    if (tickN % 3 === 0) { const ev = EVENTS_LIVE[tickN % EVENTS_LIVE.length]; feed.update(() => pushEvent(ev)); }
+  }
+  setInterval(liveTick, 1500); liveTick();
+  $('#lv-online').addEventListener('change', (e) => { feed.offline(!e.target.checked); toasts.show(e.target.checked ? 'Connected again. Figures are live.' : 'Connection lost. The figures stay, marked as offline.', { key: 'lv-online' }); });
+  $('#lv-feed').addEventListener('change', (e) => toasts.show(e.target.checked ? 'Feed on.' : `Feed off: in ${Math.round(8)} seconds the figures say they are stale.`, { key: 'lv-feed' }));
+  function paintHistory() {
+    const list = $('#h-list'), entries = hist.entries().slice().reverse();
+    for (const [btn, can, why] of [[$('#h-undo'), hist.canUndo, 'nothing to undo yet'], [$('#h-redo'), hist.canRedo, 'nothing undone to do again']]) {
+      btn.setAttribute('aria-disabled', String(!can));
+      btn.dataset.rkTip = can ? (btn.id === 'h-undo' ? 'undo the last action' : 'do it again') : why;
+    }
+    if (!entries.length) { list.innerHTML = '<li class="rk-empty">Nothing yet. Archive a component, edit a group, or order the release.</li>'; return; }
+    list.replaceChildren(...entries.map((e) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<b></b><span class="rk-meta"></span>';
+      li.firstChild.textContent = e.label;
+      li.lastChild.textContent = e.done ? new Date(e.at).toTimeString().slice(0, 8) : 'undone';
+      if (!e.done) li.setAttribute('data-undone', '');
+      return li;
+    }));
+  }
+  document.addEventListener('rk:historychange', paintHistory);
+  $('#h-undo').addEventListener('click', () => { if (hist.canUndo) hist.undo(); });
+  $('#h-redo').addEventListener('click', () => { if (hist.canRedo) hist.redo(); });
+  paintHistory();
+
   /* ---------- inputs: build a tile, find a token, text size, a date, files ---------- */
   const built = $('#built');
   function build() {
@@ -449,7 +604,9 @@
     if (sheet.returnValue !== 'reset') return;
     toasts.dismiss();
     ORDER.forEach((n) => banner.set(n, false)); paintState();
-    compTable.clear(); clearComp(); pick.clear();
+    compTable.clear(); $$('#comp-body tr[data-archived]').forEach((r) => r.removeAttribute('data-archived')); clearComp(); pick.clear(); logList.clear();
+    const order = new Map(STEP_ORDER.map((n, i) => [n, i])); $$('#steps > li').sort((a, b) => order.get(a.querySelector('b').textContent) - order.get(b.querySelector('b').textContent)).forEach((li) => $('#steps').appendChild(li));
+    hist.clear(); $('#lv-feed').checked = true; $('#lv-online').checked = true; feed.offline(false);
     tokTable.clear(); $('#tok-q').value = ''; tokGroup.set(() => false); tokFilter({ write: false });
     customAccent = null; window.siteAccent(null); store.set('rekta-site-accent-def', null); store.set('rekta-site-accent', null);
     $('#a-name').value = ''; $('#a-light').value = ''; $('#a-dark').value = ''; accentForm.clear(); accentGuard.clean();
@@ -466,5 +623,5 @@
   paintAccent();
   paintSeen();
   requestAnimationFrame(() => { measure(); env(); });
-  window.site = { app, router, home, facets, toasts, banner, compTable, pick, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard };
+  window.site = { app, router, home, facets, toasts, banner, hist, compTable, pick, files, steps, logList, feed, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard };
 })();

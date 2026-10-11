@@ -19,6 +19,20 @@ it; each entry says how.
   segments (`rk-segments`); a drop zone for files (`rk-drop`,
   `Rekta.drop()`).
 - Toasts take a plain action without a countdown (`act`).
+- Desktop: tooltips in ink (`data-rk-tip`, after `timing.tip-delay`, at
+  once on keyboard focus, never on touch); context menus at the pointer,
+  on a long press or Shift+F10 (`Rekta.contextMenu()`); a tree
+  (`rk-tree`, `Rekta.tree()`); ordering by a grip, with the pointer or the
+  keyboard (`rk-grip`, `Rekta.sortable()`); long lists where only the rows
+  in view exist (`rk-virtual`, `Rekta.virtual()`); table columns that size
+  and hide (`columns`), and cells that edit in place, with refusals below
+  the cell (`edit`).
+- Undo history: `Rekta.undoStack()`, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z
+  after the toast has gone, redo in the undo's toast.
+- The live contract: `Rekta.live()` says how fresh a region is, goes
+  stale (`timing.stale`) or offline and says so, and holds still while
+  you look, with waiting updates behind a button. [docs/live.md](docs/live.md).
+- Tokens `timing.tip-delay`, `timing.long-press`, `timing.stale`.
 - Data states: `rk-region` with `aria-busy` (a 2px line after
   `busy-delay`, at least `busy-min`), still placeholders `rk-ghost`, and
   `rk-empty` for empty and failed regions. `Rekta.busy()`.

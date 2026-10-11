@@ -28,7 +28,7 @@
        the place, so it sticks on a phone. -->
   <main class="rk-place place-home" data-rk-place="home" aria-labelledby="overview-title">
     <nav class="rk-pivot rk-pivot--nav" id="nav" aria-label="Rekta Design, sections">
-      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#feedback">feedback</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#inputs">inputs</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#platforms">platforms</a><a href="#start">get started</a>
+      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#desktop">desktop</a><a href="#feedback">feedback</a><a href="#live-undo">live &amp; undo</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#inputs">inputs</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#platforms">platforms</a><a href="#start">get started</a>
     </nav>
 
     <div class="rk-panorama" id="pan" tabindex="0" role="region" aria-label="Rekta Design, sections side by side">
@@ -214,14 +214,27 @@
       </section>
 
       <section class="rk-sec sec-wide" id="lists" aria-labelledby="lists-title">
-        <div class="sec-head"><h2 class="rk-group" id="lists-title">Rows on hairlines, chosen the Metro way.</h2><p class="rk-actions"><button class="rk-btn" type="button" id="comp-more">more</button></p></div>
+        <div class="sec-head"><h2 class="rk-group" id="lists-title">Rows on hairlines, chosen the Metro way.</h2><p class="rk-actions"><button class="rk-btn" type="button" id="comp-cols">columns</button><button class="rk-btn" type="button" id="comp-more">more</button></p></div>
+        <div id="comp-cols-menu">
+          <p class="rk-menu-label">show columns</p>
+          <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="true" type="button" data-col="2">group</button>
+          <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="true" type="button" data-col="3">status</button>
+          <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="true" type="button" data-col="4">since</button>
+        </div>
+        <div id="comp-ctx">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="show">show</button>
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="edit">edit the group<span class="rk-menu-key">F2</span></button>
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="copy">copy the name</button>
+          <hr class="rk-menu-sep">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="archive">archive</button>
+        </div>
         <div id="comp-menu">
           <button class="rk-menu-item" role="menuitem" type="button" data-act="refresh">refresh</button>
           <button class="rk-menu-item" role="menuitem" type="button" data-act="fail">refresh, and fail</button>
           <hr class="rk-menu-sep">
           <button class="rk-menu-item" role="menuitem" type="button" aria-disabled="true">print (needs a printer)</button>
         </div>
-        <p>A click selects a row and shows it. <kbd class="rk-key">Ctrl</kbd>+click adds another and starts the selection mode: then every click adds or removes, and the app bar carries the selection. <kbd class="rk-key">Shift</kbd>+click takes a range, <kbd class="rk-key">Esc</kbd> ends it. A selected row nudges, takes the accent and a checkmark.</p>
+        <p>A click selects a row and shows it. <kbd class="rk-key">Ctrl</kbd>+click adds another and starts the selection mode: then every click adds or removes, and the app bar carries the selection. <kbd class="rk-key">Shift</kbd>+click takes a range, <kbd class="rk-key">Esc</kbd> ends it. A selected row nudges, takes the accent and a checkmark. Drag a column's edge to size it; double-click a group to edit it; right-click a row for its menu.</p>
         <div class="rk-filters">
           <div class="rk-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13 13 4 4"/></svg><input class="rk-input" type="search" id="comp-q" placeholder="search components" aria-label="search components"></div>
           <button class="rk-btn" type="button" id="comp-status">status</button>
@@ -252,6 +265,68 @@
         <p class="note">Every value of the system in a table, the current one beside it: <a href="#tokens">the tokens</a>. Narrower than {{bp-sideways-scroll-min}}, rows stack as “label value”: no sideways scrolling on a phone.</p>
       </section>
 
+      <section class="rk-sec sec-wide" id="desktop" aria-labelledby="desktop-title">
+        <h2 class="rk-group" id="desktop-title">A desktop app, by mouse and by keys.</h2>
+        <p>Rest the pointer on a control: a tooltip. Right-click, long-press or <kbd class="rk-key">Shift</kbd> <kbd class="rk-key">F10</kbd> on a file: a context menu. A tree that opens and closes, a list you order by its grip, and ten thousand lines that scroll like ten.</p>
+        <div class="desk">
+          <div class="desk-tree">
+            <div class="toolbar" role="toolbar" aria-label="files">
+              <button class="rk-ab" type="button" id="tree-open" aria-label="open every folder" data-rk-tip="open every folder" aria-keyshortcuts="*"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></button>
+              <button class="rk-ab" type="button" id="tree-close" aria-label="close every folder" data-rk-tip="close every folder"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 12l5-5 5 5"/></svg></button>
+              <button class="rk-ab" type="button" id="tree-copy" aria-label="copy the path" data-rk-tip="copy the path of the selected file" aria-keyshortcuts="Control+C Meta+C"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 7h9v9H7zM4 13V4h9"/></svg></button>
+            </div>
+            <ul class="rk-tree" id="tree" aria-label="the files of Rekta Design">
+              <li aria-expanded="true"><span>tokens</span><ul><li data-about="The one source of every value: colours per theme, type, space, sizes per density, motion, timing, layers. DTCG format."><span>rekta.tokens.json</span></li></ul></li>
+              <li aria-expanded="true"><span>src</span><ul>
+                <li aria-expanded="false"><span>css</span><ul><li data-about="Every component, on the tokens only. No framework, no build step needed to read it."><span>rekta.css</span></li></ul></li>
+                <li aria-expanded="false"><span>js</span><ul><li data-about="The behaviour: press, places and back, panorama, menus, selection, forms, tooltips, live regions… one framework-free module."><span>rekta.js</span></li></ul></li>
+                <li aria-expanded="false"><span>icons</span><ul><li data-about="The icon set: 20px grid, 1.6 stroke, square ends."><span>back.svg</span></li><li data-about="The icon set: 20px grid, 1.6 stroke, square ends."><span>search.svg</span></li></ul></li>
+              </ul></li>
+              <li aria-expanded="false"><span>docs</span><ul>
+                <li data-about="The contract every platform implements: state, hooks, events, the API."><span>behaviour.md</span></li>
+                <li data-about="Tables, Metro selection, trees, long lists, split views."><span>collections.md</span></li>
+                <li data-about="Status is a fill, not an accent; the one accent slot."><span>colour.md</span></li>
+                <li data-about="Inputs, checks, refusals, leaving, dialog levels."><span>forms.md</span></li>
+                <li data-about="Pivot, places and back, the app bar, keys."><span>navigation.md</span></li>
+                <li data-about="The same numbers on every platform: units, names, input."><span>platforms.md</span></li>
+              </ul></li>
+              <li aria-expanded="false"><span>scripts</span><ul><li data-about="Writes dist/ from the tokens and checks contrast and colour-blind separation."><span>build.mjs</span></li><li data-about="Builds this site; the numbers in its text come from the tokens."><span>build-site.mjs</span></li></ul></li>
+              <li aria-expanded="false"><span>site</span><ul><li data-about="This page."><span>index.html</span></li><li data-about="This page's glue: layout only, every value a token."><span>site.css</span></li><li data-about="This page's data and wiring."><span>site.js</span></li></ul></li>
+              <li aria-expanded="false"><span>test</span><ul><li data-about="Clicks through this page in a browser and checks the behaviour contract."><span>smoke.mjs</span></li></ul></li>
+            </ul>
+          </div>
+          <div class="desk-detail" id="tree-detail" aria-live="polite">
+            <p class="rk-kicker" id="file-path">files</p>
+            <h3 class="rk-group" id="file-name">Choose a file.</h3>
+            <p id="file-about">Click a file, or move with the arrow keys: → opens a folder, ← closes it.</p>
+          </div>
+        </div>
+        <div id="tree-menu">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="show">show</button>
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="copy">copy the path<span class="rk-menu-key">Ctrl C</span></button>
+          <hr class="rk-menu-sep">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="open">open every folder</button>
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="rename" aria-disabled="true">rename (read-only here)</button>
+        </div>
+        <p class="rk-kicker group-label">order the release, by its grip</p>
+        <ol class="rk-rows sort-list" id="steps">
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>write the release notes</b><span class="rk-meta">docs</span></li>
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>check contrast in dark</b><span class="rk-meta">tokens</span></li>
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>run the smoke test</b><span class="rk-meta">test</span></li>
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>tag the release</b><span class="rk-meta">git</span></li>
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>publish the tokens</b><span class="rk-meta">dist</span></li>
+        </ol>
+        <p class="rk-kicker group-label">ten thousand lines</p>
+        <div class="rk-filters">
+          <div class="rk-segments" role="radiogroup" aria-label="show">
+            <label><input type="radio" name="log-f" value="all" checked>all</label><label><input type="radio" name="log-f" value="error">failed</label><label><input type="radio" name="log-f" value="warning">waiting</label>
+          </div>
+          <p class="rk-facts" id="log-facts">–</p>
+        </div>
+        <div class="rk-virtual log" id="log"></div>
+        <p class="rk-facts" id="log-shown">Click a line, or focus the list and move with ↑ ↓ PageUp PageDown. Only the lines in view exist.</p>
+      </section>
+
       <section class="rk-sec" id="feedback" aria-labelledby="feedback-title">
         <h2 class="rk-group" id="feedback-title">An event leaves, a state stays.</h2>
         <p>Something that just happened is a <b>toast</b>: ink, one at a time, with an undo window you can hold by pointing at it. A lasting state of the whole system takes the <b>banner</b> on top: one at a time, the most severe first, its end reported as a toast.</p>
@@ -273,6 +348,28 @@
           <div class="rk-region"><div class="rk-empty" data-status="error"><p>Could not load: the server is offline.</p></div></div>
         </div>
         <p class="note">Nothing shimmers: placeholders stand still, and the line comes only after {{duration-busy-delay}}, so a fast answer never flickers.</p>
+      </section>
+
+      <section class="rk-sec sec-wide" id="live-undo" aria-labelledby="live-title">
+        <h2 class="rk-group" id="live-title">Live, and honest about it.</h2>
+        <p>Live values say how fresh they are, and say so when they stop. Rest the pointer on them and they hold still while you read; updates wait behind a button. Turn the feed off and watch it go stale.</p>
+        <div class="live-region" id="live-region">
+          <div class="rk-tiles live-tiles">
+            <div class="rk-tile rk-w2" data-status="info"><span class="rk-tile-word">active</span><span class="rk-stat"><b data-rk-value id="lv-rps">–</b><span>requests a second</span></span><svg class="rk-spark" viewBox="0 0 200 28" role="img" aria-label="requests a second"><polyline pathLength="1" points="0,14 200,14"/></svg></div>
+            <div class="rk-tile" data-status="warning"><span class="rk-tile-word">waiting</span><span class="rk-stat"><b data-rk-value id="lv-queue">–</b><span>jobs in the queue</span></span></div>
+            <div class="rk-tile" data-status="success"><span class="rk-tile-word">done</span><span class="rk-stat"><b data-rk-value id="lv-done">–</b><span>finished today</span></span></div>
+          </div>
+          <p class="live-line"><span class="rk-age"></span></p>
+          <ul class="rk-rows" id="lv-events" aria-label="latest events"></ul>
+        </div>
+        <div class="live-controls">
+          <label class="rk-toggle"><span class="rk-toggle-label">feed</span><input type="checkbox" id="lv-feed" checked><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+          <label class="rk-toggle"><span class="rk-toggle-label">connection</span><input type="checkbox" id="lv-online" checked><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+        </div>
+        <p class="rk-kicker group-label">undo history</p>
+        <p class="rk-actions"><button class="rk-btn" type="button" id="h-undo" data-rk-tip="undo the last action" aria-keyshortcuts="Control+Z Meta+Z">undo</button><button class="rk-btn" type="button" id="h-redo" data-rk-tip="do it again" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">redo</button></p>
+        <ol class="rk-rows history" id="h-list" aria-label="what you did"><li class="rk-empty">Nothing yet. Archive a component, edit a group, or order the release.</li></ol>
+        <p class="note">Everything you archive, edit or move on this page lands here. <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd> takes the last step back, <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Shift</kbd> <kbd class="rk-key">Z</kbd> does it again; the toast offers the same.</p>
       </section>
 
       <section class="rk-sec" id="navigation" aria-labelledby="navigation-title">
@@ -528,6 +625,7 @@
     <div class="rk-ab-selection" role="group" aria-label="selection">
       <span class="rk-ab-count" role="status">0 selected</span>
       <button class="rk-ab" id="sel-copy" type="button"><span>copy</span></button>
+      <button class="rk-ab" id="sel-archive" type="button"><span>archive</span></button>
       <button class="rk-ab" type="button" data-rk-clear><span>clear</span></button>
     </div>
   </div>
@@ -550,7 +648,11 @@
         <li>select another row, start the selection mode<span><kbd class="rk-key">Ctrl</kbd> + click</span></li>
         <li>select a range<span><kbd class="rk-key">Shift</kbd> + click</span></li>
         <li>select all rows (table focused)<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">A</kbd></span></li>
-        <li>undo what the toast reports<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd></span></li>
+        <li>undo the last action<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd></span></li>
+        <li>do it again<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Shift</kbd> <kbd class="rk-key">Z</kbd></span></li>
+        <li>the menu of a row or a file<span><kbd class="rk-key">Shift</kbd> <kbd class="rk-key">F10</kbd></span></li>
+        <li>edit a cell (table row focused)<span><kbd class="rk-key">F2</kbd></span></li>
+        <li>move an item by its grip<span><kbd class="rk-key">Space</kbd> <kbd class="rk-key">↑</kbd> <kbd class="rk-key">↓</kbd></span></li>
       </ul>
       <p class="rk-actions"><button class="rk-btn rk-btn--primary" value="ok">close</button></p>
     </form>

@@ -1,4 +1,4 @@
-# Collections: tables, selection, split views
+# Collections: tables, selection, split views, trees, long lists
 
 ## Table
 
@@ -102,3 +102,65 @@ A list and the detail of its current item.
   underneath.
 - **Motion:** sideways, the new item slides in from its side like a
   facet; compact, the panes turn like places.
+
+## Columns and editing
+
+- **Column widths:** an invisible 9px handle on each head cell's
+  trailing edge, a hairline while hovered, focused or dragged (like a
+  split's divider). ← → size it by `space-m` (Shift: four times), Home to
+  the narrowest, a double click resets it. Widths are remembered.
+- **Showing columns:** a "columns" menu button with a checkbox item per
+  column; a hidden column is gone from the head and every row, and
+  stays gone on the next visit.
+- **Editing in place:** a cell that can change (`data-rk-edit`) edits on a
+  double click, or F2 on its row. The cell holds a field; Enter or Tab
+  keeps the value (Tab goes on to the next editable cell), Escape puts
+  the old one back. While the server decides, the field waits; a refusal
+  says why below the cell, in ink like a tooltip, and the field stays
+  open. A kept change lands in the undo history.
+
+## Context menus
+
+A right click, a long press on touch (`timing.long-press`) or Shift+F10
+and the context-menu key open a menu where the pointer is, or below the
+focused item. It holds the actions for that item, the same ones its
+other controls offer: a context menu is a shortcut, never the only way.
+On a selectable row it first selects the row, unless the row is already
+part of the selection, so its actions apply to what is selected. Keys as
+in any menu; Escape or a choice returns focus to the row.
+
+## Tree
+
+A hierarchy, one tab stop (`role=tree`). Rows at the density's height,
+indented `space-m` per level, a chevron that turns as an item opens.
+
+- A click selects an item and shows it; the chevron or a double click
+  opens and closes it. The selected item takes the accent, like any
+  Metro selection.
+- Keys: ↑ ↓ move, → opens a closed item or goes into an open one, ←
+  closes an open item or goes up to its parent, Home End, Enter or Space
+  shows, `*` opens all siblings, a letter jumps to the next item that
+  starts with it.
+- Opening slides the children in by 4px over `duration-short`; closing
+  is instant.
+
+## Long lists
+
+A list of any length in a bounded scroller (`rk-virtual`): only the rows
+in view and a few around them exist, at the density's row height, so ten
+thousand lines scroll like ten. It is one tab stop (a listbox; the active
+row by `aria-activedescendant`, each row its position and the list's
+size) and chosen the Metro way like any list. ↑ ↓ PageUp PageDown Home
+End move; Shift extends the selection.
+
+## Ordering by hand
+
+Items that can be reordered carry a grip (`rk-grip`: six squares) at
+their leading edge; dragging anywhere else never moves them, so a click
+still selects. Dragged, the item lifts as a floating surface (bg and a
+1px edge, no shadow), the others make room, and on release everything
+settles in `duration-short`. From the keyboard: Space or Enter on the
+grip picks the item up, ↑ ↓ move it, Space or Enter puts it down, Escape
+puts it back; Alt+↑ ↓ moves it at once. Each step is said in a live
+region. A move lands in the undo history.
+

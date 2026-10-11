@@ -95,3 +95,27 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
   .builder { grid-template-columns: 1fr; }
   .builder-out { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(8rem, auto); }
 }
+
+/* Desktop: a tree beside its detail; a toolbar of icon buttons; the release steps; the long list. */
+.desk { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(0, 1.2fr); gap: var(--rk-space-l); align-items: start; }
+.toolbar { display: flex; gap: 2px; margin-bottom: var(--rk-space-xs); border-bottom: 1px solid var(--rk-text-contrast-low); }
+.toolbar .rk-ab { min-width: 40px; min-height: 40px; padding: 0; justify-content: center; }
+.desk-detail { padding-top: var(--rk-space-xs); }
+.desk-detail > * + * { margin-top: var(--rk-space-xs); }
+.sort-list > li { justify-content: flex-start; align-items: center; gap: var(--rk-space-s); padding-block: 0; padding-left: 0; }
+.sort-list > li > .rk-meta { margin-left: auto; }
+.log { height: calc(8 * var(--rk-row-height)); }
+.log .rk-virtual-row > :last-child { margin-left: auto; }
+.log .rk-virtual-row > span:nth-child(3) { overflow: hidden; text-overflow: ellipsis; }
+.log .rk-virtual-row > .rk-meta:first-child { min-width: 4.5em; }
+.log .rk-virtual-row > .rk-tag { min-width: 5.2em; }
+
+/* Live and undo. */
+.live-tiles { grid-template-columns: repeat(auto-fill, var(--rk-tile-unit)); }
+.live-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rk-space-s); margin-top: var(--rk-space-s); }
+.live-controls { display: flex; flex-wrap: wrap; gap: var(--rk-space-s) var(--rk-space-xl); }
+.history > li[data-undone] { color: var(--rk-text-contrast-medium); }
+.history > li[data-undone] > b { font-weight: var(--rk-font-weight-regular); text-decoration: line-through; }
+@media (max-width: 759.98px), (max-height: 480px) {
+  .desk { grid-template-columns: 1fr; }
+}

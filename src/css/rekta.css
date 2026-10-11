@@ -308,6 +308,93 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-drop:has(> input:focus-visible) { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
 .rk-drop[data-rk-over] { border-style: solid; border-color: var(--rk-text-primary); background-color: var(--rk-hover); color: var(--rk-text-primary); }
 
+/* Desktop ------------------------------------------------------------------------------------------------------- */
+/* Tooltip: a small ink strip, like a toast, above its control (below when there is no room). It comes and goes; it
+   never holds anything the control does not already say or name. */
+.rk-tip {
+  position: fixed; inset: auto; margin: 0; z-index: var(--rk-layer-float); max-width: min(20rem, calc(100vw - 2 * var(--rk-space-m)));
+  padding: 4px var(--rk-space-s); border: 0; border-radius: var(--rk-radius-s); background: var(--rk-text-primary); color: var(--rk-bg);
+  font: inherit; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); line-height: var(--rk-line-height-compact); pointer-events: none;
+}
+.rk-tip:is(:popover-open, [data-rk-open]) { animation: rk-float-in var(--rk-duration-float) var(--rk-ease-in) both; --_rk-from: 4px; }
+.rk-tip[data-rk-side='below'] { --_rk-from: -4px; }
+.rk-tip .rk-key { margin-left: var(--rk-space-xs); border-color: color-mix(in srgb, var(--rk-bg) 50%, transparent); color: inherit; }
+/* Visually hidden, still read. */
+.rk-sr { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Tree: rows at the density's height, indented one space-m per level, a chevron that turns as an item opens. A
+   selected item takes the accent, like any Metro selection. */
+.rk-tree, .rk-tree ul { margin: 0; padding: 0; list-style: none; }
+.rk-tree [role='treeitem'] { outline: none; }
+.rk-tree-row {
+  display: flex; align-items: center; gap: var(--rk-space-xs); min-height: var(--rk-row-height);
+  padding: 0 var(--rk-space-s) 0 calc(var(--_rk-level, 0) * var(--rk-space-m)); cursor: pointer; user-select: none;
+  transition: background-color var(--rk-duration-short) var(--rk-ease-base), color var(--rk-duration-short) var(--rk-ease-base);
+}
+.rk-tree-row > a { color: inherit; text-decoration: none; }
+.rk-tree-twisty { position: relative; flex: none; width: 20px; height: 20px; }
+[aria-expanded] > .rk-tree-row > .rk-tree-twisty::before {
+  content: ''; position: absolute; left: 6px; top: 6px; width: 6px; height: 6px; border: solid currentColor; border-width: 1.6px 1.6px 0 0;
+  transform: rotate(45deg); transition: transform var(--rk-duration-short) var(--rk-ease-base);
+}
+[aria-expanded='true'] > .rk-tree-row > .rk-tree-twisty::before { transform: translate(1px, 1px) rotate(135deg); }
+.rk-tree [role='treeitem'][aria-selected='true'] > .rk-tree-row {
+  --rk-text-primary: var(--rk-on-accent); --rk-text-contrast-high: var(--rk-on-accent); --rk-text-contrast-medium: var(--rk-on-accent);
+  background-color: var(--rk-accent); color: var(--rk-on-accent);
+}
+.rk-tree [role='treeitem']:focus-visible > .rk-tree-row { outline: 2px solid var(--rk-focus); outline-offset: -2px; }
+.rk-tree [role='treeitem'][aria-selected='true']:focus-visible > .rk-tree-row { outline-color: currentColor; outline-offset: -4px; }
+
+/* Sortable: a grip (six squares) on each item; the dragged item lifts as a floating surface (bg and a 1px edge, no
+   shadow), the others make room. */
+.rk-grip { position: relative; flex: none; width: 24px; min-height: var(--rk-row-height); padding: 0; border: 0; background: none; color: var(--rk-text-contrast-medium); cursor: grab; touch-action: none; }
+.rk-grip::before { content: ''; position: absolute; inset: 0; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M7 4h2v2H7zM11 4h2v2h-2zM7 9h2v2H7zM11 9h2v2h-2zM7 14h2v2H7zM11 14h2v2h-2z'/%3E%3C/svg%3E") center / 20px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M7 4h2v2H7zM11 4h2v2h-2zM7 9h2v2H7zM11 9h2v2h-2zM7 14h2v2H7zM11 14h2v2h-2z'/%3E%3C/svg%3E") center / 20px no-repeat; }
+.rk-grip:focus-visible { outline: 2px solid var(--rk-focus); outline-offset: -2px; }
+[data-rk-sorting] > :not([data-rk-dragging]) { transition: transform var(--rk-duration-short) var(--rk-ease-base); }
+[data-rk-dragging], [data-rk-grabbed] { position: relative; z-index: 2; background-color: var(--rk-bg); outline: 1px solid var(--rk-text-contrast-medium); outline-offset: -1px; }
+[data-rk-dragging] .rk-grip { cursor: grabbing; }
+[data-rk-grabbed] .rk-grip { color: var(--rk-text-primary); }
+
+/* Virtual list: a bounded scroller; rows sit at their place by top, at the density's row height, on hairlines. */
+.rk-virtual { position: relative; overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--rk-text-contrast-low); outline: none; scrollbar-width: thin; }
+.rk-virtual-body { position: relative; }
+.rk-virtual-row {
+  position: absolute; left: 0; right: 0; display: flex; align-items: center; gap: var(--rk-space-m); height: var(--rk-row-height);
+  padding: 0 var(--rk-space-s) 0 calc(14px + var(--rk-space-s)); border-bottom: 1px solid var(--rk-text-contrast-low); cursor: pointer; white-space: nowrap; overflow: hidden;
+  transition: background-color var(--rk-duration-short) var(--rk-ease-base), color var(--rk-duration-short) var(--rk-ease-base);
+}
+.rk-virtual:focus-visible { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
+.rk-virtual:focus-visible .rk-virtual-row[data-rk-active] { outline: 2px solid var(--rk-focus); outline-offset: -2px; }
+.rk-virtual-row[aria-selected='true']::before {
+  content: ''; position: absolute; left: var(--rk-space-xs); top: 50%; width: 11px; height: 6px; margin-top: -5px;
+  border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg);
+}
+
+/* Table columns: an invisible 9px handle on each head cell's trailing edge, a hairline while hovered, focused or
+   dragged. Editing: the cell holds a field; a refusal shows below it in ink, like a tooltip. */
+.rk-col-handle { position: absolute; top: 0; bottom: 0; right: -4px; z-index: 1; width: 9px; cursor: col-resize; touch-action: none; outline: none; }
+.rk-col-handle::after { content: ''; position: absolute; inset: 20% 4px; width: 1px; background: transparent; transition: background-color var(--rk-duration-short) var(--rk-ease-base); }
+.rk-col-handle:focus-visible::after, .rk-col-handle[data-rk-dragging]::after { width: 2px; background: var(--rk-text-contrast-medium); }
+.rk-col-handle:focus-visible { outline: 2px solid var(--rk-focus); outline-offset: -2px; }
+.rk-table td[data-rk-editing] { position: relative; padding-block: 2px; }
+.rk-cell-input { min-height: calc(var(--rk-row-height) - 6px); padding-inline: var(--rk-space-xs); }
+.rk-table td[data-rk-editing][aria-busy='true'] .rk-cell-input { color: var(--rk-text-contrast-high); cursor: progress; }
+.rk-table td[data-rk-editing][data-status='error'] .rk-cell-input { border: 2px solid var(--rk-status-error-full); }
+.rk-cell-error {
+  position: absolute; left: 0; top: 100%; z-index: 3; width: max-content; max-width: 20rem; margin-top: 2px; padding: 4px var(--rk-space-s);
+  border-radius: var(--rk-radius-s); background: var(--rk-text-primary); color: var(--rk-bg); font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); white-space: normal;
+}
+.rk-cell-error::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--rk-status-error-tile); }
+
+/* Live: a region says how fresh it is (.rk-age); stale or offline, the line takes the waiting square and the word,
+   and sparklines stop looking current. Held, it says so; waiting updates wait behind a quiet button. */
+.rk-age { font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); font-variant-numeric: tabular-nums; }
+[data-rk-live='stale'] .rk-age, [data-rk-live='offline'] .rk-age { color: var(--rk-text-primary); font-weight: var(--rk-font-weight-semibold); }
+[data-rk-live='stale'] .rk-age::before, [data-rk-live='offline'] .rk-age::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--rk-status-warning-full); }
+[data-rk-live='stale'] .rk-spark, [data-rk-live='offline'] .rk-spark { opacity: 0.35; }
+[data-rk-live='stale'] [data-rk-value], [data-rk-live='offline'] [data-rk-value] { color: var(--rk-text-contrast-high); }
+.rk-live-more { min-height: 0; padding: 2px var(--rk-space-s); font-size: var(--rk-font-size-xs); }
+
 /* Touch: fields never set text below 16px, so iOS does not zoom the page when one takes focus. */
 @media (pointer: coarse) { .rk-input { font-size: max(16px, 1rem); } }
 
@@ -416,11 +503,11 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   transform: perspective(var(--rk-turnstile-perspective)) rotateX(calc(var(--_rk-py, 0) * -1 * var(--rk-row-tilt))) rotateY(calc(var(--_rk-px, 0) * var(--rk-row-tilt))) scale(var(--rk-row-press-scale));
   transition-duration: var(--rk-duration-press);
 }
-[data-rk-select] > [aria-selected='true'] {
+[data-rk-select] > [aria-selected='true'], .rk-virtual-row[aria-selected='true'] {
   --rk-text-primary: var(--rk-on-accent); --rk-text-contrast-high: var(--rk-on-accent); --rk-text-contrast-medium: var(--rk-on-accent); --rk-text-contrast-low: transparent;
   background-color: var(--rk-accent); color: var(--rk-on-accent);
 }
-[data-rk-select] > [aria-selected='true'] .rk-tag::before { box-shadow: 0 0 0 1px var(--rk-on-accent); }
+:is([data-rk-select] > [aria-selected='true'], .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row) .rk-tag::before { box-shadow: 0 0 0 1px var(--rk-on-accent); }
 [data-rk-select] > [aria-selected='true'] :is(.rk-check, .rk-mark)::before {
   content: ''; display: block; width: 11px; height: 6px; margin: 0 auto 3px;
   border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg);
@@ -660,6 +747,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-segments > label:hover:not(:has(> input:checked, > input:disabled)) { background-color: var(--rk-hover); }
   .rk-stepper > [data-rk-step]:hover:not([aria-disabled='true']), .rk-combo-btn:hover { background-color: var(--rk-hover); }
   .rk-drop:hover { border-color: var(--rk-text-primary); color: var(--rk-text-primary); }
+  .rk-tree-row:hover, .rk-virtual-row:hover { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+  .rk-grip:hover { color: var(--rk-text-primary); }
+  .rk-col-handle:hover::after { width: 2px; background: var(--rk-text-contrast-medium); }
+  .rk-table td[data-rk-edit]:hover:not([data-rk-editing]) { text-decoration: underline dotted; text-underline-offset: 3px; }
 }
 /* A fine pointer can select text inside tiles and rows (dragging never activates them: rekta.js); touch gets no
    text selection and no long-press callout on them. */
@@ -682,6 +773,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-segments > label:has(> input:checked) { forced-color-adjust: none; border-color: Highlight; background-color: Highlight; color: HighlightText; }
   .rk-range::-webkit-slider-runnable-track { background: linear-gradient(Highlight, Highlight) 0 / var(--_rk-v) 100% no-repeat, GrayText; }
   .rk-range::-webkit-slider-thumb { background: CanvasText; }
+  .rk-tip, .rk-cell-error { border: 1px solid CanvasText; }
+  .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row { forced-color-adjust: none; background-color: Highlight; color: HighlightText; }
+  .rk-grip::before { forced-color-adjust: none; background: CanvasText; }
+  [data-rk-live='stale'] .rk-age::before, [data-rk-live='offline'] .rk-age::before { forced-color-adjust: none; background: CanvasText; }
 }
 
 /* Window-size classes -------------------------------------------------------------------------------------------- */
