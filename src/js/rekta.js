@@ -35,6 +35,9 @@
      undoStack  actions that can be taken back and done again (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z)
      live       a live region says how fresh it is, goes stale, and holds still while you look
      chart      a line or bar chart in ink and grey: one axis, a tooltip at every point, a table of the numbers
+     icon       an icon from the sprite, decoration or an image with a name
+     titlebar   the title bar of an installed app: the drag area, back, the place's name
+     pwa        installable and offline: the service worker, the update toast, install()
      combobox   a field with a list of choices that filters as you type
      stepper    a number field between − and +, repeating while held
      drop       a zone that takes dropped or chosen files
@@ -389,7 +392,7 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
   const scrollers = (el) => [el, ...el.querySelectorAll('.rk-panorama, .rk-sec, .rk-split-list, .rk-split-detail, [data-rk-scroll]')];
   let current = home, item = null, params = '', index = 0, below = null, pushedItem = false, busy = Promise.resolve();
   const watchers = new Map();
-  const backButtons = () => document.querySelectorAll('.rk-ab-back[data-rk-back]');
+  const backButtons = () => document.querySelectorAll('.rk-ab-back[data-rk-back], .rk-titlebar [data-rk-back]');
   const showBack = () => backButtons().forEach((b) => { b.hidden = current === home && index === 0; });
   const rk = () => (history.state && history.state.rk) || {};
   function snapshot(opener) {
@@ -433,6 +436,7 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
       const f = focusTarget(to, state, back);
       if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f });
       if (onChange) onChange({ from: prev, to: name, back });
+      document.dispatchEvent(new CustomEvent('rk:placechange', { detail: { from: prev, to: name, back } }));
     };
     busy = busy.then(run, run);
     return busy;
@@ -2632,6 +2636,89 @@ export function chart(el, opts = {}) {
     update(next) { o = { ...o, ...next }; draw(); },
     get active() { return active; },
     destroy() { ro.disconnect(); document.removeEventListener('rk:prefs', theme); hideTip(); },
+  };
+}
+
+// Shell ------------------------------------------------------------------------------------------------------------
+// icon(name, { label, src }): an <svg class="rk-icon"> that uses the icon from the sprite (rekta.icons.svg, inlined in
+// the page, or at src). Without label it is decoration (aria-hidden); with one, an image with that name.
+export function icon(name, { label = '', src = '' } = {}) {
+  const s = document.createElementNS(SVGNS, 'svg');
+  s.setAttribute('class', 'rk-icon');
+  if (label) { s.setAttribute('role', 'img'); s.setAttribute('aria-label', label); } else s.setAttribute('aria-hidden', 'true');
+  const u = document.createElementNS(SVGNS, 'use');
+  u.setAttribute('href', `${src}#rk-i-${name}`);
+  s.appendChild(u);
+  return s;
+}
+
+// titlebar(el, { router }): the title bar of an installed app (.rk-titlebar), shown in the window-controls overlay of
+// an installed PWA, or when a native shell (Electron, Tauri, a WebView) sets data-rk-titlebar on the root. It is the
+// window's drag area; its back button follows the router and its place line names the current place. The window's
+// own controls keep their room (titlebar-area-*).
+export function titlebar(el, { router = null } = {}) {
+  const place = el.querySelector('.rk-titlebar-place');
+  const wco = typeof navigator !== 'undefined' ? navigator.windowControlsOverlay : null;
+  const paint = () => {
+    if (!place || !router) return;
+    const p = document.querySelector(`[data-rk-place="${CSS.escape(router.current || '')}"]`), h = p && p.querySelector('.rk-title');
+    place.textContent = p && p.dataset.rkParent && h ? h.textContent.trim() : '';
+  };
+  const geometry = () => docEl.toggleAttribute('data-rk-wco', !!(wco && wco.visible));
+  document.addEventListener('rk:placechange', paint);
+  if (wco) wco.addEventListener('geometrychange', geometry);
+  paint(); geometry();
+  return { destroy() { document.removeEventListener('rk:placechange', paint); if (wco) wco.removeEventListener('geometrychange', geometry); } };
+}
+
+// pwa({ sw, toaster, onChange }): the page as an installable app. Registers the service worker (only where a web app
+// manifest is linked and the page is in a secure context), says once it works offline, offers "reload" in a toast
+// when a new version waits, and keeps the browser's install prompt for install(). onChange(state) and rk:pwa on
+// document follow every change of { supported, installed, canInstall, offlineReady, updateReady }.
+export function pwa({ sw = 'sw.js', toaster: toasts = null, onChange = null } = {}) {
+  const standalone = () => matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay), (display-mode: minimal-ui)').matches;
+  const state = { supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator && isSecureContext, installed: standalone(), canInstall: false, offlineReady: false, updateReady: false };
+  let prompt = null, waiting = null, reg = null, reloading = false;
+  const fire = () => { const s = { ...state }; if (onChange) onChange(s); document.dispatchEvent(new CustomEvent('rk:pwa', { detail: s })); };
+  const before = (e) => { e.preventDefault(); prompt = e; state.canInstall = true; fire(); };
+  const installed = () => { prompt = null; state.canInstall = false; state.installed = true; fire(); if (toasts) toasts.show('Installed. It opens in a window of its own.', { key: 'rk-pwa' }); };
+  function wait(w) {
+    waiting = w; state.updateReady = true; fire();
+    if (toasts) toasts.show('A new version is ready.', { key: 'rk-pwa-update', act: { label: 'reload', run: () => update() } });
+  }
+  async function register() {
+    if (!state.supported || !sw || !document.querySelector('link[rel="manifest"]')) return;
+    try {
+      reg = await navigator.serviceWorker.register(sw);
+      if (reg.waiting && navigator.serviceWorker.controller) wait(reg.waiting);
+      reg.addEventListener('updatefound', () => {
+        const w = reg.installing;
+        if (w) w.addEventListener('statechange', () => { if (w.state !== 'installed') return; if (navigator.serviceWorker.controller) wait(w); else { state.offlineReady = true; fire(); } });
+      });
+      navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) location.reload(); });
+      await navigator.serviceWorker.ready;
+      if (!state.offlineReady) { state.offlineReady = true; fire(); }
+    } catch { state.supported = false; fire(); }
+  }
+  function update() {
+    if (!waiting) { if (reg) reg.update(); return false; }
+    reloading = true; waiting.postMessage('skip-waiting'); return true;
+  }
+  async function install() {
+    if (!prompt) return false;
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    prompt = null; state.canInstall = false; fire();
+    return outcome === 'accepted';
+  }
+  addEventListener('beforeinstallprompt', before);
+  addEventListener('appinstalled', installed);
+  register();
+  return {
+    get state() { return { ...state }; },
+    install, update,
+    check() { if (reg) return reg.update(); return Promise.resolve(); },
+    destroy() { removeEventListener('beforeinstallprompt', before); removeEventListener('appinstalled', installed); },
   };
 }
 

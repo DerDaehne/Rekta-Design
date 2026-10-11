@@ -493,6 +493,29 @@ const d2 = await open({}, '#tokens?group=radius');
 ok(await d2.evaluate(() => [...document.querySelectorAll('#tok-body tr')].filter((r) => !r.hidden).every((r) => r.dataset.group === 'radius')) && (await text(d2, '#tok-group')) === 'group: radius', 'a filtered address opens filtered', await text(d2, '#tok-group'));
 await d2.close();
 
+// Icons and the app shell: the sprite, the gallery, the title bar, installable, offline.
+const sh = await open();
+ok((await sh.evaluate(() => document.querySelectorAll('symbol[id^="rk-i-"]').length)) === 51 && (await sh.evaluate(() => document.querySelectorAll('.icon-gallery li').length)) === 51, 'fifty-one icons in the sprite and the gallery');
+ok(await sh.evaluate(() => { const u = document.querySelector('.icon-gallery use'); const b = u.closest('svg').getBBox(); return b.width > 4 && b.height > 4; }), 'an icon draws from the sprite');
+ok((await sh.evaluate(() => getComputedStyle(document.querySelector('#titlebar')).display)) === 'none', 'the title bar hides in a browser tab');
+await sh.evaluate(() => document.documentElement.setAttribute('data-rk-titlebar', '')); await sh.waitForTimeout(100);
+ok((await sh.evaluate(() => getComputedStyle(document.querySelector('#titlebar')).display)) === 'flex' && (await sh.evaluate(() => getComputedStyle(document.querySelector('#titlebar')).getPropertyValue('-webkit-app-region') || getComputedStyle(document.querySelector('#titlebar')).getPropertyValue('app-region'))) === 'drag', 'a native shell shows it: the window’s drag area');
+await sh.evaluate(() => window.site.router.navigate('tokens')); await sh.waitForTimeout(TURN);
+ok((await text(sh, '#titlebar .rk-titlebar-place')) === 'Every value, a token.' && !(await sh.evaluate(() => document.querySelector('#titlebar [data-rk-back]').hidden)), 'the title bar names the place and offers back');
+await sh.evaluate(() => document.documentElement.removeAttribute('data-rk-titlebar'));
+const man = await (await fetch(base + (await sh.getAttribute('link[rel=manifest]', 'href')))).json();
+ok(man.name === 'Rekta Design' && man.display_override[0] === 'window-controls-overlay' && man.icons.some((i) => i.purpose === 'maskable'), 'a web app manifest with a window-controls overlay and a maskable icon');
+ok(await sh.evaluate(() => navigator.serviceWorker.ready.then((r) => !!r.active)), 'the service worker is active');
+await sh.waitForTimeout(500);
+ok((await text(sh, '#pwa-offline')) === 'yes', 'the page says it works offline');
+await sh.context().setOffline(true);
+await sh.reload(); await sh.waitForTimeout(1500);
+ok((await sh.title()).includes('Rekta Design') && (await sh.evaluate(() => document.querySelectorAll('#tok-body tr').length)) > 100, 'offline, a reload still opens the whole page');
+await sh.evaluate(() => window.dispatchEvent(new Event('offline'))); await sh.waitForTimeout(500);
+ok((await text(sh, '.rk-banner-word')) === 'offline', 'offline, the banner says so');
+await sh.context().setOffline(false);
+await sh.close();
+
 // Phone: stacked panorama, sticky strip, toasts from the app bar, overflow, the split one pane at a time.
 const m = await open({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 ok((await m.evaluate(() => getComputedStyle(document.querySelector('#pan')).display)) !== 'flex', 'phone: the panorama stacks');

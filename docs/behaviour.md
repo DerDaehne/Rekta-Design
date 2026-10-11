@@ -67,6 +67,8 @@ paint: load `rekta.global.js` in `<head>` and call
 | `data-rk-sorting` | a sortable list | An item is being dragged. |
 | `data-rk-editing` | a table cell | Being edited in place. |
 | `data-rk-active` | a virtual row | The active row (`aria-activedescendant`). |
+| `data-rk-wco` | the root | An installed app's window-controls overlay is visible. |
+| `data-rk-titlebar` | the root | Set by a native shell: show the title bar. |
 | `data-value` | a combobox's input | The chosen option's value. |
 | `--_rk-v` | a slider | How far its value is along the track, for the fill. |
 | `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
@@ -78,6 +80,7 @@ paint: load `rekta.global.js` in `<head>` and call
 |---|---|---|
 | `--rk-i` | the page | A tile's build-in order (0–10). |
 | `--rk-v` | the page | A meter's value, 0 to 1. |
+| `--rk-titlebar-controls` | a native shell | Room kept at the title bar's end for the window's own buttons (140px by default) when `data-rk-titlebar` shows it. |
 | `--rk-sec-w` | the page | A panorama section's width when sideways. |
 | `--rk-split-w` | the page, `split()` | The width of a split's list pane; the handle writes it while dragged. |
 | `--rk-banner-h` | `banner()` | `scroll-padding`, the sticky strip, toasts without anchor positioning. |
@@ -93,6 +96,8 @@ paint: load `rekta.global.js` in `<head>` and call
 | `rk:selectionchange` | a list, table body or virtual list (bubbles) | `{ count, mode, items }` (`indices` for a virtual list) after the selection changes. |
 | `rk:edit` | a table (bubbles) | `{ row, cell, value }` after an edit is kept. |
 | `rk:historychange` | `document` | `{ undo, redo }`, the labels next in line. |
+| `rk:placechange` | `document` | `{ from, to, back }` after a place change has finished. |
+| `rk:pwa` | `document` | The app's install and offline state (see `pwa()`). |
 
 ## API
 
@@ -526,6 +531,31 @@ and markers for lines), shows the values in a tooltip and says them in a
 live region. With `table` (default), a `details.rk-chart-table` holds the
 numbers. `summary` is the accessible name. See [data.md](data.md).
 Returns `{ update(options), active, destroy }`.
+
+### `icon(name, { label, src })`
+
+An `<svg class="rk-icon">` using `#rk-i-NAME` from the sprite (inlined in
+the page, or at `src`, e.g. `'rekta.icons.svg'`). Without `label` it is
+`aria-hidden`; with one, `role=img` with that name.
+
+### `titlebar(el, { router })`
+
+`el` is a `.rk-titlebar` (a direct child of `.rk`): shown in an
+installed PWA's window-controls overlay, or when the root has
+`data-rk-titlebar`. Its `[data-rk-back]` button follows the router like
+the app bar's; its `.rk-titlebar-place` names the current place (none
+at home). The root gets `data-rk-wco` while the overlay is visible.
+Returns `{ destroy }`.
+
+### `pwa({ sw, toaster, onChange })`
+
+Registers the service worker `sw` where a web app manifest is linked and
+the page is in a secure context. When a new version waits, `toaster`
+shows "A new version is ready" with a plain "reload" action, which asks
+it to take over and reloads. Keeps the browser's install prompt for
+`install()`. `onChange(state)` and `rk:pwa` on `document` follow every
+change of `{ supported, installed, canInstall, offlineReady, updateReady }`.
+Returns `{ state, install(), update(), check(), destroy }`.
 
 ### `place(el, anchor)`
 

@@ -253,7 +253,7 @@ function check(tokens) {
   for (const g of ['color']) walk(tokens.color.light, ['color', 'light'], (p) => defined.add(tokenName(p)));
   for (const g of ['typography', 'spacing', 'radius', 'size', 'motion', 'timing', 'layer', 'breakpoint']) walk(tokens[g], [g], (p) => defined.add(tokenName(p)));
   walk(tokens.density.comfortable, ['density', 'comfortable'], (p) => defined.add(tokenName(p)));
-  const HOOKS = new Set(['i', 'v', 'sec-w', 'split-w', 'banner-h', 'pivot-scale', 'pivot-h']);
+  const HOOKS = new Set(['i', 'v', 'titlebar-controls', 'sec-w', 'split-w', 'banner-h', 'pivot-scale', 'pivot-h']);
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }
@@ -268,6 +268,22 @@ function check(tokens) {
   return problems;
 }
 
+// Icons: src/icons/*.svg (20 × 20, stroke 1.6, square ends) become one sprite of <symbol id="rk-i-NAME"> for the web
+// and a JSON list of each icon's shapes for other platforms.
+export function loadIcons() {
+  const dir = join(root, 'src', 'icons'), icons = {};
+  for (const f of readdirSync(dir).filter((x) => x.endsWith('.svg')).sort()) {
+    const svg = readFileSync(join(dir, f), 'utf8'), name = f.slice(0, -4);
+    const viewBox = (/viewBox="([^"]+)"/.exec(svg) || [])[1];
+    const shapes = [...svg.matchAll(/<(path|circle|rect|line|polyline)\b([^>]*?)\/>/g)].map(([, tag, attrs]) => ({ tag, attrs: Object.fromEntries([...attrs.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, k, v]) => [k, v])) }));
+    icons[name] = { viewBox, shapes, inner: svg.replace(/^[\s\S]*?<svg[^>]*>|<\/svg>\s*$/g, '').trim() };
+  }
+  return icons;
+}
+function iconsSprite(icons) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" style="display:none">${Object.entries(icons).map(([n, i]) => `<symbol id="rk-i-${n}" viewBox="${i.viewBox}" fill="none" stroke="currentColor" stroke-width="1.6">${i.inner}</symbol>`).join('')}</svg>\n`;
+}
+
 export function buildDist() {
   const tokens = loadTokens();
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -280,16 +296,26 @@ export function buildDist() {
   const esm = readFileSync(join(root, 'src', 'js', 'rekta.js'), 'utf8').replace(/^export const version = '[^']*';/m, `export const version = '${pkg.version}';`);
   writeFileSync(join(dist, 'rekta.js'), esm);
   writeFileSync(join(dist, 'rekta.global.js'), toGlobal(esm));
+  const icons = loadIcons();
+  writeFileSync(join(dist, 'rekta.icons.svg'), iconsSprite(icons));
+  writeFileSync(join(dist, 'rekta.icons.json'), JSON.stringify({ name: 'Rekta Design icons', version: pkg.version, grid: 20, strokeWidth: 1.6, lineCap: 'butt', lineJoin: 'miter', color: 'text colour (currentColor); a filled shape says fill', icons: Object.fromEntries(Object.entries(icons).map(([n, i]) => [n, i.shapes])) }, null, 1) + '\n');
   return pkg.version;
 }
 
-export function checkAll() { return check(loadTokens()); }
+export function checkAll() {
+  const problems = check(loadTokens());
+  for (const [n, i] of Object.entries(loadIcons())) {
+    if (i.viewBox !== '0 0 20 20') problems.push(`icon ${n} is not on the 20px grid (viewBox ${i.viewBox})`);
+    if (!i.shapes.length) problems.push(`icon ${n} has no shapes`);
+  }
+  return problems;
+}
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   if (process.argv.includes('--check')) {
     const problems = checkAll();
     if (problems.length) { console.error(problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
-    console.log('✓ tokens and stylesheet pass: contrast, status marks, colour-blind separation, every --rk- read in CSS and JS is defined');
+    console.log('✓ tokens and stylesheet pass: contrast, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid');
   } else {
     console.log(`✓ dist/ written (Rekta Design ${buildDist()})`);
   }

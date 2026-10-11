@@ -322,6 +322,9 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-tip:is(:popover-open, [data-rk-open]) { animation: rk-float-in var(--rk-duration-float) var(--rk-ease-in) both; --_rk-from: 4px; }
 .rk-tip[data-rk-side='below'] { --_rk-from: -4px; }
 .rk-tip .rk-key { margin-left: var(--rk-space-xs); border-color: color-mix(in srgb, var(--rk-bg) 50%, transparent); color: inherit; }
+/* Icons: 20px, stroke 1.6, square ends, in the text colour (rekta.icons.svg: <svg class="rk-icon"><use href="#rk-i-NAME"/>). */
+.rk-icon { display: inline-block; flex: none; width: 20px; height: 20px; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.6; overflow: visible; }
+.rk-icon--16 { width: 16px; height: 16px; }
 /* Visually hidden, still read. */
 .rk-sr { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
@@ -454,6 +457,28 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   90% { opacity: 1; }
   100% { left: 102%; opacity: 0; }
 }
+
+/* Shell ---------------------------------------------------------------------------------------------------------- */
+/* The title bar of an installed app: shown in a PWA's window-controls overlay, or when a native shell sets
+   data-rk-titlebar on the root. It is the window's drag area (its controls are not), on the ground, a hairline below;
+   the window's own buttons keep their room (titlebar-area-*). The app's name, then the place's name, light. */
+.rk-titlebar {
+  display: none; align-items: center; gap: var(--rk-space-s); height: env(titlebar-area-height, 36px); padding: 0 var(--rk-space-s);
+  background: var(--rk-bg); border-bottom: 1px solid var(--rk-text-contrast-low); font-size: var(--rk-font-size-xs); white-space: nowrap; user-select: none;
+  -webkit-app-region: drag; app-region: drag;
+}
+.rk-titlebar :is(a, button, input, select, [tabindex]) { -webkit-app-region: no-drag; app-region: no-drag; }
+.rk-titlebar .rk-ab { min-width: 32px; min-height: 28px; padding: 0 var(--rk-space-xs); justify-content: center; }
+.rk-titlebar-name b { font-weight: var(--rk-font-weight-semibold); }
+.rk-titlebar-place { overflow: hidden; text-overflow: ellipsis; font-weight: var(--rk-font-weight-light); color: var(--rk-text-contrast-high); }
+.rk-titlebar-place:not(:empty)::before { content: '/'; margin-right: var(--rk-space-s); color: var(--rk-text-contrast-medium); }
+.rk-titlebar--inline { display: flex; }
+@media (display-mode: window-controls-overlay) {
+  .rk-titlebar:not(.rk-titlebar--inline) { display: flex; position: fixed; top: env(titlebar-area-y, 0); left: env(titlebar-area-x, 0); width: env(titlebar-area-width, 100%); z-index: var(--rk-layer-banner); }
+  .rk:has(> .rk-titlebar) { padding-top: env(titlebar-area-height, 36px); }
+}
+:root[data-rk-titlebar] .rk-titlebar:not(.rk-titlebar--inline) { display: flex; position: fixed; inset: 0 0 auto; z-index: var(--rk-layer-banner); padding-right: var(--rk-titlebar-controls, 140px); }
+:root[data-rk-titlebar] .rk:has(> .rk-titlebar) { padding-top: env(titlebar-area-height, 36px); }
 
 /* Touch: fields never set text below 16px, so iOS does not zoom the page when one takes focus. */
 @media (pointer: coarse) { .rk-input { font-size: max(16px, 1rem); } }

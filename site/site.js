@@ -199,7 +199,12 @@
     ['App bar', 'navigation', 'success', '0.1'], ['Sheet', 'overlays', 'success', '0.1'], ['Toast', 'feedback', 'success', '0.1'], ['Status banner', 'feedback', 'success', '0.1'],
     ['Crumb', 'navigation', 'success', '0.2'], ['Data states', 'feedback', 'success', '0.2'], ['Menu', 'overlays', 'success', '0.2'], ['Table', 'content', 'success', '0.2'],
     ['Split', 'layout', 'success', '0.2'], ['Palette', 'navigation', 'success', '0.2'], ['Filters', 'forms', 'success', '0.2'], ['Form summary', 'forms', 'info', '0.2'],
-    ['Live contract', 'feedback', 'warning', 'next'], ['Combobox', 'forms', 'warning', 'next'], ['Undo history', 'feedback', 'warning', 'next'],
+    ['Combobox', 'forms', 'success', '0.3'], ['Toggle switch', 'forms', 'success', '0.3'], ['Stepper', 'forms', 'success', '0.3'], ['Slider', 'forms', 'success', '0.3'],
+    ['Segments', 'forms', 'success', '0.3'], ['Drop zone', 'forms', 'success', '0.3'], ['Tooltip', 'overlays', 'success', '0.3'], ['Context menu', 'overlays', 'success', '0.3'],
+    ['Tree', 'content', 'success', '0.3'], ['Sortable', 'content', 'success', '0.3'], ['Long list', 'content', 'success', '0.3'], ['Undo history', 'feedback', 'success', '0.3'],
+    ['Live contract', 'feedback', 'success', '0.3'], ['Chart', 'data', 'success', '0.3'], ['Meter', 'data', 'success', '0.3'], ['Progress dots', 'data', 'success', '0.3'],
+    ['Icons', 'assets', 'success', '0.3'], ['Title bar', 'shell', 'success', '0.3'], ['App shell', 'shell', 'info', '0.3'],
+    ['Date range', 'forms', 'warning', 'next'], ['Notification centre', 'feedback', 'warning', 'next'], ['Rich text', 'forms', 'warning', 'next'],
   ];
   const compHtml = COMPONENTS.map(([name, group, status, since]) => `<tr data-name="${name}" data-status-v="${status}"><td class="rk-check"></td><th scope="row">${name}</th><td data-rk-edit data-rk-tip="double-click or F2 to edit">${group}</td><td><span class="rk-tag" data-status="${status}">${WORD[status]}</span></td><td class="rk-num" data-sort="${since === 'next' ? 9 : since}">${since}</td></tr>`).join('');
   $('#comp-body').innerHTML = compHtml;
@@ -573,6 +578,26 @@
     setTimeout(() => { $('#dots').hidden = true; b.removeAttribute('aria-disabled'); b.textContent = 'sign in'; $('#signin-msg').textContent = 'Signed in, as no one in particular.'; toasts.show('Signed in.', { key: 'signin', from: b }); }, 2600);
   });
 
+  /* ---------- the app shell: the title bar, installable, offline ---------- */
+  Rekta.titlebar($('#titlebar'), { router });
+  const tag = (el, on, yes, no, st) => { el.dataset.status = on ? st : ''; if (!on) delete el.dataset.status; el.textContent = on ? yes : no; };
+  function paintPwa(s) {
+    tag($('#pwa-offline'), s.offlineReady, 'yes', s.supported ? 'not yet' : 'not here', 'success');
+    tag($('#pwa-installed'), s.installed, 'yes, in its own window', 'in a browser tab', 'success');
+    tag($('#pwa-online'), navigator.onLine, 'online', 'offline', 'success');
+    if (!navigator.onLine) $('#pwa-online').dataset.status = 'warning';
+    Rekta.disable($('#pwa-install'), s.installed ? 'Already installed.' : s.canInstall ? null : (s.supported ? 'Your browser offers installing from its own menu, or not at all.' : 'Installing needs the site served over https.'));
+  }
+  const app2 = Rekta.pwa({ toaster: toasts, onChange: paintPwa });
+  paintPwa(app2.state);
+  $('#pwa-install').addEventListener('click', async () => { if ($('#pwa-install').getAttribute('aria-disabled') === 'true') return; await app2.install(); });
+  $('#pwa-check').addEventListener('click', async () => {
+    await Rekta.pending($('#pwa-check'), Promise.all([app2.check().catch(() => {}), wait(600)]), { label: 'checking…' });
+    if (!app2.state.updateReady) toasts.show('This is the newest version.', { key: 'rk-pwa-check' });
+  });
+  addEventListener('offline', () => { setState('offline', true); paintPwa(app2.state); });
+  addEventListener('online', () => { setState('offline', false); paintPwa(app2.state); });
+
   /* ---------- inputs: build a tile, find a token, text size, a date, files ---------- */
   const built = $('#built');
   function build() {
@@ -657,5 +682,5 @@
   paintAccent();
   paintSeen();
   requestAnimationFrame(() => { measure(); env(); });
-  window.site = { app, router, home, facets, toasts, banner, hist, lineChart, barChart, compTable, pick, files, steps, logList, feed, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard };
+  window.site = { app, router, home, facets, toasts, banner, hist, pwa: app2, lineChart, barChart, compTable, pick, files, steps, logList, feed, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard };
 })();

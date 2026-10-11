@@ -131,3 +131,19 @@ implementation never invents a colour or a curve; it only feeds the same
 numbers into its own rendering and event system. If something is
 missing for a platform, add a token to the source, not a constant to the
 implementation.
+
+## Icons and the window
+
+- **Icons:** `dist/rekta.icons.json` holds each icon's shapes (`path`
+  data and `circle`s on a 20 × 20 grid) with the stroke width (1.6),
+  caps (`butt`) and joins (`miter`). Draw them with the toolkit's vector
+  API in the text colour; a shape with `fill` is solid. Scale them with
+  the text size like any other logical-pixel size.
+- **The title bar:** a desktop app that draws its own title bar (no
+  system frame) follows `rk-titlebar`: the window's drag area on the
+  ground with a hairline below, back when the current place has a
+  parent, the app's name, the place's name in light weight, and room at
+  the end for the system's window buttons. A web view inside a native
+  shell gets the same by setting `data-rk-titlebar` on the root.
+- **Installed web apps:** see [shell.md](shell.md): the window-controls
+  overlay, offline, and updates that wait to be asked.

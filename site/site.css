@@ -125,3 +125,14 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
 .meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--rk-space-m) var(--rk-space-l); }
 .signin > * + * { margin-top: var(--rk-space-s); }
 .signin .rk-dots { margin-block: var(--rk-space-m); }
+
+/* Icons and the app shell. */
+.icon-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 0 var(--rk-space-m); margin: 0; padding: 0; list-style: none; }
+.icon-gallery > li { display: flex; align-items: center; gap: var(--rk-space-s); min-height: var(--rk-row-height); border-top: 1px solid var(--rk-text-contrast-low); }
+.icon-gallery code { font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
+.window { max-width: 36rem; border: 1px solid var(--rk-text-contrast-medium); border-radius: var(--rk-radius-s); overflow: hidden; }
+.window .window-controls { display: flex; gap: 0; margin-left: auto; align-self: stretch; }
+.window .window-controls > i { display: grid; place-items: center; width: 40px; border-left: 1px solid var(--rk-text-contrast-low); color: var(--rk-text-contrast-high); }
+.window-body { padding: var(--rk-space-m); }
+.window-body > * + * { margin-top: var(--rk-space-xs); }
+.rk-btn .rk-icon { margin-left: -4px; }

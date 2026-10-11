@@ -8,6 +8,11 @@
 <meta name="referrer" content="no-referrer">
 <meta name="description" content="Rekta Design, a platform-neutral design language of panoramas, pivots, full-colour live tiles and meaningful motion, shown in itself.">
 <title>Rekta Design</title>
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0e12" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="rekta.tokens.css">
 <link rel="stylesheet" href="rekta.fonts.css">
 <link rel="stylesheet" href="rekta.css">
@@ -17,7 +22,13 @@
 <script src="site-head.js"></script>
 </head>
 <body>
+<!--@icons-->
 <div class="rk app" id="app">
+  <!-- The title bar of the installed app: shown only in a window-controls overlay or a native shell. -->
+  <header class="rk-titlebar" id="titlebar">
+    <button class="rk-ab" type="button" data-rk-back aria-label="back" hidden><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-back"/></svg></button>
+    <span class="rk-titlebar-name"><b>Rekta</b> Design</span><span class="rk-titlebar-place"></span>
+  </header>
   <div class="rk-banner" id="banner" data-rk-phase="clear">
     <div class="rk-banner-live"><p role="alert"></p><p role="status"></p></div>
     <p class="rk-actions"><button class="rk-btn" id="remedy" type="button">release stop</button></p>
@@ -28,7 +39,7 @@
        the place, so it sticks on a phone. -->
   <main class="rk-place place-home" data-rk-place="home" aria-labelledby="overview-title">
     <nav class="rk-pivot rk-pivot--nav" id="nav" aria-label="Rekta Design, sections">
-      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#desktop">desktop</a><a href="#feedback">feedback</a><a href="#live-undo">live &amp; undo</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#inputs">inputs</a><a href="#data">data</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#platforms">platforms</a><a href="#start">get started</a>
+      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#desktop">desktop</a><a href="#feedback">feedback</a><a href="#live-undo">live &amp; undo</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#inputs">inputs</a><a href="#data">data</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#icons">icons</a><a href="#shell">app shell</a><a href="#platforms">platforms</a><a href="#start">get started</a>
     </nav>
 
     <div class="rk-panorama" id="pan" tabindex="0" role="region" aria-label="Rekta Design, sections side by side">
@@ -63,7 +74,7 @@
           </div>
           <div class="rk-tile" data-status="warning" style="--rk-i:5">
             <span class="rk-tile-word">waiting</span>
-            <span class="rk-stat"><b>next</b><span>the live contract</span></span>
+            <span class="rk-stat"><b>next</b><span>date ranges</span></span>
           </div>
         </div>
         <p class="note">Move sideways with the mouse wheel, a trackpad swipe, or ← → once the panorama has focus. On a phone, just scroll down. <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">K</kbd> goes anywhere; <kbd class="rk-key">?</kbd> lists every key.</p>
@@ -271,9 +282,9 @@
         <div class="desk">
           <div class="desk-tree">
             <div class="toolbar" role="toolbar" aria-label="files">
-              <button class="rk-ab" type="button" id="tree-open" aria-label="open every folder" data-rk-tip="open every folder" aria-keyshortcuts="*"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></button>
-              <button class="rk-ab" type="button" id="tree-close" aria-label="close every folder" data-rk-tip="close every folder"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 12l5-5 5 5"/></svg></button>
-              <button class="rk-ab" type="button" id="tree-copy" aria-label="copy the path" data-rk-tip="copy the path of the selected file" aria-keyshortcuts="Control+C Meta+C"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 7h9v9H7zM4 13V4h9"/></svg></button>
+              <button class="rk-ab" type="button" id="tree-open" aria-label="open every folder" data-rk-tip="open every folder" aria-keyshortcuts="*"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-chevron-down"/></svg></button>
+              <button class="rk-ab" type="button" id="tree-close" aria-label="close every folder" data-rk-tip="close every folder"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-chevron-up"/></svg></button>
+              <button class="rk-ab" type="button" id="tree-copy" aria-label="copy the path" data-rk-tip="copy the path of the selected file" aria-keyshortcuts="Control+C Meta+C"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-copy"/></svg></button>
             </div>
             <ul class="rk-tree" id="tree" aria-label="the files of Rekta Design">
               <li aria-expanded="true"><span>tokens</span><ul><li data-about="The one source of every value: colours per theme, type, space, sizes per density, motion, timing, layers. DTCG format."><span>rekta.tokens.json</span></li></ul></li>
@@ -543,6 +554,33 @@
         </div>
       </section>
 
+      <section class="rk-sec sec-wide" id="icons" aria-labelledby="icons-title">
+        <h2 class="rk-group" id="icons-title">Fifty-one icons on one grid.</h2>
+        <p>20 × 20, a 1.6 stroke, square ends, in the text colour, so they follow every theme. An icon goes beside a word; alone, it has a name and a tooltip. The web takes <code>rekta.icons.svg</code> (a sprite: <code>&lt;use href="#rk-i-search"&gt;</code>); other platforms take <code>rekta.icons.json</code>, the same shapes as data.</p>
+        <!--@icon-gallery-->
+        <p class="note">Rest the pointer on one of the toolbar buttons in “desktop”: an icon alone gets its name as a tooltip, and its accessible name stays.</p>
+      </section>
+
+      <section class="rk-sec sec-wide" id="shell" aria-labelledby="shell-title">
+        <h2 class="rk-group" id="shell-title">An app, not a tab.</h2>
+        <p>Install this site and it opens in a window of its own, with Rekta's title bar where the browser's was. It works offline, and a new version waits until you say “reload”. A native shell (Electron, Tauri, a WebView) gets the same title bar by setting <code>data-rk-titlebar</code>.</p>
+        <div class="window" role="img" aria-label="An installed Rekta app: its title bar holds back, the app's name and the place's name, the window's own buttons at the end">
+          <div class="rk-titlebar rk-titlebar--inline">
+            <span class="rk-ab"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-back"/></svg></span>
+            <span class="rk-titlebar-name"><b>Rekta</b> Design</span><span class="rk-titlebar-place">Every value, a token.</span>
+            <span class="window-controls" aria-hidden="true"><i><svg class="rk-icon rk-icon--16"><use href="#rk-i-minus"/></svg></i><i><svg class="rk-icon rk-icon--16"><use href="#rk-i-stop"/></svg></i><i><svg class="rk-icon rk-icon--16"><use href="#rk-i-close"/></svg></i></span>
+          </div>
+          <div class="window-body"><p class="rk-kicker">tokens</p><p class="rk-title">Every value, a token.</p><p class="rk-facts">the same names on every platform</p></div>
+        </div>
+        <ul class="rk-rows" id="pwa-state">
+          <li>works offline<span class="rk-tag" id="pwa-offline">–</span></li>
+          <li>installed<span class="rk-tag" id="pwa-installed">–</span></li>
+          <li>connection<span class="rk-tag" id="pwa-online">–</span></li>
+        </ul>
+        <p class="rk-actions"><button class="rk-btn rk-btn--primary" type="button" id="pwa-install"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-install"/></svg>install</button><button class="rk-btn" type="button" id="pwa-check"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-refresh"/></svg>check for a new version</button></p>
+        <p class="note">Offline, the banner says so and the page keeps working from what it saved. A new version is announced by a toast with “reload”; it never replaces the page while you are in it.</p>
+      </section>
+
       <section class="rk-sec sec-wide" id="platforms" aria-labelledby="platforms-title">
         <h2 class="rk-group" id="platforms-title">Same numbers, different plumbing.</h2>
         <p>The tokens are platform-neutral; a native app reads <a href="rekta.tokens.json" download>rekta.tokens.json</a>: the same values resolved, in logical px, ms, hex and four numbers per curve. Names are the same everywhere: <code>space-m</code> is <code>--rk-space-m</code> on the web and <code>SpaceM</code> in your toolkit.</p>
@@ -627,7 +665,7 @@
       <div class="rk-tiles">
         <div class="rk-tile rk-w2" data-status="success" style="--rk-i:0"><span class="rk-tile-word">done</span><span class="rk-stat"><b>1</b><span>token source for every platform</span></span></div>
         <div class="rk-tile" data-status="success" style="--rk-i:1"><span class="rk-tile-word">done</span><span class="rk-stat"><b>0</b><span>frameworks needed</span></span></div>
-        <div class="rk-tile" data-status="warning" style="--rk-i:2"><span class="rk-tile-word">waiting</span><span class="rk-stat"><b>next</b><span>live contract</span></span></div>
+        <div class="rk-tile" data-status="warning" style="--rk-i:2"><span class="rk-tile-word">waiting</span><span class="rk-stat"><b>next</b><span>date ranges</span></span></div>
       </div>
       <p class="rk-kicker group-label">new</p>
       <ul class="rk-rows defs">
@@ -637,6 +675,14 @@
         <li><b>density</b><span>Compact with a mouse, comfortable with touch, yours to choose.</span></li>
         <li><b>lists</b><span>Tables that sort and stack, selection the Metro way, splits, search and filters in the address.</span></li>
         <li><b>forms</b><span>Late checks, early corrections, a summary, server answers at the field, a guard against lost input.</span></li>
+      </ul>
+      <p class="rk-kicker group-label">unreleased, on its way</p>
+      <ul class="rk-rows defs">
+        <li><b>inputs</b><span>Select, combobox, the Metro toggle switch, stepper, slider, date and time, segments, a drop zone for files.</span></li>
+        <li><b>desktop</b><span>Tooltips, context menus, a tree, ordering by a grip, ten thousand lines, columns that size and hide, editing in place.</span></li>
+        <li><b>live and undo</b><span>Live regions that say how fresh they are and hold still while you look; an undo history behind Ctrl+Z.</span></li>
+        <li><b>data</b><span>Line and bar charts in ink and grey, meters, progress, Metro's flying dots.</span></li>
+        <li><b>app shell</b><span>Fifty-one icons, the title bar of an installed app, installable and offline.</span></li>
       </ul>
       <p class="rk-actions"><a class="rk-btn" href="#tokens">open the tokens</a></p>
     </div>

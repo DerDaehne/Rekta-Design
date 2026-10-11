@@ -40,14 +40,15 @@ Full write-ups: [docs/principles.md](docs/principles.md),
 
 ## What's in the box
 
-Rekta has no dependencies on any framework. It ships three layers, and
+Rekta has no dependencies on any framework. It ships four layers, and
 each one is usable without the next:
 
 | Layer | Files | For |
 |---|---|---|
 | **Tokens** | `tokens/rekta.tokens.json` (source, [DTCG](https://tr.designtokens.org/format/)), `dist/rekta.tokens.json` (resolved, platform-neutral), `dist/rekta.tokens.css` (`--rk-` custom properties) | Every platform. Another party can implement Rekta for WinUI, Qt, SwiftUI, Compose, Flutter or anything else from these: see [docs/platforms.md](docs/platforms.md). |
-| **Components** | `dist/rekta.css`, `dist/rekta.fonts.css` with `dist/fonts/` | The web: tiles, rows, tags, buttons, fields, pivots, panoramas, the app bar, sheets, toasts, the status banner, the crumb and the place change. Classes `.rk-*`, nothing global. |
-| **Behaviour** | `dist/rekta.js` (ES module), `dist/rekta.global.js` (classic script, `window.Rekta`) | The web, with any framework or none: press, the turnstile, routes and back, the panorama's wheel and keyboard, pivots, toasts with undo, the banner, sheets, prefs. See [docs/behaviour.md](docs/behaviour.md). |
+| **Icons** | `src/icons/*.svg` (source), `dist/rekta.icons.svg` (a sprite), `dist/rekta.icons.json` (the shapes as data) | Every platform: 51 icons on a 20px grid, stroke 1.6, square ends. See [docs/shell.md](docs/shell.md). |
+| **Components** | `dist/rekta.css`, `dist/rekta.fonts.css` with `dist/fonts/` | The web: tiles, rows, tags, buttons, fields and every input, pivots, panoramas, the app bar and title bar, sheets, toasts, the status banner, menus and context menus, tooltips, tables, trees, long lists, splits, charts, meters, progress. Classes `.rk-*`, nothing global. |
+| **Behaviour** | `dist/rekta.js` (ES module), `dist/rekta.global.js` (classic script, `window.Rekta`) | The web, with any framework or none: press, the turnstile, routes and back, the panorama's wheel and keyboard, pivots, toasts and an undo history, the banner, live regions, menus, selection, tables, trees, long lists, sorting by hand, forms and inputs, charts, tooltips, the title bar, installing and offline. See [docs/behaviour.md](docs/behaviour.md). |
 
 ## Using it on the web
 
@@ -85,7 +86,7 @@ does not depend on.
 
 ## Showcase site
 
-`site/` is **the showcase**, built in Rekta on `dist/`: one panorama
+`site/` is **the showcase**, an installable app that works offline, built in Rekta on `dist/`: one panorama
 whose sections each explain a part of the system by being it. Live
 tiles measure the page itself, the colour section measures its contrast
 in the theme on screen, the components sit in a table chosen the Metro
@@ -100,11 +101,13 @@ on every push to `main` (and by hand).
 **0.2: tokens, components and behaviour.** The foundation is in place:
 one token source for every platform, the component stylesheet and a
 framework-free behaviour script, with routes and back, window-size
-classes, density and a keyboard model. Unreleased: the components that
-data-heavy desktop apps need: data states, menus and other floating
-surfaces, tables with Metro selection, split views, a command palette,
-search and filters, and forms. Next: the live contract (heartbeat,
-stale and offline data, holding a value still). See
+classes, density and a keyboard model. Unreleased: everything data-heavy
+desktop and web apps need: data states, menus, context menus and
+tooltips, tables with Metro selection, columns and editing, trees, long
+lists, splits, a command palette, search and filters, forms and every
+input, the live contract and an undo history, charts, meters and
+progress, an icon set, the title bar of an installed app, and installing
+and offline. Next: date ranges, a notification centre, rich text. See
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Repo

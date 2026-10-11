@@ -39,6 +39,15 @@ it; each entry says how.
   their value means one (`rk-meter`, `--rk-v`); an indeterminate
   `rk-progress`; Metro's progress dots for a wait that blocks
   (`rk-dots`, `motion.duration.dots`). [docs/data.md](docs/data.md).
+- The app shell: fifty-one icons on a 20px grid (`src/icons/`,
+  `dist/rekta.icons.svg` as a sprite, `dist/rekta.icons.json` for other
+  platforms, `rk-icon`, `Rekta.icon()`); the title bar of an installed
+  app or a native shell (`rk-titlebar`, `Rekta.titlebar()`,
+  `data-rk-titlebar`); installing and offline (`Rekta.pwa()`: the service
+  worker, a "reload" toast for a waiting version, `install()`).
+  `rk:placechange`. [docs/shell.md](docs/shell.md).
+- The showcase is an installable app that works offline, with its own
+  title bar in a window-controls overlay.
 - Data states: `rk-region` with `aria-busy` (a 2px line after
   `busy-delay`, at least `busy-min`), still placeholders `rk-ghost`, and
   `rk-empty` for empty and failed regions. `Rekta.busy()`.
