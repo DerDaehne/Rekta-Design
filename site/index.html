@@ -287,7 +287,25 @@
     </header>
     <div class="rk-split runs-split" id="runs-split">
       <section class="rk-split-list" id="runs-list" aria-label="runs">
-        <p class="note runs-note">Sort by a column; tick rows to act on several at once (Shift for a range, Ctrl/⌘+A for all, Escape to clear). A run's number opens it beside the list; drag the divider, or focus it and use ← →.</p>
+        <p class="note runs-note">Search and filter (both stay in the address); sort by a column; tick rows to act on several at once (Shift for a range, Ctrl/⌘+A for all, Escape to clear). A run's number opens it beside the list; drag the divider, or focus it and use ← →.</p>
+        <div class="rk-filters runs-filters">
+          <div class="rk-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13 13 4 4"/></svg><input class="rk-input" type="search" id="runs-q" placeholder="search runs" aria-label="search runs"></div>
+          <button class="rk-btn" type="button" id="f-status">status</button>
+          <div id="f-status-menu">
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="error">failed</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="warning">waiting</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="info">active</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="success">done</button>
+          </div>
+          <button class="rk-btn" type="button" id="f-target">target</button>
+          <div id="f-target-menu">
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="web">web</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="api">api</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="docs">docs</button>
+            <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="false" type="button" data-v="mobile">mobile</button>
+          </div>
+          <button class="rk-btn rk-btn--quiet" type="button" id="f-clear" hidden>clear filters</button>
+        </div>
         <div class="rk-region rk-table-wrap">
           <table class="rk-table" id="runs-table">
             <thead><tr>
@@ -300,6 +318,7 @@
             </tr></thead>
             <tbody id="runs-body"></tbody>
           </table>
+          <div class="rk-empty" id="runs-none" hidden><p>No runs match the search and filters.</p><p class="rk-actions"><button class="rk-btn" type="button" data-clear-filters>clear filters</button></p></div>
         </div>
       </section>
       <div class="rk-split-handle" aria-label="width of the list of runs"></div>
@@ -315,10 +334,12 @@
   <div class="rk-appbar" id="bar" role="region" aria-label="app bar">
     <button class="rk-ab rk-ab-back" id="back" type="button" data-rk-back hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg><span>back</span></button>
     <span class="rk-ab-status"><i class="rk-pulse" aria-hidden="true"></i><span class="rk-ab-k" id="live">live</span></span>
-    <button class="rk-ab" id="ab-pause" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12"/></svg><span>pause</span></button>
-    <button class="rk-ab" id="ab-stop" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5h10v10H5z"/></svg><span>stop</span></button>
-    <button class="rk-ab ab-wide" id="ab-theme" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 4a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span><span class="rk-ab-k">theme </span><b id="theme-word">system</b></span></button>
-    <button class="rk-ab ab-wide" id="ab-motion" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10h4l2-5 3 10 2-5h5"/></svg><span><span class="rk-ab-k">motion </span><b id="motion-word">on</b></span></button>
+    <button class="rk-ab" id="ab-goto" type="button" data-rk-priority="2" aria-keyshortcuts="Control+K Meta+K"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13 13 4 4"/></svg><span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl K</span></button>
+    <button class="rk-ab" id="ab-pause" type="button" data-rk-priority="3"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12"/></svg><span>pause</span></button>
+    <button class="rk-ab" id="ab-stop" type="button" data-rk-priority="3"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5h10v10H5z"/></svg><span>stop</span></button>
+    <button class="rk-ab" id="ab-theme" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 4a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span><span class="rk-ab-k">theme </span><b id="theme-word">system</b></span></button>
+    <button class="rk-ab" id="ab-motion" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10h4l2-5 3 10 2-5h5"/></svg><span><span class="rk-ab-k">motion </span><b id="motion-word">on</b></span></button>
+    <button class="rk-ab rk-ab-more" id="ab-more" type="button" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h.01M10 10h.01M16 10h.01" stroke-width="3" stroke-linecap="round"/></svg><span>more</span></button>
     <div class="rk-ab-selection" role="group" aria-label="selected runs">
       <span class="rk-ab-count" role="status">0 selected</span>
       <button class="rk-ab" id="sel-export" type="button"><span>export</span></button>
@@ -326,6 +347,30 @@
       <button class="rk-ab" type="button" data-rk-clear><span>clear</span></button>
     </div>
   </div>
+
+  <!-- Go to a place or run a command: rises from the app bar (Ctrl/⌘+K) -->
+  <div class="rk-palette" id="palette" aria-label="go to a place or run a command">
+    <input class="rk-input" type="text" placeholder="go to a place or run a command" aria-label="go to a place or run a command">
+    <ul></ul>
+  </div>
+
+  <dialog class="rk-sheet" id="keys-sheet" aria-labelledby="keys-title">
+    <form method="dialog">
+      <p class="rk-kicker">help</p>
+      <h2 class="rk-group" id="keys-title">Keyboard shortcuts</h2>
+      <ul class="rk-rows keys-list">
+        <li>go to a place or run a command<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">K</kbd></span></li>
+        <li>this list<span><kbd class="rk-key">?</kbd></span></li>
+        <li>back, or close what is open<span><kbd class="rk-key">Esc</kbd></span></li>
+        <li>previous or next section (panorama focused)<span><kbd class="rk-key">←</kbd> <kbd class="rk-key">→</kbd></span></li>
+        <li>first or last section<span><kbd class="rk-key">Home</kbd> <kbd class="rk-key">End</kbd></span></li>
+        <li>undo what the toast reports<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd></span></li>
+        <li>select all rows (table focused)<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">A</kbd></span></li>
+        <li>select a range of rows<span><kbd class="rk-key">Shift</kbd> + click</span></li>
+      </ul>
+      <p class="rk-actions"><button class="rk-btn rk-btn--primary" value="ok">close</button></p>
+    </form>
+  </dialog>
 
   <dialog class="rk-sheet" id="sheet" aria-labelledby="sheet-title">
     <form method="dialog">

@@ -36,7 +36,6 @@ html, body { margin: 0; background: var(--rk-bg); color: var(--rk-text-primary);
 .detail > * + * { margin-top: var(--rk-space-m); }
 .queue-trend .rk-spark { width: 100%; height: 72px; }
 .queue-trend polyline { vector-effect: non-scaling-stroke; stroke-dasharray: none; animation: none; }
-@media (max-width: 759.98px), (max-height: 480px) { .ab-wide { display: none; } }
 
 /* The accent slot, set as a product would: one value per theme, apart from every status hue. */
 :root[data-accent='plum'] { --rk-accent: #7d29ad; --rk-on-accent: #ffffff; }
@@ -46,6 +45,9 @@ html, body { margin: 0; background: var(--rk-bg); color: var(--rk-text-primary);
 /* Runs: a split under the place's header. */
 .runs-split { padding-inline: var(--rk-space-m); padding-bottom: var(--rk-space-l); }
 .runs-note { margin-bottom: var(--rk-space-m); }
+.runs-filters { margin-bottom: var(--rk-space-m); }
+.keys-list > li { align-items: center; }
+.keys-list kbd { font-family: inherit; }
 .rk-split-detail > * + * { margin-top: var(--rk-space-m); }
 .rk-split-detail .rk-rows { margin-top: var(--rk-space-xs); }
 

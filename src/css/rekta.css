@@ -195,7 +195,7 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   background: var(--rk-glass); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-top: 1px solid var(--rk-text-contrast-low);
 }
 .rk-ab {
-  display: inline-flex; align-items: center; gap: 6px; min-width: 48px; min-height: 48px; padding: 0 10px;
+  display: inline-flex; flex: none; align-items: center; gap: 6px; min-width: 48px; min-height: 48px; padding: 0 10px;
   border: 0; border-radius: var(--rk-radius-s); background: none; color: inherit; cursor: pointer;
   font: inherit; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold);
   transition: background-color var(--rk-duration-short) var(--rk-ease-base);
@@ -204,7 +204,8 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-ab b { font-weight: inherit; }
 .rk-ab svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .rk-ab-back { order: -1; }
-.rk-ab-status { display: inline-flex; align-items: center; gap: var(--rk-space-s); margin-right: auto; font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); white-space: nowrap; }
+.rk-ab[data-rk-overflow] { display: none; }
+.rk-ab-status { display: inline-flex; flex: none; align-items: center; gap: var(--rk-space-s); margin-right: auto; font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); white-space: nowrap; }
 .rk-pulse { width: 8px; height: 8px; flex: none; background: var(--rk-status-success-full); animation: rk-pulse var(--rk-duration-pulse) ease-in-out infinite; }
 .rk-appbar[data-rk-state='paused'] .rk-pulse { background: var(--rk-status-warning-full); animation: none; }
 .rk-appbar[data-rk-state='halted'] .rk-pulse { background: var(--rk-status-error-full); animation: none; }
@@ -265,6 +266,17 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-table th[aria-sort='descending'] .rk-sort::after { border-bottom-width: 0; border-top-color: currentColor; }
 .rk-table-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
 
+/* Search and filters: a row above a list or table. The search field leads; each filter is a button that says what it
+   keeps ("status: failed, done", or "status: any") and opens a menu of checkbox items; "clear filters" shows while
+   anything is filtered. */
+.rk-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rk-space-s); }
+.rk-search { position: relative; flex: 1 1 14rem; max-width: 24rem; }
+.rk-search > svg { position: absolute; left: 10px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); fill: none; stroke: currentColor; stroke-width: 1.6; color: var(--rk-text-contrast-high); pointer-events: none; }
+.rk-search > .rk-input { padding-left: 32px; }
+.rk-search > .rk-input::-webkit-search-cancel-button { cursor: pointer; }
+/* A quiet button: same size, no frame, for a secondary action beside framed ones (clear filters). */
+.rk-btn--quiet { border-color: transparent; color: var(--rk-text-contrast-high); }
+
 /* Selection: while rows are selected the app bar carries the selection's count and actions instead of its own. */
 .rk-ab-selection { display: none; flex: 1 1 auto; align-items: center; gap: var(--rk-space-xs); min-width: 0; }
 .rk-appbar[data-rk-selecting] > :not(.rk-ab-selection) { display: none; }
@@ -301,6 +313,17 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-menu-item[aria-checked='true']::before { background: currentColor; }
 .rk-menu-key { margin-left: auto; padding-left: var(--rk-space-l); font-size: var(--rk-font-size-xxs); color: var(--rk-text-contrast-high); }
 .rk-menu-sep { height: 0; margin: var(--rk-space-xs) 0; border: 0; border-top: 1px solid var(--rk-text-contrast-low); }
+/* Palette: go to a place or run a command. It rises from the app bar at every width, centred, up to 40rem wide;
+   the active option (aria-selected) looks focused while focus stays in the input. */
+.rk-palette { inset: auto 0 calc(var(--rk-appbar-height) + env(safe-area-inset-bottom) + var(--rk-space-s)); margin-inline: auto; width: min(40rem, calc(100% - 2 * var(--rk-space-m))); max-width: none; max-height: min(28rem, 70dvh); padding: 0; overflow: hidden; --_rk-from: 4px; }
+.rk-palette:is(:popover-open, [data-rk-open]) { display: flex; flex-direction: column; }
+.rk-palette > input { flex: none; border: 0; border-bottom: 1px solid var(--rk-text-contrast-low); border-radius: 0; min-height: calc(var(--rk-control-height) + var(--rk-space-s)); padding-inline: var(--rk-space-m); }
+.rk-palette > input:focus-visible { outline: 0; border-color: var(--rk-text-contrast-medium); }
+.rk-palette > :is(ul, ol) { flex: 1 1 auto; margin: 0; padding: var(--rk-space-xs) 0; overflow-y: auto; list-style: none; }
+.rk-palette [role='option'][aria-selected='true'] { outline: 2px solid var(--rk-focus); outline-offset: -2px; background-color: var(--rk-hover); }
+.rk-palette-empty { margin: 0 var(--rk-space-m); }
+/* A key, as on the keyboard: in hints, the palette and the shortcut list. */
+.rk-key { display: inline-block; min-width: 1.6em; padding: 0 4px; border: 1px solid var(--rk-text-contrast-medium); border-radius: var(--rk-radius-s); font-size: var(--rk-font-size-xxs); font-weight: var(--rk-font-weight-semibold); line-height: 1.5; text-align: center; color: var(--rk-text-primary); white-space: nowrap; }
 .rk-menu-label { padding: var(--rk-space-s) var(--rk-space-m) var(--rk-space-xs); font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-high); }
 
 /* Crumb: the way up from a place to its parent, first in the place's header. It is a link to the parent's address
@@ -467,6 +490,7 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-menu-item:hover:not([aria-disabled='true']) { background-color: var(--rk-hover); }
   .rk-table tbody tr:has(a, input, button):hover { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
   .rk-sort:hover { color: var(--rk-text-primary); }
+  .rk-btn--quiet:hover { color: var(--rk-text-primary); }
   .rk-split-handle:hover::after { width: 2px; background-color: var(--rk-text-contrast-medium); }
   .rk-toast-act:hover { background-color: var(--rk-hover); }
 }

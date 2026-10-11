@@ -58,6 +58,7 @@ paint: load `rekta.global.js` in `<head>` and call
 | `data-rk-selected` | a table row | Its checkbox is checked (`table()`). |
 | `data-rk-selecting` | the app bar | Rows are selected; the bar carries the selection. |
 | `data-rk-dragging` | a split handle | Being dragged. |
+| `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
 | `data-theme`, `data-density`, `data-motion` | the root | Prefs overrides (see `prefs`). |
 
 ### Public hooks
@@ -176,7 +177,11 @@ A small router for places mounted in the page as
   of its own (a split in the compact class). `open(item)` shows an item
   of the current place; a link to `#name/item` does the same.
 
-Returns `{ current, item, below, navigate(name, { replace, pressed }), open(item, { replace }), back(name?), onItem, urlOf(name, item), destroy }`.
+- Search and filters are parameters of the address (`#name?q=web`).
+  `setParams(params)` replaces them (never pushing); `params` reads
+  them; the `onItem` watcher gets them as `params` on arrival and back.
+
+Returns `{ current, item, params, below, navigate(name, { replace, pressed }), open(item, { replace }), setParams(params), back(name?), onItem, urlOf(name, item, params), destroy }`.
 
 ### `panorama(el, { pivot })`
 
@@ -267,7 +272,7 @@ or its text plus "…") at the same width, refuses more clicks and writes
 `data-rk-pending` (the line under it) until `work` settles. Resolves or
 rejects with the work.
 
-### `menu(trigger, el, { onSelect })`
+### `menu(trigger, el, { onSelect, summary })`
 
 A menu button. `el` holds `.rk-menu-item` buttons (`role` `menuitem`,
 `menuitemcheckbox` or `menuitemradio`), `.rk-menu-sep` and
@@ -276,7 +281,12 @@ A menu button. `el` holds `.rk-menu-item` buttons (`role` `menuitem`,
 `aria-expanded`, `aria-controls`), places it, and runs its keys (see
 [states.md](states.md#floating-surfaces)). A choice toggles a checkbox
 item or picks a radio item, closes the menu, returns focus to the
-trigger and calls `onSelect(item)`. Returns `{ open(index), close(), destroy }`.
+trigger and calls `onSelect(item)`; a checkbox item toggles and leaves the
+menu open. With `summary` ("status") the trigger says what is ticked
+("status: failed, done", or "status: any"): a filter button. Returns
+`{ open(index), close(), set(isChecked), destroy }` (`set` ticks
+checkbox items from outside, as when a filter comes back from the
+address).
 
 ### `table(el, { onSort, appbar, onSelect })`
 
@@ -300,6 +310,25 @@ under `key`). Compact, `show('detail' | 'list', { focus })` turns
 between the panes. `reveal(dir)` slides a new item into the detail
 sideways. Returns `{ show, reveal, sideways, showing, destroy }`. Pair
 it with `places().onItem(place, fn, { push: () => !split.sideways })`.
+
+### `palette(el, { items, trigger, router, shortcut })`
+
+`el` is a `.rk-palette` holding an input and a list. `items()` returns
+entries `{ label, group, keys, keywords, href | run }`; it is called each
+time the palette opens, so commands can say what they will do now. The
+palette rises from the app bar, filters as you type, moves with ↑ ↓,
+runs with Enter (an `href` goes through `router`), and clears, then
+closes, with Escape. Ctrl/Cmd+`shortcut` (default K) toggles it from
+anywhere; `trigger` (the app bar's "go to") toggles it too. Returns
+`{ open(), close(), isOpen, destroy }`.
+
+### `appbar(el, { more })`
+
+Moves the app bar's controls that do not fit into the menu of `more` (a
+`.rk-ab.rk-ab-more` button, shown only while needed), the lowest
+`data-rk-priority` first, then from the end; writes `data-rk-overflow`
+on each moved control. Back, the live state and a selection's controls
+never move. Returns `{ layout(), destroy }`.
 
 ### `place(el, anchor)`
 

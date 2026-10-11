@@ -20,6 +20,8 @@
      menu       a menu button with a floating list, placed next to its control
      table      sorting, selection with the app bar carrying it, labels for the stacked layout
      split      a list and its current item: a draggable divider sideways, one pane at a time compact
+     palette    go to a place or run a command, from a list that rises from the app bar (Ctrl/Cmd+K)
+     appbar     controls that do not fit move into a "more" menu
      start      the defaults for a page: prefs, press, sheets, arrival build-in
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
@@ -334,39 +336,45 @@ export const turn = {
 // while a turn runs finishes that turn first.
 // A place can show one item at a time (the run a split shows): #name/item. onItem(place, fn, { push }) hears it.
 // Choosing an item replaces the address, unless push() says it should be a step of its own (a split in the compact
-// class, where the item replaces the list); then back returns to the list.
+// class, where the item replaces the list); then back returns to the list. Search and filters are parameters of the
+// address (#name?status=failed): setParams() replaces them, never pushing; the watcher hears them on arrival and back.
 export function places({ root = document, mode = 'hash', base = '', home, title = document.title, onChange } = {}) {
   const all = () => [...root.querySelectorAll('[data-rk-place]')];
   const byName = (name) => (name ? root.querySelector(`[data-rk-place="${CSS.escape(name)}"]`) : null);
   home = home || (all()[0] && all()[0].dataset.rkPlace);
   const enc = encodeURIComponent;
-  const urlOf = (name, item = null) => (mode === 'hash'
-    ? (name === home && !item ? location.pathname + location.search : `#${enc(name)}${item ? `/${enc(item)}` : ''}`)
-    : `${base}/${name === home && !item ? '' : enc(name)}${item ? `/${enc(item)}` : ''}`);
+  const urlOf = (name, item = null, params = '') => {
+    const q = params ? `?${params}` : '';
+    return mode === 'hash'
+      ? (name === home && !item && !q ? location.pathname + location.search : `#${enc(name)}${item ? `/${enc(item)}` : ''}${q}`)
+      : `${base}/${name === home && !item ? '' : enc(name)}${item ? `/${enc(item)}` : ''}${q}`;
+  };
   // An address's place and item, or null when it names no place here.
   const parse = (href) => {
     const u = new URL(href, location.href);
     if (u.origin !== location.origin) return null;
     if (mode === 'hash' && (u.pathname !== location.pathname || u.search !== location.search)) return null;
     if (mode === 'path' && !(u.pathname === base || u.pathname.startsWith(`${base}/`))) return null;
-    const raw = mode === 'hash' ? u.hash.slice(1) : u.pathname.slice(base.length).replace(/^\/|\/$/g, '');
+    let raw = mode === 'hash' ? u.hash.slice(1) : u.pathname.slice(base.length).replace(/^\/|\/$/g, '');
+    let params = mode === 'hash' ? '' : u.search.slice(1);
+    if (mode === 'hash' && raw.includes('?')) { params = raw.slice(raw.indexOf('?') + 1); raw = raw.slice(0, raw.indexOf('?')); }
     const [first, ...rest] = raw.split('/');
     const name = decodeURIComponent(first || '') || home, item = rest.length ? decodeURIComponent(rest.join('/')) : null;
-    return byName(name) ? { name, item } : null;
+    return byName(name) ? { name, item, params } : null;
   };
   const nameOf = (href) => { const p = parse(href); return p && p.name; };
   const parentOf = (name) => { const p = byName(name) && byName(name).dataset.rkParent; return byName(p) ? p : home; };
   const titleOf = (name) => { const h = byName(name).querySelector('.rk-title'); const t = h && h.textContent.trim(); return name === home || !t ? title : `${t} · ${title}`; };
   // Everything that scrolls in a place keeps its offset while the place is away.
   const scrollers = (el) => [el, ...el.querySelectorAll('.rk-panorama, .rk-sec, .rk-split-list, .rk-split-detail, [data-rk-scroll]')];
-  let current = home, item = null, index = 0, below = null, pushedItem = false, busy = Promise.resolve();
+  let current = home, item = null, params = '', index = 0, below = null, pushedItem = false, busy = Promise.resolve();
   const watchers = new Map();
   const backButtons = () => document.querySelectorAll('.rk-ab-back[data-rk-back]');
   const showBack = () => backButtons().forEach((b) => { b.hidden = current === home && index === 0; });
   const rk = () => (history.state && history.state.rk) || {};
   function snapshot(opener) {
     const el = byName(current), prev = rk();
-    return { ...(history.state || {}), rk: { ...prev, place: current, index, below, item, pushedItem, scrollY, scroll: scrollers(el).map((s) => [s.scrollLeft, s.scrollTop]), opener: opener || prev.opener || null } };
+    return { ...(history.state || {}), rk: { ...prev, place: current, index, below, item, params, pushedItem, scrollY, scroll: scrollers(el).map((s) => [s.scrollLeft, s.scrollTop]), opener: opener || prev.opener || null } };
   }
   function restore(el, state) {
     const offsets = (state && state.scroll) || [];
@@ -382,10 +390,10 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     if (!t.hasAttribute('tabindex') && !t.matches('a, button, input, select, textarea')) t.setAttribute('tabindex', '-1');
     return t;
   }
-  // The place's item changed: tell its watcher, which may name it for the title.
+  // The place's item or parameters changed: tell its watcher, which may name the item for the title.
   function setItem(next, opts = {}) {
     item = next || null;
-    const w = watchers.get(current), named = w ? w.fn(item, opts) : null;
+    const w = watchers.get(current), named = w ? w.fn(item, { ...opts, params: new URLSearchParams(params) }) : null;
     document.title = typeof named === 'string' && named ? `${named} · ${titleOf(current)}` : titleOf(current);
   }
   function show(name, state, { instant = false, back = false, pressed = null } = {}) {
@@ -393,6 +401,7 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     current = name;
     below = state ? state.below || null : null;
     pushedItem = !!(state && state.pushedItem);
+    params = (state && state.params) || '';
     showBack();
     const run = async () => {
       if (from && from !== to) {
@@ -414,8 +423,8 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     if (p.name === current) { if (p.item !== item) open(p.item); return Promise.resolve(); }
     turn.finish();
     history.replaceState(snapshot(pressed && pressed.getAttribute('href')), '');
-    const entry = { rk: { place: p.name, index: replace ? index : index + 1, below: replace ? below : current, item: p.item, pushedItem: false } };
-    if (replace) history.replaceState(entry, '', urlOf(p.name, p.item)); else history.pushState(entry, '', urlOf(p.name, p.item));
+    const entry = { rk: { place: p.name, index: replace ? index : index + 1, below: replace ? below : current, item: p.item, params: p.params || '', pushedItem: false } };
+    if (replace) history.replaceState(entry, '', urlOf(p.name, p.item, entry.rk.params)); else history.pushState(entry, '', urlOf(p.name, p.item, entry.rk.params));
     index = entry.rk.index;
     return show(p.name, entry.rk, { pressed });
   }
@@ -429,10 +438,10 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     if (push) {
       history.replaceState(snapshot(), '');
       index += 1; pushedItem = true;
-      history.pushState({ rk: { place: current, index, below, item: next, pushedItem: true } }, '', urlOf(current, next));
+      history.pushState({ rk: { place: current, index, below, item: next, params, pushedItem: true } }, '', urlOf(current, next, params));
     } else {
       const s = snapshot();
-      history.replaceState({ ...s, rk: { ...s.rk, item: next } }, '', urlOf(current, next));
+      history.replaceState({ ...s, rk: { ...s.rk, item: next } }, '', urlOf(current, next, params));
     }
     setItem(next, { back: false });
   }
@@ -457,7 +466,7 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
   }
   const pop = (e) => {
     const state = e.state && e.state.rk;
-    const p = state && byName(state.place) ? { name: state.place, item: state.item || null } : parse(location.href);
+    const p = state && byName(state.place) ? { name: state.place, item: state.item || null, params: state.params || '' } : parse(location.href);
     if (!p) return;
     turn.finish();
     const to = state ? state.index : 0, backward = to < index, jump = Math.abs(to - index);
@@ -465,12 +474,14 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     if (p.name === current) {
       below = state ? state.below || null : null;
       pushedItem = !!(state && state.pushedItem);
-      if (p.item !== item) setItem(p.item, { back: backward });
+      const paramsChanged = (p.params || '') !== params;
+      params = p.params || '';
+      if (p.item !== item || paramsChanged) setItem(p.item, { back: backward });
       restore(byName(current), state);
       showBack();
       return;
     }
-    show(p.name, state || { item: p.item }, { back: backward, instant: jump > 1 || e.hasUAVisualTransition });
+    show(p.name, state || { item: p.item, params: p.params }, { back: backward, instant: jump > 1 || e.hasUAVisualTransition });
   };
   const click = (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -495,7 +506,7 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
   });
   // Start on the place and item the address names. A cold entry puts the parent place underneath, and the place's
   // list beneath an item, so back stays in the app.
-  const start = parse(location.href) || { name: home, item: null };
+  const start = parse(location.href) || { name: home, item: null, params: '' };
   const st = rk();
   if (st.place === start.name && (st.item || null) === start.item) {
     index = st.index || 0; below = st.below || null; pushedItem = !!st.pushedItem;
@@ -504,17 +515,18 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     if (start.name !== home) chain.push({ place: parentOf(start.name), item: null, below: null });
     const placeBelow = start.name !== home ? parentOf(start.name) : null;
     if (start.item) chain.push({ place: start.name, item: null, below: placeBelow });
-    chain.push({ place: start.name, item: start.item, below: placeBelow, pushedItem: !!start.item });
+    chain.push({ place: start.name, item: start.item, below: placeBelow, pushedItem: !!start.item, params: start.params });
     chain.forEach((c, i) => {
-      const entry = { rk: { place: c.place, index: i, below: c.below, item: c.item, pushedItem: !!c.pushedItem } };
-      if (i === 0) history.replaceState({ ...(history.state || {}), ...entry }, '', urlOf(c.place, c.item));
-      else history.pushState(entry, '', urlOf(c.place, c.item));
+      const entry = { rk: { place: c.place, index: i, below: c.below, item: c.item, params: c.params || '', pushedItem: !!c.pushedItem } };
+      if (i === 0) history.replaceState({ ...(history.state || {}), ...entry }, '', urlOf(c.place, c.item, entry.rk.params));
+      else history.pushState(entry, '', urlOf(c.place, c.item, entry.rk.params));
     });
     index = chain.length - 1; below = placeBelow; pushedItem = !!start.item;
   }
   for (const el of all()) el.hidden = el.dataset.rkPlace !== start.name;
   current = start.name;
   item = start.item;
+  params = start.params || '';
   document.title = titleOf(current);
   showBack();
   if (st.place === start.name) requestAnimationFrame(() => restore(byName(current), st));
@@ -524,6 +536,15 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     get current() { return current; },
     get item() { return item; },
     get below() { return below; },
+    get params() { return new URLSearchParams(params); },
+    // setParams(p): the current place's search and filters, in the address; replaces, never pushes.
+    setParams(p) {
+      const next = new URLSearchParams(p).toString();
+      if (next === params) return;
+      params = next;
+      const s = snapshot();
+      history.replaceState({ ...s, rk: { ...s.rk, params } }, '', urlOf(current, item, params));
+    },
     navigate, back, open, urlOf,
     // onItem(place, fn, { push }): fn(item | null, { back, initial }) whenever that place's item changes; it may
     // return a name for the window title. push() decides whether choosing an item is a history step of its own.
@@ -1014,8 +1035,10 @@ const isOpen = (el) => (canPopover ? el.matches(':popover-open') : !el.hidden);
 // menu(trigger, el, { onSelect }): a menu button. el is a .rk-float of .rk-menu-item buttons (role menuitem,
 // menuitemcheckbox or menuitemradio), opened by a click, Enter, Space or ↓ (↑ from the end). In the menu: ↑ ↓ wrap,
 // Home End, a letter jumps to the next item starting with it; Enter or Space chooses; Escape, Tab or a click outside
-// closes and focus returns to the trigger after a choice or Escape.
-export function menu(trigger, el, { onSelect } = {}) {
+// closes and focus returns to the trigger after a choice or Escape. A checkbox item toggles and leaves the menu open,
+// so several can be ticked in a row. With summary ("status"), the trigger says what is ticked: "status: failed, done",
+// or "status: any" when nothing is (a filter button).
+export function menu(trigger, el, { onSelect, summary = null } = {}) {
   el.id = el.id || `rk-menu-${Math.random().toString(36).slice(2, 8)}`;
   el.setAttribute('role', 'menu');
   if (canPopover) el.setAttribute('popover', 'auto'); else el.hidden = true;
@@ -1025,6 +1048,12 @@ export function menu(trigger, el, { onSelect } = {}) {
   trigger.setAttribute('aria-expanded', 'false');
   const items = () => [...el.querySelectorAll('.rk-menu-item')].filter((i) => i.getClientRects().length);
   const focusItem = (i) => { const list = items(); if (list.length) list[(i + list.length) % list.length].focus(); };
+  function summarize() {
+    if (!summary) return;
+    const on = [...el.querySelectorAll('[aria-checked="true"]')].map((i) => i.textContent.trim());
+    trigger.textContent = `${summary}: ${on.length ? on.join(', ') : 'any'}`;
+  }
+  summarize();
   // With popovers the trigger is the menu's invoker: the browser toggles it on click and a click on the trigger
   // never counts as a click outside. Placement and focus follow the toggle.
   let first = 0;
@@ -1067,9 +1096,11 @@ export function menu(trigger, el, { onSelect } = {}) {
   const choose = (e) => {
     const item = e.target.closest('.rk-menu-item');
     if (!item || item.getAttribute('aria-disabled') === 'true') { if (item) e.preventDefault(); return; }
-    if (item.getAttribute('role') === 'menuitemcheckbox') item.setAttribute('aria-checked', String(item.getAttribute('aria-checked') !== 'true'));
+    const checkbox = item.getAttribute('role') === 'menuitemcheckbox';
+    if (checkbox) item.setAttribute('aria-checked', String(item.getAttribute('aria-checked') !== 'true'));
     if (item.getAttribute('role') === 'menuitemradio') el.querySelectorAll('[role=menuitemradio]').forEach((r) => r.setAttribute('aria-checked', String(r === item)));
-    close();
+    summarize();
+    if (!checkbox) close(); else if (!canPopover || el.matches(':popover-open')) place(el, trigger);
     if (onSelect) onSelect(item);
   };
   const outside = (e) => { if (!canPopover && isOpen(el) && !el.contains(e.target) && !trigger.contains(e.target)) close(false); };
@@ -1084,6 +1115,8 @@ export function menu(trigger, el, { onSelect } = {}) {
   addEventListener('scroll', reflow, true);
   return {
     open, close,
+    // Set the checkbox items from outside (a filter restored from the address); the trigger follows.
+    set(checked) { el.querySelectorAll('[role=menuitemcheckbox]').forEach((i) => i.setAttribute('aria-checked', String(checked(i)))); summarize(); },
     destroy() {
       trigger.removeEventListener('click', click); trigger.removeEventListener('keydown', triggerKey);
       el.removeEventListener('keydown', key); el.removeEventListener('click', choose); el.removeEventListener('toggle', toggle);
@@ -1131,8 +1164,11 @@ export function table(el, { onSort, appbar = null, onSelect } = {}) {
     if (onSort) onSort({ column: th.cellIndex, dir, th }); else sortRows(th.cellIndex, dir);
   }
   const selected = () => rows().filter((r) => r.hasAttribute('data-rk-selected'));
+  // Rows a filter has hidden are out of the selection: they are unticked and never ticked by all or a range.
+  const selectable = () => rows().filter((r) => box(r) && !r.hidden);
   function sync() {
-    const list = rows().filter(box), count = list.filter((r) => box(r).checked).length;
+    for (const r of rows()) { const b = box(r); if (b && r.hidden && b.checked) b.checked = false; }
+    const list = selectable(), count = list.filter((r) => box(r).checked).length;
     for (const r of list) r.toggleAttribute('data-rk-selected', box(r).checked);
     const a = all();
     if (a) { a.checked = !!count && count === list.length; a.indeterminate = !!count && count < list.length; }
@@ -1144,7 +1180,7 @@ export function table(el, { onSort, appbar = null, onSelect } = {}) {
     if (onSelect) onSelect(selected());
     el.dispatchEvent(new CustomEvent('rk:selectionchange', { bubbles: true, detail: { count, rows: selected() } }));
   }
-  function setAll(on) { for (const r of rows()) { const b = box(r); if (b && !b.disabled) b.checked = on; } sync(); }
+  function setAll(on) { for (const r of selectable()) { const b = box(r); if (!b.disabled) b.checked = on; } sync(); }
   function clear({ focus = true } = {}) {
     const hadFocus = appbar && appbar.contains(document.activeElement);
     setAll(false);
@@ -1161,14 +1197,14 @@ export function table(el, { onSort, appbar = null, onSelect } = {}) {
     if (b === all()) { setAll(b.checked); return; }
     const row = b.closest('tr');
     if (shift && anchor && anchor.isConnected) {
-      const list = rows(), [i, j] = [list.indexOf(anchor), list.indexOf(row)].sort((m, n) => m - n);
+      const list = selectable(), [i, j] = [list.indexOf(anchor), list.indexOf(row)].sort((m, n) => m - n);
       list.slice(i, j + 1).forEach((r) => { const x = box(r); if (x && !x.disabled) x.checked = b.checked; });
     }
     anchor = row; shift = false;
     sync();
   };
   const key = (e) => {
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a' && !isEditable(e.target) && rows().some(box)) { e.preventDefault(); setAll(true); }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a' && !isEditable(e.target) && selectable().length) { e.preventDefault(); setAll(true); }
   };
   const offEsc = keys.on(20, (e) => {
     if (e.key !== 'Escape' || !selected().length || isEditable(e.target)) return false;
@@ -1262,6 +1298,166 @@ export function split(el, { key = null } = {}) {
       if (handle) { handle.removeEventListener('pointerdown', down); handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); handle.removeEventListener('keydown', keydown); handle.removeEventListener('dblclick', reset); }
     },
   };
+}
+
+// Palette ----------------------------------------------------------------------------------------------------------
+// palette(el, { items, trigger, router, shortcut }): go to a place or run a command, from a list that rises from the
+// app bar at every width. el is a .rk-palette holding an input and a list; items() returns { label, group, keys,
+// keywords, href | run }. Typing filters (every word must start a word of the label or its keywords); ↑ ↓ move,
+// Enter runs, Escape clears the text, then closes. Ctrl/Cmd+K (shortcut) opens it from anywhere.
+export function palette(el, { items = () => [], trigger = null, router = null, shortcut = 'k' } = {}) {
+  const input = el.querySelector('input'), list = el.querySelector('ul, ol');
+  el.id = el.id || `rk-palette-${Math.random().toString(36).slice(2, 8)}`;
+  list.id = list.id || `${el.id}-list`;
+  if (canPopover) el.setAttribute('popover', 'auto'); else el.hidden = true;
+  el.classList.add('rk-float');
+  input.setAttribute('role', 'combobox'); input.setAttribute('aria-controls', list.id); input.setAttribute('aria-expanded', 'false');
+  input.setAttribute('aria-autocomplete', 'list'); input.setAttribute('autocomplete', 'off'); input.spellcheck = false;
+  list.setAttribute('role', 'listbox');
+  if (trigger) { trigger.setAttribute('aria-haspopup', 'dialog'); trigger.setAttribute('aria-controls', el.id); trigger.setAttribute('aria-expanded', 'false'); }
+  let shown = [], active = 0, opener = null;
+  const words = (t) => t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  function match(it, q) {
+    if (!q) return 1;
+    const hay = words(`${it.label} ${it.keywords || ''}`), label = it.label.toLowerCase();
+    if (!words(q).every((w) => hay.some((h) => h.startsWith(w)))) return label.includes(q.toLowerCase()) ? 1 : 0;
+    return label.startsWith(q.toLowerCase()) ? 3 : 2;
+  }
+  function render() {
+    const q = input.value.trim(), all = (typeof items === 'function' ? items() : items) || [];
+    const groups = [];
+    for (const it of all) if (!groups.includes(it.group || '')) groups.push(it.group || '');
+    shown = [];
+    all.forEach((it, i) => { const score = match(it, q); if (score) shown.push({ it, score, i }); });
+    shown.sort((a, b) => groups.indexOf(a.it.group || '') - groups.indexOf(b.it.group || '') || (q ? b.score - a.score : 0) || a.i - b.i);
+    active = 0;
+    list.replaceChildren();
+    let group = null;
+    shown.forEach(({ it }, k) => {
+      if ((it.group || '') !== group) {
+        group = it.group || '';
+        if (group) { const h = document.createElement('li'); h.className = 'rk-menu-label'; h.setAttribute('role', 'presentation'); h.textContent = group; list.appendChild(h); }
+      }
+      const li = document.createElement('li');
+      li.className = 'rk-menu-item'; li.id = `${el.id}-o${k}`; li.setAttribute('role', 'option');
+      li.append(it.label);
+      if (it.keys) { const kk = document.createElement('span'); kk.className = 'rk-menu-key'; kk.textContent = it.keys; li.appendChild(kk); }
+      li.addEventListener('pointermove', () => mark(k));
+      li.addEventListener('click', () => run(k));
+      list.appendChild(li);
+    });
+    if (!shown.length) {
+      const li = document.createElement('li'); li.className = 'rk-empty rk-palette-empty'; li.setAttribute('role', 'presentation');
+      li.textContent = `Nothing to go to or run matches “${q}”.`; list.appendChild(li);
+    }
+    mark(0);
+  }
+  function mark(k) {
+    if (!shown.length) { input.removeAttribute('aria-activedescendant'); return; }
+    active = (k + shown.length) % shown.length;
+    list.querySelectorAll('[role=option]').forEach((o, i) => o.setAttribute('aria-selected', String(i === active)));
+    const o = list.querySelector(`#${CSS.escape(`${el.id}-o${active}`)}`);
+    input.setAttribute('aria-activedescendant', o.id);
+    o.scrollIntoView({ block: 'nearest' });
+  }
+  function open() {
+    if (isOpen(el)) { input.focus(); return; }
+    opener = document.activeElement;
+    input.value = '';
+    openFloat(el);
+    render();
+    input.setAttribute('aria-expanded', 'true');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    input.focus();
+  }
+  function close(refocus = true) {
+    if (!isOpen(el)) return;
+    closeFloat(el);
+    input.setAttribute('aria-expanded', 'false');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    if (refocus && opener && opener.isConnected) opener.focus();
+  }
+  function run(k) {
+    const pick = shown[k];
+    if (!pick) return;
+    close(!pick.it.href);
+    if (pick.it.href) { if (router) router.navigate(pick.it.href); else location.href = pick.it.href; }
+    else if (pick.it.run) pick.it.run();
+  }
+  const key = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); mark(active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); mark(active - 1); }
+    else if (e.key === 'Enter') { e.preventDefault(); run(active); }
+    else if (e.key === 'Escape') { e.preventDefault(); if (input.value) { input.value = ''; render(); } else close(); }
+    else if (e.key === 'Tab') e.preventDefault();
+  };
+  const toggle = (e) => { if (e.newState === 'closed') { input.setAttribute('aria-expanded', 'false'); if (trigger) trigger.setAttribute('aria-expanded', 'false'); } };
+  // A pointer press on the trigger would light-dismiss the open palette first; the click then reopens it. Remember.
+  let wasOpen = false;
+  const down = () => { wasOpen = isOpen(el); };
+  const triggerClick = (e) => { e.preventDefault(); if (wasOpen) { wasOpen = false; return; } open(); };
+  const offKey = keys.on(5, (e) => {
+    if (!shortcut || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== shortcut) return false;
+    if (isOpen(el)) close(); else open();
+    return true;
+  });
+  const outside = (e) => { if (!canPopover && isOpen(el) && !el.contains(e.target) && !(trigger && trigger.contains(e.target))) close(false); };
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', key);
+  el.addEventListener('toggle', toggle);
+  document.addEventListener('pointerdown', outside, true);
+  if (trigger) { trigger.addEventListener('pointerdown', down); trigger.addEventListener('click', triggerClick); }
+  return {
+    open, close,
+    get isOpen() { return isOpen(el); },
+    destroy() {
+      input.removeEventListener('input', render); input.removeEventListener('keydown', key); el.removeEventListener('toggle', toggle);
+      document.removeEventListener('pointerdown', outside, true); offKey();
+      if (trigger) { trigger.removeEventListener('pointerdown', down); trigger.removeEventListener('click', triggerClick); }
+    },
+  };
+}
+
+// App bar ----------------------------------------------------------------------------------------------------------
+// appbar(el, { more }): controls that do not fit move into a "more" menu, the least important first (data-rk-priority,
+// higher stays longer; then from the end). more is a .rk-ab button shown only while something has moved; its menu
+// repeats each moved control's words, and choosing one clicks the control. Back, the live state and a selection's
+// controls never move.
+export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
+  if (!more) return { layout() {}, destroy() {} };
+  const pop = document.createElement('div');
+  pop.className = 'rk-float rk-ab-menu';
+  el.appendChild(pop);
+  const words = (c) => (c.getAttribute('aria-label') || c.textContent).replace(/\s+/g, ' ').trim();
+  const candidates = () => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back'))
+    .map((c, i) => ({ c, i, p: Number(c.dataset.rkPriority || 0) }))
+    .sort((a, b) => a.p - b.p || b.i - a.i).map((x) => x.c);
+  function build() {
+    pop.replaceChildren(...[...el.querySelectorAll(':scope > .rk-ab[data-rk-overflow]')].map((c) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'rk-menu-item'; b.setAttribute('role', 'menuitem'); b.textContent = words(c);
+      b._rkFor = c;
+      return b;
+    }));
+  }
+  const fits = () => el.scrollWidth <= el.clientWidth + 1;
+  function layout() {
+    if (el.hasAttribute('data-rk-selecting')) return;
+    el.querySelectorAll(':scope > [data-rk-overflow]').forEach((c) => c.removeAttribute('data-rk-overflow'));
+    more.hidden = true;
+    if (!fits()) {
+      more.hidden = false;
+      for (const c of candidates()) { if (fits()) break; c.setAttribute('data-rk-overflow', ''); }
+    }
+    build();
+  }
+  const m = menu(more, pop, { onSelect: (item) => { if (item._rkFor) item._rkFor.click(); } });
+  const rebuild = () => build();
+  more.addEventListener('pointerdown', rebuild); more.addEventListener('keydown', rebuild);
+  const ro = new ResizeObserver(layout);
+  ro.observe(el);
+  layout();
+  return { layout, destroy() { ro.disconnect(); m.destroy(); more.removeEventListener('pointerdown', rebuild); more.removeEventListener('keydown', rebuild); pop.remove(); } };
 }
 
 // Start --------------------------------------------------------------------------------------------------------------

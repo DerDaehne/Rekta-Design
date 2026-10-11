@@ -109,9 +109,24 @@ in the same bar, within the thumb's reach, hidden at the top place. It is
 the one navigational concession the bottom bar makes; everywhere else,
 navigation lives in the pivot and the crumb, not the app bar.
 
-A command entry surface (e.g. a command palette, the places list) rises
-from this bar at every width, not as a page overlay centred on the
-screen: it visually belongs to the bar that triggered it.
+### Go to
+
+"go to" in the app bar (and Ctrl/Cmd+K anywhere) opens the **palette**:
+one list to go to a place, a section, an item (a run) or to run a
+command. It rises from the app bar at every width, centred, up to 40rem
+wide, never as an overlay in the middle of the screen: it belongs to the
+bar that opened it. Typing filters (each word must start a word of an
+entry or its keywords); ↑ ↓ move, Enter goes or runs, Escape clears the
+text and then closes. Entries are grouped (places, sections, items,
+commands) and a command shows its key. Commands say what they will do
+now ("resume intake" while paused).
+
+### When the bar is full
+
+Controls that do not fit move into "more", the least important first
+(`data-rk-priority`), and its menu repeats their words. Back, the live
+state and a selection's controls never move. Nothing is hidden for good:
+every control is reachable at every width.
 
 ## Keyboard
 
@@ -126,6 +141,12 @@ Every pointer action has a keyboard path.
 | A tile | Enter (Space on a button tile) | Presses it; release activates |
 | Anywhere | Escape | Closes the innermost thing that is open (see below) |
 | Anywhere but a text field | Ctrl/Cmd+Z | Undoes the action of the open toast |
+| Anywhere | Ctrl/Cmd+K | Go to: the palette |
+| Anywhere but a text field | ? | The keyboard shortcuts |
+| A table | Ctrl/Cmd+A, Shift+click | Select all, select a range |
+
+The keyboard shortcuts are listed in the app itself (a sheet behind `?`
+and an entry in the palette), never only in a manual.
 
 ### Who gets a key
 

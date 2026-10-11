@@ -34,6 +34,16 @@ it; each entry says how.
   replaced sideways, a history step compact; deep links put the list
   underneath.
 - `tokens.px()` reads a length token in px.
+- Go to: `rk-palette` rises from the app bar at every width (Ctrl/Cmd+K,
+  "go to"), lists places, sections, items and commands, filters as you
+  type. `Rekta.palette()`. Keyboard shortcuts behind `?`; `rk-key`.
+- App-bar overflow: controls that do not fit move into "more"
+  (`rk-ab-more`, `data-rk-priority`). `Rekta.appbar()`. App-bar controls
+  no longer shrink.
+- Search and filters: `rk-filters`, `rk-search`, filter buttons that say
+  what they keep (`menu(…, { summary })`), `rk-btn--quiet`; parameters
+  in the address (`setParams`, `params`). Checkbox items leave a menu
+  open.
 - [docs/collections.md](docs/collections.md).
 
 ### Fixed

@@ -23,6 +23,24 @@ columns that line up.
   their column. The head becomes a row of sort buttons. Compact means
   vertical only.
 
+## Search and filters
+
+A row above the list or table: the search field first, then one button
+per filter, then "clear filters" (a quiet button) while anything is
+filtered.
+
+- **A filter button says what it keeps:** "status: failed, done", or
+  "status: any". It opens a menu of checkbox items that stays open, so
+  several can be ticked in a row.
+- **Search** narrows as you type (a short pause, no button); Escape in
+  the field clears it.
+- **Facts follow:** the facts line says how many show ("12 runs ·
+  showing 3"); no match says so in the region, with "clear filters".
+- **The address keeps them** (`#runs?q=web&status=failed`): reload,
+  share and back restore them. They replace the address and never add
+  a history step: filters are a view of the place, not a place.
+- Rows a filter hides drop out of the selection.
+
 ## Selection
 
 When an action applies to several rows at once, the rows get a checkbox

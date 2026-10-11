@@ -173,9 +173,10 @@ await p.waitForTimeout(1300);
 ok(!(await p.evaluate(() => document.querySelector('#jobs-region').hasAttribute('aria-busy'))) && (await toast(p)) === 'Jobs refreshed.', 'refresh ends');
 await p.click('#jobs-more'); await p.waitForTimeout(200); await p.click('#jobs-menu [data-act=show-done]'); await p.waitForTimeout(200);
 ok(await p.evaluate(() => document.querySelector('#done').hidden), 'a checkbox item toggles');
-await p.click('#jobs-more'); await p.waitForTimeout(200);
+ok(await p.evaluate(() => document.querySelector('#jobs-menu').matches(':popover-open')), 'a checkbox item leaves the menu open');
 ok((await p.getAttribute('#jobs-menu [data-act=show-done]', 'aria-checked')) === 'false', 'the checkbox item shows its state');
 await p.click('#jobs-menu [data-act=show-done]'); await p.waitForTimeout(200);
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 
 // Facets: arrow keys, nothing added to history.
 const len = await p.evaluate(() => history.length);
@@ -292,6 +293,44 @@ const hb = await p.evaluate(() => { const r = document.querySelector('.rk-split-
 await p.mouse.move(hb.x, hb.y); await p.mouse.down(); await p.mouse.move(hb.x + 100, hb.y, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(100);
 const w2 = await p.evaluate(() => document.querySelector('#runs-list').getBoundingClientRect().width);
 ok(Math.abs(w2 - w1 - 100) <= 2, 'the divider drags', `${w1} → ${w2}`);
+
+// Search and filters: the trigger says what it keeps, rows hide, the address keeps it, clear brings everything back.
+const shownRuns = () => p.evaluate(() => [...document.querySelectorAll('#runs-body tr')].filter((tr) => !tr.hidden).length);
+await p.click('#f-status'); await p.waitForTimeout(200);
+await p.click('#f-status-menu [data-v=error]'); await p.click('#f-status-menu [data-v=warning]'); await p.waitForTimeout(200);
+ok(await p.evaluate(() => document.querySelector('#f-status-menu').matches(':popover-open')), 'a filter menu stays open for several choices');
+ok((await text(p, '#f-status')) === 'status: failed, waiting', 'the filter button says what it keeps', await text(p, '#f-status'));
+ok((await shownRuns()) === 2, 'the filter hides the other rows');
+ok((await p.evaluate(() => location.hash)).includes('status=failed%2Cwaiting'), 'the address keeps the filter', await p.evaluate(() => location.hash));
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+await p.click('#f-status'); await p.waitForTimeout(200); await p.click('#f-status-menu [data-v=warning]'); await p.click('#f-status-menu [data-v=error]'); await p.keyboard.press('Escape');
+await p.fill('#runs-q', 'mobile'); await p.waitForTimeout(400);
+ok((await shownRuns()) === 3 && (await text(p, '#runs-facts')).endsWith('showing 3') && (await p.evaluate(() => location.hash)).includes('q=mobile'), 'search narrows the rows and stays in the address');
+await p.fill('#runs-q', 'nothing like this'); await p.waitForTimeout(400);
+ok(!(await p.evaluate(() => document.querySelector('#runs-none').hidden)), 'no match says so in the region');
+await p.click('#f-clear'); await p.waitForTimeout(300);
+ok((await shownRuns()) === 12 && !(await p.evaluate(() => location.hash)).includes('?') && (await text(p, '#f-status')) === 'status: any', 'clear filters brings everything back');
+
+// Go to: the palette rises from the app bar; Ctrl+K, typing, ↓, Enter; Escape clears, then closes.
+await p.keyboard.press('Control+k'); await p.waitForTimeout(300);
+ok(await p.evaluate(() => document.querySelector('#palette').matches(':popover-open') && document.activeElement === document.querySelector('#palette input')), 'Ctrl+K opens the palette with focus in it');
+const pb = await p.evaluate(() => ({ pal: document.querySelector('#palette').getBoundingClientRect().bottom, bar: document.querySelector('#bar').getBoundingClientRect().top }));
+ok(pb.pal <= pb.bar, 'the palette rises from the app bar', JSON.stringify(pb));
+await p.keyboard.type('queue'); await p.waitForTimeout(200);
+const activeOpt = () => p.evaluate(() => { const id = document.activeElement.getAttribute('aria-activedescendant'); return id ? document.getElementById(id).textContent : null; });
+ok((await activeOpt()) === 'Build queue', 'typing filters, the best match is active', await activeOpt());
+await p.keyboard.press('Escape'); await p.waitForTimeout(100);
+ok((await p.inputValue('#palette input')) === '' && await p.evaluate(() => document.querySelector('#palette').matches(':popover-open')), 'Escape clears the text first');
+await p.keyboard.type('review'); await p.keyboard.press('Enter'); await p.waitForTimeout(TURN);
+ok(await visible(p, 'reviews') && !(await p.evaluate(() => document.querySelector('#palette').matches(':popover-open'))), 'Enter goes to the place');
+await p.click('#ab-goto'); await p.waitForTimeout(300); await p.click('#ab-goto'); await p.waitForTimeout(300);
+ok(!(await p.evaluate(() => document.querySelector('#palette').matches(':popover-open'))), 'a second click on go to closes it');
+await p.keyboard.press('Control+k'); await p.waitForTimeout(200); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+ok(!(await p.evaluate(() => document.querySelector('#palette').matches(':popover-open'))), 'Escape on empty text closes the palette');
+await p.locator('#reviews-title').focus(); await p.keyboard.press('?'); await p.waitForTimeout(300);
+ok(await p.evaluate(() => document.querySelector('#keys-sheet').open), '? opens the keyboard shortcuts');
+await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+ok(!(await p.evaluate(() => document.querySelector('#keys-sheet').open)) && await visible(p, 'reviews'), 'Escape closes the sheet, not the place');
 await p.close();
 
 // Deep link: a cold entry puts the parent underneath, so back stays in the app.
@@ -306,6 +345,9 @@ ok((await text(d2, '#run-title')) === 'Run #4179' && (await d2.evaluate(() => hi
 await d2.keyboard.press('Escape'); await d2.waitForTimeout(600);
 ok((await d2.evaluate(() => location.hash)) === '#runs' && await visible(d2, 'runs'), 'back from a deep-linked run shows the list');
 await d2.close();
+const d3 = await open({}, '#runs?status=failed');
+ok((await d3.evaluate(() => [...document.querySelectorAll('#runs-body tr')].filter((tr) => !tr.hidden).length)) === 1 && (await text(d3, '#f-status')) === 'status: failed', 'a filtered address opens filtered');
+await d3.close();
 
 // Phone: sticky strip, toasts from the app bar, the app bar's back, touch press.
 const m = await open({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
@@ -331,6 +373,12 @@ await m.screenshot({ path: join(shots, 'phone-place.png') });
 await m.tap('#back'); await m.waitForTimeout(TURN);
 ok(await visible(m, 'board'), 'phone: app bar back returns');
 ok((await m.evaluate(() => Math.round(document.querySelector('#reset').getBoundingClientRect().height))) === 44, 'touch: 44px controls');
+ok(await m.evaluate(() => document.querySelector('#ab-theme').hasAttribute('data-rk-overflow') && !document.querySelector('#ab-more').hidden), 'phone: what does not fit moves into more');
+await m.tap('#ab-more'); await m.waitForTimeout(300);
+const moreItems = await m.evaluate(() => [...document.querySelectorAll('.rk-ab-menu .rk-menu-item')].map((b) => b.textContent));
+ok(moreItems.includes('motion on'), 'phone: more repeats the moved controls\' words', moreItems.join(' | '));
+await m.tap('.rk-ab-menu .rk-menu-item:nth-child(2)'); await m.waitForTimeout(300);
+ok((await m.evaluate(() => document.documentElement.dataset.motion)) === 'off', 'phone: a control in more still works');
 await m.evaluate(() => window.board.router.navigate('runs')); await m.waitForTimeout(TURN);
 ok((await m.evaluate(() => getComputedStyle(document.querySelector('#runs-body tr')).display)) === 'flex', 'phone: table rows stack');
 ok((await m.evaluate(() => getComputedStyle(document.querySelector('#runs-body td:nth-child(4)'), '::before').content)) === '"target "', 'phone: cells carry their column\'s label');

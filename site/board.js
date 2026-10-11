@@ -309,7 +309,8 @@
   const runsSplit = Rekta.split($('#runs-split'), { key: 'rekta-board-runs-split' });
   function runsFacts() {
     const rows = $$('#runs-body tr'), failed = rows.filter((tr) => $('.rk-tag', tr).dataset.status === 'error').length;
-    $('#runs-facts').textContent = `${rows.length} runs · ${failed} failed`;
+    const shown = rows.filter((tr) => !tr.hidden).length;
+    $('#runs-facts').textContent = `${rows.length} runs · ${failed} failed${shown < rows.length ? ` · showing ${shown}` : ''}`;
   }
   function renderRun(id) {
     const r = RUNS.find((x) => x.id === id);
@@ -321,7 +322,46 @@
       + '</ul>';
   }
   let lastRun = null;
-  router.onItem('runs', (id, { initial }) => {
+  // Search and filters: rows hide, the address keeps them (#runs?q=…&status=…), the selection forgets hidden rows.
+  const checkedIn = (menuEl) => $$('[aria-checked="true"]', menuEl).map((i) => i.dataset.v);
+  function applyFilters({ write = true } = {}) {
+    const q = $('#runs-q').value.trim().toLowerCase(), st = checkedIn($('#f-status-menu')), tg = checkedIn($('#f-target-menu'));
+    let shown = 0;
+    for (const tr of $$('#runs-body tr')) {
+      const r = RUNS.find((x) => x.id === tr.dataset.run);
+      const keep = (!q || `#${r.id} ${r.target} ${RUN_WORD[r.status]}`.includes(q)) && (!st.length || st.includes(r.status)) && (!tg.length || tg.includes(r.target));
+      tr.hidden = !keep;
+      if (keep) shown += 1;
+    }
+    $('#f-clear').hidden = !(q || st.length || tg.length);
+    $('#runs-none').hidden = shown > 0;
+    runsTable.refresh(); runsFacts();
+    if (write && router.current === 'runs') {
+      const p = new URLSearchParams();
+      if (q) p.set('q', q);
+      if (st.length) p.set('status', st.map((v) => RUN_WORD[v]).join(','));
+      if (tg.length) p.set('target', tg.join(','));
+      router.setParams(p);
+    }
+  }
+  const fStatus = Rekta.menu($('#f-status'), $('#f-status-menu'), { summary: 'status', onSelect: () => applyFilters() });
+  const fTarget = Rekta.menu($('#f-target'), $('#f-target-menu'), { summary: 'target', onSelect: () => applyFilters() });
+  let typing = 0;
+  $('#runs-q').addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(applyFilters, 150); });
+  function clearFilters() { $('#runs-q').value = ''; fStatus.set(() => false); fTarget.set(() => false); applyFilters(); $('#runs-q').focus(); }
+  $('#f-clear').addEventListener('click', clearFilters);
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-clear-filters]')) clearFilters(); });
+  function filtersFrom(params) {
+    const words = (k) => (params.get(k) || '').split(',').filter(Boolean);
+    const st = words('status'), tg = words('target');
+    $('#runs-q').value = params.get('q') || '';
+    fStatus.set((i) => st.includes(RUN_WORD[i.dataset.v]));
+    fTarget.set((i) => tg.includes(i.dataset.v));
+    applyFilters({ write: false });
+  }
+
+  router.onItem('runs', (id, { initial, params }) => {
+    filtersFrom(params);
     $$('#runs-body tr').forEach((tr) => { if (tr.dataset.run === id) tr.setAttribute('aria-current', 'true'); else tr.removeAttribute('aria-current'); });
     renderRun(id);
     if (id) {
@@ -353,6 +393,32 @@
     });
   });
 
+  /* ---------- go to: a palette from the app bar, and the app bar's overflow ---------- */
+  const SECTIONS = [['overview', 'overview'], ['jobs', 'jobs'], ['facets', 'facets'], ['controls', 'controls'], ['system', 'system state'], ['look', 'theme, density and motion']];
+  Rekta.palette($('#palette'), {
+    trigger: $('#ab-goto'), router,
+    items: () => [
+      { group: 'places', label: 'Rekta Board', href: '#', keywords: 'board home' },
+      { group: 'places', label: 'Nightly import', href: '#import', keywords: 'job failed' },
+      { group: 'places', label: 'Build queue', href: '#queue', keywords: 'builds' },
+      { group: 'places', label: 'Awaiting review', href: '#reviews', keywords: 'reviews approve' },
+      { group: 'places', label: 'Runs today', href: '#runs', keywords: 'deploys' },
+      ...SECTIONS.map(([id, label]) => ({ group: 'board sections', label, keywords: id, run: () => router.navigate('board').then(() => board.goTo(id)) })),
+      ...RUNS.map((r) => ({ group: 'runs', label: `Run #${r.id}`, keywords: `${r.target} ${RUN_WORD[r.status]}`, href: `#runs/${r.id}` })),
+      { group: 'commands', label: banner.is('paused') ? 'resume intake' : 'pause intake', run: () => $('#ab-pause').click() },
+      { group: 'commands', label: banner.is('halted') ? 'release the emergency stop' : 'emergency stop', run: () => $('#ab-stop').click() },
+      { group: 'commands', label: 'refresh the jobs', run: () => refreshJobs() },
+      { group: 'commands', label: `theme: next (now ${prefs.get('theme')})`, run: () => $('#ab-theme').click() },
+      { group: 'commands', label: prefs.get('motion') === 'off' ? 'turn motion on' : 'turn motion off', run: () => $('#ab-motion').click() },
+      { group: 'commands', label: 'keyboard shortcuts', keys: '?', run: () => $('#keys-sheet').showModal() },
+    ],
+  });
+  Rekta.appbar($('#bar'));
+  Rekta.keys.on(5, (e) => {
+    if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey || Rekta.keys.isEditable(e.target) || document.querySelector('dialog[open]')) return false;
+    $('#keys-sheet').showModal(); return true;
+  });
+
   /* ---------- sheet and reset ---------- */
   const sheet = $('#sheet'), resetBtn = $('#reset');
   resetBtn.addEventListener('click', () => sheet.showModal());
@@ -371,7 +437,7 @@
     $('#tiles').innerHTML = start.tiles; seed();
     $('[data-rk-place=import]').innerHTML = start.importPlace;
     $('#review-list').innerHTML = start.reviews; paintReviews();
-    $('#runs-body').innerHTML = runsHtml; runsTable.refresh(); runsFacts();
+    $('#runs-body').innerHTML = runsHtml; $('#runs-q').value = ''; fStatus.set(() => false); fTarget.set(() => false); applyFilters({ write: false });
     $('#revert').click();
     facets.select(0);
     board.goTo('overview', { focus: false });
