@@ -8,6 +8,9 @@ with a distinct job:
 1. **Small, secondary info** — a kicker line above everything else
    (a breadcrumb, a status summary, a timestamp). Quiet: small size,
    muted colour (`color.*.text.contrast-high`), lowercase for UI words.
+   A kicker says something the screen does not already say: a panorama
+   section that the strip above already names starts with its heading,
+   not with its own name again.
 2. **The one bold main title** — what this screen *is* (a record's own
    title, or a place's name). This is the only place weight
    `typography.weight.semibold` (600) appears at a large size — it is

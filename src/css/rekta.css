@@ -118,6 +118,7 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 /* Fixed order, active title large and light; inactive titles scale down from the same line box, so the strip's
    height never depends on which title is active. Each title's hit area stays at least touch-target tall. */
 .rk-pivot {
+  --_rk-inactive: var(--rk-font-size-pivot-inactive);
   position: relative; display: flex; align-items: baseline; gap: var(--rk-space-l); min-height: var(--rk-touch-target);
   overflow-x: auto; overscroll-behavior-x: contain; white-space: nowrap; scrollbar-width: none; scroll-behavior: smooth;
 }
@@ -136,11 +137,10 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-pivot > a::after, .rk-pivot > button::after {
   content: ''; position: absolute; inset: auto 0 0; height: max(100%, calc(var(--rk-touch-target) / var(--_rk-s)));
 }
+.rk-pivot--nav { --_rk-inactive: var(--rk-font-size-nav-inactive); }
 .rk-pivot--nav > a, .rk-pivot--nav > button { font-size: var(--rk-font-size-nav-active); }
 .rk-pivot > [aria-current], .rk-pivot > [aria-selected='true'] { --_rk-s: 1; color: var(--rk-text-primary); }
-.rk-pivot-end { flex: 0 0 100%; }
 /* A strip whose titles all fit does not glide; its titles only change size. */
-.rk-pivot[data-rk-fit] > .rk-pivot-end { display: none; }
 
 /* Buttons and switches ------------------------------------------------------------------------------------------- */
 /* Primary takes the accent slot (ink by default). Height follows the density: 44px for touch, 32px for a fine pointer. */
@@ -178,6 +178,20 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-field[data-status='error'] .rk-input { padding-inline: 11px; border: 2px solid var(--rk-status-error-full); }
 .rk-field[data-status='error'] .rk-hint { color: var(--rk-text-primary); }
 .rk-field[data-status='error'] .rk-hint::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--_rk-mark); }
+/* A label may say "optional"; required fields carry no mark. */
+.rk-optional { font-weight: var(--rk-font-weight-regular); color: var(--rk-text-contrast-high); }
+/* The summary of what needs attention, first in the form: a sentence with the error square and a link to each field,
+   a hairline below, no fill. It takes focus when the form is sent with errors. */
+.rk-errors { padding-bottom: var(--rk-space-m); border-bottom: 1px solid var(--rk-text-contrast-low); color: var(--rk-text-primary); }
+.rk-errors:focus-visible { outline: 2px solid var(--rk-focus); outline-offset: 4px; }
+.rk-errors > p { font-weight: var(--rk-font-weight-semibold); }
+.rk-errors > p::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--rk-status-error-full); }
+.rk-errors > ul { margin: var(--rk-space-xs) 0 0; padding: 0 0 0 14px; list-style: none; }
+.rk-errors > ul > li + li { margin-top: 2px; }
+.rk-errors a { color: inherit; }
+/* Why a control cannot act now: a hint beside it, always shown, read with it. */
+.rk-actions > .rk-why { flex: 1 1 12rem; }
+
 /* Touch: fields never set text below 16px, so iOS does not zoom the page when one takes focus. */
 @media (pointer: coarse) { .rk-input { font-size: max(16px, 1rem); } }
 
@@ -238,8 +252,8 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 /* Table ---------------------------------------------------------------------------------------------------------- */
 /* Hairlines and the density's row height; the head in the kicker's voice, sticking to the top of what scrolls; the
    sorted column in text-primary with a triangle; numbers right-aligned in tabular figures. The row's main cell is a
-   <th scope="row">. A selected row takes surface and its checkbox (.rk-check); the current row (the one a split
-   shows, aria-current="true") a 2px ink bar at its leading edge. Narrower than 760px, rows stack (below). */
+   <th scope="row">; a selectable table starts each row with an empty .rk-check cell for the checkmark. Narrower
+   than 760px, rows stack (below). */
 .rk-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .rk-table :is(th, td) { padding: var(--rk-space-xs) var(--rk-space-s); text-align: left; vertical-align: middle; }
 .rk-table thead th {
@@ -252,10 +266,7 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-table tbody :is(th, td) { height: var(--rk-row-height); }
 .rk-table tbody th { font-weight: var(--rk-font-weight-semibold); }
 .rk-table .rk-num { text-align: right; }
-.rk-table .rk-check { width: calc(20px + 2 * var(--rk-space-s)); }
-.rk-table .rk-check input { display: block; width: 20px; height: 20px; margin: 0; accent-color: var(--rk-accent); }
-.rk-table tr[data-rk-selected] { background-color: var(--rk-surface); }
-.rk-table tbody tr[aria-current='true'] > :first-child { box-shadow: inset 2px 0 0 var(--rk-text-primary); }
+.rk-table .rk-check { width: calc(14px + 2 * var(--rk-space-s)); }
 .rk-sort {
   display: inline-flex; align-items: center; gap: 6px; min-height: var(--rk-control-height); margin-block: calc(-1 * var(--rk-space-s)); padding: 0;
   border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: inherit;
@@ -277,7 +288,40 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 /* A quiet button: same size, no frame, for a secondary action beside framed ones (clear filters). */
 .rk-btn--quiet { border-color: transparent; color: var(--rk-text-contrast-high); }
 
-/* Selection: while rows are selected the app bar carries the selection's count and actions instead of its own. */
+/* Selection, the Metro way: a selected row or entry takes the accent fill (ink unless the product sets an accent)
+   with on-accent text and a checkmark at its leading edge, no box. It nudges where it is pressed (data-rk-press):
+   less than a tile, rows being long and low. Its colour changes after the nudge. The text tokens follow the fill,
+   so tags, facts and links stay readable on it; a status square keeps its colour inside an on-accent ring. */
+[data-rk-press]:not(.rk-tile) {
+  transition: transform var(--rk-duration-short) var(--rk-ease-base), background-color var(--rk-duration-short) var(--rk-ease-base), color var(--rk-duration-short) var(--rk-ease-base);
+  -webkit-tap-highlight-color: transparent; cursor: pointer;
+}
+[data-rk-press]:not(.rk-tile)[data-rk-pressed] {
+  transform: perspective(var(--rk-turnstile-perspective)) rotateX(calc(var(--_rk-py, 0) * -1 * var(--rk-row-tilt))) rotateY(calc(var(--_rk-px, 0) * var(--rk-row-tilt))) scale(var(--rk-row-press-scale));
+  transition-duration: var(--rk-duration-press);
+}
+[data-rk-select] > [aria-selected='true'] {
+  --rk-text-primary: var(--rk-on-accent); --rk-text-contrast-high: var(--rk-on-accent); --rk-text-contrast-medium: var(--rk-on-accent); --rk-text-contrast-low: transparent;
+  background-color: var(--rk-accent); color: var(--rk-on-accent);
+}
+[data-rk-select] > [aria-selected='true'] .rk-tag::before { box-shadow: 0 0 0 1px var(--rk-on-accent); }
+[data-rk-select] > [aria-selected='true'] :is(.rk-check, .rk-mark)::before {
+  content: ''; display: block; width: 11px; height: 6px; margin: 0 auto 3px;
+  border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg);
+}
+/* The whole item is the target, so its title link reads as its title; it keeps the link for a new tab. */
+[data-rk-select] > * a[href] { color: inherit; text-decoration: none; }
+[data-rk-select] > * a[href]:hover { text-decoration: underline; text-underline-offset: 3px; }
+[data-rk-select] > :focus-visible { outline: 2px solid var(--rk-focus); outline-offset: -2px; }
+[data-rk-select] > [aria-selected='true']:focus-visible { outline-color: currentColor; outline-offset: -4px; }
+/* A selectable list: each entry starts with a slot for the checkmark. */
+.rk-rows[data-rk-select] > li { position: relative; padding-left: calc(14px + var(--rk-space-s)); padding-right: var(--rk-space-s); }
+.rk-rows[data-rk-select] > li[aria-selected='true']::before {
+  content: ''; position: absolute; left: var(--rk-space-xs); top: 50%; width: 11px; height: 6px; margin-top: -5px;
+  border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg);
+}
+
+/* While the selection mode lasts, the app bar carries the selection's count and actions instead of its own. */
 .rk-ab-selection { display: none; flex: 1 1 auto; align-items: center; gap: var(--rk-space-xs); min-width: 0; }
 .rk-appbar[data-rk-selecting] > :not(.rk-ab-selection) { display: none; }
 .rk-appbar[data-rk-selecting] > .rk-ab-selection { display: flex; }
@@ -361,11 +405,15 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-sec + .rk-sec { border-top: 1px solid var(--rk-text-contrast-low); }
 .rk-sec > * + * { margin-top: var(--rk-space-m); }
 .rk-sec > .rk-kicker + * { margin-top: var(--rk-space-xs); }
-/* Compact: a section strip that is a direct child of the place sticks under the banner. */
+/* Compact: a section strip that is a direct child of the place sticks under the banner. It never shrinks. A top-level
+   strip (rk-pivot--nav) takes the facet level here: sticking, it holds less of a small screen. */
 .rk-place > .rk-pivot {
+  flex: none;
   position: sticky; top: var(--rk-banner-h, 0px); z-index: var(--rk-layer-sticky);
   padding-inline: var(--rk-space-m); background: var(--rk-bg); border-bottom: 1px solid var(--rk-text-contrast-low);
 }
+.rk-place > .rk-pivot--nav { --_rk-inactive: var(--rk-font-size-pivot-inactive); }
+.rk-place > .rk-pivot--nav > :is(a, button) { font-size: var(--rk-font-size-pivot-active); }
 
 /* Feedback: toast and status banner ------------------------------------------------------------------------------ */
 /* An event is ink and leaves; a state is a tile and stays.
@@ -488,7 +536,7 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-ab:hover { background-color: var(--rk-hover); }
   .rk-crumb:hover { color: var(--rk-text-primary); }
   .rk-menu-item:hover:not([aria-disabled='true']) { background-color: var(--rk-hover); }
-  .rk-table tbody tr:has(a, input, button):hover { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+  .rk-table tbody tr:has(a, input, button):hover, [data-rk-select] > :hover { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
   .rk-sort:hover { color: var(--rk-text-primary); }
   .rk-btn--quiet:hover { color: var(--rk-text-primary); }
   .rk-split-handle:hover::after { width: 2px; background-color: var(--rk-text-contrast-medium); }
@@ -507,8 +555,8 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-region[aria-busy='true']::before, .rk-btn[data-rk-pending]::after, .rk-empty[data-status='error'] > :first-child::before { forced-color-adjust: none; background: CanvasText; }
   .rk-ghost { forced-color-adjust: none; background: GrayText; }
   .rk-float { border-color: CanvasText; }
-  .rk-table tbody tr[aria-current='true'] > :first-child { border-left: 2px solid CanvasText; }
-  .rk-table tr[data-rk-selected] { outline: 1px solid Highlight; outline-offset: -1px; }
+  .rk-errors > p::before { forced-color-adjust: none; background: CanvasText; }
+  [data-rk-select] > [aria-selected='true'] { forced-color-adjust: none; background-color: Highlight; color: HighlightText; }
   .rk-split-handle::after { background: CanvasText; }
 }
 
@@ -541,15 +589,14 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 @container rk (max-width: 759.98px) {
   .rk-table, .rk-table :is(thead, tbody, tr, th, td) { display: block; }
   .rk-table tr { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--rk-space-m); }
-  .rk-table tr:has(> .rk-check) { padding-left: calc(20px + var(--rk-space-m)); }
-  .rk-table .rk-check { position: absolute; left: 0; top: var(--rk-space-s); width: auto; padding: 0; }
+  .rk-table tr:has(> .rk-check) { padding-left: calc(14px + var(--rk-space-m)); padding-right: var(--rk-space-s); }
+  .rk-table .rk-check { position: absolute; left: var(--rk-space-xs); top: var(--rk-space-m); width: 14px; padding: 0; }
   .rk-table thead tr { padding-block: var(--rk-space-xs); border-bottom: 1px solid var(--rk-text-contrast-low); }
   .rk-table thead th { position: static; padding: 0; border: 0; background: none; }
   .rk-table thead th:not([aria-sort]):not(.rk-check) { display: none; }
-  .rk-table thead .rk-check { top: 50%; transform: translateY(-50%); }
+  .rk-table thead tr:has(> .rk-check) { padding-left: 0; }
+  .rk-table thead .rk-check { display: none; }
   .rk-table tbody tr { padding-block: var(--rk-space-s); }
-  .rk-table tbody tr[aria-current='true'] { box-shadow: inset 2px 0 0 var(--rk-text-primary); }
-  .rk-table tbody tr[aria-current='true'] > :first-child { box-shadow: none; }
   .rk-table tbody :is(th, td) { height: auto; padding: 0; }
   .rk-table tbody th { order: 1; flex: 1 1 0; min-width: 50%; }
   .rk-table tbody td:has(> .rk-tag) { order: 2; margin-left: auto; }
@@ -570,10 +617,14 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
     /* Sections are sized in tile units; more width shows more sections, never wider ones. */
     .rk-sec { flex: 0 0 var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))); overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding-right: var(--rk-space-s); }
     .rk-sec + .rk-sec { border-top: 0; }
-    /* Lets the last section reach the left edge, like the pivot's trailing spacer; gone when everything fits. */
+    /* A table head sticks to the section's top edge, not below its padding. */
+    .rk-sec .rk-table thead th { top: calc(-1 * var(--rk-space-l)); }
+    /* Lets the last section reach the left edge; gone when everything fits. */
     .rk-panorama-end { flex: 0 0 max(0px, calc(100% - var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))) - var(--rk-space-xl))); }
     .rk-panorama[data-rk-fit] > .rk-panorama-end { display: none; }
     .rk-place > .rk-pivot { position: static; padding-inline: var(--rk-space-xl); background: none; border-bottom: 0; }
+    .rk-place > .rk-pivot--nav { --_rk-inactive: var(--rk-font-size-nav-inactive); }
+    .rk-place > .rk-pivot--nav > :is(a, button) { font-size: var(--rk-font-size-nav-active); }
     .rk-split {
       display: grid; min-height: 0;
       grid-template-columns: minmax(var(--rk-pane-min), var(--rk-split-w, calc(4 * var(--rk-tile-unit) + 3 * var(--rk-space-s)))) 1px minmax(var(--rk-pane-min), 1fr);
@@ -599,9 +650,11 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   :root:not([data-motion='on']) :is(.rk-panorama, .rk-pivot) { scroll-behavior: auto; }
   :root:not([data-motion='on']) .rk-pulse { animation: none; }
   :root:not([data-motion='on']) .rk-tile[data-rk-pressed] { transform: scale(var(--rk-tile-press-scale)); }
+  :root:not([data-motion='on']) [data-rk-press]:not(.rk-tile)[data-rk-pressed] { transform: scale(var(--rk-row-press-scale)); }
   :root:not([data-motion='on']) .rk-region[aria-busy='true']::before, :root:not([data-motion='on']) .rk-btn[data-rk-pending]::after { background-size: 100% 100%; background-color: var(--rk-text-contrast-medium); background-image: none; }
 }
 :root[data-motion='off'] :is(.rk-panorama, .rk-pivot) { scroll-behavior: auto; }
 :root[data-motion='off'] .rk-pulse { animation: none; }
 :root[data-motion='off'] .rk-tile[data-rk-pressed] { transform: scale(var(--rk-tile-press-scale)); }
+:root[data-motion='off'] [data-rk-press]:not(.rk-tile)[data-rk-pressed] { transform: scale(var(--rk-row-press-scale)); }
 :root[data-motion='off'] .rk-region[aria-busy='true']::before, :root[data-motion='off'] .rk-btn[data-rk-pending]::after { background-size: 100% 100%; background-color: var(--rk-text-contrast-medium); background-image: none; }

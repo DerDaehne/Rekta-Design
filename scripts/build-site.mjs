@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// Plain Node, no dependencies. Builds the demo site, Rekta Board, from site/ and the dist/ files it runs on.
+// Plain Node, no dependencies. Builds the showcase site from site/ and the dist/ files it runs on. Like the docs, the
+// site takes its numbers from the tokens at build time: {{token-name}} becomes the token's value ({{token-name|px}}
+// in px at the default text size), and
+// <!--@block--> becomes generated markup (status tiles, swatches, contrast pairs, the type scale, the token data).
 //
 //   node scripts/build-site.mjs                  runs the build, then writes _site/: site/*.html|css|js beside
 //                                                dist/rekta.* and dist/fonts/
@@ -12,7 +15,7 @@ import { copyFileSync, cpSync, createReadStream, mkdirSync, readFileSync, readdi
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildDist } from './build.mjs';
+import { buildDist, cssValue, loadTokens, tokenName, walk } from './build.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, '_site');
@@ -20,18 +23,69 @@ const dist = join(root, 'dist');
 const site = join(root, 'site');
 
 const version = buildDist();
+const tokens = loadTokens();
+
+// Every token as data: name, group, value (light, or comfortable), alt (dark, or compact), description, path.
+const GROUP = { color: 'colour', typography: 'type', spacing: 'space', radius: 'radius', size: 'size', density: 'density', motion: 'motion', timing: 'timing', layer: 'layer', breakpoint: 'breakpoint' };
+function tokenData() {
+  const out = new Map();
+  const add = (path, token, base, alt) => {
+    const name = tokenName(path), entry = out.get(name) || { name, group: GROUP[path[0]], path: base, description: token.$description || '' };
+    const v = cssValue(tokens, path, token);
+    if (alt) { entry.alt = v; entry.altLabel = alt; } else entry.value = v;
+    out.set(name, entry);
+  };
+  walk(tokens.color.light, ['color', 'light'], (p, t) => add(p, t, `color.*.${p.slice(2).join('.')}`));
+  walk(tokens.color.dark, ['color', 'dark'], (p, t) => add(p, t, `color.*.${p.slice(2).join('.')}`, 'dark'));
+  walk(tokens.density.comfortable, ['density', 'comfortable'], (p, t) => add(p, t, `density.*.${p.slice(2).join('.')}`));
+  walk(tokens.density.compact, ['density', 'compact'], (p, t) => add(p, t, `density.*.${p.slice(2).join('.')}`, 'compact'));
+  for (const g of ['typography', 'spacing', 'radius', 'size', 'motion', 'timing', 'layer', 'breakpoint']) walk(tokens[g], [g], (p, t) => add(p, t, p.join('.')));
+  return [...out.values()];
+}
+const data = tokenData();
+const byName = new Map(data.map((t) => [t.name, t]));
+const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const WORD = { info: 'active', success: 'done', warning: 'waiting', error: 'failed' };
+const blocks = {
+  status: () => ['info', 'success', 'warning', 'error'].map((st, i) => `<div class="rk-tile" data-status="${st}" style="--rk-i:${i}"><span class="rk-tile-word">${WORD[st]}</span>`
+    + `<span class="rk-stat"><b data-contrast="text-primary status-${st}-tile">–</b><span>primary text on ${st}</span></span>`
+    + `<span class="rk-meta tile-hex">${byName.get(`status-${st}-tile`).value} · ${byName.get(`status-${st}-tile`).alt}</span></div>`).join('\n'),
+  swatches: () => `<ul class="swatches">${['bg', 'surface', 'surface-2', 'text-primary', 'text-contrast-high', 'text-contrast-medium', 'text-contrast-low', 'accent', 'focus', 'disabled'].map((n) => {
+    const t = byName.get(n), v = t.value.startsWith('var(') ? 'text-primary' : t.value, a = t.alt.startsWith('var(') ? 'text-primary' : t.alt;
+    return `<li><span class="swatch" style="background:var(--rk-${n})"></span><code>${n}</code><span class="rk-meta">${esc(v)} · ${esc(a)}</span></li>`;
+  }).join('')}</ul>`,
+  pairs: () => `<table class="rk-table pairs"><thead><tr><th scope="col">pair</th><th scope="col" class="rk-num">needs</th><th scope="col" class="rk-num">now</th></tr></thead><tbody>${[
+    ['text-primary', 'bg', 4.5], ['text-primary', 'surface', 4.5], ['text-contrast-high', 'bg', 4.5], ['text-contrast-high', 'surface', 4.5],
+    ['text-contrast-medium', 'bg', 3], ['focus', 'bg', 3], ['on-accent', 'accent', 4.5],
+  ].map(([fg, bg, min]) => `<tr><th scope="row"><code>${fg}</code> on <code>${bg}</code></th><td class="rk-num">${min} : 1</td><td class="rk-num"><b data-contrast="${fg} ${bg}" data-min="${min}">–</b></td></tr>`).join('')}</tbody></table>`,
+  typescale: () => `<ul class="rk-rows scale">${data.filter((t) => t.group === 'type' && t.name.startsWith('font-size-')).map((t) => `<li><span class="scale-sample" style="font-size:var(--rk-${t.name})">Rekta</span><span><code>${t.name.slice(10)}</code> <span class="rk-meta">${esc(t.value)}</span></span></li>`).join('')}</ul>`,
+  'tokens-data': () => `<script type="application/json" id="tokens-data">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`,
+};
+function render(text) {
+  return text
+    .replace(/<!--@([\w-]+)-->/g, (_, n) => { if (!blocks[n]) throw new Error(`unknown block <!--@${n}-->`); return blocks[n](); })
+    .replace(/\{\{([\w-]+)(\|px)?\}\}/g, (_, n, px) => {
+      const t = byName.get(n);
+      if (!t) throw new Error(`unknown token {{${n}}}`);
+      return esc(px ? t.value.replace(/(-?[\d.]+)rem\b/g, (m, v) => `${+v * 16}px`) : t.value);
+    });
+}
+
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
-for (const f of readdirSync(site)) if (/\.(html|css|js)$/.test(f)) copyFileSync(join(site, f), join(out, f));
+for (const f of readdirSync(site)) {
+  if (/\.html$/.test(f)) writeFileSync(join(out, f), render(readFileSync(join(site, f), 'utf8')));
+  else if (/\.(css|js)$/.test(f)) copyFileSync(join(site, f), join(out, f));
+}
 for (const f of readdirSync(dist)) if (f.startsWith('rekta.')) copyFileSync(join(dist, f), join(out, f));
 cpSync(join(dist, 'fonts'), join(out, 'fonts'), { recursive: true });
-console.log(`✓ _site/ written (Rekta Board on Rekta Design ${version})`);
+console.log(`✓ _site/ written (Rekta Design ${version} showcase)`);
 
 const single = process.argv.indexOf('--single');
 if (single > 0) {
   const target = process.argv[single + 1];
   if (!target) throw new Error('--single needs a file name');
-  const html = readFileSync(join(site, 'index.html'), 'utf8');
+  const html = readFileSync(join(out, 'index.html'), 'utf8');
   const read = (f) => readFileSync(join(out, f), 'utf8');
   const fonts = read('rekta.fonts.css').replace(/url\(fonts\/([\w.-]+)\)/g, (_, f) => `url(data:font/woff2;base64,${readFileSync(join(out, 'fonts', f)).toString('base64')})`);
   const style = (f) => {
@@ -48,7 +102,8 @@ if (single > 0) {
   const inline = (part) => part
     .replace(/<link rel="stylesheet" href="([\w.-]+)">/g, (_, f) => style(f))
     .replace(/<script src="([\w.-]+)"><\/script>/g, (_, f) => script(f));
-  const page = inline(head).replace(/^\s*<meta[^>]*>\n/gm, '') + inline(body);
+  // The dist files do not travel with one page, so their download links become plain names.
+  const page = (inline(head).replace(/^\s*<meta[^>]*>\n/gm, '') + inline(body)).replace(/<a href="(rekta\.[\w.]+)" download>([^<]*)<\/a>/g, '<code>$2</code>');
   writeFileSync(target, page.trim() + '\n');
   console.log(`✓ ${target} written (${Math.round(page.length / 1024)} kB, self-contained)`);
 }
