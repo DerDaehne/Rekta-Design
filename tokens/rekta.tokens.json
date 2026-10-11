@@ -43,7 +43,7 @@
       "accent": {
         "$type": "color",
         "$value": "{color.light.text.primary}",
-        "$description": "Optional product accent slot: primary button fill, checked controls, a link colour if the product wants one. Defaults to ink, so Rekta stays neutral until a product overrides it per theme. Never a large fill, never a tile, never a status. Must hold 3:1 on bg and surface and stay clearly apart from every status-*-full hue."
+        "$description": "Optional product accent slot: primary button fill, checked controls, a selected item's fill, a link colour if the product wants one. Defaults to ink, so Rekta stays neutral until a product overrides it per theme. Never a tile, never a status; a selected row is the largest fill it takes. Must hold 3:1 on bg and surface and stay clearly apart from every status-*-full hue."
       },
       "on-accent": {
         "$type": "color",
@@ -187,7 +187,7 @@
       "accent": {
         "$type": "color",
         "$value": "{color.dark.text.primary}",
-        "$description": "Optional product accent slot: primary button fill, checked controls, a link colour if the product wants one. Defaults to ink, so Rekta stays neutral until a product overrides it per theme. Never a large fill, never a tile, never a status. Must hold 3:1 on bg and surface and stay clearly apart from every status-*-full hue."
+        "$description": "Optional product accent slot: primary button fill, checked controls, a selected item's fill, a link colour if the product wants one. Defaults to ink, so Rekta stays neutral until a product overrides it per theme. Never a tile, never a status; a selected row is the largest fill it takes. Must hold 3:1 on bg and surface and stay clearly apart from every status-*-full hue."
       },
       "on-accent": {
         "$type": "color",
@@ -737,7 +737,7 @@
       "pivot-glide": {
         "$type": "duration",
         "$value": "500ms",
-        "$description": "The pivot strip gliding so the newly active title sits at the left edge. Used with ease-pivot-glide."
+        "$description": "The pivot strip gliding by the newly active title's place in the order. Used with ease-pivot-glide."
       },
       "pivot-size": {
         "$type": "duration",
@@ -848,6 +848,21 @@
         "$type": "number",
         "$value": 0.97,
         "$description": "How far a pressed tile sinks back."
+      },
+      "row-tilt": {
+        "$type": "number",
+        "$value": 2,
+        "$extensions": {
+          "rekta": {
+            "unit": "deg"
+          }
+        },
+        "$description": "A selectable row or entry tilts this far towards where it is pressed (a tile tilts tile-tilt): long and low, it needs less to read as a nudge. Degrees."
+      },
+      "row-press-scale": {
+        "$type": "number",
+        "$value": 0.99,
+        "$description": "How far a selectable row or entry sinks while pressed."
       }
     }
   },

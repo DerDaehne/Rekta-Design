@@ -9,14 +9,16 @@ The others render smaller and dimmer, in their fixed positions before
 and after the active one.
 
 Changing the active title does **not** reorder the strip and does
-**not** slide the new active title to the front. Instead, the whole
-strip glides so the newly active title sits at the strip's left edge —
-titles that come before it in the fixed order visibly scroll off-screen
-to the left, the same way the panels below do; nothing clips them out
-of view early. A trailing spacer after the last title means even the
-last title in the order can still reach the left edge. Selecting a
-title (including a nested pivot's) also moves the content it names to
-the same flush-left position, never centred or right-aligned.
+**not** slide the new active title to the front. Instead, a strip that
+does not fit glides by the active title's **place in the order**: the
+first title shows the start of the strip, the last its end, and the
+titles between move it in proportion. So the strip moves less than the
+content below it, and the titles just before the active one stay
+visible and in reach: one click goes back a step. The active title is
+always whole on screen; titles further away run off either edge,
+clipped where the edge cuts them. A strip that fits holds still.
+Selecting a title (including a nested pivot's) moves the content it
+names flush left, never centred or right-aligned.
 
 Two motions play at once, not one after the other: the strip's glide
 uses a pronounced ease-in-out with clear acceleration and deceleration;

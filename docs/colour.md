@@ -4,8 +4,12 @@
 
 The ground (`color.*.bg`), surface (`color.*.surface`) and its hover
 step (`color.*.surface-2`) are all neutral — near-white/near-black and
-two close greys. There is no selectable brand accent colour; Rekta Design
-does not pick a hue to represent "the product." Hierarchy between
+two close greys. Rekta Design does not pick a hue to represent "the
+product": its one product slot, the **accent** (`color.*.accent` with
+`on-accent`), is ink until a product sets it per theme. It fills the
+primary button, checked controls and a selected item, never a tile or a
+status, and must hold 3:1 on the ground and stay clearly apart from
+every status hue. Hierarchy between
 content comes from typography, spacing and hairlines
 (`color.*.text.contrast-low`), not from a tint.
 
@@ -92,9 +96,11 @@ emphasis, selection, branding or a chart series.
 
 ## Selection and floating surfaces
 
-- **Selected rows** take the `surface` fill and a checkbox at the leading
-  edge. Selection is never a status colour and never the accent as a
-  fill: a selected failed job still reads as failed.
+- **Selected items** take the `accent` fill with `on-accent` text and a
+  checkmark without a box at the leading edge, the Metro way. A status
+  inside a selected item keeps its word and its mark (edged in
+  `on-accent`), so a selected failed job still reads as failed.
+  Selection is never a status colour.
 - **Floating surfaces** (menus, the command palette, the places list, a
   combobox's list) are `bg` with a 1px `text-contrast-medium` edge and
   `radius-s`. No shadow: the edge parts them from what is below in both

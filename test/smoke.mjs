@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Clicks through Rekta Board (_site/) in Chromium and checks the behaviour contract: routes and back, focus, the
-// turnstile, the panorama's keyboard and wheel, toasts, the banner, prefs, the sheet, a phone and reduced motion.
+// Clicks through the showcase (_site/) in Chromium and checks the behaviour contract: places, back and focus, the
+// turnstile, the panorama's keys and wheel, Metro selection, tables, filters, the split, menus, the palette, toasts,
+// the banner, forms and their guard, prefs, sheets, a phone, and reduced motion.
 // Needs Playwright, which the repository does not depend on:
 //   PLAYWRIGHT=/path/to/playwright/index.mjs node test/smoke.mjs     (default: import 'playwright')
 // Run node scripts/build-site.mjs first. Screenshots go to site-shots/. Exit 1 on any failed check or page error.
@@ -31,9 +32,7 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const browser = await chromium.launch();
 const errors = [], failures = [];
 let passed = 0;
-function ok(cond, what, detail = '') {
-  if (cond) passed += 1; else failures.push(`${what}${detail ? ` (${detail})` : ''}`);
-}
+function ok(cond, what, detail = '') { if (cond) passed += 1; else failures.push(`${what}${detail !== '' ? ` (${detail})` : ''}`); }
 async function open(opts = {}, path = '') {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference', ...opts });
   const p = await ctx.newPage();
@@ -45,12 +44,15 @@ async function open(opts = {}, path = '') {
   return p;
 }
 const visible = (p, place) => p.evaluate((n) => !document.querySelector(`[data-rk-place="${n}"]`).hidden, place);
-const focused = (p) => p.evaluate(() => document.activeElement.id || document.activeElement.className || document.activeElement.tagName);
+const focused = (p) => p.evaluate(() => { const a = document.activeElement; return a.id || a.dataset.name || a.className || a.tagName; });
 const text = async (p, sel) => { const el = await p.$(sel); return el ? (await el.textContent()).trim() : '(none)'; };
 const toast = (p) => text(p, '.rk-toast:not([data-rk-phase]) .rk-toast-msg');
+const isOpen = (p, sel) => p.evaluate((s) => document.querySelector(s).matches(':popover-open'), sel);
+const sheetTitle = (p) => p.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return d ? d.querySelector('h2').textContent : null; });
+const go = async (p, id) => { await p.click(`#nav a[href="#${id}"]`); await p.waitForTimeout(900); };
 const TURN = 1300;
 
-// Rest looks: no horizontal page overflow in either theme, on a desktop and a phone.
+// Rest looks: no horizontal page overflow in either theme, on a desktop, a phone and a short window.
 for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 844, 'light'], [390, 844, 'dark'], [844, 390, 'light']]) {
   const p = await open({ viewport: { width: w, height: h }, colorScheme: scheme, hasTouch: w < 760 || h < 481 });
   ok(!(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `${w}x${h} ${scheme}: no horizontal overflow`);
@@ -58,374 +60,317 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
   await p.close();
 }
 
-// Desktop click-through.
 const p = await open();
 ok(await p.evaluate(() => getComputedStyle(document.querySelector('#pan')).display === 'flex'), 'desktop panorama is sideways');
 ok(await p.evaluate(() => document.querySelector('#back').hidden), 'app bar back hidden at home');
+ok(await p.evaluate(() => { const n = document.querySelector('#nav'); return n.scrollHeight <= n.clientHeight + 1; }), 'the section strip is not cut');
 
-// Tile → place: the turnstile, the address, the title, focus.
-await p.click('#tile-import');
-await p.waitForTimeout(120);
+// Generated from the tokens, measured live.
+const count = await p.evaluate(() => JSON.parse(document.querySelector('#tokens-data').textContent).length);
+ok((await text(p, '#token-count')) === String(count), 'the tokens tile counts the tokens');
+ok(await p.evaluate(() => [...document.querySelectorAll('[data-contrast]')].every((b) => /^\d+\.\d : 1$/.test(b.textContent))), 'contrast is measured live');
+ok(!(await p.evaluate(() => /\{\{|<!--@/.test(document.body.innerHTML))), 'every placeholder was filled at build time');
+
+// Tile → place: the turnstile, the address, the title, focus; the crumb back.
+await p.click('#tile-notes'); await p.waitForTimeout(120);
 ok(await p.evaluate(() => document.querySelectorAll('[data-rk-turn]').length > 3), 'leaving units turn');
 await p.screenshot({ path: join(shots, 'turn-mid.png') });
 await p.waitForTimeout(TURN);
-ok(await visible(p, 'import') && !(await visible(p, 'board')), 'import place shows, board hides');
-ok((await p.evaluate(() => location.hash)) === '#import', 'address is #import');
-ok((await p.title()) === 'Nightly import · Rekta Board', 'title names the place', await p.title());
-ok((await focused(p)) === 'import-title', 'focus on the place title', await focused(p));
-ok(await p.evaluate(() => !document.querySelector('[data-rk-turn], [data-rk-pressed]')), 'no turn or press state left');
-await p.screenshot({ path: join(shots, 'place-import.png') });
+ok(await visible(p, 'notes') && !(await visible(p, 'home')), 'the release notes show, home hides');
+ok((await p.evaluate(() => location.hash)) === '#notes' && (await p.title()) === 'Rekta 0.2 · Rekta Design', 'address and title name the place', await p.title());
+ok((await focused(p)) === 'notes-title', 'focus on the place title', await focused(p));
+await p.click('[data-rk-place=notes] .rk-crumb'); await p.waitForTimeout(TURN);
+ok(await visible(p, 'home') && (await p.evaluate(() => location.hash)) === '', 'the crumb goes back home');
+ok((await focused(p)) === 'tile-notes', 'focus back on the opening tile', await focused(p));
 
-await p.click('#retry'); await p.waitForTimeout(400);
-ok((await toast(p)).startsWith('Nightly import retrying'), 'retry toast', await toast(p));
-ok((await p.getAttribute('#tile-import', 'data-status')) === 'info', 'board tile follows the retry');
-
-// The crumb goes back (the board is the place below): focus returns to the opening tile.
-await p.click('[data-rk-place=import] .rk-crumb'); await p.waitForTimeout(TURN);
-ok(await visible(p, 'board'), 'crumb returns to the board');
-ok((await p.evaluate(() => location.hash)) === '', 'address is the board again');
-ok((await focused(p)) === 'tile-import', 'focus back on the opening tile', await focused(p));
-ok((await p.evaluate(() => history.state.rk.index)) === 0, 'crumb used history (index 0)');
-
-// Browser back and forward play the turnstile both ways.
-await p.click('#tile-queue'); await p.waitForTimeout(TURN);
-ok(await visible(p, 'queue'), 'queue place shows');
-ok(await p.evaluate(() => document.querySelectorAll('#running .rk-ghost').length > 0), 'queue rows load behind still placeholders');
-await p.waitForTimeout(1400);
-ok(await p.evaluate(() => !document.querySelector('#queue-region').hasAttribute('aria-busy') && document.querySelectorAll('#running b').length === 3), 'queue rows arrive and the line goes');
+// Browser back and forward; Escape; a navigation during a turn.
+await p.click('#tile-tokens'); await p.waitForTimeout(TURN);
+ok(await visible(p, 'tokens'), 'the tokens place shows');
+await p.screenshot({ path: join(shots, 'tokens.png') });
 await p.goBack(); await p.waitForTimeout(TURN);
-ok(await visible(p, 'board'), 'browser back shows the board');
+ok(await visible(p, 'home'), 'browser back shows home');
 await p.goForward(); await p.waitForTimeout(TURN);
-ok(await visible(p, 'queue'), 'browser forward shows the queue');
+ok(await visible(p, 'tokens'), 'browser forward shows the tokens');
 await p.keyboard.press('Escape'); await p.waitForTimeout(TURN);
-ok(await visible(p, 'board'), 'Escape goes back');
-ok((await focused(p)) === 'tile-queue', 'Escape returns focus to the tile', await focused(p));
-
-// A navigation during a turn is never refused: the running turn finishes first.
-await p.click('#tile-reviews'); await p.waitForTimeout(80);
+ok(await visible(p, 'home') && (await focused(p)) === 'tile-tokens', 'Escape goes back, focus on the tile', await focused(p));
+await p.click('#tile-notes'); await p.waitForTimeout(80);
 await p.goBack(); await p.waitForTimeout(TURN + 300);
-ok(await visible(p, 'board') && !(await visible(p, 'reviews')), 'back during a turn lands on the board');
-ok(await p.evaluate(() => document.querySelectorAll('[data-rk-place]:not([hidden])').length === 1), 'exactly one place shows');
+ok(await visible(p, 'home') && (await p.evaluate(() => document.querySelectorAll('[data-rk-place]:not([hidden])').length === 1)), 'back during a turn lands home, one place shows');
 
-// Panorama: keyboard section jumps, pivot follows, focus on the section heading from the pivot.
+// Panorama: keys, the pivot, the wheel; the sections-seen tile.
 await p.focus('#pan');
 await p.keyboard.press('End'); await p.waitForTimeout(900);
-ok((await p.getAttribute('#nav a[href="#look"]', 'aria-current')) === 'location', 'End jumps to the last section');
+ok((await p.getAttribute('#nav a[href="#start"]', 'aria-current')) === 'location', 'End jumps to the last section');
 await p.keyboard.press('Home'); await p.waitForTimeout(900);
 ok((await p.getAttribute('#nav a[href="#overview"]', 'aria-current')) === 'location', 'Home jumps to the first section');
-await p.click('#nav a[href="#jobs"]'); await p.waitForTimeout(900);
-ok((await focused(p)) === 'jobs-title', 'a pivot jump focuses the section heading', await focused(p));
-ok((await p.evaluate(() => location.hash)) === '', 'a section jump changes no address');
-
-// Wheel: a vertical wheel over the panorama moves it sideways.
-await p.click('#nav a[href="#overview"]'); await p.waitForTimeout(900);
+await go(p, 'lists');
+ok((await focused(p)) === 'lists-title' && (await p.evaluate(() => location.hash)) === '', 'a pivot jump focuses the heading, changes no address', await focused(p));
+ok(+(await text(p, '#seen-n')) >= 2, 'sections seen counts', await text(p, '#seen-n'));
+const strip = () => p.evaluate(() => { const n = document.querySelector('#nav'), a = n.querySelector('[aria-current]'), b = a.previousElementSibling, w = n.getBoundingClientRect(); return { active: a.getBoundingClientRect().left >= w.left && a.getBoundingClientRect().right <= w.right, before: b.getBoundingClientRect().left >= w.left, left: Math.round(a.getBoundingClientRect().left) }; });
+const s1 = await strip();
+ok(s1.active && s1.before && s1.left > 200, 'the strip glides by place: the active title whole, the one before it in reach', JSON.stringify(s1));
+await go(p, 'overview');
 const x0 = await p.evaluate(() => document.querySelector('#pan').scrollLeft);
-await p.mouse.move(900, 600); await p.mouse.wheel(0, 300); await p.waitForTimeout(300);
-ok((await p.evaluate(() => document.querySelector('#pan').scrollLeft)) > x0, 'vertical wheel moves the panorama sideways');
+await p.mouse.move(700, 500); await p.mouse.wheel(0, 300); await p.waitForTimeout(300);
+ok((await p.evaluate(() => document.querySelector('#pan').scrollLeft)) > x0, 'a vertical wheel moves the panorama sideways');
+ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures frames', await text(p, '[data-live=fps] [data-v]'));
 
-// Jobs: the switch sets state, the row moves; archive, undo by button and by Ctrl+Z, hold, expiry.
-await p.click('#nav a[href="#jobs"]'); await p.waitForTimeout(900);
-await p.click('#open li:first-child .rk-switch input'); await p.waitForTimeout(500);
-ok((await p.evaluate(() => [...document.querySelectorAll('#done .job-name')].map((b) => b.textContent)[0])) === 'Nightly import', 'switch moves the job to done');
-await p.click('#archive'); await p.waitForTimeout(400);
-ok((await toast(p)) === '3 jobs archived, 5 seconds to', 'archive toast', await toast(p));
-await p.waitForTimeout(2100);
-ok(['3', '2'].includes(await text(p, '.rk-toast:not([data-rk-phase]) .rk-toast-count')), 'undo window counts down');
-await p.click('.rk-toast:not([data-rk-phase]) .rk-toast-act'); await p.waitForTimeout(500);
-ok((await p.evaluate(() => document.querySelectorAll('#done > li').length)) === 3, 'undo restores the rows');
-ok((await focused(p)) === 'archive', 'focus returns to the control that raised the toast', await focused(p));
-await p.waitForTimeout(300); await p.click('#archive'); await p.waitForTimeout(300);
-await p.click('#jobs-title'); await p.keyboard.press('Control+z'); await p.waitForTimeout(500);
-ok((await p.evaluate(() => document.querySelectorAll('#done > li').length)) === 3, 'Ctrl+Z undoes');
-await p.click('#f-name'); await p.click('#archive'); await p.waitForTimeout(300);
-await p.focus('#f-name'); await p.keyboard.press('Control+z'); await p.waitForTimeout(300);
-ok((await p.evaluate(() => document.querySelectorAll('#done > li').length)) === 0, 'Ctrl+Z in a text field is the field\'s');
-await p.hover('.rk-toast:not([data-rk-phase])'); await p.waitForTimeout(2500);
-ok(['5', '4'].includes(await text(p, '.rk-toast:not([data-rk-phase]) .rk-toast-count')), 'hover holds the window');
-await p.mouse.move(5, 5); await p.waitForTimeout(5600);
-ok((await p.evaluate(() => document.querySelectorAll('.rk-toast').length)) === 0, 'the toast expires');
-ok((await p.getAttribute('#archive', 'aria-disabled')) === 'true' && (await text(p, `#${await p.getAttribute('#archive', 'data-rk-why')}`)) === 'Archive needs at least one done job.', 'archive says why it cannot act');
+// Tiles: a button tile opens a sheet.
+await go(p, 'tiles');
+await p.click('#tile-presses'); await p.waitForTimeout(300);
+ok((await sheetTitle(p)) === 'A button tile opens a sheet.' && (await text(p, '#presses')) !== '0', 'a button tile opens a sheet; presses count');
+await p.keyboard.press('Escape'); await p.waitForTimeout(300);
 
-// Menu: the keyboard, the invoker, a choice; refresh shows the loading line after its delay, never at once.
-await p.focus('#jobs-more'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
-const act = () => p.evaluate(() => document.activeElement.dataset.act || document.activeElement.id);
-ok(await p.evaluate(() => document.querySelector('#jobs-menu').matches(':popover-open')) && (await p.getAttribute('#jobs-more', 'aria-expanded')) === 'true', 'Enter opens the menu');
-ok((await act()) === 'refresh', 'the first item takes focus', await act());
-await p.keyboard.press('ArrowDown');
-ok((await act()) === 'show-done', '↓ moves down');
-await p.keyboard.press('ArrowUp'); await p.keyboard.press('ArrowUp');
-ok((await act()) === 'print', '↑ wraps to the end');
-await p.keyboard.press('e');
-ok((await act()) === 'export', 'a letter jumps to its item');
+// Panorama section: a pivot with facets.
+await go(p, 'panorama');
+await p.click('#tab-2'); await p.waitForTimeout(500);
+ok(await p.evaluate(() => !document.querySelector('#facet-2').hidden && document.querySelector('#facet-0').hidden), 'a facet shows its panel');
+ok(/sideways · 1440/.test(await text(p, '#env-class')), 'the environment reads out', await text(p, '#env-class'));
+
+// Motion: reorder, toast, reduce motion.
+await go(p, 'motion');
+await p.click('#flip li:first-child input'); await p.waitForTimeout(500);
+ok((await p.evaluate(() => document.querySelector('#flip li:last-child span').textContent)) === 'write the release notes', 'a finished row moves to the end');
+await p.click('#m-toast'); await p.waitForTimeout(300);
+ok((await toast(p)).startsWith('Something happened'), 'a toast');
+await p.check('#m-off'); await p.waitForTimeout(200);
+ok((await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-duration-short').trim())) === '0s', 'reduce motion zeroes durations');
+await p.uncheck('#m-off'); await p.waitForTimeout(200);
+
+// Lists: Metro selection. A click selects and shows; Ctrl+click starts the mode; then clicks add and remove.
+await go(p, 'lists');
+const row = (n) => `#comp-body tr:nth-child(${n})`;
+const sel = () => p.evaluate(() => [...document.querySelectorAll('#comp-body tr[aria-selected="true"]')].map((r) => r.dataset.name));
+const mode = () => p.evaluate(() => document.querySelector('#bar').hasAttribute('data-rk-selecting'));
+const box = await p.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.left + r.width * 0.8, y: r.top + r.height / 2 }; }, row(2));
+await p.mouse.move(box.x, box.y); await p.mouse.down(); await p.waitForTimeout(60);
+ok(await p.evaluate((s) => document.querySelector(s).hasAttribute('data-rk-pressed'), row(2)), 'a row nudges where it is pressed');
+await p.mouse.up(); await p.waitForTimeout(350);
+ok(JSON.stringify(await sel()) === '["Sparkline"]' && (await text(p, '#comp-shown')).startsWith('Shown: Sparkline'), 'a click selects one row and shows it', `${await sel()} / ${await text(p, '#comp-shown')}`);
+ok(await p.evaluate((s) => {
+  const r = document.querySelector(s), probe = document.createElement('i');
+  probe.style.color = 'var(--rk-accent)'; document.body.appendChild(probe);
+  const c = getComputedStyle(probe).color; probe.remove();
+  return getComputedStyle(r).backgroundColor === c;
+}, row(2)), 'a selected row takes the accent');
+ok(await p.evaluate((s) => getComputedStyle(document.querySelector(`${s} .rk-check`), '::before').content !== 'none', row(2)), 'a selected row shows its checkmark');
+await p.screenshot({ path: join(shots, 'selected.png') });
+ok(!(await mode()), 'one selection is not the selection mode');
+await p.click(row(4), { modifiers: ['Control'] }); await p.waitForTimeout(200);
+ok((await sel()).length === 2 && await mode() && (await text(p, '.rk-ab-count')) === '2 selected', 'Ctrl+click adds and starts the mode; the app bar carries it', `${await sel()} / ${await text(p, '.rk-ab-count')}`);
+await p.click(row(5)); await p.waitForTimeout(150);
+ok((await sel()).length === 3, 'in the mode a plain click adds');
+await p.screenshot({ path: join(shots, 'selecting.png') });
+await p.click(row(5)); await p.waitForTimeout(150);
+ok((await sel()).length === 2, 'and removes');
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
-ok(!(await p.evaluate(() => document.querySelector('#jobs-menu').matches(':popover-open'))) && (await act()) === 'jobs-more', 'Escape closes and returns focus');
-await p.click('#jobs-more'); await p.waitForTimeout(200); await p.click('#jobs-more'); await p.waitForTimeout(200);
-ok(!(await p.evaluate(() => document.querySelector('#jobs-menu').matches(':popover-open'))), 'a second click on the trigger closes the menu');
-await p.click('#jobs-more'); await p.waitForTimeout(200);
-const menuBox = await p.evaluate(() => { const m = document.querySelector('#jobs-menu').getBoundingClientRect(), t = document.querySelector('#jobs-more').getBoundingClientRect(); return { top: m.top, below: t.bottom, inView: m.right <= innerWidth && m.left >= 0 }; });
-ok(menuBox.top >= menuBox.below && menuBox.inView, 'the menu sits below its trigger, inside the window', JSON.stringify(menuBox));
-await p.click('#jobs-menu [data-act=refresh]'); await p.waitForTimeout(100);
-const line = () => p.evaluate(() => getComputedStyle(document.querySelector('#jobs-region'), '::before').visibility);
-ok((await p.getAttribute('#jobs-region', 'aria-busy')) === 'true' && (await line()) === 'hidden', 'loading: no line before the delay');
+ok((await sel()).length === 0 && !(await mode()) && await visible(p, 'home'), 'Escape ends the mode, not the place');
+await p.click(row(1)); await p.click(row(3), { modifiers: ['Shift'] }); await p.waitForTimeout(150);
+ok((await sel()).length === 3, 'Shift+click selects a range', await sel());
+await p.keyboard.press('Escape');
+await p.focus(row(1)); await p.keyboard.press('ArrowDown'); await p.keyboard.press(' '); await p.waitForTimeout(150);
+ok(JSON.stringify(await sel()) === '["Sparkline"]', '↓ moves, Space selects', await sel());
+await p.keyboard.press('Escape');
+await p.click('#comp-table thead th:nth-child(2) .rk-sort'); await p.waitForTimeout(500);
+ok((await p.evaluate(() => document.querySelector('#comp-body tr').dataset.name)) === 'App bar', 'sort by component');
+await p.click('#comp-status'); await p.waitForTimeout(200); await p.click('#comp-status-menu [data-v=warning]'); await p.waitForTimeout(200);
+ok((await text(p, '#comp-status')) === 'status: waiting' && (await p.evaluate(() => [...document.querySelectorAll('#comp-body tr')].filter((r) => !r.hidden).length)) === 3, 'a filter keeps the waiting components', await text(p, '#comp-status'));
+await p.keyboard.press('Escape'); await p.click('#comp-clear'); await p.waitForTimeout(200);
+await p.click('#comp-more'); await p.waitForTimeout(200); await p.click('#comp-menu [data-act=refresh]'); await p.waitForTimeout(100);
+const line = () => p.evaluate(() => getComputedStyle(document.querySelector('#comp-region'), '::before').visibility);
+ok((await p.getAttribute('#comp-region', 'aria-busy')) === 'true' && (await line()) === 'hidden', 'loading: no line before the delay');
 await p.waitForTimeout(400);
 ok((await line()) === 'visible', 'loading: the line after the delay');
 await p.waitForTimeout(1300);
-ok(!(await p.evaluate(() => document.querySelector('#jobs-region').hasAttribute('aria-busy'))) && (await toast(p)) === 'Jobs refreshed.', 'refresh ends');
-await p.click('#jobs-more'); await p.waitForTimeout(200); await p.click('#jobs-menu [data-act=show-done]'); await p.waitForTimeout(200);
-ok(await p.evaluate(() => document.querySelector('#done').hidden), 'a checkbox item toggles');
-ok(await p.evaluate(() => document.querySelector('#jobs-menu').matches(':popover-open')), 'a checkbox item leaves the menu open');
-ok((await p.getAttribute('#jobs-menu [data-act=show-done]', 'aria-checked')) === 'false', 'the checkbox item shows its state');
-await p.click('#jobs-menu [data-act=show-done]'); await p.waitForTimeout(200);
-await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+ok((await toast(p)) === 'Components refreshed.', 'refresh ends with a toast');
+await p.click('#comp-more'); await p.waitForTimeout(200); await p.click('#comp-menu [data-act=fail]'); await p.waitForTimeout(1900);
+ok((await p.getAttribute('#comp-error', 'data-status')) === 'error', 'a failed refresh says so in the region');
+await p.click('#comp-retry'); await p.waitForTimeout(1600);
+ok(!(await p.$('#comp-error')), 'retry loads again');
+const picks = () => p.evaluate(() => [...document.querySelectorAll('#pick-rows [aria-selected="true"]')].map((r) => r.dataset.name));
+await p.click('#pick-rows li:nth-child(1)'); await p.waitForTimeout(300);
+ok(JSON.stringify(await picks()) === '["Nightly import"]' && (await text(p, '#pick-shown')) === 'Shown: Nightly import.', 'rows: a click selects and shows');
+ok(await p.evaluate(() => getComputedStyle(document.querySelector('#pick-rows li:nth-child(1)'), '::before').content !== 'none'), 'rows: a checkmark without a box');
+await p.click('#pick-rows li:nth-child(3)', { modifiers: ['Control'] }); await p.waitForTimeout(200);
+ok((await picks()).length === 2 && (await text(p, '.rk-ab-count')) === '2 selected' && await mode(), 'rows: Ctrl+click starts the mode');
+await p.screenshot({ path: join(shots, 'rows-selected.png') });
+await p.click('#sel-copy'); await p.waitForTimeout(300);
+ok(/^(Copied 2 names\.|Copying needs clipboard access; 2 selected\.)$/.test(await toast(p)), 'the app bar acts on the selection', await toast(p));
+await p.click('#pick-rows li:nth-child(1)'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+ok((await picks()).length === 0 && !(await mode()), 'rows: Escape ends the mode');
 
-// Facets: arrow keys, nothing added to history.
-const len = await p.evaluate(() => history.length);
-await p.click('#nav a[href="#facets"]'); await p.waitForTimeout(900);
-await p.click('#tab-0'); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(400);
-ok((await text(p, '[role=tab][aria-selected=true]')) === 'activity', 'ArrowRight selects the next facet');
-ok((await p.evaluate(() => history.length)) === len, 'facets add no history entries');
-
-// Controls: a form that checks late, sums up what needs attention, corrects early, and hears the server.
-await p.click('#nav a[href="#controls"]'); await p.waitForTimeout(900);
-ok(!(await p.getAttribute('#time-field', 'data-status')), 'a field is not marked before it is checked');
-await p.fill('#f-name', ''); await p.click('#save'); await p.waitForTimeout(300);
-ok((await text(p, '.rk-errors > p')) === '2 fields need attention' && (await p.evaluate(() => document.activeElement.classList.contains('rk-errors'))), 'sending with errors: a summary takes focus');
-ok((await p.evaluate(() => document.querySelectorAll('.rk-errors a').length)) === 2 && (await p.getAttribute('#time-field', 'data-status')) === 'error', 'the summary links each field, each field shows its error');
-await p.click('.rk-errors a[href="#f-time"]'); await p.waitForTimeout(100);
-ok((await focused(p)) === 'f-time' && (await p.evaluate(() => location.hash)) === '', 'a summary link focuses its field, the address stays');
-await p.fill('#f-time', '02:30'); await p.waitForTimeout(100);
-ok(!(await p.getAttribute('#time-field', 'data-status')), 'a field in error is corrected as you type');
-await p.fill('#f-name', 'Release notes'); await p.click('#save'); await p.waitForTimeout(1300);
-ok((await text(p, '.rk-errors > p')) === '1 field needs attention' && (await p.evaluate(() => document.querySelector('#f-name').closest('.rk-field').querySelector('.rk-hint').textContent)).includes('already exists'), 'the server says no at the field');
-ok((await p.getAttribute('#delete-schedule', 'aria-disabled')) === 'true' && (await p.evaluate(() => document.getElementById(document.querySelector('#delete-schedule').dataset.rkWhy).textContent)).startsWith('Only the owner'), 'a disabled control says why');
-await p.fill('#f-name', 'Nightly import'); await p.click('#save'); await p.waitForTimeout(100);
-ok((await text(p, '#save')) === 'saving schedule…' && (await p.getAttribute('#save', 'aria-disabled')) === 'true', 'pending: the button says what it does');
-await p.waitForTimeout(1200);
-ok((await toast(p)).startsWith('Schedule saved') && (await text(p, '#save')) === 'save schedule', 'save toast, label back');
-ok(!(await p.$('.rk-errors')), 'a clean send clears the summary');
-
-// Leaving with unsaved input asks first: keep editing stays, discard leaves and puts the form back.
-await p.fill('#f-name', 'Nightly import 2');
-await p.click('#nav a[href="#overview"]'); await p.waitForTimeout(900);
-await p.click('#tile-import'); await p.waitForTimeout(400);
-const sheetOpen = () => p.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return d ? d.querySelector('h2').textContent : null; });
-ok((await sheetOpen()) === 'Leave without saving?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep editing', 'leaving with changes asks; keep editing is the safe answer');
-await p.keyboard.press('Escape'); await p.waitForTimeout(400);
-ok(await visible(p, 'board') && (await p.inputValue('#f-name')) === 'Nightly import 2', 'Escape keeps editing');
-await p.click('#tile-import'); await p.waitForTimeout(400);
-await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(TURN);
-ok(await visible(p, 'import') && (await p.inputValue('#f-name')) === 'Nightly import', 'discard leaves and puts the form back');
-await p.keyboard.press('Escape'); await p.waitForTimeout(TURN);
-await p.fill('#f-name', 'Nightly import 3');
-await p.goForward(); await p.waitForTimeout(600);
-ok((await sheetOpen()) === 'Leave without saving?' && (await p.evaluate(() => location.hash)) === '' && await visible(p, 'board'), 'the browser\'s forward asks too, and waits on the board');
-await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(TURN);
-ok(await visible(p, 'import') && (await p.evaluate(() => location.hash)) === '#import', 'discard lets the browser\'s step happen');
-await p.keyboard.press('Escape'); await p.waitForTimeout(TURN);
-
-// Banner: halted wins over paused, the remedy steps down, the end is a toast.
-await p.click('#ab-stop'); await p.waitForTimeout(500);
-ok((await text(p, '.rk-banner-word')) === 'halted' && (await p.getAttribute('#banner', 'data-status')) === 'error', 'halted banner');
-ok(await p.evaluate(() => !!document.querySelector('#banner [role=alert] .rk-banner-word')), 'halted speaks as an alert');
-ok((await p.getAttribute('#bar', 'data-rk-state')) === 'halted', 'app bar halted');
+// Feedback: toasts with undo, pending, the banner.
+await go(p, 'feedback');
+await p.click('#f-undo'); await p.waitForTimeout(300);
+await p.click('#feedback-title'); await p.keyboard.press('Control+z'); await p.waitForTimeout(500);
+ok((await toast(p)) === 'It is back.', 'Ctrl+Z undoes', await toast(p));
+await p.click('#f-pending'); await p.waitForTimeout(100);
+ok((await text(p, '#f-pending')) === 'saving…', 'pending: the button says what it does', await text(p, '#f-pending'));
+await p.waitForTimeout(1700);
+ok((await toast(p)) === 'Saved.' && (await text(p, '#f-pending')) === 'save', 'pending ends, label back');
+await p.check('#s-halted'); await p.waitForTimeout(500);
+ok((await text(p, '.rk-banner-word')) === 'halted' && await p.evaluate(() => !!document.querySelector('#banner [role=alert] .rk-banner-word')) && (await p.getAttribute('#bar', 'data-rk-state')) === 'halted', 'halted: an alert, the app bar follows');
 await p.click('#ab-pause'); await p.waitForTimeout(400);
-ok((await text(p, '.rk-banner-word')) === 'halted' && (await toast(p)).startsWith('Intake paused'), 'pause under halt: banner holds, toast says so');
+ok((await text(p, '.rk-banner-word')) === 'halted' && (await toast(p)).startsWith('Live data paused'), 'pause under halt: the banner holds, a toast says so', await toast(p));
 await p.screenshot({ path: join(shots, 'halted.png') });
 await p.click('#remedy'); await p.waitForTimeout(600);
-ok((await text(p, '.rk-banner-word')) === 'paused' && (await toast(p)).startsWith('Emergency stop released'), 'release steps down to paused');
+ok((await text(p, '.rk-banner-word')) === 'paused', 'release steps down to paused');
 await p.click('#remedy'); await p.waitForTimeout(800);
-ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear' && (await toast(p)).startsWith('Intake resumed'), 'resume clears the banner');
-await p.click('#nav a[href="#system"]'); await p.waitForTimeout(900);
+ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'resume clears the banner');
 await p.check('#s-offline'); await p.waitForTimeout(400);
 ok((await text(p, '#data-now')) === 'frozen', 'offline freezes the figures');
-await p.click('#jobs-more'); await p.waitForTimeout(200); await p.click('#jobs-menu [data-act=refresh]'); await p.waitForTimeout(1900);
-ok((await p.getAttribute('#jobs-error', 'data-status')) === 'error', 'a failed load says so in the region');
 await p.click('#remedy'); await p.waitForTimeout(1500);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'retry reconnects');
-await p.click('#jobs-retry'); await p.waitForTimeout(1900);
-ok(!(await p.$('#jobs-error')), 'retry in the region loads again');
-await p.check('#s-readonly'); await p.waitForTimeout(400);
-ok((await text(p, '.rk-banner-word')) === 'read-only' && await p.evaluate(() => document.querySelector('#remedy').parentElement.hidden), 'read-only has no action');
-await p.click('#save'); await p.waitForTimeout(1300);
-ok((await text(p, '.rk-errors > p')).startsWith('Could not save: the job database is read-only'), 'the server says no to the whole form');
-await p.uncheck('#s-readonly'); await p.waitForTimeout(600);
 
-// Look: prefs on the root, density, motion, accent.
-await p.click('#nav a[href="#look"]'); await p.waitForTimeout(900);
+// Navigation: the palette, the shortcut sheet, a radio menu.
+await p.keyboard.press('Control+k'); await p.waitForTimeout(300);
+ok(await isOpen(p, '#palette') && await p.evaluate(() => document.activeElement === document.querySelector('#palette input')), 'Ctrl+K opens the palette');
+const pb = await p.evaluate(() => ({ pal: document.querySelector('#palette').getBoundingClientRect().bottom, bar: document.querySelector('#bar').getBoundingClientRect().top }));
+ok(pb.pal <= pb.bar + 1, 'the palette rises from the app bar', JSON.stringify(pb));
+await p.keyboard.type('release'); await p.waitForTimeout(150);
+const activeOpt = () => p.evaluate(() => { const id = document.activeElement.getAttribute('aria-activedescendant'); return id ? document.getElementById(id).textContent : null; });
+ok((await activeOpt()) === 'Release notes', 'typing filters', await activeOpt());
+await p.keyboard.press('Escape');
+ok((await p.inputValue('#palette input')) === '' && await isOpen(p, '#palette'), 'Escape clears first');
+await p.keyboard.type('--rk-accent'); await p.waitForTimeout(150);
+ok((await activeOpt()) === '--rk-accent', 'a token in the palette', await activeOpt());
+await p.keyboard.press('Enter'); await p.waitForTimeout(TURN);
+ok(await visible(p, 'tokens') && (await p.evaluate(() => location.hash)) === '#tokens/accent', 'the palette goes to a token', await p.evaluate(() => location.hash));
+await p.keyboard.press('Escape'); await p.waitForTimeout(TURN);
+ok(await visible(p, 'home'), 'and back');
+await p.locator('#navigation-title').focus(); await p.keyboard.press('?'); await p.waitForTimeout(300);
+ok((await sheetTitle(p)) === 'Keyboard shortcuts', '? opens the shortcuts');
+await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+await go(p, 'navigation');
+await p.click('#n-sort'); await p.waitForTimeout(200); await p.click('#n-sort-menu [data-sort="2"]'); await p.waitForTimeout(500);
+ok((await p.evaluate(() => document.querySelector('#tok-body tr td:nth-child(3)').textContent)) === 'breakpoint', 'a radio menu sorts the tokens by group');
+await p.click('#n-sort'); await p.waitForTimeout(200); await p.click('#n-sort-menu [data-sort="1"]'); await p.waitForTimeout(300);
+
+// Forms: make an accent. Late checks, the summary, real contrast, server refusals, the guard, confirm, disable.
+await go(p, 'forms');
+ok((await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'remove says why it cannot act yet');
+await p.click('#a-save'); await p.waitForTimeout(300);
+ok((await text(p, '.rk-errors > p')) === '2 fields need attention' && await p.evaluate(() => document.activeElement.classList.contains('rk-errors')), 'sending empty: a summary takes focus', await text(p, '.rk-errors > p'));
+await p.click('.rk-errors a[href="#a-light"]');
+ok((await focused(p)) === 'a-light', 'a summary link focuses its field');
+await p.fill('#a-light', '#f7cb47'); await p.waitForTimeout(100);
+const hint = (id) => p.evaluate((i) => document.querySelector(`#${i}`).closest('.rk-field').querySelector('.rk-hint').textContent, id);
+ok((await hint('a-light')).includes(':1 on the light ground'), 'the contrast is checked for real', await hint('a-light'));
+await p.fill('#a-light', '#1f6f5c'); await p.waitForTimeout(100);
+ok(!(await p.evaluate(() => document.querySelector('#a-light').closest('.rk-field').dataset.status)), 'corrected as you type');
+await p.fill('#a-name', 'plum'); await p.click('#a-save'); await p.waitForTimeout(1200);
+ok((await hint('a-name')).includes('already exists'), 'the server says no at the field', await hint('a-name'));
+await p.fill('#a-name', 'sea'); await p.click('#a-save');
+await p.waitForFunction(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase]) .rk-toast-msg'); return t && t.textContent.startsWith('Accent'); }, null, { timeout: 4000 }).catch(() => {});
+ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#1f6f5c', 'the accent applies', `${await toast(p)} / ${await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim() + ' ' + document.documentElement.dataset.accent + ' ' + localStorage.getItem('rekta-prefs'))}`);
+ok(!(await p.getAttribute('#a-remove', 'aria-disabled')), 'remove can act now');
+await p.click('#a-remove'); await p.waitForTimeout(400);
+ok((await sheetTitle(p)) === 'Remove “sea”?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep it', 'confirm: the safe answer first');
+await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(400);
+ok((await p.evaluate(() => document.documentElement.dataset.accent)) === undefined && (await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'removed, ink again');
+await p.fill('#a-name', 'sea-2');
+await go(p, 'overview');
+await p.click('#tile-notes'); await p.waitForTimeout(400);
+ok((await sheetTitle(p)) === 'Leave without saving?', 'leaving with changes asks', await sheetTitle(p));
+await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+ok(await visible(p, 'home') && (await p.inputValue('#a-name')) === 'sea-2', 'Escape keeps editing');
+await p.click('#tile-notes'); await p.waitForTimeout(400); await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(TURN);
+ok(await visible(p, 'notes') && (await p.inputValue('#a-name')) === 'sea', 'discard leaves and puts the form back', await p.inputValue('#a-name'));
+await p.keyboard.press('Escape'); await p.waitForTimeout(TURN);
+await go(p, 'feedback');
+await p.check('#s-readonly'); await p.waitForTimeout(300);
+await go(p, 'forms');
+await p.click('#a-save'); await p.waitForTimeout(1200);
+ok((await text(p, '.rk-errors > p')).startsWith('Could not apply: maintenance'), 'the server says no to the whole form', await text(p, '.rk-errors > p'));
+await go(p, 'feedback'); await p.uncheck('#s-readonly'); await p.waitForTimeout(600);
+
+// Look: prefs, density, motion, the accent slot.
+await go(p, 'look');
 await p.check('input[name=theme][value=dark]'); await p.check('input[name=accent][value=plum]'); await p.waitForTimeout(300);
-ok((await p.evaluate(() => document.documentElement.dataset.theme)) === 'dark', 'theme dark on the root');
-ok((await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#c38aed', 'accent slot in dark');
+ok((await p.evaluate(() => document.documentElement.dataset.theme)) === 'dark' && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#c38aed', 'theme dark, the plum accent in dark', await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim()));
 await p.screenshot({ path: join(shots, 'dark-plum.png') });
 const btnH = () => p.evaluate(() => Math.round(document.querySelector('#reset').getBoundingClientRect().height));
-ok((await btnH()) === 32, 'fine pointer: compact 32px controls', await btnH());
+ok((await btnH()) === 32, 'fine pointer: compact controls', await btnH());
 await p.check('input[name=density][value=comfortable]'); await p.waitForTimeout(200);
 ok((await btnH()) === 44, 'comfortable: 44px controls', await btnH());
-await p.check('input[name=density][value=auto]');
-await p.check('input[name=motion][value=off]'); await p.waitForTimeout(200);
-ok((await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-duration-short').trim())) === '0s', 'motion off zeroes durations');
-ok((await p.evaluate(() => JSON.parse(localStorage.getItem('rekta-prefs')).motion)) === 'off', 'prefs remembered');
-await p.check('input[name=motion][value=system]'); await p.check('input[name=theme][value=system]');
+await p.check('input[name=density][value=auto]'); await p.check('input[name=theme][value=system]'); await p.check('input[name=accent][value=ink]');
+ok((await p.evaluate(() => JSON.parse(localStorage.getItem('rekta-prefs')).theme)) === 'system', 'prefs remembered');
 
-// Sheet: opens, a tap on the shading cancels, reset works.
+// Sheet: the shading cancels; reset.
 await p.click('#reset'); await p.waitForTimeout(300);
-ok(await p.evaluate(() => document.querySelector('#sheet').open), 'sheet opens');
-ok((await p.evaluate(() => getComputedStyle(document.documentElement).overflow)) === 'hidden', 'page behind the sheet does not scroll');
+ok((await p.evaluate(() => getComputedStyle(document.documentElement).overflow)) === 'hidden', 'the page behind a sheet does not scroll');
 await p.mouse.click(700, 850); await p.waitForTimeout(400);
 ok(!(await p.evaluate(() => document.querySelector('#sheet').open)), 'a tap on the shading cancels');
-await p.click('#reset'); await p.waitForTimeout(300);
-await p.click('#sheet button[value=reset]'); await p.waitForTimeout(600);
-ok((await p.evaluate(() => document.querySelectorAll('#open > li').length)) === 3 && (await p.inputValue('#f-time')) === '25:00', 'reset restores the demo');
+await p.click('#reset'); await p.waitForTimeout(300); await p.click('#sheet button[value=reset]'); await p.waitForTimeout(600);
+ok((await toast(p)).startsWith('Demo reset') && (await text(p, '#presses')) === '0', 'reset restores the demo');
 
-// Reviews: a row action, the tile follows, undo.
-await p.click('#nav a[href="#overview"]'); await p.waitForTimeout(900);
-await p.click('#tile-reviews'); await p.waitForTimeout(TURN);
-await p.click('#review-list li:first-child [data-approve]'); await p.waitForTimeout(300);
-ok((await text(p, '#reviews-open')) === '2', 'approving updates the board tile');
-ok((await focused(p)) === 'rk-btn', 'focus moves to the next row\'s action', await focused(p));
-await p.keyboard.press('Control+z'); await p.waitForTimeout(400);
-ok((await text(p, '#reviews-open')) === '3', 'Ctrl+Z restores the review');
-
-// Runs: a sortable, selectable table in a split; the current run is part of the address.
-await p.evaluate(() => window.board.router.navigate('runs')); await p.waitForTimeout(TURN);
-const runIds = () => p.evaluate(() => [...document.querySelectorAll('#runs-body tr')].map((tr) => tr.dataset.run));
-ok((await runIds()).length === 12, 'runs table has 12 rows');
-await p.click('#runs-table thead th:nth-child(5) .rk-sort'); await p.waitForTimeout(500);
-ok((await p.getAttribute('#runs-table thead th:nth-child(5)', 'aria-sort')) === 'ascending' && (await runIds())[0] === '4184', 'sort ascending by duration');
-ok((await p.getAttribute('#runs-table thead th:nth-child(6)', 'aria-sort')) === 'none', 'the other column lets go of its sort');
-await p.click('#runs-table thead th:nth-child(5) .rk-sort'); await p.waitForTimeout(500);
-ok((await runIds())[0] === '4178', 'sort descending by duration');
-await p.click('#runs-body tr:nth-child(1) .rk-check input');
-await p.click('#runs-body tr:nth-child(4) .rk-check input', { modifiers: ['Shift'] }); await p.waitForTimeout(200);
-ok((await p.evaluate(() => document.querySelectorAll('#runs-body tr[data-rk-selected]').length)) === 4, 'Shift+click selects a range');
-ok(await p.evaluate(() => document.querySelector('#bar').hasAttribute('data-rk-selecting')) && (await text(p, '.rk-ab-count')) === '4 selected', 'the app bar carries the selection');
-ok(await p.evaluate(() => document.querySelector('#runs-table thead .rk-check input').indeterminate), 'the head checkbox shows a partial selection');
-await p.keyboard.press('Escape'); await p.waitForTimeout(200);
-ok((await p.evaluate(() => document.querySelectorAll('#runs-body tr[data-rk-selected]').length)) === 0 && await p.evaluate(() => !document.querySelector('#bar').hasAttribute('data-rk-selecting')), 'Escape clears the selection, not the place');
-ok(await visible(p, 'runs'), 'Escape with a selection stays in the place');
-await p.focus('#runs-body tr:nth-child(2) .rk-check input'); await p.keyboard.press('Control+a'); await p.waitForTimeout(200);
-ok((await p.evaluate(() => document.querySelectorAll('#runs-body tr[data-rk-selected]').length)) === 12, 'Ctrl+A selects all');
-await p.click('[data-rk-clear]'); await p.waitForTimeout(200);
-await p.click('#runs-body tr:nth-child(2) .rk-check input'); await p.click('#runs-body tr:nth-child(3) .rk-check input');
-await p.click('#sel-archive'); await p.waitForTimeout(300);
-ok((await runIds()).length === 10 && (await toast(p)).startsWith('2 runs archived'), 'archive the selection, with undo');
-await p.keyboard.press('Control+z'); await p.waitForTimeout(600);
-ok((await runIds()).length === 12 && (await runIds())[0] === '4178', 'undo puts them back in sort order');
+// Tokens: a table in a split; the current token in the address; selection; filters in the address; the divider.
+await p.evaluate(() => window.site.router.navigate('tokens')); await p.waitForTimeout(TURN);
+ok((await p.evaluate(() => document.querySelectorAll('#tok-body tr').length)) === count, 'every token has a row');
 const hist = await p.evaluate(() => history.length);
-await p.click('#runs-body tr:nth-child(3) th a'); await p.waitForTimeout(500);
-const third = (await runIds())[2];
-ok((await p.evaluate(() => location.hash)) === `#runs/${third}`, 'a run has an address', await p.evaluate(() => location.hash));
-ok((await p.evaluate(() => history.length)) === hist, 'sideways, choosing a run replaces the address');
-ok((await p.getAttribute(`#runs-body tr[data-run="${third}"]`, 'aria-current')) === 'true' && (await text(p, '#run-title')) === `Run #${third}`, 'the current run shows beside the list');
-ok((await p.title()).startsWith(`Run #${third} · `), 'the title names the run');
-const w0 = await p.evaluate(() => document.querySelector('#runs-list').getBoundingClientRect().width);
-await p.focus('.rk-split-handle'); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(100);
-const w1 = await p.evaluate(() => document.querySelector('#runs-list').getBoundingClientRect().width);
-ok(Math.round(w1 - w0) === 16, 'the divider moves with the keyboard', `${w0} → ${w1}`);
-const hb = await p.evaluate(() => { const r = document.querySelector('.rk-split-handle').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 200 }; });
-await p.mouse.move(hb.x, hb.y); await p.mouse.down(); await p.mouse.move(hb.x + 100, hb.y, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(100);
-const w2 = await p.evaluate(() => document.querySelector('#runs-list').getBoundingClientRect().width);
-ok(Math.abs(w2 - w1 - 100) <= 2, 'the divider drags', `${w1} → ${w2}`);
-
-// Search and filters: the trigger says what it keeps, rows hide, the address keeps it, clear brings everything back.
-const shownRuns = () => p.evaluate(() => [...document.querySelectorAll('#runs-body tr')].filter((tr) => !tr.hidden).length);
-await p.click('#f-status'); await p.waitForTimeout(200);
-await p.click('#f-status-menu [data-v=error]'); await p.click('#f-status-menu [data-v=warning]'); await p.waitForTimeout(200);
-ok(await p.evaluate(() => document.querySelector('#f-status-menu').matches(':popover-open')), 'a filter menu stays open for several choices');
-ok((await text(p, '#f-status')) === 'status: failed, waiting', 'the filter button says what it keeps', await text(p, '#f-status'));
-ok((await shownRuns()) === 2, 'the filter hides the other rows');
-ok((await p.evaluate(() => location.hash)).includes('status=failed%2Cwaiting'), 'the address keeps the filter', await p.evaluate(() => location.hash));
+await p.click('#tok-body tr[data-name="focus"] th a'); await p.waitForTimeout(500);
+ok((await p.evaluate(() => location.hash)) === '#tokens/focus' && (await p.evaluate(() => history.length)) === hist, 'a click selects, shows and replaces the address', await p.evaluate(() => location.hash));
+ok((await text(p, '#token-title')) === '--rk-focus' && (await p.getAttribute('#tok-body tr[data-name="focus"]', 'aria-selected')) === 'true', 'the detail shows beside the list');
+ok((await p.title()).startsWith('--rk-focus · '), 'the title names the token', await p.title());
+await p.screenshot({ path: join(shots, 'token.png') });
+await p.click('#tok-body tr[data-name="bg"]', { modifiers: ['Control'] }); await p.waitForTimeout(200);
+ok((await text(p, '.rk-ab-count')) === '2 selected', 'Ctrl+click in the tokens');
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
-await p.click('#f-status'); await p.waitForTimeout(200); await p.click('#f-status-menu [data-v=warning]'); await p.click('#f-status-menu [data-v=error]'); await p.keyboard.press('Escape');
-await p.fill('#runs-q', 'mobile'); await p.waitForTimeout(400);
-ok((await shownRuns()) === 3 && (await text(p, '#runs-facts')).endsWith('showing 3') && (await p.evaluate(() => location.hash)).includes('q=mobile'), 'search narrows the rows and stays in the address');
-await p.fill('#runs-q', 'nothing like this'); await p.waitForTimeout(400);
-ok(!(await p.evaluate(() => document.querySelector('#runs-none').hidden)), 'no match says so in the region');
-await p.click('#f-clear'); await p.waitForTimeout(300);
-ok((await shownRuns()) === 12 && !(await p.evaluate(() => location.hash)).includes('?') && (await text(p, '#f-status')) === 'status: any', 'clear filters brings everything back');
-
-// Go to: the palette rises from the app bar; Ctrl+K, typing, ↓, Enter; Escape clears, then closes.
-await p.keyboard.press('Control+k'); await p.waitForTimeout(300);
-ok(await p.evaluate(() => document.querySelector('#palette').matches(':popover-open') && document.activeElement === document.querySelector('#palette input')), 'Ctrl+K opens the palette with focus in it');
-const pb = await p.evaluate(() => ({ pal: document.querySelector('#palette').getBoundingClientRect().bottom, bar: document.querySelector('#bar').getBoundingClientRect().top }));
-ok(pb.pal <= pb.bar, 'the palette rises from the app bar', JSON.stringify(pb));
-await p.keyboard.type('queue'); await p.waitForTimeout(200);
-const activeOpt = () => p.evaluate(() => { const id = document.activeElement.getAttribute('aria-activedescendant'); return id ? document.getElementById(id).textContent : null; });
-ok((await activeOpt()) === 'Build queue', 'typing filters, the best match is active', await activeOpt());
-await p.keyboard.press('Escape'); await p.waitForTimeout(100);
-ok((await p.inputValue('#palette input')) === '' && await p.evaluate(() => document.querySelector('#palette').matches(':popover-open')), 'Escape clears the text first');
-await p.keyboard.type('review'); await p.keyboard.press('Enter'); await p.waitForTimeout(TURN);
-ok(await visible(p, 'reviews') && !(await p.evaluate(() => document.querySelector('#palette').matches(':popover-open'))), 'Enter goes to the place');
-await p.click('#ab-goto'); await p.waitForTimeout(300); await p.click('#ab-goto'); await p.waitForTimeout(300);
-ok(!(await p.evaluate(() => document.querySelector('#palette').matches(':popover-open'))), 'a second click on go to closes it');
-await p.keyboard.press('Control+k'); await p.waitForTimeout(200); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
-ok(!(await p.evaluate(() => document.querySelector('#palette').matches(':popover-open'))), 'Escape on empty text closes the palette');
-await p.locator('#reviews-title').focus(); await p.keyboard.press('?'); await p.waitForTimeout(300);
-ok(await p.evaluate(() => document.querySelector('#keys-sheet').open), '? opens the keyboard shortcuts');
-await p.keyboard.press('Escape'); await p.waitForTimeout(300);
-ok(!(await p.evaluate(() => document.querySelector('#keys-sheet').open)) && await visible(p, 'reviews'), 'Escape closes the sheet, not the place');
+ok(await visible(p, 'tokens'), 'Escape ends the selection before it goes back');
+await p.click('#tok-group'); await p.waitForTimeout(200); await p.click('#tok-group-menu [data-v=motion]'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+ok((await p.evaluate(() => location.hash)).includes('group=motion') && (await p.evaluate(() => [...document.querySelectorAll('#tok-body tr')].every((r) => r.hidden || r.dataset.group === 'motion'))), 'filters keep motion tokens, in the address', await p.evaluate(() => location.hash));
+await p.click('#tok-clear'); await p.waitForTimeout(200);
+const w0 = await p.evaluate(() => document.querySelector('#tokens-list').getBoundingClientRect().width);
+await p.focus('#tokens-split .rk-split-handle'); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(100);
+ok(Math.round((await p.evaluate(() => document.querySelector('#tokens-list').getBoundingClientRect().width)) - w0) === 16, 'the divider moves with the keyboard');
 await p.close();
 
-// Deep link: a cold entry puts the parent underneath, so back stays in the app.
-const d = await open({}, '#reviews');
-ok(await visible(d, 'reviews'), 'deep link opens the place');
-ok((await d.evaluate(() => history.state.rk.index)) === 1, 'the parent is underneath');
-await d.keyboard.press('Escape'); await d.waitForTimeout(TURN);
-ok(await visible(d, 'board') && (await d.evaluate(() => location.hash)) === '', 'back from a deep link lands on the board');
+// Deep links: the place, its list and the token underneath; filters in the address.
+const d = await open({}, '#tokens/space-m');
+ok((await text(d, '#token-title')) === '--rk-space-m' && (await d.evaluate(() => history.state.rk.index)) === 2, 'a deep link to a token puts home and the list underneath', await d.evaluate(() => JSON.stringify(history.state)));
+await d.keyboard.press('Escape'); await d.waitForTimeout(600);
+ok((await d.evaluate(() => location.hash)) === '#tokens', 'back from it shows the list', await d.evaluate(() => location.hash));
 await d.close();
-const d2 = await open({}, '#runs/4179');
-ok((await text(d2, '#run-title')) === 'Run #4179' && (await d2.evaluate(() => history.state.rk.index)) === 2, 'a deep link to a run puts the place and its list underneath');
-await d2.keyboard.press('Escape'); await d2.waitForTimeout(600);
-ok((await d2.evaluate(() => location.hash)) === '#runs' && await visible(d2, 'runs'), 'back from a deep-linked run shows the list');
+const d2 = await open({}, '#tokens?group=radius');
+ok(await d2.evaluate(() => [...document.querySelectorAll('#tok-body tr')].filter((r) => !r.hidden).every((r) => r.dataset.group === 'radius')) && (await text(d2, '#tok-group')) === 'group: radius', 'a filtered address opens filtered', await text(d2, '#tok-group'));
 await d2.close();
-const d3 = await open({}, '#runs?status=failed');
-ok((await d3.evaluate(() => [...document.querySelectorAll('#runs-body tr')].filter((tr) => !tr.hidden).length)) === 1 && (await text(d3, '#f-status')) === 'status: failed', 'a filtered address opens filtered');
-await d3.close();
 
-// Phone: sticky strip, toasts from the app bar, the app bar's back, touch press.
+// Phone: stacked panorama, sticky strip, toasts from the app bar, overflow, the split one pane at a time.
 const m = await open({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-ok((await m.evaluate(() => getComputedStyle(document.querySelector('#pan')).display)) !== 'flex', 'phone panorama stacks');
-await m.evaluate(() => scrollTo(0, 1600)); await m.waitForTimeout(300);
-ok((await m.evaluate(() => Math.round(document.querySelector('#nav').getBoundingClientRect().top))) === 0, 'section strip sticks to the top');
-ok((await m.evaluate(() => parseFloat(document.documentElement.style.getPropertyValue('--rk-pivot-h')))) > 40, 'strip height published');
-await m.tap('#nav a[href="#system"]'); await m.waitForTimeout(900);
-const sysTop = await m.evaluate(() => document.querySelector('#system').getBoundingClientRect().top);
-const navH = await m.evaluate(() => document.querySelector('#nav').getBoundingClientRect().bottom);
-ok(sysTop >= navH - 2, 'a section jump lands below the strip', `${sysTop} vs ${navH}`);
-await m.tap('#ab-stop'); await m.waitForTimeout(500);
-await m.tap('#event'); await m.waitForTimeout(400);
+ok((await m.evaluate(() => getComputedStyle(document.querySelector('#pan')).display)) !== 'flex', 'phone: the panorama stacks');
+await m.evaluate(() => scrollTo(0, 2400)); await m.waitForTimeout(300);
+ok((await m.evaluate(() => Math.round(document.querySelector('#nav').getBoundingClientRect().top))) === 0, 'phone: the section strip sticks');
+await m.tap('#nav a[href="#feedback"]'); await m.waitForTimeout(900);
+ok((await m.evaluate(() => document.querySelector('#feedback').getBoundingClientRect().top)) >= (await m.evaluate(() => document.querySelector('#nav').getBoundingClientRect().bottom)) - 2, 'phone: a jump lands below the strip');
+await m.tap('#f-event'); await m.waitForTimeout(400);
 const tb = await m.evaluate(() => ({ toast: document.querySelector('.rk-toast:not([data-rk-phase])').getBoundingClientRect().bottom, bar: document.querySelector('#bar').getBoundingClientRect().top }));
-ok(tb.toast <= tb.bar, 'phone toast rises from the app bar', JSON.stringify(tb));
-await m.screenshot({ path: join(shots, 'phone-halted.png') });
-await m.tap('#ab-stop'); await m.waitForTimeout(600);
-await m.evaluate(() => scrollTo(0, 0)); await m.waitForTimeout(200);
-await m.tap('#tile-import'); await m.waitForTimeout(TURN);
-ok(await visible(m, 'import'), 'phone: tap opens the place');
-ok(!(await m.evaluate(() => document.querySelector('#back').hidden)), 'phone: app bar back shows');
-await m.screenshot({ path: join(shots, 'phone-place.png') });
-await m.tap('#back'); await m.waitForTimeout(TURN);
-ok(await visible(m, 'board'), 'phone: app bar back returns');
-ok((await m.evaluate(() => Math.round(document.querySelector('#reset').getBoundingClientRect().height))) === 44, 'touch: 44px controls');
-ok(await m.evaluate(() => document.querySelector('#ab-theme').hasAttribute('data-rk-overflow') && !document.querySelector('#ab-more').hidden), 'phone: what does not fit moves into more');
+ok(tb.toast <= tb.bar + 1, 'phone: a toast rises from the app bar', JSON.stringify(tb));
+ok(await m.evaluate(() => { const b = document.querySelector('#bar'); return b.scrollWidth <= b.clientWidth; }), 'phone: the app bar fits');
+await m.setViewportSize({ width: 300, height: 844 }); await m.waitForTimeout(300);
+ok(await m.evaluate(() => document.querySelector('#ab-motion').hasAttribute('data-rk-overflow') && !document.querySelector('#ab-more').hidden), 'narrower: what does not fit moves into more');
 await m.tap('#ab-more'); await m.waitForTimeout(300);
-const moreItems = await m.evaluate(() => [...document.querySelectorAll('.rk-ab-menu .rk-menu-item')].map((b) => b.textContent));
-ok(moreItems.includes('motion on'), 'phone: more repeats the moved controls\' words', moreItems.join(' | '));
-await m.tap('.rk-ab-menu .rk-menu-item:nth-child(2)'); await m.waitForTimeout(300);
-ok((await m.evaluate(() => document.documentElement.dataset.motion)) === 'off', 'phone: a control in more still works');
-await m.evaluate(() => window.board.router.navigate('runs')); await m.waitForTimeout(TURN);
-ok((await m.evaluate(() => getComputedStyle(document.querySelector('#runs-body tr')).display)) === 'flex', 'phone: table rows stack');
-ok((await m.evaluate(() => getComputedStyle(document.querySelector('#runs-body td:nth-child(4)'), '::before').content)) === '"target "', 'phone: cells carry their column\'s label');
-await m.tap('#runs-body tr:nth-child(6) th a'); await m.waitForTimeout(TURN);
-ok(await m.evaluate(() => document.querySelector('#runs-list').hidden && !document.querySelector('#runs-detail').hidden), 'phone: the run replaces the list');
-ok((await m.evaluate(() => document.activeElement.id)) === 'run-title', 'phone: focus on the run');
+ok((await m.evaluate(() => [...document.querySelectorAll('.rk-ab-menu .rk-menu-item')].map((b) => b.textContent))).some((t) => t.includes('motion')), 'narrower: more repeats the moved controls');
+await m.keyboard.press('Escape');
+await m.setViewportSize({ width: 390, height: 844 }); await m.waitForTimeout(300);
+await m.evaluate(() => scrollTo(0, 0)); await m.waitForTimeout(200);
+await m.tap('#tile-notes'); await m.waitForTimeout(TURN);
+ok(await visible(m, 'notes') && !(await m.evaluate(() => document.querySelector('#back').hidden)), 'phone: a tile opens the place, back shows');
+await m.tap('#back'); await m.waitForTimeout(TURN);
+ok(await visible(m, 'home'), 'phone: the app bar back returns');
+ok((await m.evaluate(() => Math.round(document.querySelector('#reset').getBoundingClientRect().height))) === 44, 'touch: 44px controls');
+await m.evaluate(() => window.site.router.navigate('tokens')); await m.waitForTimeout(TURN);
+ok((await m.evaluate(() => getComputedStyle(document.querySelector('#tok-body tr')).display)) === 'flex', 'phone: table rows stack', await m.evaluate(() => getComputedStyle(document.querySelector('#tok-body tr')).display));
+await m.tap('#tok-body tr[data-name="bg"] th a'); await m.waitForTimeout(TURN);
+ok(await m.evaluate(() => document.querySelector('#tokens-list').hidden && !document.querySelector('#tokens-detail').hidden) && (await m.evaluate(() => document.activeElement.id)) === 'token-title', 'phone: the token replaces the list, focus on it', await focused(m));
+await m.screenshot({ path: join(shots, 'phone-token.png') });
 await m.goBack(); await m.waitForTimeout(TURN);
-ok(await m.evaluate(() => !document.querySelector('#runs-list').hidden && document.querySelector('#runs-detail').hidden) && (await m.evaluate(() => location.hash)) === '#runs', 'phone: back returns to the list');
-ok((await m.evaluate(() => document.activeElement.textContent)) === '#4179', 'phone: focus back on the run it opened', await m.evaluate(() => document.activeElement.textContent));
+ok(await m.evaluate(() => !document.querySelector('#tokens-list').hidden), 'phone: back returns to the list', await focused(m));
 await m.close();
 
 // Reduced motion: a place change is instant, never skipped.
 const r = await open({ reducedMotion: 'reduce' });
-await r.click('#tile-import'); await r.waitForTimeout(150);
-ok(await visible(r, 'import') && !(await visible(r, 'board')), 'reduced motion: the place changes at once');
+await r.click('#tile-notes'); await r.waitForTimeout(150);
+ok(await visible(r, 'notes') && !(await visible(r, 'home')), 'reduced motion: the place changes at once');
 await r.close();
 
 await browser.close();

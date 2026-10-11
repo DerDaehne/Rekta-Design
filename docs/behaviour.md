@@ -46,17 +46,19 @@ paint: load `rekta.global.js` in `<head>` and call
 
 | Attribute | On | Meaning |
 |---|---|---|
-| `data-rk-pressed` | a tile | Being pressed, or held for the rest of `duration-press` after a quick tap. |
+| `data-rk-pressed` | a tile, a `[data-rk-press]` item | Being pressed, or held for the rest of `duration-press` after a quick tap. |
 | `data-rk-turn` | units of a place, or the place | `out`, `back-out`, `pressed` while leaving; `in`, `back-in` while arriving. |
 | `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it. Removed once the build-in is over, so a re-render never replays it. |
 | `data-rk-phase` | a toast, the banner | `leaving` while it goes; `clear` on the banner when no state stands. |
-| `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls and the trailing spacer is gone. |
+| `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
 | `aria-busy` | a `.rk-region` | Loading (`busy()`). |
-| `data-rk-selected` | a table row | Its checkbox is checked (`table()`). |
-| `data-rk-selecting` | the app bar | Rows are selected; the bar carries the selection. |
+| `data-rk-select` | a list or table body | Its items are chosen the Metro way (`select()`). |
+| `aria-selected` | an item of it | `true` when selected: the accent fill and the checkmark. |
+| `data-rk-press` | an item of it | It nudges when pressed (`press()`). |
+| `data-rk-selecting` | the list, the app bar | In the selection mode; the bar carries the selection. |
 | `data-rk-dragging` | a split handle | Being dragged. |
 | `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
 | `data-theme`, `data-density`, `data-motion` | the root | Prefs overrides (see `prefs`). |
@@ -78,7 +80,7 @@ paint: load `rekta.global.js` in `<head>` and call
 |---|---|---|
 | `rk:prefs` | `document` | `{ name, value }` after `prefs.set`. |
 | `rk:bannerchange` | the banner (bubbles) | `{ state }`, the state now shown or `null`. |
-| `rk:selectionchange` | a table (bubbles) | `{ count, rows }` after the selection changes. |
+| `rk:selectionchange` | a list or table body (bubbles) | `{ count, mode, items }` after the selection changes. |
 
 ## API
 
@@ -125,8 +127,11 @@ is open. Native `<dialog>` and popovers handle their own Escape.
 ### `press(scope)`
 
 Tiles that are links or buttons (`a.rk-tile`, `button.rk-tile`) nudge
-back where they are pressed. Enter presses any tile; Space presses
-button tiles (Space scrolls on a link). On touch the press waits
+back where they are pressed, and so does anything with `data-rk-press`
+(selectable rows, with the smaller `row-tilt` and `row-press-scale`).
+A press on a control inside it is the control's own. Enter presses any
+tile; Space presses button tiles and `data-rk-press` items (Space
+scrolls on a link). On touch the press waits
 `duration-tap-delay` and cancels on 8 px of movement, so the start of a
 scroll never sinks a tile. A click after 4 px of dragging, or with text
 selected inside the tile or row, is cancelled: dragging never
@@ -217,7 +222,7 @@ Returns `{ goTo(sectionOrId, { focus, instant }), current, destroy }`.
 
 `el` is a `.rk-pivot[role=tablist]` of `[role=tab]` buttons with
 `aria-controls`. A click or ← → Home End selects a facet; the strip
-glides it to the left edge and the panel slides in from its side. Facets
+glides by the facet's place in the order (the ones before it stay in reach) and the panel slides in from its side. Facets
 add nothing to history. Returns `{ select(index, { focus }), destroy }`.
 
 ### `toaster(region)`
@@ -293,18 +298,34 @@ menu open. With `summary` ("status") the trigger says what is ticked
 checkbox items from outside, as when a filter comes back from the
 address).
 
-### `table(el, { onSort, appbar, onSelect })`
+### `select(el, { items, onShow, onChange, appbar })`
+
+Metro selection on `el`, a list (`.rk-rows`, a grid of items) or a
+table body; `items` picks its items (default: its `li` or `tr`
+children). A click selects one item and calls `onShow(item)`;
+Ctrl/Cmd+click toggles and starts the selection mode, in which every
+click toggles; Shift+click takes a range. Keys: ↑ ↓ (← → in a grid),
+Home End, Space or Enter as a click, Ctrl/Cmd+A all, Escape (key layer
+20) ends the mode. The list is one tab stop (roving `tabindex`); it gets
+`role=listbox` (a table `role=grid`) and `aria-multiselectable`, each
+item `aria-selected` and `data-rk-press`. Hidden items drop out of the
+selection. With `appbar`, the bar gets `data-rk-selecting` in the mode,
+its `.rk-ab-count` the count, and its `[data-rk-clear]` button clears.
+`onChange(items, { mode })` and `rk:selectionchange` follow every
+change. Returns `{ selected(), only(item, { show }), toggle(item), clear(), selectAll(), mode, refresh(), destroy }`
+(`refresh` after adding, removing or hiding items).
+
+### `table(el, { onSort, select, onShow, onSelect, appbar })`
 
 `el` is a `.rk-table`. A `.rk-sort` button in a head cell sorts by its
 column (ascending, then descending; `aria-sort`), moving the rows with
-FLIP; with `onSort({ column, dir, th })` the app sorts instead. Rows
-with a `.rk-check` checkbox are selectable (Shift+click ranges, the head
-checkbox, Ctrl/Cmd+A, Escape at key layer 20); a selected row gets
-`data-rk-selected`. With `appbar`, the bar gets `data-rk-selecting`, its
-`.rk-ab-count` the count, and its `[data-rk-clear]` button clears. Cells
-get `data-label` from their head for the stacked layout. Fires
-`rk:selectionchange`. Returns `{ selected(), clear(), selectAll(), sort(column, dir), refresh(), destroy }`
-(`refresh` after adding or removing rows).
+FLIP; with `onSort({ column, dir, th })` the app sorts instead. With
+`select: true`, or when the body has an `.rk-check` cell, its rows are
+chosen with `select()` (`onShow`, `onSelect` as its `onChange`,
+`appbar`); the `.rk-check` cell holds the checkmark. Cells get
+`data-label` from their head for the stacked layout. Returns
+`{ selected(), only(row, { show }), clear(), selectAll(), mode, sort(column, dir), refresh(), destroy }`
+(`refresh` after adding, removing or hiding rows).
 
 ### `split(el, { key })`
 

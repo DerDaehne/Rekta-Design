@@ -18,7 +18,8 @@
      busy       a data region loads: the line after busy-delay, never a flash
      pending    a button's action runs: it says what it is doing, at the same width
      menu       a menu button with a floating list, placed next to its control
-     table      sorting, selection with the app bar carrying it, labels for the stacked layout
+     select     Metro selection: a click selects and shows, Ctrl/Cmd+click starts the selection mode
+     table      sorting, selection, labels for the stacked layout
      split      a list and its current item: a draggable divider sideways, one pane at a time compact
      palette    go to a place or run a command, from a list that rises from the app bar (Ctrl/Cmd+K)
      appbar     controls that do not fit move into a "more" menu
@@ -124,7 +125,9 @@ export const keys = {
 // A tile nudges back where it is pressed. On touch it presses only after tap-delay without movement, so the start of a
 // scroll never sinks it. Movement past 4px (8px on touch) releases it, and a click that follows a drag or a text
 // selection inside the tile is cancelled: dragging never activates. A quick tap still shows the whole sink.
-const TILE = 'a.rk-tile, button.rk-tile';
+// Tiles that open something, and anything marked data-rk-press (a selectable row or entry, which tilts less).
+const TILE = 'a.rk-tile, button.rk-tile, [data-rk-press]';
+const CONTROL = 'button, input, select, textarea, label, summary';
 const pressState = { pressed: null, last: null, since: 0, letGo: 0, lettingGo: null };
 function setPressed(tile, x, y) {
   releasePress(true);
@@ -155,7 +158,9 @@ export function press(scope = document) {
   const down = (e) => {
     if (e.button > 0) return;
     const tile = e.target.closest && e.target.closest(TILE);
-    if (!tile || turn.running) { start = null; return; }
+    // A control inside a row acts on its own; the row does not sink under it.
+    const inner = tile && tile.matches('[data-rk-press]') && e.target.closest(CONTROL);
+    if (!tile || turn.running || (inner && tile.contains(inner))) { start = null; return; }
     const r = tile.getBoundingClientRect();
     const x = clamp((e.clientX - r.left) / r.width * 2 - 1), y = clamp((e.clientY - r.top) / r.height * 2 - 1);
     start = { x: e.clientX, y: e.clientY, tile, touch: e.pointerType === 'touch', moved: false, px: x, py: y };
@@ -185,7 +190,7 @@ export function press(scope = document) {
   };
   const keydown = (e) => {
     if (e.repeat || turn.running || !e.target.matches || !e.target.matches(TILE)) return;
-    if (e.key === 'Enter' || (e.key === ' ' && e.target.tagName === 'BUTTON')) setPressed(e.target, 0, 0);
+    if (e.key === 'Enter' || (e.key === ' ' && (e.target.tagName === 'BUTTON' || e.target.matches('[data-rk-press]')))) setPressed(e.target, 0, 0);
   };
   const keyup = (e) => { if (e.key === ' ' || e.key === 'Enter') releasePress(false); };
   const blur = () => releasePress(true);
@@ -765,11 +770,27 @@ function pivotFit(strip) {
   const right = strip.scrollLeft + last.getBoundingClientRect().right - strip.getBoundingClientRect().left;
   strip.toggleAttribute('data-rk-fit', right <= strip.clientWidth + 1);
 }
-// A strip that does not fit glides so the active title sits at its left edge; one that fits holds still.
+// A strip that does not fit glides by the active title's place in the order, not to it: the first title at the start,
+// the last at the end, those between in proportion, so the titles before the active one stay in reach. The active
+// title is always whole on screen, and the one before it too where both fit. One that fits holds still. The titles are
+// still changing size while it glides, so the target is where they end up, not where they are now.
 function pivotGlide(strip, item) {
   if (!item || strip.hasAttribute('data-rk-fit')) return;
-  const first = strip.querySelector('a, button');
-  animateScroll(strip, item.offsetLeft - first.offsetLeft, ms('--rk-duration-pivot-glide'), bezier('--rk-ease-pivot-glide'));
+  const titles = [...strip.querySelectorAll(':scope > a, :scope > button')], i = titles.indexOf(item);
+  if (i < 0) return;
+  const style = getComputedStyle(strip), s = parseFloat(style.getPropertyValue('--rk-pivot-scale')) || 0.6;
+  const gap = parseFloat(style.columnGap) || 0, padL = parseFloat(style.paddingLeft) || 0, padR = parseFloat(style.paddingRight) || 0;
+  let x = 0, left = 0, width = 0, prev = 0;
+  for (const t of titles) {
+    const w = t === item ? t.offsetWidth : t.offsetWidth * s;
+    if (t === item) { left = x; width = w; }
+    if (t === titles[i - 1]) prev = x;
+    x += w + gap;
+  }
+  const room = strip.clientWidth - padL - padR, max = Math.max(0, x - gap - room);
+  const by = max * (titles.length > 1 ? i / (titles.length - 1) : 0);
+  const to = Math.min(max, Math.max(0, left + width - room, Math.min(by, i ? prev : left)));
+  animateScroll(strip, to, ms('--rk-duration-pivot-glide'), bezier('--rk-ease-pivot-glide'));
 }
 export function pivot(el, { onSelect } = {}) {
   const tabs = () => [...el.querySelectorAll('[role=tab]')];
@@ -1154,20 +1175,143 @@ export function menu(trigger, el, { onSelect, summary = null } = {}) {
   };
 }
 
+// Selection ----------------------------------------------------------------------------------------------------------
+// select(el, { items, onShow, onChange, appbar }): Metro selection over the items of a list (li) or a table body (tr).
+// A click selects an item and shows it (onShow), the way a file list does. Ctrl/Cmd+click adds or removes an item and
+// starts the selection mode: then every click adds or removes, until the selection is empty or Escape ends it.
+// Shift+click selects the range from the last item. Keys: ↑ ↓ (← → in a grid) Home End move the focus; Space and
+// Enter act as a click, Ctrl/Cmd+Space as a Ctrl+click; Ctrl/Cmd+A selects all. A selected item takes the accent fill
+// and a checkmark; it nudges where it is pressed (data-rk-press). Items a filter hides drop out. With an appbar, the
+// bar carries the selection in the mode (data-rk-selecting, .rk-ab-count, [data-rk-clear]).
+const selecting = new WeakMap();                                       // app bar → the selections in their mode
+export function select(el, { items = ':scope > li, :scope > tr', onShow = null, onChange = null, appbar = null } = {}) {
+  const list = () => [...el.querySelectorAll(items)];
+  const visible = () => list().filter((i) => !i.hidden);
+  const chosen = () => list().filter((i) => i.getAttribute('aria-selected') === 'true');
+  const isTable = el.tagName === 'TBODY';
+  const host = isTable ? el.closest('table') : el;
+  let mode = false, anchor = null;
+  host.setAttribute('role', isTable ? 'grid' : 'listbox');
+  host.setAttribute('aria-multiselectable', 'true');
+  el.setAttribute('data-rk-select', '');
+  function prepare() {
+    const all = list();
+    for (const i of all) {
+      if (!isTable) i.setAttribute('role', 'option');
+      if (!i.hasAttribute('aria-selected')) i.setAttribute('aria-selected', 'false');
+      i.setAttribute('data-rk-press', '');
+      if (i.hidden && i.getAttribute('aria-selected') === 'true') i.setAttribute('aria-selected', 'false');
+    }
+    const focusable = all.filter((i) => !i.hidden);
+    if (!focusable.some((i) => i.tabIndex === 0)) { const first = chosen().find((i) => !i.hidden) || focusable[0]; if (first) first.tabIndex = 0; }
+    for (const i of all) if (i.tabIndex !== 0 || i.hidden) i.tabIndex = -1;
+  }
+  function roving(item) { for (const i of list()) i.tabIndex = i === item ? 0 : -1; }
+  function sync() {
+    const n = chosen().length;
+    if (!n) mode = false;
+    el.toggleAttribute('data-rk-selecting', mode);
+    if (appbar) {
+      const modes = selecting.get(appbar) || new Set();
+      selecting.set(appbar, modes);
+      if (mode) modes.add(el); else modes.delete(el);
+      appbar.toggleAttribute('data-rk-selecting', modes.size > 0);
+      const c = appbar.querySelector('.rk-ab-count');
+      if (c && (mode || !modes.size)) c.textContent = `${n} selected`;
+      if (!mode && appbar.contains(document.activeElement)) { const t = chosen()[0] || visible()[0]; if (t) t.focus(); }
+    }
+    if (onChange) onChange(chosen(), { mode });
+    el.dispatchEvent(new CustomEvent('rk:selectionchange', { bubbles: true, detail: { count: n, mode, items: chosen() } }));
+  }
+  const set = (i, on) => i.setAttribute('aria-selected', String(on));
+  // only(item): a plain choice. The item alone is selected and shown.
+  function only(item, { show = true } = {}) {
+    mode = false;
+    for (const i of list()) set(i, i === item);
+    if (item) { anchor = item; roving(item); }
+    sync();
+    if (show && item && onShow) onShow(item);
+  }
+  function toggle(item) {
+    if (!mode) { mode = true; }
+    set(item, item.getAttribute('aria-selected') !== 'true');
+    anchor = item; roving(item);
+    sync();
+  }
+  function range(item, add) {
+    const vis = visible(), a = anchor && vis.includes(anchor) ? anchor : vis[0];
+    const [x, y] = [vis.indexOf(a), vis.indexOf(item)].sort((m, n) => m - n);
+    if (!add) for (const i of list()) set(i, false);
+    vis.slice(x, y + 1).forEach((i) => set(i, true));
+    mode = chosen().length > 1;
+    roving(item);
+    sync();
+  }
+  function act(item, { add = false, extend = false } = {}) {
+    if (extend) range(item, add);
+    else if (add || mode) toggle(item);
+    else only(item);
+  }
+  const click = (e) => {
+    const item = e.target.closest(items.replace(/:scope > /g, ''));
+    if (!item || item.parentElement !== el || e.button !== 0) return;
+    const inner = e.target.closest(CONTROL);
+    if (inner && item.contains(inner)) return;                        // a control inside the item acts on its own
+    if (e.target.closest('a[href]')) e.preventDefault();               // the item's title link: the click selects
+    e.stopPropagation();
+    act(item, { add: e.ctrlKey || e.metaKey, extend: e.shiftKey });
+    item.focus({ preventScroll: true });
+  };
+  const key = (e) => {
+    const item = e.target.closest && e.target.closest(items.replace(/:scope > /g, ''));
+    if (!item || item.parentElement !== el || e.altKey) return;
+    if (isEditable(e.target) || (e.target !== item && e.target.closest(CONTROL))) return;
+    const vis = visible(), i = vis.indexOf(item);
+    const cols = !isTable && getComputedStyle(el).display === 'grid' ? getComputedStyle(el).gridTemplateColumns.split(' ').length : 1;
+    const to = { ArrowDown: i + cols, ArrowUp: i - cols, ArrowRight: cols > 1 ? i + 1 : undefined, ArrowLeft: cols > 1 ? i - 1 : undefined, Home: 0, End: vis.length - 1 }[e.key];
+    if (to !== undefined) {
+      e.preventDefault();
+      const next = vis[Math.max(0, Math.min(vis.length - 1, to))];
+      if (e.shiftKey) range(next, mode); else roving(next);
+      next.focus();
+      return;
+    }
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); act(item, { add: e.ctrlKey || e.metaKey, extend: e.shiftKey }); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); mode = true; for (const v of vis) set(v, true); sync(); }
+  };
+  const offEsc = keys.on(20, (e) => {
+    if (e.key !== 'Escape' || !mode || isEditable(e.target)) return false;
+    if (!el.contains(e.target) && !(appbar && appbar.contains(e.target))) return false;
+    clear(); return true;
+  });
+  function clear() { for (const i of list()) set(i, false); mode = false; sync(); }
+  const clearClick = (e) => { if (e.target.closest('[data-rk-clear]')) clear(); };
+  el.addEventListener('click', click);
+  el.addEventListener('keydown', key);
+  if (appbar) appbar.addEventListener('click', clearClick);
+  prepare();
+  sync();
+  return {
+    selected: chosen, only, toggle, clear,
+    selectAll() { mode = true; for (const v of visible()) set(v, true); sync(); },
+    get mode() { return mode; },
+    refresh() { prepare(); sync(); },
+    destroy() {
+      el.removeEventListener('click', click); el.removeEventListener('keydown', key); offEsc();
+      if (appbar) { appbar.removeEventListener('click', clearClick); const modes = selecting.get(appbar); if (modes) { modes.delete(el); appbar.toggleAttribute('data-rk-selecting', modes.size > 0); } }
+    },
+  };
+}
+
 // Table ------------------------------------------------------------------------------------------------------------
-// table(el, { onSort, appbar, onSelect }): a .rk-table. A sort button in a head cell sorts by its column, ascending
-// then descending, with the rows moving to their new places (FLIP); onSort takes over for data sorted elsewhere.
-// Rows with a .rk-check checkbox are selectable: Shift+click selects a range, the head checkbox all or none,
-// Ctrl/Cmd+A all while focus is in the table, Escape clears. A selected row gets data-rk-selected. With an appbar,
-// the bar carries the selection (data-rk-selecting, .rk-ab-count, a [data-rk-clear] button). Cells get data-label
-// from their head for the stacked layout of a narrow place.
-export function table(el, { onSort, appbar = null, onSelect } = {}) {
+// table(el, { onSort, select, onShow, onSelect, appbar }): a .rk-table. A sort button in a head cell sorts by its
+// column, ascending then descending, with the rows moving to their new places (FLIP); onSort takes over for data
+// sorted elsewhere. With select (or a .rk-check cell in its rows), rows are selected the Metro way (select()). Cells
+// get data-label from their head for the stacked layout of a narrow place.
+export function table(el, { onSort, select: selectable = null, onShow = null, onSelect = null, appbar = null } = {}) {
   const head = () => (el.tHead ? [...el.tHead.rows[0].cells] : []);
   const rows = () => (el.tBodies[0] ? [...el.tBodies[0].rows] : []);
-  const box = (row) => row.querySelector('.rk-check input[type=checkbox]');
-  const all = () => el.tHead && el.tHead.querySelector('.rk-check input[type=checkbox]');
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-  let anchor = null, shift = false;
   function label() {
     const names = head().map((th) => th.textContent.trim());
     for (const r of rows()) [...r.cells].forEach((c, i) => { if (!c.hasAttribute('data-label') && !c.classList.contains('rk-check') && names[i]) c.dataset.label = names[i]; });
@@ -1192,65 +1336,23 @@ export function table(el, { onSort, appbar = null, onSelect } = {}) {
     th.setAttribute('aria-sort', dir);
     if (onSort) onSort({ column: th.cellIndex, dir, th }); else sortRows(th.cellIndex, dir);
   }
-  const selected = () => rows().filter((r) => r.hasAttribute('data-rk-selected'));
-  // Rows a filter has hidden are out of the selection: they are unticked and never ticked by all or a range.
-  const selectable = () => rows().filter((r) => box(r) && !r.hidden);
-  function sync() {
-    for (const r of rows()) { const b = box(r); if (b && r.hidden && b.checked) b.checked = false; }
-    const list = selectable(), count = list.filter((r) => box(r).checked).length;
-    for (const r of list) r.toggleAttribute('data-rk-selected', box(r).checked);
-    const a = all();
-    if (a) { a.checked = !!count && count === list.length; a.indeterminate = !!count && count < list.length; }
-    if (appbar) {
-      appbar.toggleAttribute('data-rk-selecting', count > 0);
-      const c = appbar.querySelector('.rk-ab-count');
-      if (c) c.textContent = `${count} selected`;
-    }
-    if (onSelect) onSelect(selected());
-    el.dispatchEvent(new CustomEvent('rk:selectionchange', { bubbles: true, detail: { count, rows: selected() } }));
-  }
-  function setAll(on) { for (const r of selectable()) { const b = box(r); if (!b.disabled) b.checked = on; } sync(); }
-  function clear({ focus = true } = {}) {
-    const hadFocus = appbar && appbar.contains(document.activeElement);
-    setAll(false);
-    if (focus && hadFocus) { const t = all() || (rows()[0] && box(rows()[0])); if (t) t.focus(); }
-  }
   const click = (e) => {
     const sorter = e.target.closest('.rk-sort');
-    if (sorter) { const th = sorter.closest('th'); sort(th, th.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending'); return; }
-    if (e.target.matches('.rk-check input[type=checkbox]')) shift = e.shiftKey;
+    if (sorter) { const th = sorter.closest('th'); sort(th, th.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending'); }
   };
-  const change = (e) => {
-    const b = e.target;
-    if (!b.matches('.rk-check input[type=checkbox]')) return;
-    if (b === all()) { setAll(b.checked); return; }
-    const row = b.closest('tr');
-    if (shift && anchor && anchor.isConnected) {
-      const list = selectable(), [i, j] = [list.indexOf(anchor), list.indexOf(row)].sort((m, n) => m - n);
-      list.slice(i, j + 1).forEach((r) => { const x = box(r); if (x && !x.disabled) x.checked = b.checked; });
-    }
-    anchor = row; shift = false;
-    sync();
-  };
-  const key = (e) => {
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a' && !isEditable(e.target) && selectable().length) { e.preventDefault(); setAll(true); }
-  };
-  const offEsc = keys.on(20, (e) => {
-    if (e.key !== 'Escape' || !selected().length || isEditable(e.target)) return false;
-    if (!el.contains(e.target) && !(appbar && appbar.contains(e.target))) return false;
-    clear(); return true;
-  });
-  const clearClick = (e) => { if (e.target.closest('[data-rk-clear]')) clear(); };
   el.addEventListener('click', click);
-  el.addEventListener('change', change);
-  el.addEventListener('keydown', key);
-  if (appbar) appbar.addEventListener('click', clearClick);
   label();
-  sync();
+  const wantSelect = selectable !== null ? selectable : !!el.querySelector('tbody .rk-check');
+  const sel = wantSelect && el.tBodies[0] ? select(el.tBodies[0], { items: ':scope > tr', onShow, onChange: onSelect, appbar }) : null;
   return {
-    selected, clear, selectAll: () => setAll(true), sort: (column, dir = 'ascending') => sort(head()[column], dir),
-    refresh() { label(); sync(); },
-    destroy() { el.removeEventListener('click', click); el.removeEventListener('change', change); el.removeEventListener('keydown', key); if (appbar) appbar.removeEventListener('click', clearClick); offEsc(); },
+    selected: () => (sel ? sel.selected() : []),
+    only: (row, o) => sel && sel.only(row, o),
+    clear: () => sel && sel.clear(),
+    selectAll: () => sel && sel.selectAll(),
+    get mode() { return sel ? sel.mode : false; },
+    sort: (column, dir = 'ascending') => sort(head()[column], dir),
+    refresh() { label(); if (sel) sel.refresh(); },
+    destroy() { el.removeEventListener('click', click); if (sel) sel.destroy(); },
   };
 }
 

@@ -24,12 +24,19 @@ it; each entry says how.
 - Tables (`rk-table`): kicker head that sticks, sorting with FLIP
   (`rk-sort`, `aria-sort`), numbers in `rk-num`, rows that stack as
   "label value" in a narrow place. `Rekta.table()`.
-- Selection: `rk-check` checkboxes, `rk-surface` on selected rows, Shift
-  ranges, Ctrl/Cmd+A, Escape; the app bar carries the count and actions
-  (`rk-ab-selection`, `rk-ab-count`, `data-rk-clear`).
+- Selection, the Metro way: `Rekta.select()` on any list or table body.
+  A click selects one item and shows it; Ctrl/Cmd+click adds and starts
+  the selection mode, in which every click adds or removes; Shift takes
+  a range, Ctrl/Cmd+A all, Escape ends it. A pressed item nudges where
+  it is pressed (`motion.transform.row-tilt`, `row-press-scale`); a
+  selected one takes the accent fill and a checkmark without a box
+  (`rk-check` cell, `rk-mark`). In the mode the app bar carries the
+  count and actions (`rk-ab-selection`, `rk-ab-count`, `data-rk-clear`,
+  `data-rk-selecting`). `rk:selectionchange`.
+- `data-rk-press`: anything can nudge like a tile.
 - Split views (`rk-split`): a hairline with an invisible, focusable
   handle sideways (`--rk-split-w`, `size.pane-min`), one pane at a time
-  compact. `Rekta.split()`. The current row has a 2px ink bar.
+  compact. `Rekta.split()`. The shown item is the selected one.
 - Items in addresses: `#place/item`, `places().onItem()`, `open()`;
   replaced sideways, a history step compact; deep links put the list
   underneath.
@@ -55,11 +62,26 @@ it; each entry says how.
 - [docs/forms.md](docs/forms.md): checks, refusals, leaving, dialog
   levels, disabled reasons.
 - [docs/collections.md](docs/collections.md).
+- The showcase site (`site/`) replaces the Rekta Board demo: every
+  section a live example, generated from the tokens at build time
+  (`{{token}}`, `<!--@block-->`), with the tokens as a place of their
+  own and the components as a table.
+
+### Changed
+
+- **The accent marks the selection.** Selected rows take the accent fill
+  with on-accent text (was the surface fill and a checkbox).
+- **The pivot glides by place, not to the edge.** A strip that does not
+  fit moves by the active title's place in the order, so the titles
+  before it stay in reach; the active title is always whole on screen.
+  `rk-pivot-end` is gone: remove it from your markup.
 
 ### Fixed
 
 - The classic script carries `async` functions; `--check` now fails
   when `rekta.global.js` does not parse.
+- The sticky section strip no longer shrinks in a place and clips the
+  descenders of its titles.
 
 ## 0.2.0 — 2026-10-11
 

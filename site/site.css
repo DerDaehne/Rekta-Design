@@ -1,0 +1,83 @@
+/* Rekta Design, the showcase: page glue only. Every colour, space, size and duration is a Rekta token; the components
+   are rekta.css. Compact: everything stacks and the page scrolls. Sideways (760px wide and taller than 480px): the app
+   fills the window, the panorama moves sideways and each section scrolls inside itself. */
+html, body { margin: 0; background: var(--rk-bg); color: var(--rk-text-primary); }
+.app { box-sizing: border-box; min-height: 100dvh; padding-bottom: calc(var(--rk-appbar-height) + env(safe-area-inset-bottom)); }
+.top { padding: var(--rk-space-m) var(--rk-space-m) var(--rk-space-s); }
+.top > * + * { margin-top: var(--rk-space-xs); }
+.top > .rk-crumb { margin-left: calc(-1 * var(--rk-space-xs)); padding-inline: var(--rk-space-xs); }
+.brand { font-size: var(--rk-font-size-xl); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-title); }
+.brand b { font-weight: var(--rk-font-weight-semibold); }
+
+.note { font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); max-width: 36rem; }
+.sec-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: var(--rk-space-s) var(--rk-space-m); }
+.fields { display: grid; gap: var(--rk-space-m); max-width: 30rem; }
+.rk-sec .group-label, .detail .group-label { margin-top: var(--rk-space-l); }
+.group-label + * { margin-top: var(--rk-space-xs) !important; }
+.tag-row { gap: var(--rk-space-s) var(--rk-space-l); }
+code { font-family: var(--rk-font-mono); font-size: 0.9em; }
+kbd.rk-key { font-family: inherit; }
+.light { font-weight: var(--rk-font-weight-light); }
+
+/* A term and its explanation, one per hairline row. */
+.defs > li { display: block; }
+.defs > li > b { display: block; }
+.defs > li > span { display: block; color: var(--rk-text-contrast-high); }
+.numbered { counter-reset: n; }
+.numbered > li { counter-increment: n; }
+.numbered > li > b::before { content: counter(n) '  '; font-variant-numeric: tabular-nums; color: var(--rk-text-contrast-medium); }
+
+/* Colour: swatches; tiles that show their two fills. */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--rk-space-s) var(--rk-space-m); margin: 0; padding: 0; list-style: none; }
+.swatches li { display: grid; grid-template-columns: 28px 1fr; grid-template-rows: auto auto; column-gap: var(--rk-space-s); align-items: center; }
+.swatch { grid-row: 1 / span 2; width: 28px; height: 28px; border-radius: var(--rk-radius-tile); box-shadow: inset 0 0 0 1px var(--rk-text-contrast-low); }
+.tile-hex { color: inherit; }
+.pairs b { font-weight: var(--rk-font-weight-medium); }
+
+/* Typography. */
+.levels { padding: var(--rk-space-m) 0; border-block: 1px solid var(--rk-text-contrast-low); }
+.levels > * + * { margin-top: var(--rk-space-xs); }
+.scale > li { align-items: baseline; }
+.scale-sample { line-height: 1.1; }
+
+/* Motion and feedback demos. */
+.motion-demos { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--rk-space-l); }
+.motion-demos > div > * + * { margin-top: var(--rk-space-s); }
+.flip > li { align-items: center; padding-block: var(--rk-space-xs); }
+.states { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--rk-space-m); }
+.small-tiles { --rk-tile-unit: 5.5rem; }
+.small-tiles .rk-tile { min-height: 5.5rem; }
+pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-block: 1px solid var(--rk-text-contrast-low); font-size: var(--rk-font-size-xs); line-height: var(--rk-line-height-body); }
+
+/* Places below the home: a detail column, and the tokens' split. */
+.detail { padding: 0 var(--rk-space-m) var(--rk-space-l); max-width: calc(4 * var(--rk-tile-unit) + 4 * var(--rk-space-s) + 2 * var(--rk-space-xl)); }
+.detail > * + * { margin-top: var(--rk-space-m); }
+.page-split { padding-inline: var(--rk-space-m); padding-bottom: var(--rk-space-l); }
+.page-split .rk-filters { margin-bottom: var(--rk-space-m); }
+.rk-split-detail > * + * { margin-top: var(--rk-space-m); }
+#token-detail > * + * { margin-top: var(--rk-space-m); }
+.token-swatches { display: flex; gap: var(--rk-space-s); }
+.token-swatches > span { width: 48px; height: 48px; border-radius: var(--rk-radius-tile); box-shadow: inset 0 0 0 1px var(--rk-text-contrast-low); }
+.token-name { font-family: var(--rk-font-mono); font-size: var(--rk-font-size-m); word-break: break-all; }
+#tok-body td:last-child { font-family: var(--rk-font-mono); font-size: var(--rk-font-size-xs); word-break: break-all; }
+.keys-list > li { align-items: center; }
+
+/* The accent slot, set as a product would: one value per theme, apart from every status hue. */
+:root[data-accent='plum'] { --rk-accent: #7d29ad; --rk-on-accent: #ffffff; }
+@media (prefers-color-scheme: dark) { :root[data-accent='plum']:not([data-theme='light']) { --rk-accent: #c38aed; --rk-on-accent: #0e0e12; } }
+:root[data-accent='plum'][data-theme='dark'] { --rk-accent: #c38aed; --rk-on-accent: #0e0e12; }
+
+@media (min-width: 760px) and (min-height: 481px) {
+  html, body { height: 100%; }
+  .app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .top { flex: none; padding-inline: var(--rk-space-xl); }
+  .rk-place { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  .place-detail { overflow-y: auto; }
+  .place-split { overflow: hidden; }
+  .page-split { flex: 1 1 auto; padding: 0 var(--rk-space-xl); }
+  .page-split > .rk-split-list { padding: 0 var(--rk-space-m) var(--rk-space-l) 0; }
+  .page-split > .rk-split-detail { padding: 0 0 var(--rk-space-l) var(--rk-space-l); }
+  .detail { padding-inline: var(--rk-space-xl); }
+  .rk-panorama { flex: 1 1 auto; }
+  .sec-wide { --rk-sec-w: calc(4 * var(--rk-tile-unit) + 4 * var(--rk-space-s)); }
+}

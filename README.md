@@ -58,7 +58,7 @@ each one is usable without the next:
 <script type="module">
   import * as Rekta from './rekta.js';
   Rekta.start();                                   // prefs, press, sheets, first-paint build-in
-  Rekta.places({ home: 'board' });                 // places, addresses, back
+  Rekta.places({ home: 'home' });                  // places, addresses, back
   Rekta.panorama(document.querySelector('.rk-panorama'), { pivot: document.querySelector('.rk-pivot') });
 </script>
 ```
@@ -75,32 +75,37 @@ whole contract, with every hook, attribute and event, is in
 ```sh
 node scripts/build.mjs           # writes dist/ (no dependencies, no network)
 node scripts/build.mjs --check   # contrast, colour-blind separation, every --rk- read defined
-node scripts/build-site.mjs      # dist/ plus the demo site in _site/
+node scripts/build-site.mjs      # dist/ plus the showcase site in _site/
 node scripts/build-site.mjs --serve
-PLAYWRIGHT=/path/to/playwright/index.mjs node test/smoke.mjs   # clicks through the demo in Chromium
+PLAYWRIGHT=/path/to/playwright/index.mjs node test/smoke.mjs   # clicks through the showcase in Chromium
 ```
 
 Node 20 or later. The smoke test needs Playwright, which the repository
 does not depend on.
 
-## Demo site
+## Showcase site
 
-`site/` is **Rekta Board**, a small app built on `dist/`: a board of
-live tiles that open their own places with a turnstile, rows with
-switches and actions, a facet pivot, fields, the status banner with
-four states, toasts with undo, and the theme, density and motion
-switches. `.github/workflows/pages.yml` builds it and deploys it to
-GitHub Pages on every push to `main` (and by hand).
+`site/` is **the showcase**, built in Rekta on `dist/`: one panorama
+whose sections each explain a part of the system by being it. Live
+tiles measure the page itself, the colour section measures its contrast
+in the theme on screen, the components sit in a table chosen the Metro
+way, every token has a row in a place of its own with its detail beside
+it, and the banner, toasts, menus, the palette, a guarded form and the
+prefs all work. Numbers in the copy come from the tokens at build time.
+`.github/workflows/pages.yml` builds it and deploys it to GitHub Pages
+on every push to `main` (and by hand).
 
 ## Status
 
 **0.2: tokens, components and behaviour.** The foundation is in place:
 one token source for every platform, the component stylesheet and a
 framework-free behaviour script, with routes and back, window-size
-classes, density and a keyboard model. Next are the components that
+classes, density and a keyboard model. Unreleased: the components that
 data-heavy desktop apps need: data states, menus and other floating
-surfaces, a table with selection, split views, a command palette, search
-and filters, and forms. See [CHANGELOG.md](CHANGELOG.md).
+surfaces, tables with Metro selection, split views, a command palette,
+search and filters, and forms. Next: the live contract (heartbeat,
+stale and offline data, holding a value still). See
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Repo
 

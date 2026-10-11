@@ -43,28 +43,42 @@ filtered.
 
 ## Selection
 
-When an action applies to several rows at once, the rows get a checkbox
-at their leading edge (`rk-check`).
+Rows and list items are chosen the Metro way: no checkboxes, the item
+itself answers. It works the same on a table, a list of rows or a grid
+of items (`Rekta.select()`, or `table()` for a table).
 
-- **Look:** a selected row takes `rk-surface`. Never a status colour and
-  never the accent: a selected failed run still reads as failed.
-- **Pointer:** a click on a checkbox selects that row, Shift+click the
-  range from the last one; the head checkbox selects all or none and
-  shows a partial selection. Clicking the row's title still opens it.
-- **Keys:** Space toggles the focused checkbox, Ctrl/Cmd+A selects all
-  while focus is in the table, Escape clears the selection (before it
-  would go back).
-- **The app bar carries it.** While anything is selected, the app bar
-  shows the count ("3 selected"), the actions that apply to the selection
-  and "clear", in place of its own controls. The count is a live region.
+- **A click selects and shows.** A plain click (or tap) selects that one
+  item and shows it: its detail beside the list, or in its place on a
+  phone. Clicking its title link does the same.
+- **Ctrl/Cmd+click starts the selection mode.** It adds the item to the
+  selection. From then on every plain click adds or removes an item,
+  until the selection is empty again or Escape ends the mode. Shift+click
+  takes the range from the last item; Ctrl/Cmd+A selects every visible
+  item.
+- **Look:** a pressed item nudges where it is pressed, like a tile but
+  smaller (`motion.transform.row-tilt`, `row-press-scale`). A selected
+  item takes the **accent** fill with `on-accent` text, and a checkmark
+  without a box at its leading edge (the `rk-check` cell of a table, or
+  the item's own padding in `rk-rows`). Tags inside keep their word and
+  mark. Never a status colour.
+- **Keys:** the list is one tab stop; ↑ ↓ (and ← → in a grid) move,
+  Home End jump, Space or Enter act like a click (with Ctrl/Cmd or
+  Shift as above), Escape ends the selection mode before it would go
+  back.
+- **The app bar carries it.** In the selection mode the app bar shows
+  the count ("3 selected"), the actions that apply to the selection and
+  "clear", in place of its own controls. The count is a live region. One
+  selected item is not the mode: it is the item being shown.
 - An action on a selection that changes data offers undo in a toast and
   puts the rows back where they were.
+- Inside an item, a real control (a button, a switch) acts on its own and
+  does not select.
 
-## Current item
+## Shown item
 
-In a split view, the row whose detail shows is **current**, which is not
-the same as selected: a row can be both. The current row has a 2px
-`rk-text-primary` bar at its leading edge (`aria-current="true"`).
+In a split view, the item whose detail shows is the selected one: a
+plain click selects and shows in one step. In the selection mode the
+detail keeps the item it showed.
 
 ## Split view
 
