@@ -102,7 +102,8 @@ if (single > 0) {
   const inline = (part) => part
     .replace(/<link rel="stylesheet" href="([\w.-]+)">/g, (_, f) => style(f))
     .replace(/<script src="([\w.-]+)"><\/script>/g, (_, f) => script(f));
-  const page = inline(head).replace(/^\s*<meta[^>]*>\n/gm, '') + inline(body);
+  // The dist files do not travel with one page, so their download links become plain names.
+  const page = (inline(head).replace(/^\s*<meta[^>]*>\n/gm, '') + inline(body)).replace(/<a href="(rekta\.[\w.]+)" download>([^<]*)<\/a>/g, '<code>$2</code>');
   writeFileSync(target, page.trim() + '\n');
   console.log(`✓ ${target} written (${Math.round(page.length / 1024)} kB, self-contained)`);
 }
