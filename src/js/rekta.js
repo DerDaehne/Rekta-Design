@@ -27,7 +27,10 @@
      guard      unsaved input asks before it is left behind
      confirm    a short question in a sheet, the safe answer first
      disable    a control that cannot act now says why
-     start      the defaults for a page: prefs, press, sheets, arrival build-in
+     combobox   a field with a list of choices that filters as you type
+     stepper    a number field between − and +, repeating while held
+     drop       a zone that takes dropped or chosen files
+     start      the defaults for a page: prefs, press, sheets, steppers, sliders, switches, arrival build-in
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
 export const version = '0.2.0';
@@ -839,7 +842,7 @@ export function toaster(region) {
     sr.textContent = `, ${windowSec()} seconds to${again ? ' undo' : ''}`;
     msg.appendChild(sr);
   }
-  function show(text, { key = text, undo = null, from = null, action = 'undo' } = {}) {
+  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null } = {}) {
     if (open && open.key === key && open.undo && undo) { open.update(text, undo); return open; }
     if (open) open.leave(false);
     const WIN = windowSec();
@@ -859,6 +862,11 @@ export function toaster(region) {
       const line = el.appendChild(document.createElement('span'));
       line.className = 'rk-toast-line'; line.setAttribute('aria-hidden', 'true');
       btn.addEventListener('click', () => leave(true));
+    } else if (act) {
+      // A plain action ("reload"): no countdown; the toast stays its usual time and holds like any other.
+      const btn = el.appendChild(document.createElement('button'));
+      btn.type = 'button'; btn.className = 'rk-toast-act'; btn.textContent = act.label;
+      btn.addEventListener('click', () => { leave(false); act.run(); });
     }
     say(msg, text, !!undo);
     const paint = () => { if (count) { count.textContent = left; el.style.setProperty('--_rk-left', left / WIN); } };
@@ -1431,6 +1439,16 @@ export function split(el, { key = null } = {}) {
   };
 }
 
+// How well a label matches what was typed: every typed word must start a word of the label or its keywords (3 when the
+// label starts with the text, 2 otherwise), or the label must contain the text (1); 0 is no match.
+const words = (t) => t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+function matchScore(label, keywords, q) {
+  if (!q) return 1;
+  const hay = words(`${label} ${keywords || ''}`), l = label.toLowerCase();
+  if (!words(q).every((w) => hay.some((h) => h.startsWith(w)))) return l.includes(q.toLowerCase()) ? 1 : 0;
+  return l.startsWith(q.toLowerCase()) ? 3 : 2;
+}
+
 // Palette ----------------------------------------------------------------------------------------------------------
 // palette(el, { items, trigger, router, shortcut }): go to a place or run a command, from a list that rises from the
 // app bar at every width. el is a .rk-palette holding an input and a list; items() returns { label, group, keys,
@@ -1447,13 +1465,7 @@ export function palette(el, { items = () => [], trigger = null, router = null, s
   list.setAttribute('role', 'listbox');
   if (trigger) { trigger.setAttribute('aria-haspopup', 'dialog'); trigger.setAttribute('aria-controls', el.id); trigger.setAttribute('aria-expanded', 'false'); }
   let shown = [], active = 0, opener = null;
-  const words = (t) => t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  function match(it, q) {
-    if (!q) return 1;
-    const hay = words(`${it.label} ${it.keywords || ''}`), label = it.label.toLowerCase();
-    if (!words(q).every((w) => hay.some((h) => h.startsWith(w)))) return label.includes(q.toLowerCase()) ? 1 : 0;
-    return label.startsWith(q.toLowerCase()) ? 3 : 2;
-  }
+  const match = (it, q) => matchScore(it.label, it.keywords, q);
   function render() {
     const q = input.value.trim(), all = (typeof items === 'function' ? items() : items) || [];
     const groups = [];
@@ -1749,13 +1761,212 @@ export function guard(el, { router = null, what = 'This form' } = {}) {
   return { get dirty() { return changed().length > 0; }, changed, clean, restore, destroy() { removeEventListener('beforeunload', unload); off(); } };
 }
 
+// Inputs -----------------------------------------------------------------------------------------------------------
+// combobox(input, { options, source, onSelect, free }): a text field with a list of choices that filters as you type.
+// options is a list of strings or { label, value, group, hint, keywords }, or a function returning one; source(q)
+// instead returns them as a promise (the list shows the loading line while it waits). The list floats below the
+// field like a menu. ↓ or Alt+↓ opens, ↑ ↓ move, Enter chooses, Escape closes, then clears; a click chooses. Without
+// free, the field only keeps a choice from the list: leaving it with other text puts the last choice back.
+export function combobox(input, { options = [], source = null, onSelect = null, free = false } = {}) {
+  const wrap = input.closest('.rk-combo') || input.parentElement;
+  const button = wrap.querySelector('.rk-combo-btn');
+  const list = document.createElement('ul');
+  list.className = 'rk-float rk-combo-list';
+  list.id = uid('rk-combo');
+  list.setAttribute('role', 'listbox');
+  if (canPopover) list.setAttribute('popover', 'manual'); else list.hidden = true;
+  wrap.appendChild(list);
+  input.setAttribute('role', 'combobox'); input.setAttribute('aria-controls', list.id); input.setAttribute('aria-expanded', 'false');
+  input.setAttribute('aria-autocomplete', 'list'); input.setAttribute('autocomplete', 'off'); input.spellcheck = false;
+  if (button) { button.tabIndex = -1; button.setAttribute('aria-hidden', 'true'); }
+  const norm = (o) => (typeof o === 'string' ? { label: o, value: o } : { value: o.label, ...o });
+  let shown = [], active = -1, chosen = input.value ? { label: input.value, value: input.dataset.value || input.value } : null, asked = 0;
+  const all = () => (typeof options === 'function' ? options() : options).map(norm);
+  async function render() {
+    const q = input.value.trim(), n = ++asked;
+    let opts;
+    if (source) {
+      const wait = setTimeout(() => list.setAttribute('aria-busy', 'true'), ms('--rk-duration-busy-delay'));
+      try { opts = (await source(q)).map(norm); } catch { opts = null; }
+      clearTimeout(wait); list.removeAttribute('aria-busy');
+      if (n !== asked) return;
+    } else opts = all();
+    shown = [];
+    if (opts) opts.forEach((o, i) => { const s = source ? 1 : matchScore(o.label, o.keywords, q === (chosen && chosen.label) ? '' : q); if (s) shown.push({ o, s, i }); });
+    if (!source && q && q !== (chosen && chosen.label)) shown.sort((a, b) => b.s - a.s || a.i - b.i);
+    list.replaceChildren();
+    let group = null;
+    shown.forEach(({ o }, k) => {
+      if ((o.group || '') !== group) {
+        group = o.group || '';
+        if (group) { const h = document.createElement('li'); h.className = 'rk-menu-label'; h.setAttribute('role', 'presentation'); h.textContent = group; list.appendChild(h); }
+      }
+      const li = document.createElement('li');
+      li.className = 'rk-menu-item'; li.id = `${list.id}-o${k}`; li.setAttribute('role', 'option');
+      if (chosen && o.value === chosen.value) li.setAttribute('data-rk-chosen', '');
+      li.append(o.label);
+      if (o.hint) { const h = document.createElement('span'); h.className = 'rk-menu-key'; h.textContent = o.hint; li.appendChild(h); }
+      li.addEventListener('pointermove', () => mark(k));
+      li.addEventListener('pointerdown', (e) => e.preventDefault());               // keep focus in the field
+      li.addEventListener('click', () => choose(k));
+      list.appendChild(li);
+    });
+    if (!shown.length) {
+      const li = document.createElement('li'); li.className = 'rk-empty rk-palette-empty'; li.setAttribute('role', 'presentation');
+      li.textContent = opts ? (q ? `Nothing matches “${q}”.` : 'Nothing to choose yet.') : 'Could not load the choices. Type to try again.';
+      list.appendChild(li);
+    }
+    const at = chosen ? shown.findIndex(({ o }) => o.value === chosen.value) : -1;
+    mark(q && q !== (chosen && chosen.label) ? 0 : at);
+    if (isOpen(list)) place(list, input);
+  }
+  function mark(k) {
+    active = shown.length ? Math.max(-1, Math.min(k, shown.length - 1)) : -1;
+    list.querySelectorAll('[role=option]').forEach((o, i) => o.setAttribute('aria-selected', String(i === active)));
+    const o = active >= 0 && list.querySelector(`#${CSS.escape(`${list.id}-o${active}`)}`);
+    if (o) { input.setAttribute('aria-activedescendant', o.id); o.scrollIntoView({ block: 'nearest' }); } else input.removeAttribute('aria-activedescendant');
+  }
+  function open() {
+    if (isOpen(list)) return;
+    list.style.minWidth = `${input.offsetWidth}px`;
+    openFloat(list); place(list, input);
+    input.setAttribute('aria-expanded', 'true');
+    render();
+  }
+  function close() {
+    if (!isOpen(list)) return;
+    closeFloat(list); input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant');
+  }
+  function choose(k) {
+    const pick = shown[k];
+    if (!pick) return;
+    chosen = { label: pick.o.label, value: pick.o.value };
+    input.value = pick.o.label; input.dataset.value = pick.o.value;
+    close();
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    if (onSelect) onSelect(pick.o);
+  }
+  function settle() {
+    const q = input.value.trim();
+    if (free || !q || (chosen && q === chosen.label)) { if (!q && chosen && !free) { chosen = null; delete input.dataset.value; if (onSelect) onSelect(null); } return; }
+    const exact = all().find((o) => o.label.toLowerCase() === q.toLowerCase());
+    if (exact && !source) { chosen = { label: exact.label, value: exact.value }; input.value = exact.label; input.dataset.value = exact.value; if (onSelect) onSelect(exact); }
+    else input.value = chosen ? chosen.label : '';
+  }
+  const key = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!isOpen(list)) open(); else mark(active + 1 >= shown.length ? 0 : active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (isOpen(list)) mark(active <= 0 ? shown.length - 1 : active - 1); }
+    else if (e.key === 'Enter') { if (isOpen(list)) { e.preventDefault(); choose(active); } }
+    else if (e.key === 'Escape') {
+      if (isOpen(list)) { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (input.value) { e.preventDefault(); e.stopPropagation(); input.value = ''; settle(); }
+    } else if (e.key === 'Tab') close();
+  };
+  const typed = () => { if (!isOpen(list)) open(); else render(); };
+  const blur = () => { close(); settle(); };
+  const toggle = (e) => { e.preventDefault(); if (isOpen(list)) close(); else { input.focus(); open(); } };
+  const outside = (e) => { if (isOpen(list) && !list.contains(e.target) && !wrap.contains(e.target)) close(); };
+  const reflow = () => { if (isOpen(list)) place(list, input); };
+  input.addEventListener('keydown', key);
+  input.addEventListener('input', typed);
+  input.addEventListener('blur', blur);
+  input.addEventListener('click', () => { if (!isOpen(list)) open(); });
+  if (button) { button.addEventListener('pointerdown', (e) => e.preventDefault()); button.addEventListener('click', toggle); }
+  document.addEventListener('pointerdown', outside, true);
+  addEventListener('resize', reflow); addEventListener('scroll', reflow, true);
+  return {
+    open, close,
+    get value() { return chosen ? chosen.value : (free ? input.value : null); },
+    set(value) { const o = all().find((x) => x.value === value); chosen = o ? { label: o.label, value: o.value } : null; input.value = o ? o.label : ''; if (o) input.dataset.value = o.value; else delete input.dataset.value; },
+    destroy() {
+      input.removeEventListener('keydown', key); input.removeEventListener('input', typed); input.removeEventListener('blur', blur);
+      document.removeEventListener('pointerdown', outside, true); removeEventListener('resize', reflow); removeEventListener('scroll', reflow, true); list.remove();
+    },
+  };
+}
+
+// stepper(el): a number field between − and + buttons (.rk-stepper holding an input[type=number] and two buttons with
+// data-rk-step="-1" and "1"). A press steps once; held, it repeats. The buttons say when the limit is reached.
+export function stepper(el) {
+  const input = el.querySelector('input'), btns = [...el.querySelectorAll('[data-rk-step]')];
+  let repeat = 0, delay = 0;
+  const paint = () => {
+    const v = input.valueAsNumber, min = input.min === '' ? -Infinity : +input.min, max = input.max === '' ? Infinity : +input.max;
+    for (const b of btns) { const up = +b.dataset.rkStep > 0, at = Number.isFinite(v) && (up ? v >= max : v <= min); b.setAttribute('aria-disabled', String(at)); }
+  };
+  function step(b) {
+    if (b.getAttribute('aria-disabled') === 'true' || input.disabled) return false;
+    const n = +b.dataset.rkStep;
+    try { if (n > 0) input.stepUp(n); else input.stepDown(-n); } catch { input.value = String((+input.value || 0) + n); }
+    input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
+    paint();
+    return true;
+  }
+  const stop = () => { clearTimeout(delay); clearInterval(repeat); delay = repeat = 0; };
+  const down = (e) => {
+    const b = e.target.closest('[data-rk-step]');
+    if (!b || e.button !== 0) return;
+    e.preventDefault(); input.focus({ preventScroll: true });
+    if (!step(b)) return;
+    delay = setTimeout(() => { repeat = setInterval(() => { if (!step(b)) stop(); }, 80); }, 400);
+  };
+  const click = (e) => { const b = e.target.closest('[data-rk-step]'); if (b && e.detail === 0) step(b); };    // keyboard
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('click', click);
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) el.addEventListener(ev, stop);
+  input.addEventListener('input', paint);
+  for (const b of btns) { b.type = 'button'; b.tabIndex = -1; }
+  paint();
+  return { destroy() { stop(); el.removeEventListener('pointerdown', down); el.removeEventListener('click', click); input.removeEventListener('input', paint); } };
+}
+
+// A slider (.rk-range) fills up to its value; an <output> right after it shows the value (with data-unit).
+function rangeFill(r) {
+  const min = +r.min || 0, max = r.max === '' ? 100 : +r.max, v = +r.value;
+  r.style.setProperty('--_rk-v', `${((v - min) / (max - min || 1)) * 100}%`);
+  const out = r.nextElementSibling;
+  if (out && out.tagName === 'OUTPUT') out.textContent = `${r.value}${out.dataset.unit || ''}`;
+}
+const onRange = (e) => { if (e.target.matches && e.target.matches('input.rk-range')) rangeFill(e.target); };
+
+// drop(el, { onFiles, accept }): a .rk-drop zone around a file input takes files dropped on it or chosen with the
+// input. While files are dragged over it, it gets data-rk-over. Dropping files elsewhere on the page never opens
+// them in the browser while a zone is mounted.
+export function drop(el, { onFiles = null, accept = null } = {}) {
+  const input = el.querySelector('input[type=file]');
+  let depth = 0;
+  const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  const ok = (f) => !accept || accept.split(',').some((a) => { a = a.trim(); return a.startsWith('.') ? f.name.toLowerCase().endsWith(a.toLowerCase()) : a.endsWith('/*') ? f.type.startsWith(a.slice(0, -1)) : f.type === a; });
+  const give = (files) => { const list = [...files].filter(ok); if (list.length && onFiles) onFiles(list, [...files].filter((f) => !ok(f))); };
+  const enter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth += 1; el.setAttribute('data-rk-over', ''); };
+  const over = (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
+  const leave = () => { depth = Math.max(0, depth - 1); if (!depth) el.removeAttribute('data-rk-over'); };
+  const dropped = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; el.removeAttribute('data-rk-over'); give(e.dataTransfer.files); };
+  const page = (e) => { if (hasFiles(e) && !el.contains(e.target)) { e.preventDefault(); if (e.type === 'dragover') e.dataTransfer.dropEffect = 'none'; } };
+  const chose = () => { give(input.files); input.value = ''; };
+  el.addEventListener('dragenter', enter); el.addEventListener('dragover', over); el.addEventListener('dragleave', leave); el.addEventListener('drop', dropped);
+  addEventListener('dragover', page); addEventListener('drop', page);
+  if (input) { if (accept) input.accept = accept; input.addEventListener('change', chose); }
+  return {
+    destroy() {
+      el.removeEventListener('dragenter', enter); el.removeEventListener('dragover', over); el.removeEventListener('dragleave', leave); el.removeEventListener('drop', dropped);
+      removeEventListener('dragover', page); removeEventListener('drop', page); if (input) input.removeEventListener('change', chose);
+    },
+  };
+}
+
 // Start --------------------------------------------------------------------------------------------------------------
-// The defaults for a page: restore the user's prefs, press on tiles, sheets, and the first paint's build-in. An
-// embedded page whose host owns theme, density and motion passes restore: false.
+// The defaults for a page: restore the user's prefs, press on tiles, sheets, steppers, sliders, switches, and the
+// first paint's build-in. An embedded page whose host owns theme, density and motion passes restore: false.
 export function start({ root = document, restore = true } = {}) {
   if (restore) prefs.restore();
   const parts = [press(root)];
   root.querySelectorAll('dialog.rk-sheet').forEach((d) => parts.push(sheet(d)));
+  root.querySelectorAll('.rk-stepper').forEach((s) => parts.push(stepper(s)));
+  root.querySelectorAll('input.rk-range').forEach(rangeFill);
+  root.querySelectorAll('.rk-toggle input[type=checkbox]').forEach((i) => i.setAttribute('role', 'switch'));
+  document.addEventListener('input', onRange);
+  parts.push({ destroy() { document.removeEventListener('input', onRange); } });
   arrive(docEl);
   return { destroy() { parts.forEach((p) => p.destroy()); } };
 }

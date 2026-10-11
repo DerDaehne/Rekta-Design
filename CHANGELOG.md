@@ -9,6 +9,16 @@ it; each entry says how.
 
 ### Added
 
+- Inputs, native where they can be: `select.rk-input` with a chevron;
+  number, date and time fields in Rekta's frame (the date and time
+  pickers' icons from Rekta's set); a combobox that filters as you type
+  (`rk-combo`, `Rekta.combobox()`); the Metro toggle switch
+  (`rk-toggle`: a square frame, the accent fill, an ink bar as the
+  thumb, the state word beside it); a stepper (`rk-stepper`,
+  `Rekta.stepper()`); a slider (`rk-range`, with an `<output>`);
+  segments (`rk-segments`); a drop zone for files (`rk-drop`,
+  `Rekta.drop()`).
+- Toasts take a plain action without a countdown (`act`).
 - Data states: `rk-region` with `aria-busy` (a 2px line after
   `busy-delay`, at least `busy-min`), still placeholders `rk-ghost`, and
   `rk-empty` for empty and failed regions. `Rekta.busy()`.

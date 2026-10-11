@@ -192,6 +192,122 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 /* Why a control cannot act now: a hint beside it, always shown, read with it. */
 .rk-actions > .rk-why { flex: 1 1 12rem; }
 
+/* Inputs --------------------------------------------------------------------------------------------------------- */
+/* Native where it can be: a select, number, date and time are the platform's own controls in Rekta's frame, so
+   their pickers, keyboard and screen-reader support come for free. */
+select.rk-input {
+  appearance: none; padding-right: 36px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
+}
+select.rk-input[multiple] { padding: var(--rk-space-xs) 0; background-image: none; }
+select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary); }
+.rk-input[type='number'] { -moz-appearance: textfield; appearance: textfield; font-variant-numeric: tabular-nums; }
+.rk-input[type='number']::-webkit-inner-spin-button, .rk-input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.rk-input:is([type='date'], [type='time'], [type='datetime-local'], [type='month'], [type='week']) { font-variant-numeric: tabular-nums; }
+.rk-input::-webkit-calendar-picker-indicator {
+  width: 16px; height: 16px; padding: 2px; opacity: 1; cursor: pointer; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.6'%3E%3Cpath d='M3 5h14v12H3zM3 8.5h14M7 3v4M13 3v4'/%3E%3C/svg%3E") center / 16px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.6'%3E%3Cpath d='M3 5h14v12H3zM3 8.5h14M7 3v4M13 3v4'/%3E%3C/svg%3E") center / 16px no-repeat;
+}
+.rk-input[type='time']::-webkit-calendar-picker-indicator {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.6'%3E%3Ccircle cx='10' cy='10' r='7'/%3E%3Cpath d='M10 6v4l3 2'/%3E%3C/svg%3E");
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.6'%3E%3Ccircle cx='10' cy='10' r='7'/%3E%3Cpath d='M10 6v4l3 2'/%3E%3C/svg%3E");
+}
+/* Combobox: a field with a chevron button; its list floats below like a menu. The active option looks focused while
+   focus stays in the field; the current choice carries a check. */
+.rk-combo { position: relative; display: flex; }
+.rk-combo > .rk-input { padding-right: 40px; }
+.rk-combo-btn {
+  position: absolute; inset: 1px 1px 1px auto; width: 36px; border: 0; border-radius: 0 var(--rk-radius-s) var(--rk-radius-s) 0; background: none; color: inherit; cursor: pointer;
+}
+.rk-combo-btn::before { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -5px 0 0 -3px; border: solid currentColor; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); }
+.rk-combo-list { padding: var(--rk-space-xs) 0; margin: 0; list-style: none; }
+.rk-combo-list [role='option'][aria-selected='true'] { outline: 2px solid var(--rk-focus); outline-offset: -2px; background-color: var(--rk-hover); }
+.rk-combo-list [role='option']::before { content: ''; flex: none; width: 10px; height: 6px; margin: -3px 2px 0 0; }
+.rk-combo-list [data-rk-chosen]::before { border: solid currentColor; border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+.rk-combo-list[aria-busy='true']::before {
+  content: ''; position: absolute; inset: 0 0 auto; height: 2px;
+  background: linear-gradient(var(--rk-text-primary), var(--rk-text-primary)) no-repeat -50% 0 / 30% 100%; animation: rk-busy var(--rk-duration-busy) linear infinite;
+}
+
+/* Toggle switch, the Metro way: a square-cornered frame, the accent fill growing from the leading edge when on, a solid
+   ink bar as the thumb, and the state word beside it. The checkbox (role="switch") stays the real control. */
+.rk-toggle { position: relative; display: inline-flex; align-items: center; gap: var(--rk-space-s); min-height: var(--rk-control-height); font-weight: var(--rk-font-weight-semibold); cursor: pointer; }
+.rk-toggle > input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.rk-toggle-track {
+  position: relative; flex: none; width: 46px; height: 22px; padding: 2px; border: 2px solid var(--rk-text-primary);
+  background: linear-gradient(var(--rk-accent), var(--rk-accent)) no-repeat; background-origin: content-box; background-clip: content-box; background-size: 0 100%;
+  transition: background-size var(--rk-duration-short) var(--rk-ease-base);
+}
+.rk-toggle-track::after {
+  content: ''; position: absolute; top: -2px; bottom: -2px; left: -2px; width: 12px; background: var(--rk-text-primary);
+  transition: transform var(--rk-duration-short) var(--rk-ease-base);
+}
+.rk-toggle > input:checked + .rk-toggle-track { background-size: calc(100% - 14px) 100%; }
+.rk-toggle > input:checked + .rk-toggle-track::after { transform: translateX(34px); }
+.rk-toggle > input:focus-visible + .rk-toggle-track { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
+.rk-toggle > input:disabled + .rk-toggle-track { border-color: var(--rk-disabled); }
+.rk-toggle > input:disabled + .rk-toggle-track::after { background: var(--rk-disabled); }
+.rk-toggle:has(> input:disabled) { color: var(--rk-disabled); cursor: not-allowed; }
+.rk-toggle-label { margin-right: var(--rk-space-s); }
+.rk-toggle-word { min-width: 2.2em; font-weight: var(--rk-font-weight-regular); color: var(--rk-text-contrast-high); }
+.rk-toggle-word::before { content: attr(data-off); }
+.rk-toggle > input:checked ~ .rk-toggle-word::before { content: attr(data-on); }
+
+/* Stepper: − field +, joined; the field centred in tabular figures. */
+.rk-stepper { display: inline-flex; align-items: stretch; }
+.rk-stepper > .rk-input { width: 5.5em; border-radius: 0; text-align: center; }
+.rk-stepper > [data-rk-step] {
+  flex: none; width: var(--rk-control-height); min-height: var(--rk-control-height); border: 1px solid var(--rk-text-contrast-medium); background: none; color: inherit; font: inherit; font-size: var(--rk-font-size-m); line-height: 1; cursor: pointer;
+}
+.rk-stepper > [data-rk-step]:first-child { border-right: 0; border-radius: var(--rk-radius-s) 0 0 var(--rk-radius-s); }
+.rk-stepper > [data-rk-step]:last-child { border-left: 0; border-radius: 0 var(--rk-radius-s) var(--rk-radius-s) 0; }
+.rk-stepper > [data-rk-step]:active { background-color: var(--rk-hover); }
+.rk-stepper > [data-rk-step][aria-disabled='true'] { color: var(--rk-disabled); cursor: not-allowed; }
+
+/* Slider: a 6px track filled with the accent up to the value, an ink bar as the thumb (rekta.js writes --_rk-v). */
+.rk-range { -webkit-appearance: none; appearance: none; width: 100%; height: var(--rk-control-height); margin: 0; background: none; cursor: pointer; --_rk-v: 50%; }
+.rk-range::-webkit-slider-runnable-track { height: 6px; background: linear-gradient(var(--rk-accent), var(--rk-accent)) 0 / var(--_rk-v) 100% no-repeat, var(--rk-text-contrast-low); }
+.rk-range::-moz-range-track { height: 6px; background: var(--rk-text-contrast-low); }
+.rk-range::-moz-range-progress { height: 6px; background: var(--rk-accent); }
+.rk-range::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 24px; margin-top: -9px; border: 0; border-radius: 0; background: var(--rk-text-primary); }
+.rk-range::-moz-range-thumb { width: 10px; height: 24px; border: 0; border-radius: 0; background: var(--rk-text-primary); }
+.rk-range:focus-visible { outline: none; }
+.rk-range:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
+.rk-range:focus-visible::-moz-range-thumb { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
+.rk-range:disabled { cursor: not-allowed; }
+.rk-range:disabled::-webkit-slider-thumb { background: var(--rk-disabled); }
+.rk-range + output { min-width: 3.5em; font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; text-align: right; }
+.rk-slider { display: flex; align-items: center; gap: var(--rk-space-m); }
+
+/* Segments: two to five options side by side, one chosen; a row of joined buttons, the chosen one in the accent. */
+.rk-segments { display: inline-flex; flex-wrap: wrap; margin: 0; padding: 0; border: 0; min-width: 0; }
+.rk-segments > label {
+  position: relative; display: inline-flex; align-items: center; min-height: var(--rk-control-height); padding: 0 var(--rk-control-padding);
+  border: 2px solid var(--rk-text-primary); font-weight: var(--rk-font-weight-semibold); cursor: pointer; white-space: nowrap;
+  transition: background-color var(--rk-duration-short) var(--rk-ease-base), color var(--rk-duration-short) var(--rk-ease-base);
+}
+.rk-segments > label + label { margin-left: -2px; }
+.rk-segments > label:first-of-type { border-radius: var(--rk-radius-s) 0 0 var(--rk-radius-s); }
+.rk-segments > label:last-of-type { border-radius: 0 var(--rk-radius-s) var(--rk-radius-s) 0; }
+.rk-segments > label > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
+.rk-segments > label:has(> input:checked) { z-index: 1; border-color: var(--rk-accent); background-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk-segments > label:has(> input:focus-visible) { z-index: 2; outline: 2px solid var(--rk-focus); outline-offset: 2px; }
+.rk-segments > label:has(> input:disabled) { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
+
+/* Drop zone: a dashed frame around a file input; files dragged over it make it solid and lay the hover over it. */
+.rk-drop {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--rk-space-xs);
+  min-height: 7.5rem; padding: var(--rk-space-l) var(--rk-space-m); border: 2px dashed var(--rk-text-contrast-medium); border-radius: var(--rk-radius-s);
+  text-align: center; color: var(--rk-text-contrast-high); cursor: pointer;
+  transition: border-color var(--rk-duration-short) var(--rk-ease-base), background-color var(--rk-duration-short) var(--rk-ease-base);
+}
+.rk-drop > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.rk-drop b { color: var(--rk-text-primary); }
+.rk-drop:has(> input:focus-visible) { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
+.rk-drop[data-rk-over] { border-style: solid; border-color: var(--rk-text-primary); background-color: var(--rk-hover); color: var(--rk-text-primary); }
+
 /* Touch: fields never set text below 16px, so iOS does not zoom the page when one takes focus. */
 @media (pointer: coarse) { .rk-input { font-size: max(16px, 1rem); } }
 
@@ -541,6 +657,9 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-btn--quiet:hover { color: var(--rk-text-primary); }
   .rk-split-handle:hover::after { width: 2px; background-color: var(--rk-text-contrast-medium); }
   .rk-toast-act:hover { background-color: var(--rk-hover); }
+  .rk-segments > label:hover:not(:has(> input:checked, > input:disabled)) { background-color: var(--rk-hover); }
+  .rk-stepper > [data-rk-step]:hover:not([aria-disabled='true']), .rk-combo-btn:hover { background-color: var(--rk-hover); }
+  .rk-drop:hover { border-color: var(--rk-text-primary); color: var(--rk-text-primary); }
 }
 /* A fine pointer can select text inside tiles and rows (dragging never activates them: rekta.js); touch gets no
    text selection and no long-press callout on them. */
@@ -558,6 +677,11 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-errors > p::before { forced-color-adjust: none; background: CanvasText; }
   [data-rk-select] > [aria-selected='true'] { forced-color-adjust: none; background-color: Highlight; color: HighlightText; }
   .rk-split-handle::after { background: CanvasText; }
+  .rk-toggle-track { forced-color-adjust: none; border-color: CanvasText; background-image: linear-gradient(Highlight, Highlight); }
+  .rk-toggle-track::after { background: CanvasText; }
+  .rk-segments > label:has(> input:checked) { forced-color-adjust: none; border-color: Highlight; background-color: Highlight; color: HighlightText; }
+  .rk-range::-webkit-slider-runnable-track { background: linear-gradient(Highlight, Highlight) 0 / var(--_rk-v) 100% no-repeat, GrayText; }
+  .rk-range::-webkit-slider-thumb { background: CanvasText; }
 }
 
 /* Window-size classes -------------------------------------------------------------------------------------------- */

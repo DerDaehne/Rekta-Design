@@ -384,6 +384,64 @@
   });
   if (customAccent) { $('#a-name').value = customAccent.name; $('#a-light').value = customAccent.light; $('#a-dark').value = customAccent.dark || ''; accentGuard.clean(); }
 
+  /* ---------- inputs: build a tile, find a token, text size, a date, files ---------- */
+  const built = $('#built');
+  function build() {
+    const st = $('#b-status').value, size = ($$('input[name=b-size]').find((r) => r.checked) || {}).value;
+    if (st) built.dataset.status = st; else delete built.dataset.status;
+    built.className = `rk-tile${size === 'w2' ? ' rk-w2' : size === 'h2' ? ' rk-w2 rk-h2' : ''}`;
+    $('.rk-tile-word', built).textContent = st ? WORD[st] : 'idle';
+    $('.rk-stat b', built).textContent = $('#b-value').value || '0';
+    $('.rk-stat span', built).textContent = $('#b-label').value.trim() || 'no label';
+    let spark = $('.rk-spark', built);
+    if ($('#b-spark').checked && !spark && st !== 'success') {
+      built.insertAdjacentHTML('beforeend', '<svg class="rk-spark" viewBox="0 0 200 28" role="img" aria-label="rising over the last 8 hours"><polyline pathLength="1" points="0,24 30,20 60,22 90,14 120,16 150,9 180,11 200,4"/></svg>');
+    } else if ((!$('#b-spark').checked || st === 'success') && spark) spark.remove();
+  }
+  $('#builder').addEventListener('input', build);
+  $('#builder').addEventListener('change', build);
+  $('#builder').addEventListener('submit', (e) => e.preventDefault());
+  const tokenFind = Rekta.combobox($('#find-token'), {
+    options: () => TOKENS.map((t) => ({ label: `--rk-${t.name}`, value: t.name, hint: t.group, group: t.group, keywords: `${t.name} ${t.value || ''}` })),
+    onSelect(o) {
+      const t = o && TOKENS.find((x) => x.name === o.value);
+      $('#find-hint').textContent = t ? `${t.value}${t.alt && t.alt !== t.value ? ` · ${t.altLabel} ${t.alt}` : ''}: ${t.description || 'a token of Rekta Design.'}` : 'A combobox: it filters as you type and keeps only a choice from its list.';
+    },
+  });
+  $('#text-size').addEventListener('input', (e) => { root.style.fontSize = +e.target.value === 100 ? '' : `${e.target.value}%`; env(); });
+  const today = new Date(); today.setDate(today.getDate() + 3);
+  $('#when-d').value = today.toISOString().slice(0, 10);
+  function when() {
+    const d = $('#when-d').value, t = $('#when-t').value || '09:00';
+    if (!d) { $('#when-hint').textContent = 'No date: nothing to remind you of.'; return; }
+    const at = new Date(`${d}T${t}`), days = Math.round((at - Date.now()) / 864e5);
+    $('#when-hint').textContent = at < Date.now() ? 'That has passed: choose a later time.' : `${days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`}, at ${t}.`;
+  }
+  $('#when-d').addEventListener('input', when); $('#when-t').addEventListener('input', when); when();
+  const LIMIT = 4 * 1024 * 1024;
+  const kb = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} kB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+  Rekta.drop($('#drop'), {
+    onFiles(files) {
+      const list = $('#files');
+      list.hidden = false;
+      for (const f of files) {
+        const li = document.createElement('li');
+        li.innerHTML = `<b></b><span class="rk-tag" data-status="warning">waiting</span><span class="rk-meta"></span><progress class="rk-progress" max="100" value="0"></progress>`;
+        $('b', li).textContent = f.name; $('.rk-meta', li).textContent = kb(f.size);
+        list.prepend(li);
+        if (f.size > LIMIT) { const tag = $('.rk-tag', li); tag.dataset.status = 'error'; tag.textContent = 'failed'; $('.rk-meta', li).textContent = `${kb(f.size)} · larger than ${kb(LIMIT)}`; $('progress', li).remove(); continue; }
+        let v = 0;
+        const tag = $('.rk-tag', li), bar = $('progress', li), step = Math.max(4, 40 - f.size / 50000);
+        tag.dataset.status = 'info'; tag.textContent = 'active';
+        const timer = setInterval(() => {
+          v = Math.min(100, v + step); bar.value = v;
+          if (v >= 100) { clearInterval(timer); tag.dataset.status = 'success'; tag.textContent = 'done'; bar.remove(); }
+        }, 120);
+      }
+      toasts.show(`${files.length === 1 ? '1 file' : `${files.length} files`} added. Nothing leaves your device.`, { key: 'files' });
+    },
+  });
+
   /* ---------- sheet and reset ---------- */
   const sheet = $('#sheet');
   $('#reset').addEventListener('click', () => sheet.showModal());
@@ -398,6 +456,8 @@
     if (root.dataset.accent === 'plum') { delete root.dataset.accent; }
     presses = 0; $('#presses').textContent = '0'; seen.clear(); seen.add(home.current ? home.current.id : 'overview'); paintSeen();
     facets.select(0);
+    $('#text-size').value = 100; $('#text-size').dispatchEvent(new Event('input', { bubbles: true }));
+    $('#builder').reset(); build(); tokenFind.set(null); $('#files').replaceChildren(); $('#files').hidden = true;
     paintAccent();
     toasts.show('Demo reset. Everything is back at the start.', { key: 'reset' });
   });
@@ -406,5 +466,5 @@
   paintAccent();
   paintSeen();
   requestAnimationFrame(() => { measure(); env(); });
-  window.site = { app, router, home, facets, toasts, banner, compTable, pick, tokTable, tokSplit, palette, accentForm, accentGuard };
+  window.site = { app, router, home, facets, toasts, banner, compTable, pick, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard };
 })();

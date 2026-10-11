@@ -81,3 +81,17 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
   .rk-panorama { flex: 1 1 auto; }
   .sec-wide { --rk-sec-w: calc(4 * var(--rk-tile-unit) + 4 * var(--rk-space-s)); }
 }
+
+/* Inputs: the tile builder beside its tile; the other inputs in a grid. */
+.builder { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--rk-space-l); align-items: start; }
+.builder-out { grid-template-columns: repeat(2, var(--rk-tile-unit)); grid-auto-rows: var(--rk-tile-unit); }
+.builder-out > .rk-tile { min-height: var(--rk-tile-unit); }
+.rk-choices-plain { margin: 0; padding: 0; border: 0; min-width: 0; }
+.input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--rk-space-m) var(--rk-space-l); }
+.when { display: grid; grid-template-columns: 1fr 8rem; gap: var(--rk-space-s); }
+.files > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--rk-space-m); align-items: center; }
+.files .rk-progress { grid-column: 1 / -1; }
+@media (max-width: 759.98px), (max-height: 480px) {
+  .builder { grid-template-columns: 1fr; }
+  .builder-out { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(8rem, auto); }
+}

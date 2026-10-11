@@ -28,7 +28,7 @@
        the place, so it sticks on a phone. -->
   <main class="rk-place place-home" data-rk-place="home" aria-labelledby="overview-title">
     <nav class="rk-pivot rk-pivot--nav" id="nav" aria-label="Rekta Design, sections">
-      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#feedback">feedback</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#platforms">platforms</a><a href="#start">get started</a>
+      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#feedback">feedback</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#inputs">inputs</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#platforms">platforms</a><a href="#start">get started</a>
     </nav>
 
     <div class="rk-panorama" id="pan" tabindex="0" role="region" aria-label="Rekta Design, sections side by side">
@@ -313,6 +313,61 @@
           </div>
           <p class="rk-actions"><button class="rk-btn rk-btn--primary" type="submit" id="a-save" data-rk-pending-label="applying…">apply accent</button><button class="rk-btn" type="button" id="a-remove">remove accent</button></p>
         </form>
+      </section>
+
+      <section class="rk-sec sec-wide" id="inputs" aria-labelledby="inputs-title">
+        <h2 class="rk-group" id="inputs-title">Native where it can be, Rekta where it shows.</h2>
+        <p>Every input here changes something you can see. A select, a number, a date and a time are the platform's own controls in Rekta's frame, so their pickers, keys and screen readers come for free; the rest are Rekta's own.</p>
+        <div class="builder">
+          <form class="fields" id="builder" aria-label="build a tile">
+            <div class="rk-field">
+              <label class="rk-label" for="b-status">status</label>
+              <select class="rk-input" id="b-status">
+                <option value="info">active</option><option value="success">done</option><option value="warning">waiting</option><option value="error">failed</option><option value="">idle</option>
+              </select>
+            </div>
+            <div class="rk-field">
+              <label class="rk-label" for="b-value">number</label>
+              <div class="rk-stepper"><button data-rk-step="-1" aria-label="one less">−</button><input class="rk-input" type="number" id="b-value" value="12" min="0" max="999"><button data-rk-step="1" aria-label="one more">+</button></div>
+            </div>
+            <div class="rk-field">
+              <label class="rk-label" for="b-label">label</label>
+              <input class="rk-input" id="b-label" value="builds today" maxlength="40">
+            </div>
+            <fieldset class="rk-field rk-choices-plain"><legend class="rk-label">size</legend>
+              <div class="rk-segments" role="radiogroup" aria-label="size">
+                <label><input type="radio" name="b-size" value="1" checked>1 × 1</label><label><input type="radio" name="b-size" value="w2">2 × 1</label><label><input type="radio" name="b-size" value="h2">2 × 2</label>
+              </div>
+            </fieldset>
+            <label class="rk-toggle"><span class="rk-toggle-label">sparkline</span><input type="checkbox" id="b-spark"><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+          </form>
+          <div class="rk-tiles builder-out" aria-live="polite">
+            <div class="rk-tile" id="built" data-status="info"><span class="rk-tile-word">active</span><span class="rk-stat"><b>12</b><span>builds today</span></span></div>
+          </div>
+        </div>
+        <div class="input-grid">
+          <div class="rk-field">
+            <label class="rk-label" for="find-token">find a token</label>
+            <div class="rk-combo"><input class="rk-input" id="find-token" placeholder="type a name, a group or a value" aria-describedby="find-hint"><button class="rk-combo-btn" type="button" aria-label="show all tokens"></button></div>
+            <span class="rk-hint" id="find-hint">A combobox: it filters as you type and keeps only a choice from its list.</span>
+          </div>
+          <div class="rk-field">
+            <label class="rk-label" for="text-size">text size</label>
+            <div class="rk-slider"><input class="rk-range" type="range" id="text-size" min="87.5" max="125" step="12.5" value="100"><output data-unit="%">100%</output></div>
+            <span class="rk-hint">Sizes are in rem: the whole page follows, as it follows your browser's text size.</span>
+          </div>
+          <div class="rk-field">
+            <label class="rk-label" for="when-d">remind me on</label>
+            <div class="when"><input class="rk-input" type="date" id="when-d"><input class="rk-input" type="time" id="when-t" value="09:00" aria-label="at"></div>
+            <span class="rk-hint" id="when-hint">The browser's own date and time pickers, in Rekta's frame.</span>
+          </div>
+          <div class="rk-field">
+            <span class="rk-label" id="files-label">files</span>
+            <label class="rk-drop" id="drop" aria-labelledby="files-label"><input type="file" multiple><b>Drop files here</b><span>or choose them · nothing leaves your device</span></label>
+          </div>
+        </div>
+        <ul class="rk-rows files" id="files" aria-label="files" hidden></ul>
+        <p class="note">Toggle switches act at once, so they live outside forms that are sent; a checkbox waits for “save”. Segments are for two to five options you see at a glance; more go in a select.</p>
       </section>
 
       <section class="rk-sec" id="look" aria-labelledby="look-title">

@@ -284,6 +284,41 @@ await p.click('#a-save'); await p.waitForTimeout(1200);
 ok((await text(p, '.rk-errors > p')).startsWith('Could not apply: maintenance'), 'the server says no to the whole form', await text(p, '.rk-errors > p'));
 await go(p, 'feedback'); await p.uncheck('#s-readonly'); await p.waitForTimeout(600);
 
+// Inputs: build a tile with a select, a stepper, segments and a toggle; a combobox; the text size; a date; files.
+await go(p, 'inputs');
+await p.selectOption('#b-status', 'error'); await p.waitForTimeout(100);
+ok((await p.getAttribute('#built', 'data-status')) === 'error' && (await text(p, '#built .rk-tile-word')) === 'failed', 'a select sets the tile');
+await p.click('.rk-stepper [data-rk-step="1"]'); await p.waitForTimeout(100);
+ok((await p.inputValue('#b-value')) === '13' && (await text(p, '#built .rk-stat b')) === '13', 'the stepper steps');
+await p.fill('#b-value', '999'); await p.dispatchEvent('#b-value', 'input');
+ok((await p.getAttribute('.rk-stepper [data-rk-step="1"]', 'aria-disabled')) === 'true', 'the stepper says when its limit is reached');
+await p.click('.rk-segments label:nth-child(3)'); await p.waitForTimeout(100);
+ok(await p.evaluate(() => document.querySelector('#built').matches('.rk-w2.rk-h2')), 'segments choose the size');
+await p.click('.rk-toggle'); await p.waitForTimeout(100);
+ok((await p.getAttribute('#b-spark', 'role')) === 'switch' && !!(await p.$('#built .rk-spark')), 'a toggle is a switch; it adds a sparkline at once');
+await p.selectOption('#b-status', 'success'); await p.waitForTimeout(100);
+ok(!(await p.$('#built .rk-spark')), 'a done tile drops its sparkline: stillness means done');
+await p.selectOption('#b-status', 'info'); await p.waitForTimeout(100);
+ok((await p.evaluate(() => getComputedStyle(document.querySelector('.rk-toggle-word'), '::before').content)) === '"on"', 'the toggle says its state in a word');
+await p.click('#find-token'); await p.keyboard.type('focus'); await p.waitForTimeout(150);
+ok((await p.getAttribute('#find-token', 'aria-expanded')) === 'true' && (await p.evaluate(() => document.querySelector(`#${document.querySelector('#find-token').getAttribute('aria-activedescendant')}`).textContent)).startsWith('--rk-focus'), 'the combobox filters as you type');
+await p.keyboard.press('Enter'); await p.waitForTimeout(100);
+ok((await p.inputValue('#find-token')) === '--rk-focus' && (await text(p, '#find-hint')).startsWith('#1a44ea'), 'Enter chooses; the hint shows the value', await text(p, '#find-hint'));
+await p.fill('#find-token', 'nonsense'); await p.keyboard.press('Tab'); await p.waitForTimeout(100);
+ok((await p.inputValue('#find-token')) === '--rk-focus', 'leaving with other text puts the choice back');
+await p.focus('#find-token'); await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(100);
+ok((await p.inputValue('#find-token')) === '' && await visible(p, 'home'), 'Escape closes, then clears, and never goes back');
+await p.focus('#text-size'); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(100);
+ok((await p.evaluate(() => document.documentElement.style.fontSize)) === '112.5%' && (await text(p, '.rk-slider output')) === '112.5%', 'the slider sets the text size');
+await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(100);
+ok(/^In 3 days, at 09:00\.$/.test(await text(p, '#when-hint')), 'a date in the browser’s own picker', await text(p, '#when-hint'));
+await p.setInputFiles('#drop input', [{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') }, { name: 'huge.bin', mimeType: 'application/octet-stream', buffer: Buffer.alloc(5 * 1024 * 1024) }]);
+await p.waitForTimeout(400);
+ok((await p.evaluate(() => [...document.querySelectorAll('#files li .rk-tag')].map((t) => t.textContent).sort().join())) === 'active,failed' || (await p.evaluate(() => [...document.querySelectorAll('#files li .rk-tag')].map((t) => t.textContent).sort().join())) === 'done,failed', 'files: one uploads, one is too large');
+await p.waitForTimeout(1500);
+ok((await p.evaluate(() => [...document.querySelectorAll('#files li .rk-tag')].map((t) => t.textContent).sort().join())) === 'done,failed', 'and the upload finishes');
+await p.screenshot({ path: join(shots, 'inputs.png') });
+
 // Look: prefs, density, motion, the accent slot.
 await go(p, 'look');
 await p.check('input[name=theme][value=dark]'); await p.check('input[name=accent][value=plum]'); await p.waitForTimeout(300);

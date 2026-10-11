@@ -60,6 +60,9 @@ paint: load `rekta.global.js` in `<head>` and call
 | `data-rk-press` | an item of it | It nudges when pressed (`press()`). |
 | `data-rk-selecting` | the list, the app bar | In the selection mode; the bar carries the selection. |
 | `data-rk-dragging` | a split handle | Being dragged. |
+| `data-rk-over` | a drop zone | Files are dragged over it. |
+| `data-value` | a combobox's input | The chosen option's value. |
+| `--_rk-v` | a slider | How far its value is along the track, for the fill. |
 | `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
 | `data-theme`, `data-density`, `data-motion` | the root | Prefs overrides (see `prefs`). |
 
@@ -88,7 +91,9 @@ paint: load `rekta.global.js` in `<head>` and call
 
 The defaults for a page: restores prefs (unless `restore: false`, for an
 embedded page whose host owns theme, density and motion), attaches
-`press` to `root`, attaches `sheet` to every `dialog.rk-sheet`, and
+`press` to `root`, attaches `sheet` to every `dialog.rk-sheet` and
+`stepper` to every `.rk-stepper`, keeps every `input.rk-range` filled
+to its value, gives every `.rk-toggle` checkbox `role="switch"`, and
 marks the first paint as an arrival. Returns `{ destroy }`.
 
 ### `prefs`
@@ -231,14 +236,15 @@ add nothing to history. Returns `{ select(index, { focus }), destroy }`.
 `aria-atomic="false"`, placed after the content whose actions raise
 toasts.
 
-`toaster.show(text, { key, undo, from, action })` shows one toast,
+`toaster.show(text, { key, undo, from, action, act })` shows one toast,
 replacing the one open. With `undo`, the toast has an undo button and a
 `duration-toast` window that counts down once a second and holds while
 it is hovered or has focus. The same `key` with `undo` updates the open
 toast and restarts its window. Ctrl/Cmd+Z undoes while the window is
 open, except in a text field; Escape inside a toast dismisses it. When
 the toast had focus as it goes, focus returns to `from`, or to the
-place's title. Undo is a shortcut, never the only way back.
+place's title. Undo is a shortcut, never the only way back. `act:
+{ label, run }` adds a plain action without a countdown ("reload").
 
 Returns `{ show, open, dismiss(), destroy }`.
 
@@ -384,6 +390,35 @@ button and takes focus. Escape and the shading answer cancel.
 The control cannot act now and says why in a `.rk-hint` beside it
 (`aria-describedby`); it stays focusable (`aria-disabled`) and clicks do
 nothing. `disable(control, null)` enables it again.
+
+### `combobox(input, { options, source, onSelect, free })`
+
+`input` is a `.rk-input` inside a `.rk-combo` (optionally with a
+`.rk-combo-btn` chevron). `options` is a list of strings or
+`{ label, value, group, hint, keywords }` (or a function returning one);
+`source(q)` instead returns a promise of them, for a remote list. Typing
+filters (every word must start a word of the label or its keywords);
+the list floats below like a menu (`role=listbox`, `aria-activedescendant`).
+↓ or Alt+↓ opens, ↑ ↓ move, Enter chooses, Escape closes, then clears.
+Without `free`, leaving the field with text that is not a choice puts
+the last choice back. `onSelect(option | null)` follows a choice; the
+input gets `data-value`. Returns `{ open, close, value, set(value), destroy }`.
+
+### `stepper(el)`
+
+`el` is a `.rk-stepper`: a button with `data-rk-step="-1"`, an
+`input[type=number]`, a button with `data-rk-step="1"`. A press steps
+once (firing `input` and `change`); held, it repeats after 400ms every
+80ms. A button at the limit gets `aria-disabled`. The buttons are out of
+the tab order: ↑ ↓ in the field do the same. `start()` attaches it.
+
+### `drop(el, { onFiles, accept })`
+
+`el` is a `.rk-drop` label around an `input[type=file]`. Files dropped on
+it or chosen with the input go to `onFiles(accepted, refused)` (`accept`
+as in the input's attribute). While files are dragged over it, it gets
+`data-rk-over`. While it is mounted, files dropped elsewhere on the page
+are not opened by the browser. Returns `{ destroy }`.
 
 ### `place(el, anchor)`
 
