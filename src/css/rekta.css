@@ -178,6 +178,20 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-field[data-status='error'] .rk-input { padding-inline: 11px; border: 2px solid var(--rk-status-error-full); }
 .rk-field[data-status='error'] .rk-hint { color: var(--rk-text-primary); }
 .rk-field[data-status='error'] .rk-hint::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--_rk-mark); }
+/* A label may say "optional"; required fields carry no mark. */
+.rk-optional { font-weight: var(--rk-font-weight-regular); color: var(--rk-text-contrast-high); }
+/* The summary of what needs attention, first in the form: a sentence with the error square and a link to each field,
+   a hairline below, no fill. It takes focus when the form is sent with errors. */
+.rk-errors { padding-bottom: var(--rk-space-m); border-bottom: 1px solid var(--rk-text-contrast-low); color: var(--rk-text-primary); }
+.rk-errors:focus-visible { outline: 2px solid var(--rk-focus); outline-offset: 4px; }
+.rk-errors > p { font-weight: var(--rk-font-weight-semibold); }
+.rk-errors > p::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--rk-status-error-full); }
+.rk-errors > ul { margin: var(--rk-space-xs) 0 0; padding: 0 0 0 14px; list-style: none; }
+.rk-errors > ul > li + li { margin-top: 2px; }
+.rk-errors a { color: inherit; }
+/* Why a control cannot act now: a hint beside it, always shown, read with it. */
+.rk-actions > .rk-why { flex: 1 1 12rem; }
+
 /* Touch: fields never set text below 16px, so iOS does not zoom the page when one takes focus. */
 @media (pointer: coarse) { .rk-input { font-size: max(16px, 1rem); } }
 
@@ -507,6 +521,7 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-region[aria-busy='true']::before, .rk-btn[data-rk-pending]::after, .rk-empty[data-status='error'] > :first-child::before { forced-color-adjust: none; background: CanvasText; }
   .rk-ghost { forced-color-adjust: none; background: GrayText; }
   .rk-float { border-color: CanvasText; }
+  .rk-errors > p::before { forced-color-adjust: none; background: CanvasText; }
   .rk-table tbody tr[aria-current='true'] > :first-child { border-left: 2px solid CanvasText; }
   .rk-table tr[data-rk-selected] { outline: 1px solid Highlight; outline-offset: -1px; }
   .rk-split-handle::after { background: CanvasText; }

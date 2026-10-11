@@ -44,6 +44,16 @@ it; each entry says how.
   what they keep (`menu(…, { summary })`), `rk-btn--quiet`; parameters
   in the address (`setParams`, `params`). Checkbox items leave a menu
   open.
+- Forms: `Rekta.form()` checks late and corrects early, sums up errors in
+  `rk-errors` (focused, with links to the fields) and shows server
+  refusals at the field or for the form; `rk-optional`.
+- Leaving unsaved input asks first: `Rekta.guard()` and `router.guard()`
+  (links, back, Escape and the browser's own steps), plus the browser's
+  question on closing.
+- `Rekta.confirm()`: a sheet with the safe answer first.
+  `Rekta.disable()`: a disabled control says why, beside it.
+- [docs/forms.md](docs/forms.md): checks, refusals, leaving, dialog
+  levels, disabled reasons.
 - [docs/collections.md](docs/collections.md).
 
 ### Fixed

@@ -150,7 +150,7 @@
       if (!ul.children.length && !empty) { const p = document.createElement('p'); p.className = 'rk-empty'; p.textContent = ul === openList ? 'Nothing open. Well done.' : 'Nothing done yet.'; ul.after(p); }
       if (ul.children.length && empty) empty.remove();
     }
-    archiveBtn.disabled = !doneList.children.length;
+    Rekta.disable(archiveBtn, doneList.children.length ? null : 'Archive needs at least one done job.');
   }
   function setJob(li, done) {
     const tag = $('.rk-tag', li), meta = $('.rk-meta', li);
@@ -242,26 +242,29 @@
   });
   $('#reviews-title').tabIndex = -1;
 
-  /* ---------- controls: live validation, cause and remedy ---------- */
-  const timeField = $('#time-field'), timeInput = $('#f-time'), timeHint = $('#h-time'), save = $('#save');
-  function validate() {
-    const v = timeInput.value.trim(), m = /^(\d{1,2}):(\d{2})$/.exec(v), ok = !!m && +m[1] < 24 && +m[2] < 60;
-    if (ok) { timeField.removeAttribute('data-status'); timeInput.removeAttribute('aria-invalid'); timeHint.textContent = 'Daily, in 24-hour time.'; }
-    else {
-      timeField.dataset.status = 'error'; timeInput.setAttribute('aria-invalid', 'true');
-      timeHint.textContent = m ? `${v} is not a time of day. Use 00:00 to 23:59.` : 'Write the time as hours and minutes, for example 02:30.';
-    }
-    save.disabled = !ok;
-    return ok;
-  }
-  timeInput.addEventListener('input', validate);
-  $('#schedule-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (!validate()) { timeInput.focus(); return; }
-    Rekta.pending(save, wait(900)).then(() => toasts.show(`Schedule saved: ${$('#f-name').value.trim()} runs daily at ${timeInput.value.trim()}.`, { key: 'schedule', from: save }));
+  /* ---------- controls: a form that checks late and corrects early, guarded against leaving ---------- */
+  const save = $('#save'), scheduleForm = $('#schedule-form');
+  const schedule = Rekta.form(scheduleForm, {
+    validators: {
+      'f-name': (v) => (v.trim() ? null : 'Give the project a name; it shows on every tile.'),
+      'f-time': (v) => {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
+        if (!m) return 'Write the time as hours and minutes, for example 02:30.';
+        return +m[1] < 24 && +m[2] < 60 ? null : `${v.trim()} is not a time of day. Use 00:00 to 23:59.`;
+      },
+      'f-mail': (v) => (!v.trim() || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim()) ? null : 'Write one address, like ops@example.com.'),
+    },
+    async onSubmit(values) {
+      await wait(900);
+      if (banner.is('readonly')) throw { message: 'Could not save: the job database is read-only until 15:00. Your changes are still here.' };
+      if (values['f-name'].trim().toLowerCase() === 'release notes') throw { fields: { 'f-name': 'A project called “Release notes” already exists. Choose another name.' } };
+      scheduleGuard.clean();
+      toasts.show(`Schedule saved: ${values['f-name'].trim()} runs daily at ${values['f-time'].trim()}.`, { key: 'schedule', from: save });
+    },
   });
-  $('#revert').addEventListener('click', () => { $('#f-name').value = 'Nightly import'; timeInput.value = '25:00'; $('#f-retry').checked = true; validate(); });
-  validate();
+  const scheduleGuard = Rekta.guard(scheduleForm, { router, what: 'The schedule' });
+  $('#revert').addEventListener('click', () => { scheduleGuard.restore(); schedule.clear(); });
+  Rekta.disable($('#delete-schedule'), 'Only the owner, kabai studio, can delete this schedule.');
 
   /* ---------- the import place: retry, and the board's tile follows ---------- */
   // Delegated: a reset re-renders the place.
@@ -438,7 +441,8 @@
     $('[data-rk-place=import]').innerHTML = start.importPlace;
     $('#review-list').innerHTML = start.reviews; paintReviews();
     $('#runs-body').innerHTML = runsHtml; $('#runs-q').value = ''; fStatus.set(() => false); fTarget.set(() => false); applyFilters({ write: false });
-    $('#revert').click();
+    $('#f-name').value = 'Nightly import'; $('#f-time').value = '25:00'; $('#f-mail').value = ''; $('#f-retry').checked = true;
+    schedule.clear(); scheduleGuard.clean();
     facets.select(0);
     board.goTo('overview', { focus: false });
     toasts.show('Demo reset. Everything is back at the start.', { key: 'reset' });

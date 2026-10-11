@@ -144,7 +144,7 @@ await p.hover('.rk-toast:not([data-rk-phase])'); await p.waitForTimeout(2500);
 ok(['5', '4'].includes(await text(p, '.rk-toast:not([data-rk-phase]) .rk-toast-count')), 'hover holds the window');
 await p.mouse.move(5, 5); await p.waitForTimeout(5600);
 ok((await p.evaluate(() => document.querySelectorAll('.rk-toast').length)) === 0, 'the toast expires');
-ok(await p.evaluate(() => document.querySelector('#archive').disabled), 'archive disabled with nothing done');
+ok((await p.getAttribute('#archive', 'aria-disabled')) === 'true' && (await text(p, `#${await p.getAttribute('#archive', 'data-rk-why')}`)) === 'Archive needs at least one done job.', 'archive says why it cannot act');
 
 // Menu: the keyboard, the invoker, a choice; refresh shows the loading line after its delay, never at once.
 await p.focus('#jobs-more'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
@@ -185,13 +185,43 @@ await p.click('#tab-0'); await p.keyboard.press('ArrowRight'); await p.waitForTi
 ok((await text(p, '[role=tab][aria-selected=true]')) === 'activity', 'ArrowRight selects the next facet');
 ok((await p.evaluate(() => history.length)) === len, 'facets add no history entries');
 
-// Controls: cause and remedy, then save.
+// Controls: a form that checks late, sums up what needs attention, corrects early, and hears the server.
 await p.click('#nav a[href="#controls"]'); await p.waitForTimeout(900);
-ok((await p.getAttribute('#time-field', 'data-status')) === 'error', 'invalid time marked');
-await p.fill('#f-time', '02:30'); await p.click('#save'); await p.waitForTimeout(100);
+ok(!(await p.getAttribute('#time-field', 'data-status')), 'a field is not marked before it is checked');
+await p.fill('#f-name', ''); await p.click('#save'); await p.waitForTimeout(300);
+ok((await text(p, '.rk-errors > p')) === '2 fields need attention' && (await p.evaluate(() => document.activeElement.classList.contains('rk-errors'))), 'sending with errors: a summary takes focus');
+ok((await p.evaluate(() => document.querySelectorAll('.rk-errors a').length)) === 2 && (await p.getAttribute('#time-field', 'data-status')) === 'error', 'the summary links each field, each field shows its error');
+await p.click('.rk-errors a[href="#f-time"]'); await p.waitForTimeout(100);
+ok((await focused(p)) === 'f-time' && (await p.evaluate(() => location.hash)) === '', 'a summary link focuses its field, the address stays');
+await p.fill('#f-time', '02:30'); await p.waitForTimeout(100);
+ok(!(await p.getAttribute('#time-field', 'data-status')), 'a field in error is corrected as you type');
+await p.fill('#f-name', 'Release notes'); await p.click('#save'); await p.waitForTimeout(1300);
+ok((await text(p, '.rk-errors > p')) === '1 field needs attention' && (await p.evaluate(() => document.querySelector('#f-name').closest('.rk-field').querySelector('.rk-hint').textContent)).includes('already exists'), 'the server says no at the field');
+ok((await p.getAttribute('#delete-schedule', 'aria-disabled')) === 'true' && (await p.evaluate(() => document.getElementById(document.querySelector('#delete-schedule').dataset.rkWhy).textContent)).startsWith('Only the owner'), 'a disabled control says why');
+await p.fill('#f-name', 'Nightly import'); await p.click('#save'); await p.waitForTimeout(100);
 ok((await text(p, '#save')) === 'saving schedule…' && (await p.getAttribute('#save', 'aria-disabled')) === 'true', 'pending: the button says what it does');
 await p.waitForTimeout(1200);
 ok((await toast(p)).startsWith('Schedule saved') && (await text(p, '#save')) === 'save schedule', 'save toast, label back');
+ok(!(await p.$('.rk-errors')), 'a clean send clears the summary');
+
+// Leaving with unsaved input asks first: keep editing stays, discard leaves and puts the form back.
+await p.fill('#f-name', 'Nightly import 2');
+await p.click('#nav a[href="#overview"]'); await p.waitForTimeout(900);
+await p.click('#tile-import'); await p.waitForTimeout(400);
+const sheetOpen = () => p.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return d ? d.querySelector('h2').textContent : null; });
+ok((await sheetOpen()) === 'Leave without saving?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep editing', 'leaving with changes asks; keep editing is the safe answer');
+await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+ok(await visible(p, 'board') && (await p.inputValue('#f-name')) === 'Nightly import 2', 'Escape keeps editing');
+await p.click('#tile-import'); await p.waitForTimeout(400);
+await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(TURN);
+ok(await visible(p, 'import') && (await p.inputValue('#f-name')) === 'Nightly import', 'discard leaves and puts the form back');
+await p.keyboard.press('Escape'); await p.waitForTimeout(TURN);
+await p.fill('#f-name', 'Nightly import 3');
+await p.goForward(); await p.waitForTimeout(600);
+ok((await sheetOpen()) === 'Leave without saving?' && (await p.evaluate(() => location.hash)) === '' && await visible(p, 'board'), 'the browser\'s forward asks too, and waits on the board');
+await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(TURN);
+ok(await visible(p, 'import') && (await p.evaluate(() => location.hash)) === '#import', 'discard lets the browser\'s step happen');
+await p.keyboard.press('Escape'); await p.waitForTimeout(TURN);
 
 // Banner: halted wins over paused, the remedy steps down, the end is a toast.
 await p.click('#ab-stop'); await p.waitForTimeout(500);
@@ -216,6 +246,8 @@ await p.click('#jobs-retry'); await p.waitForTimeout(1900);
 ok(!(await p.$('#jobs-error')), 'retry in the region loads again');
 await p.check('#s-readonly'); await p.waitForTimeout(400);
 ok((await text(p, '.rk-banner-word')) === 'read-only' && await p.evaluate(() => document.querySelector('#remedy').parentElement.hidden), 'read-only has no action');
+await p.click('#save'); await p.waitForTimeout(1300);
+ok((await text(p, '.rk-errors > p')).startsWith('Could not save: the job database is read-only'), 'the server says no to the whole form');
 await p.uncheck('#s-readonly'); await p.waitForTimeout(600);
 
 // Look: prefs on the root, density, motion, accent.

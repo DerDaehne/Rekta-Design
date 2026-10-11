@@ -36,7 +36,7 @@ Full write-ups: [docs/principles.md](docs/principles.md),
 [docs/accessibility.md](docs/accessibility.md),
 [docs/platforms.md](docs/platforms.md),
 [docs/behaviour.md](docs/behaviour.md), [docs/states.md](docs/states.md),
-[docs/collections.md](docs/collections.md).
+[docs/collections.md](docs/collections.md), [docs/forms.md](docs/forms.md).
 
 ## What's in the box
 

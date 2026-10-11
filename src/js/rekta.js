@@ -22,6 +22,10 @@
      split      a list and its current item: a draggable divider sideways, one pane at a time compact
      palette    go to a place or run a command, from a list that rises from the app bar (Ctrl/Cmd+K)
      appbar     controls that do not fit move into a "more" menu
+     form       late checks, early corrections, a summary of what needs attention, server answers at the field
+     guard      unsaved input asks before it is left behind
+     confirm    a short question in a sheet, the safe answer first
+     disable    a control that cannot act now says why
      start      the defaults for a page: prefs, press, sheets, arrival build-in
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
@@ -417,10 +421,20 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     busy = busy.then(run, run);
     return busy;
   }
-  function navigate(target, { replace = false, pressed = null } = {}) {
+  // Guards (unsaved input) may hold a place change: each returns true at once when it has nothing to ask, or false,
+  // or a promise of the answer. verdict() is true when every guard lets go at once, else a promise.
+  const guards = new Set();
+  let bypass = false, ignoreNext = null;
+  function verdict() {
+    const answers = [...guards].map((g) => { try { return g(); } catch { return false; } });
+    if (answers.every((a) => a === true)) return true;
+    return Promise.all(answers.map((a) => Promise.resolve(a).catch(() => false))).then((all) => all.every(Boolean));
+  }
+  function navigate(target, { replace = false, pressed = null, force = false } = {}) {
     const p = byName(target) ? { name: target, item: null } : parse(target);
     if (!p) return Promise.resolve();
     if (p.name === current) { if (p.item !== item) open(p.item); return Promise.resolve(); }
+    if (!force) { const v = verdict(); if (v !== true) return Promise.resolve(v).then((ok) => (ok ? navigate(target, { replace, pressed, force: true }) : undefined)); }
     turn.finish();
     history.replaceState(snapshot(pressed && pressed.getAttribute('href')), '');
     const entry = { rk: { place: p.name, index: replace ? index : index + 1, below: replace ? below : current, item: p.item, params: p.params || '', pushedItem: false } };
@@ -460,16 +474,28 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     }
     if (current === home) return false;
     const up = target || parentOf(current);
-    history.replaceState({ rk: { place: up, index: 0, below: null } }, '', urlOf(up));
-    show(up, null, { back: true });
+    const go = () => { history.replaceState({ rk: { place: up, index: 0, below: null } }, '', urlOf(up)); show(up, null, { back: true }); };
+    const v = verdict();
+    if (v === true) go(); else Promise.resolve(v).then((ok) => { if (ok) go(); });
     return true;
   }
   const pop = (e) => {
+    if (ignoreNext) { const done = ignoreNext; ignoreNext = null; done(); return; }
     const state = e.state && e.state.rk;
     const p = state && byName(state.place) ? { name: state.place, item: state.item || null, params: state.params || '' } : parse(location.href);
     if (!p) return;
-    turn.finish();
     const to = state ? state.index : 0, backward = to < index, jump = Math.abs(to - index);
+    // The browser has already moved; a guard that holds the change takes the step back, asks, and replays it.
+    const v = p.name !== current && !bypass && to !== index ? verdict() : true;
+    if (v !== true) {
+      const delta = to - index;
+      const reverted = new Promise((r) => { ignoreNext = r; });
+      history.go(-delta);
+      Promise.all([v, reverted]).then(([ok]) => { if (ok) { bypass = true; history.go(delta); } });
+      return;
+    }
+    bypass = false;
+    turn.finish();
     index = to;
     if (p.name === current) {
       below = state ? state.below || null : null;
@@ -546,6 +572,9 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
       history.replaceState({ ...s, rk: { ...s.rk, params } }, '', urlOf(current, item, params));
     },
     navigate, back, open, urlOf,
+    // guard(fn): fn() may hold any change of place, from a link, back, Escape or the browser. It returns true at once
+    // when it has nothing to ask (then nothing waits), else false or a promise of the answer. Returns a remover.
+    guard(fn) { guards.add(fn); return () => guards.delete(fn); },
     // onItem(place, fn, { push }): fn(item | null, { back, initial }) whenever that place's item changes; it may
     // return a name for the window title. push() decides whether choosing an item is a history step of its own.
     onItem(place, fn, { push } = {}) {
@@ -1458,6 +1487,164 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
   ro.observe(el);
   layout();
   return { layout, destroy() { ro.disconnect(); m.destroy(); more.removeEventListener('pointerdown', rebuild); more.removeEventListener('keydown', rebuild); pop.remove(); } };
+}
+
+// Forms ------------------------------------------------------------------------------------------------------------
+const uid = (p) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
+const controlsOf = (form) => [...form.querySelectorAll('input, select, textarea')].filter((c) => !/^(button|submit|reset|image|hidden)$/.test(c.type));
+const labelOf = (c) => { const l = c.id && document.querySelector(`label[for="${CSS.escape(c.id)}"]`); return ((l && l.textContent) || c.getAttribute('aria-label') || c.name || 'field').replace(/\s+/g, ' ').trim(); };
+
+// disable(control, reason): a control that cannot act now, and says why next to it (a .rk-hint linked by
+// aria-describedby). It stays focusable (aria-disabled), so the reason is read with it; clicks do nothing.
+// disable(control, null) enables it again.
+export function disable(control, reason) {
+  const id = control.dataset.rkWhy || uid('rk-why');
+  control.dataset.rkWhy = id;
+  let hint = document.getElementById(id);
+  const ids = (control.getAttribute('aria-describedby') || '').split(/\s+/).filter((x) => x && x !== id);
+  if (!control._rkBlock) control._rkBlock = (e) => { if (control.getAttribute('aria-disabled') === 'true') { e.preventDefault(); e.stopImmediatePropagation(); } };
+  if (reason) {
+    control.disabled = false;
+    control.setAttribute('aria-disabled', 'true');
+    if (!hint) { hint = document.createElement('span'); hint.className = 'rk-hint rk-why'; hint.id = id; control.after(hint); }
+    hint.textContent = reason;
+    control.setAttribute('aria-describedby', [...ids, id].join(' '));
+    control.addEventListener('click', control._rkBlock, true);
+  } else {
+    control.removeAttribute('aria-disabled');
+    if (hint) hint.remove();
+    if (ids.length) control.setAttribute('aria-describedby', ids.join(' ')); else control.removeAttribute('aria-describedby');
+    control.removeEventListener('click', control._rkBlock, true);
+  }
+}
+
+// confirm({ title, text, kicker, ok, cancel, safe }): a short question in a sheet; resolves true when ok is chosen.
+// The safe answer is the primary button and takes focus: for an action that cannot be undone, safe: 'cancel'.
+// Escape and a tap on the shading answer cancel.
+export function confirm({ title, text = '', kicker = '', ok = 'ok', cancel = 'cancel', safe = 'ok', root = document.querySelector('.rk') || document.body } = {}) {
+  const d = document.createElement('dialog');
+  d.className = 'rk-sheet';
+  const tid = uid('rk-confirm');
+  d.setAttribute('aria-labelledby', tid);
+  const f = d.appendChild(document.createElement('form'));
+  f.method = 'dialog';
+  if (kicker) { const k = f.appendChild(document.createElement('p')); k.className = 'rk-kicker'; k.textContent = kicker; }
+  const h = f.appendChild(document.createElement('h2')); h.className = 'rk-group'; h.id = tid; h.textContent = title;
+  if (text) { const t = f.appendChild(document.createElement('p')); t.textContent = text; }
+  const row = f.appendChild(document.createElement('p')); row.className = 'rk-actions';
+  const b = (label, value) => { const x = row.appendChild(document.createElement('button')); x.className = `rk-btn${safe === value ? ' rk-btn--primary' : ''}`; x.value = value; x.textContent = label; if (safe === value) x.autofocus = true; return x; };
+  const opener = document.activeElement;
+  b(cancel, 'cancel'); b(ok, 'ok');
+  root.appendChild(d);
+  const sh = sheet(d);
+  return new Promise((resolve) => {
+    d.addEventListener('close', () => {
+      sh.destroy();
+      resolve(d.returnValue === 'ok');
+      setTimeout(() => d.remove(), ms('--rk-duration-short'));
+      if (opener && opener.isConnected && !opener.closest('[hidden]')) opener.focus({ preventScroll: true });
+    }, { once: true });
+    d.showModal();
+  });
+}
+
+// form(el, { validators, onSubmit, submit }): checks a form late and corrects it early. validators maps a control's
+// id to fn(value, control) → a cause-and-remedy sentence, or nothing. A field is checked when it is left after an
+// edit, and again on every keystroke while it shows an error. On submit with errors, a summary at the top of the form
+// (.rk-errors: "2 fields need attention", a link to each) takes focus. Without errors, onSubmit(values) runs while
+// the submit button is pending; it may reject with { fields: { id: message } } (the server said no to a field) or
+// { message } (to the whole form), which show the same way. Returns { check, setErrors, clear, destroy }.
+export function form(el, { validators = {}, onSubmit = null, submit = el.querySelector('[type=submit]') } = {}) {
+  el.noValidate = true;
+  const edited = new Set();
+  const fieldOf = (c) => c.closest('.rk-field') || c.parentElement;
+  function hintOf(c) {
+    const f = fieldOf(c);
+    let h = f.querySelector('.rk-hint:not(.rk-why)');
+    if (!h) { h = document.createElement('span'); h.className = 'rk-hint'; f.appendChild(h); }
+    if (!h.id) h.id = uid('rk-hint');
+    const ids = (c.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+    if (!ids.includes(h.id)) c.setAttribute('aria-describedby', [...ids, h.id].join(' '));
+    if (h.dataset.rkHint === undefined) h.dataset.rkHint = h.textContent;
+    return h;
+  }
+  function setError(c, msg) {
+    const f = fieldOf(c), h = hintOf(c);
+    if (msg) { f.dataset.status = 'error'; c.setAttribute('aria-invalid', 'true'); h.textContent = msg; }
+    else { if (f.dataset.status === 'error') delete f.dataset.status; c.removeAttribute('aria-invalid'); h.textContent = h.dataset.rkHint; }
+  }
+  const run = (c) => { const v = validators[c.id]; return v ? v(c.type === 'checkbox' ? c.checked : c.value, c) || null : null; };
+  const check1 = (c) => { const m = run(c); setError(c, m); return m; };
+  function errors() { return controlsOf(el).map((c) => ({ c, m: el.querySelector(`#${CSS.escape(c.id)}[aria-invalid="true"]`) ? hintOf(c).textContent : null })).filter((x) => x.m); }
+  let box = null;
+  function summarize(list, message = null) {
+    if (!list.length && !message) { if (box) { box.remove(); box = null; } return; }
+    if (!box) {
+      box = document.createElement('div'); box.className = 'rk-errors'; box.tabIndex = -1; box.setAttribute('role', 'group');
+      el.prepend(box);
+    }
+    const hid = uid('rk-errors');
+    box.setAttribute('aria-labelledby', hid);
+    const head = document.createElement('p'); head.id = hid;
+    head.textContent = message || (list.length === 1 ? '1 field needs attention' : `${list.length} fields need attention`);
+    const ul = document.createElement('ul');
+    for (const { c, m } of list) {
+      const a = document.createElement('a'); a.href = `#${c.id}`; a.textContent = `${labelOf(c)}: ${m}`;
+      a.addEventListener('click', (e) => { e.preventDefault(); c.focus(); });
+      ul.appendChild(document.createElement('li')).appendChild(a);
+    }
+    box.replaceChildren(head, ...(list.length ? [ul] : []));
+    box.focus();
+  }
+  function check() { const list = []; for (const c of controlsOf(el)) { const m = check1(c); if (m) list.push({ c, m }); } return list; }
+  function setErrors(map = {}, message = null) {
+    const list = [];
+    for (const [id, m] of Object.entries(map)) { const c = el.querySelector(`#${CSS.escape(id)}`); if (c) { setError(c, m); list.push({ c, m }); } }
+    summarize(list, message && !list.length ? message : null);
+  }
+  const values = () => Object.fromEntries(controlsOf(el).filter((c) => c.id || c.name).map((c) => [c.id || c.name, c.type === 'checkbox' ? c.checked : c.value]));
+  const input = (e) => { edited.add(e.target); if (e.target.getAttribute('aria-invalid') === 'true') check1(e.target); };
+  const blur = (e) => { if (edited.has(e.target)) check1(e.target); };
+  const onsubmit = async (e) => {
+    e.preventDefault();
+    const list = check();
+    if (list.length) { summarize(list); return; }
+    summarize([]);
+    if (!onSubmit) return;
+    try { await (submit ? pending(submit, () => onSubmit(values())) : onSubmit(values())); }
+    catch (err) { if (err && err.fields) setErrors(err.fields, err.message); else summarize([], (err && err.message) || 'Could not save. Try again.'); }
+  };
+  el.addEventListener('input', input);
+  el.addEventListener('focusout', blur);
+  el.addEventListener('submit', onsubmit);
+  return {
+    check, setErrors,
+    clear() { edited.clear(); controlsOf(el).forEach((c) => setError(c, null)); summarize([]); },
+    get errors() { return errors(); },
+    destroy() { el.removeEventListener('input', input); el.removeEventListener('focusout', blur); el.removeEventListener('submit', onsubmit); },
+  };
+}
+
+// guard(el, { router, what }): unsaved input is not lost by accident. While the form differs from how it was
+// loaded (or last saved: clean()), leaving its place asks "Leave without saving?" (keep editing is the safe answer)
+// and closing the window asks the browser's question. Discarding puts the form back as it was.
+export function guard(el, { router = null, what = 'This form' } = {}) {
+  const state = (c) => (c.type === 'checkbox' || c.type === 'radio' ? c.checked : c.value);
+  let saved = new Map();
+  const clean = () => { saved = new Map(controlsOf(el).map((c) => [c, state(c)])); };
+  const changed = () => controlsOf(el).filter((c) => saved.has(c) && saved.get(c) !== state(c));
+  const restore = () => { for (const [c, v] of saved) { if (c.type === 'checkbox' || c.type === 'radio') c.checked = v; else c.value = v; } el.dispatchEvent(new Event('rk:restored', { bubbles: true })); };
+  clean();
+  const unload = (e) => { if (changed().length) { e.preventDefault(); e.returnValue = ''; } };
+  addEventListener('beforeunload', unload);
+  const place = el.closest('[data-rk-place]');
+  const off = router ? router.guard(() => {
+    const n = changed().length;
+    if (!n || (place && place.dataset.rkPlace !== router.current)) return true;
+    return confirm({ kicker: 'unsaved', title: 'Leave without saving?', text: `${what} has ${n === 1 ? '1 unsaved change' : `${n} unsaved changes`}.`, ok: 'discard changes', cancel: 'keep editing', safe: 'cancel' })
+      .then((leave) => { if (leave) restore(); return leave; });
+  }) : () => {};
+  return { get dirty() { return changed().length > 0; }, changed, clean, restore, destroy() { removeEventListener('beforeunload', unload); off(); } };
 }
 
 // Start --------------------------------------------------------------------------------------------------------------

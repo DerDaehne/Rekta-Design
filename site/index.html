@@ -140,12 +140,18 @@
             <span class="rk-hint" id="h-time">Daily, in 24-hour time.</span>
           </div>
           <div class="rk-field">
+            <label class="rk-label" for="f-mail">alerts to <span class="rk-optional">(optional)</span></label>
+            <input class="rk-input" id="f-mail" type="email" autocomplete="email" aria-describedby="h-mail">
+            <span class="rk-hint" id="h-mail">One address; it hears about failures only.</span>
+          </div>
+          <div class="rk-field">
             <label class="rk-label" for="f-owner">owner</label>
             <input class="rk-input" id="f-owner" value="kabai studio" disabled>
           </div>
           <label class="rk-switch"><input type="checkbox" id="f-retry" checked> retry on failure</label>
-          <p class="rk-actions"><button class="rk-btn rk-btn--primary" id="save" type="submit" data-rk-pending-label="saving schedule…">save schedule</button><button class="rk-btn" id="revert" type="button">revert</button><button class="rk-btn" type="button" disabled>delete</button></p>
+          <p class="rk-actions"><button class="rk-btn rk-btn--primary" id="save" type="submit" data-rk-pending-label="saving schedule…">save schedule</button><button class="rk-btn" id="revert" type="button">revert</button><button class="rk-btn" type="button" id="delete-schedule">delete</button></p>
         </form>
+        <p class="note">Send it as it is: the summary lists what needs attention. Name it “Release notes” and the server says no at the field; save during maintenance and it says no to the whole form. Change something, then open a tile: the board asks before your changes are lost.</p>
         <p class="note">Tags on the ground, and soft tags in running text:</p>
         <p class="rk-actions tag-row"><span class="rk-tag" data-status="info">active</span><span class="rk-tag" data-status="warning">waiting</span><span class="rk-tag" data-status="error">failed</span><span class="rk-tag" data-status="success">done</span><span class="rk-tag">idle</span></p>
         <p>The nightly import is <span class="rk-tag rk-tag--soft" data-status="error">failed</span> and the release notes are <span class="rk-tag rk-tag--soft" data-status="warning">waiting</span> for review.</p>

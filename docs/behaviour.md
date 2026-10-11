@@ -181,7 +181,12 @@ A small router for places mounted in the page as
   `setParams(params)` replaces them (never pushing); `params` reads
   them; the `onItem` watcher gets them as `params` on arrival and back.
 
-Returns `{ current, item, params, below, navigate(name, { replace, pressed }), open(item, { replace }), setParams(params), back(name?), onItem, urlOf(name, item, params), destroy }`.
+- `guard(fn)`: `fn()` may hold any change of place (a link, back,
+  Escape, the browser's back or forward). It returns `true` at once when
+  it has nothing to ask, else `false` or a promise of the answer; on the
+  browser's own step the router takes it back, asks, and replays it.
+
+Returns `{ current, item, params, below, navigate(name, { replace, pressed }), open(item, { replace }), setParams(params), back(name?), guard(fn), onItem, urlOf(name, item, params), destroy }`.
 
 ### `panorama(el, { pivot })`
 
@@ -329,6 +334,35 @@ Moves the app bar's controls that do not fit into the menu of `more` (a
 `data-rk-priority` first, then from the end; writes `data-rk-overflow`
 on each moved control. Back, the live state and a selection's controls
 never move. Returns `{ layout(), destroy }`.
+
+### `form(el, { validators, onSubmit, submit })`
+
+Checks late and corrects early (see [forms.md](forms.md)). `validators`
+maps a control's id to `fn(value, control)` returning a cause-and-remedy
+sentence or nothing. Errors go to the field (`data-status="error"`,
+`aria-invalid`, the hint) and, on sending, into a `.rk-errors` summary
+that takes focus. Without errors, `onSubmit(values)` runs while the
+submit button is pending; it may reject with `{ fields: { id: message } }`
+or `{ message }`. Returns `{ check(), setErrors(map, message), clear(), errors, destroy }`.
+
+### `guard(el, { router, what })`
+
+While the form differs from how it was loaded (or last `clean()`ed),
+leaving its place asks "Leave without saving?" through `router.guard`,
+and closing the window asks the browser's question. Discarding restores
+the form. Returns `{ dirty, changed(), clean(), restore(), destroy }`.
+
+### `confirm({ title, text, kicker, ok, cancel, safe })`
+
+A short question in a sheet; resolves `true` for `ok`. The safe answer
+(`safe: 'cancel'` for an action that cannot be undone) is the primary
+button and takes focus. Escape and the shading answer cancel.
+
+### `disable(control, reason)`
+
+The control cannot act now and says why in a `.rk-hint` beside it
+(`aria-describedby`); it stays focusable (`aria-disabled`) and clicks do
+nothing. `disable(control, null)` enables it again.
 
 ### `place(el, anchor)`
 
