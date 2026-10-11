@@ -49,7 +49,8 @@ itself is a section (the home's overview), its entry carries the
 product's name, so the strip opens on it. Sideways it takes the nav
 level (`nav-active`, `nav-inactive`); compact, where it sticks to the
 top, it takes the facet level (`pivot-active`, `pivot-inactive`), so it
-holds less of a small screen. Above a width threshold
+holds less of a small screen. The sections below it start with their
+own heading; a kicker repeating the strip's title would say it twice. Above a width threshold
 (1300px in the source prototype — a project adopting Rekta Design can pick
 its own, it is not one of the four structural breakpoints), a pivot may
 render all its facets side by side as a panorama instead of one at a

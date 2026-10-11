@@ -77,7 +77,8 @@ it; each entry says how.
   `rk-pivot-end` is gone: remove it from your markup.
 - **A top-level strip is the place's title.** `rk-pivot--nav` takes the
   nav level sideways and the facet level compact, where it sticks. The
-  showcase drops its brand line; the strip opens on "rekta".
+  showcase drops its brand line; the strip opens on "rekta". Its
+  sections drop the kickers that repeated the strip's titles.
 
 ### Fixed
 
