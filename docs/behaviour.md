@@ -73,11 +73,12 @@ paint: load `rekta.global.js` in `<head>` and call
 
 ## API
 
-### `start({ root })`
+### `start({ root, restore })`
 
-The defaults for a page: restores prefs, attaches `press` to `root`,
-attaches `sheet` to every `dialog.rk-sheet`, and marks the first paint
-as an arrival. Returns `{ destroy }`.
+The defaults for a page: restores prefs (unless `restore: false`, for an
+embedded page whose host owns theme, density and motion), attaches
+`press` to `root`, attaches `sheet` to every `dialog.rk-sheet`, and
+marks the first paint as an arrival. Returns `{ destroy }`.
 
 ### `prefs`
 

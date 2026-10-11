@@ -877,9 +877,10 @@ export function sheet(dialog) {
 }
 
 // Start --------------------------------------------------------------------------------------------------------------
-// The defaults for a page: restore the user's prefs, press on tiles, sheets, and the first paint's build-in.
-export function start({ root = document } = {}) {
-  prefs.restore();
+// The defaults for a page: restore the user's prefs, press on tiles, sheets, and the first paint's build-in. An
+// embedded page whose host owns theme, density and motion passes restore: false.
+export function start({ root = document, restore = true } = {}) {
+  if (restore) prefs.restore();
   const parts = [press(root)];
   root.querySelectorAll('dialog.rk-sheet').forEach((d) => parts.push(sheet(d)));
   arrive(docEl);
