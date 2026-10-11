@@ -17,6 +17,8 @@ one; it should never be "add some animation because it feels nice."
 | **Toast** | `motion.duration.short` (250ms), 12px from the top | "Something happened"; a toast with an undo action shows a countdown rather than just vanishing, so the user can see their window closing. |
 | **Status banner** | `motion.duration.short` (250ms), fade + 8px | A persistent state change (e.g. "the system is halted") announces itself once via this fade-in, then stays static — its *colour* (not continued motion) carries which kind of halt it is. |
 | **Live indicators** | lines draw in over `motion.duration.long` (600ms); bars grow over the same; a live pulse/blink cycles roughly every 1.2–1.6s | "This is updating right now." Reserved for genuinely live data — a finished/static item's charts render immediately, with no draw-in and no pulse, so stillness itself signals "done." |
+| **Loading, pending** | a 2px line passes over `motion.duration.busy` (1200ms), linear, after `timing.busy-delay`; stands still at full width under reduced motion | "Working on it." Never a shimmer or a pulse on placeholders: they stand still. |
+| **Floating surface** | `motion.duration.float` (150ms) · `motion.easing.in`, fade + 4px away from its control; leaves at once | "Options for this control, right here." |
 | **State changes** (hover, border, colour, underline) | `motion.duration.short` (250ms) · `motion.easing.base` | The calm default for anything reacting to pointer/focus: nothing snaps, everything glides briefly. |
 
 ## Reduced motion

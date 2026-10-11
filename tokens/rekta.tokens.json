@@ -745,6 +745,16 @@
         "$type": "duration",
         "$value": "1400ms",
         "$description": "One cycle of the live pulse in the app bar. Only for genuinely live data."
+      },
+      "busy": {
+        "$type": "duration",
+        "$value": "1200ms",
+        "$description": "One pass of the indeterminate 2px line that says a region is loading or an action is pending. Under reduced motion the line stands still at full width."
+      },
+      "float": {
+        "$type": "duration",
+        "$value": "150ms",
+        "$description": "A floating surface (menu, list) appearing next to its control: a fade and a 4px shift away from the control. It leaves at once."
       }
     },
     "easing": {
@@ -849,6 +859,16 @@
       "$type": "duration",
       "$value": "100ms",
       "$description": "On touch, a tile presses only after this long without movement, so the start of a scroll never sinks it."
+    },
+    "busy-delay": {
+      "$type": "duration",
+      "$value": "300ms",
+      "$description": "A loading or pending indicator appears only after this long, so fast answers never flicker. Wall time: reduced motion leaves it alone."
+    },
+    "busy-min": {
+      "$type": "duration",
+      "$value": "500ms",
+      "$description": "Once a loading indicator shows, it stays at least this long, so it never flashes."
     }
   },
   "layer": {
@@ -872,6 +892,11 @@
       "$type": "number",
       "$value": 40,
       "$description": "The toast region, above the banner and the app bar."
+    },
+    "float": {
+      "$type": "number",
+      "$value": 50,
+      "$description": "Floating surfaces (menus, lists) where the browser has no popover top layer. With popovers they sit in the top layer and need no value."
     }
   },
   "breakpoint": {

@@ -90,6 +90,9 @@ ok((await p.evaluate(() => history.state.rk.index)) === 0, 'crumb used history (
 // Browser back and forward play the turnstile both ways.
 await p.click('#tile-queue'); await p.waitForTimeout(TURN);
 ok(await visible(p, 'queue'), 'queue place shows');
+ok(await p.evaluate(() => document.querySelectorAll('#running .rk-ghost').length > 0), 'queue rows load behind still placeholders');
+await p.waitForTimeout(1400);
+ok(await p.evaluate(() => !document.querySelector('#queue-region').hasAttribute('aria-busy') && document.querySelectorAll('#running b').length === 3), 'queue rows arrive and the line goes');
 await p.goBack(); await p.waitForTimeout(TURN);
 ok(await visible(p, 'board'), 'browser back shows the board');
 await p.goForward(); await p.waitForTimeout(TURN);
@@ -143,6 +146,37 @@ await p.mouse.move(5, 5); await p.waitForTimeout(5600);
 ok((await p.evaluate(() => document.querySelectorAll('.rk-toast').length)) === 0, 'the toast expires');
 ok(await p.evaluate(() => document.querySelector('#archive').disabled), 'archive disabled with nothing done');
 
+// Menu: the keyboard, the invoker, a choice; refresh shows the loading line after its delay, never at once.
+await p.focus('#jobs-more'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
+const act = () => p.evaluate(() => document.activeElement.dataset.act || document.activeElement.id);
+ok(await p.evaluate(() => document.querySelector('#jobs-menu').matches(':popover-open')) && (await p.getAttribute('#jobs-more', 'aria-expanded')) === 'true', 'Enter opens the menu');
+ok((await act()) === 'refresh', 'the first item takes focus', await act());
+await p.keyboard.press('ArrowDown');
+ok((await act()) === 'show-done', '↓ moves down');
+await p.keyboard.press('ArrowUp'); await p.keyboard.press('ArrowUp');
+ok((await act()) === 'print', '↑ wraps to the end');
+await p.keyboard.press('e');
+ok((await act()) === 'export', 'a letter jumps to its item');
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+ok(!(await p.evaluate(() => document.querySelector('#jobs-menu').matches(':popover-open'))) && (await act()) === 'jobs-more', 'Escape closes and returns focus');
+await p.click('#jobs-more'); await p.waitForTimeout(200); await p.click('#jobs-more'); await p.waitForTimeout(200);
+ok(!(await p.evaluate(() => document.querySelector('#jobs-menu').matches(':popover-open'))), 'a second click on the trigger closes the menu');
+await p.click('#jobs-more'); await p.waitForTimeout(200);
+const menuBox = await p.evaluate(() => { const m = document.querySelector('#jobs-menu').getBoundingClientRect(), t = document.querySelector('#jobs-more').getBoundingClientRect(); return { top: m.top, below: t.bottom, inView: m.right <= innerWidth && m.left >= 0 }; });
+ok(menuBox.top >= menuBox.below && menuBox.inView, 'the menu sits below its trigger, inside the window', JSON.stringify(menuBox));
+await p.click('#jobs-menu [data-act=refresh]'); await p.waitForTimeout(100);
+const line = () => p.evaluate(() => getComputedStyle(document.querySelector('#jobs-region'), '::before').visibility);
+ok((await p.getAttribute('#jobs-region', 'aria-busy')) === 'true' && (await line()) === 'hidden', 'loading: no line before the delay');
+await p.waitForTimeout(400);
+ok((await line()) === 'visible', 'loading: the line after the delay');
+await p.waitForTimeout(1300);
+ok(!(await p.evaluate(() => document.querySelector('#jobs-region').hasAttribute('aria-busy'))) && (await toast(p)) === 'Jobs refreshed.', 'refresh ends');
+await p.click('#jobs-more'); await p.waitForTimeout(200); await p.click('#jobs-menu [data-act=show-done]'); await p.waitForTimeout(200);
+ok(await p.evaluate(() => document.querySelector('#done').hidden), 'a checkbox item toggles');
+await p.click('#jobs-more'); await p.waitForTimeout(200);
+ok((await p.getAttribute('#jobs-menu [data-act=show-done]', 'aria-checked')) === 'false', 'the checkbox item shows its state');
+await p.click('#jobs-menu [data-act=show-done]'); await p.waitForTimeout(200);
+
 // Facets: arrow keys, nothing added to history.
 const len = await p.evaluate(() => history.length);
 await p.click('#nav a[href="#facets"]'); await p.waitForTimeout(900);
@@ -153,8 +187,10 @@ ok((await p.evaluate(() => history.length)) === len, 'facets add no history entr
 // Controls: cause and remedy, then save.
 await p.click('#nav a[href="#controls"]'); await p.waitForTimeout(900);
 ok((await p.getAttribute('#time-field', 'data-status')) === 'error', 'invalid time marked');
-await p.fill('#f-time', '02:30'); await p.click('#save'); await p.waitForTimeout(400);
-ok((await toast(p)).startsWith('Schedule saved'), 'save toast');
+await p.fill('#f-time', '02:30'); await p.click('#save'); await p.waitForTimeout(100);
+ok((await text(p, '#save')) === 'saving schedule…' && (await p.getAttribute('#save', 'aria-disabled')) === 'true', 'pending: the button says what it does');
+await p.waitForTimeout(1200);
+ok((await toast(p)).startsWith('Schedule saved') && (await text(p, '#save')) === 'save schedule', 'save toast, label back');
 
 // Banner: halted wins over paused, the remedy steps down, the end is a toast.
 await p.click('#ab-stop'); await p.waitForTimeout(500);
@@ -171,8 +207,12 @@ ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear' && (await toas
 await p.click('#nav a[href="#system"]'); await p.waitForTimeout(900);
 await p.check('#s-offline'); await p.waitForTimeout(400);
 ok((await text(p, '#data-now')) === 'frozen', 'offline freezes the figures');
+await p.click('#jobs-more'); await p.waitForTimeout(200); await p.click('#jobs-menu [data-act=refresh]'); await p.waitForTimeout(1900);
+ok((await p.getAttribute('#jobs-error', 'data-status')) === 'error', 'a failed load says so in the region');
 await p.click('#remedy'); await p.waitForTimeout(1500);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'retry reconnects');
+await p.click('#jobs-retry'); await p.waitForTimeout(1900);
+ok(!(await p.$('#jobs-error')), 'retry in the region loads again');
 await p.check('#s-readonly'); await p.waitForTimeout(400);
 ok((await text(p, '.rk-banner-word')) === 'read-only' && await p.evaluate(() => document.querySelector('#remedy').parentElement.hidden), 'read-only has no action');
 await p.uncheck('#s-readonly'); await p.waitForTimeout(600);

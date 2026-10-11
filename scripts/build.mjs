@@ -212,8 +212,9 @@ function fontsCss() {
 
 // The ES module becomes a classic script: export statements go, the module's names are gathered on window.Rekta.
 export function toGlobal(esm) {
-  const names = [...esm.matchAll(/^export\s+(?:const|function|class|let)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
-  const body = esm.replace(/^export\s+(const|function|class|let)\s/gm, '$1 ').replace(/^export\s*\{[^}]*\};?\s*$/gm, '');
+  const names = [...esm.matchAll(/^export\s+(?:async\s+function\*?|function\*?|const|class|let)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
+  const body = esm.replace(/^export\s+(async\s+function|function|const|class|let)\s/gm, '$1 ').replace(/^export\s*\{[^}]*\};?\s*$/gm, '');
+  if (/^export\b/m.test(body)) throw new Error('rekta.js has an export the classic script cannot carry');
   return `/* Rekta Design behaviour, classic script. Generated from src/js/rekta.js by scripts/build.mjs; do not edit. */\n(function () {\n${body}\nwindow.Rekta = { ${names.join(', ')} };\n})();\n`;
 }
 
@@ -262,6 +263,8 @@ function check(tokens) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.js reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }
   for (const n of ['pivot-inactive', 'nav-inactive']) if (!defined.has(`font-size-${n}`)) problems.push(`rekta.js needs --rk-font-size-${n}`);
+  // The classic script must parse as one, with every export on window.Rekta.
+  try { new Function(toGlobal(js)); } catch (e) { problems.push(`rekta.global.js does not parse: ${e.message}`); }
   return problems;
 }
 

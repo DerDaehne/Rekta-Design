@@ -82,9 +82,17 @@
       <!-- 2 · jobs: rows with a title link, a switch for state, FLIP between groups, archive with undo -->
       <section class="rk-sec" id="jobs" aria-labelledby="jobs-title">
         <p class="rk-kicker">jobs</p>
-        <div class="sec-head"><h2 class="rk-group" id="jobs-title">Tonight</h2><button class="rk-btn" id="archive" type="button">archive done</button></div>
-        <p class="note">A row's title opens it, its switch sets its state, a button acts. Mark a job done and it moves to its group. Archive the done jobs, then undo within 5 seconds (or press Ctrl/⌘+Z). Hover or focus the toast to hold it.</p>
+        <div class="sec-head"><h2 class="rk-group" id="jobs-title">Tonight</h2><p class="rk-actions"><button class="rk-btn" id="archive" type="button">archive done</button><button class="rk-btn" id="jobs-more" type="button">more</button></p></div>
+        <div id="jobs-menu">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="refresh">refresh<span class="rk-menu-key">R</span></button>
+          <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="true" type="button" data-act="show-done">show done jobs</button>
+          <hr class="rk-menu-sep">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="export">export as CSV</button>
+          <button class="rk-menu-item" role="menuitem" type="button" aria-disabled="true" data-act="print">print (needs a printer)</button>
+        </div>
+        <p class="note">A row's title opens it, its switch sets its state, a button acts. Mark a job done and it moves to its group. Archive the done jobs, then undo within 5 seconds (or press Ctrl/⌘+Z). Hover or focus the toast to hold it. More → refresh shows the loading line; try it while offline.</p>
         <p class="rk-kicker group-label" id="open-label">open</p>
+        <div class="rk-region" id="jobs-region">
         <ul class="rk-rows jobs" id="open" aria-labelledby="open-label">
           <li data-orig="error"><a class="job-name" href="#import">Nightly import</a><span class="rk-meta">3 of 5 steps</span><span class="rk-tag" data-status="error">failed</span><label class="rk-switch"><input type="checkbox" aria-label="Nightly import done"> done</label></li>
           <li data-orig="warning"><a class="job-name" href="#reviews">Release notes</a><span class="rk-meta">review requested</span><span class="rk-tag" data-status="warning">waiting</span><label class="rk-switch"><input type="checkbox" aria-label="Release notes done"> done</label></li>
@@ -95,6 +103,7 @@
           <li data-orig="success"><b class="job-name">Report export</b><span class="rk-meta">41 s</span><span class="rk-tag" data-status="success">done</span><label class="rk-switch"><input type="checkbox" checked aria-label="Report export done"> done</label></li>
           <li data-orig="success"><b class="job-name">Deploy 2026.10.11-2</b><span class="rk-meta">3 min</span><span class="rk-tag" data-status="success">done</span><label class="rk-switch"><input type="checkbox" checked aria-label="Deploy 2026.10.11-2 done"> done</label></li>
         </ul>
+        </div>
       </section>
 
       <!-- 3 · facets: a pivot inside a place -->
@@ -135,7 +144,7 @@
             <input class="rk-input" id="f-owner" value="kabai studio" disabled>
           </div>
           <label class="rk-switch"><input type="checkbox" id="f-retry" checked> retry on failure</label>
-          <p class="rk-actions"><button class="rk-btn rk-btn--primary" id="save" type="submit">save schedule</button><button class="rk-btn" id="revert" type="button">revert</button><button class="rk-btn" type="button" disabled>delete</button></p>
+          <p class="rk-actions"><button class="rk-btn rk-btn--primary" id="save" type="submit" data-rk-pending-label="saving schedule…">save schedule</button><button class="rk-btn" id="revert" type="button">revert</button><button class="rk-btn" type="button" disabled>delete</button></p>
         </form>
         <p class="note">Tags on the ground, and soft tags in running text:</p>
         <p class="rk-actions tag-row"><span class="rk-tag" data-status="info">active</span><span class="rk-tag" data-status="warning">waiting</span><span class="rk-tag" data-status="error">failed</span><span class="rk-tag" data-status="success">done</span><span class="rk-tag">idle</span></p>
@@ -232,12 +241,14 @@
       <div class="queue-trend">
         <svg class="rk-spark" data-status="info" viewBox="0 0 200 28" role="img" aria-label="build queue" data-trend="queue-big" preserveAspectRatio="none"><polyline pathLength="1" points="0,14 200,14"/></svg>
       </div>
-      <p class="rk-kicker group-label">running</p>
-      <ul class="rk-rows">
-        <li><b>Build #4182</b><span class="rk-meta">web · 2 min</span><span class="rk-tag" data-status="info">active</span></li>
-        <li><b>Build #4183</b><span class="rk-meta">api · 1 min</span><span class="rk-tag" data-status="info">active</span></li>
-        <li><b>Build #4179</b><span class="rk-meta">docs · 6 min</span><span class="rk-tag" data-status="info">active</span></li>
-      </ul>
+      <p class="rk-kicker group-label" id="running-label">running</p>
+      <div class="rk-region" id="queue-region">
+        <ul class="rk-rows" id="running" aria-labelledby="running-label">
+          <li aria-hidden="true"><span class="rk-ghost" style="width:7em"></span><span class="rk-ghost" style="width:4em"></span></li>
+          <li aria-hidden="true"><span class="rk-ghost" style="width:9em"></span><span class="rk-ghost" style="width:4em"></span></li>
+          <li aria-hidden="true"><span class="rk-ghost" style="width:6em"></span><span class="rk-ghost" style="width:4em"></span></li>
+        </ul>
+      </div>
       <p class="rk-kicker group-label">waiting</p>
       <ul class="rk-rows">
         <li><b>Build #4184</b><span class="rk-meta">web</span><span class="rk-tag" data-status="warning">waiting</span></li>

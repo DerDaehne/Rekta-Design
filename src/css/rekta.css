@@ -144,12 +144,12 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 /* Buttons and switches ------------------------------------------------------------------------------------------- */
 /* Primary takes the accent slot (ink by default). Height follows the density: 44px for touch, 32px for a fine pointer. */
 .rk-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--rk-space-s);
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: var(--rk-space-s);
   min-height: var(--rk-control-height); padding: 0 var(--rk-control-padding); border: 2px solid currentColor; border-radius: var(--rk-radius-s);
   background-color: transparent; color: inherit; font: inherit; font-weight: var(--rk-font-weight-semibold); cursor: pointer;
   transition: background-color var(--rk-duration-short) var(--rk-ease-base);
 }
-.rk-btn:active { background-color: var(--rk-hover); }
+.rk-btn:active, .rk-btn[aria-expanded='true'] { background-color: var(--rk-hover); }
 .rk-btn--primary, .rk-btn--primary:active { background-color: var(--rk-accent); border-color: var(--rk-accent); color: var(--rk-on-accent); }
 .rk-btn--primary:active { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
 .rk-btn:disabled, .rk-btn[aria-disabled='true'] { border-color: var(--rk-disabled); background: none; color: var(--rk-disabled); cursor: not-allowed; }
@@ -209,6 +209,54 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-appbar[data-rk-state='halted'] .rk-pulse { background: var(--rk-status-error-full); animation: none; }
 .rk-ab-k { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @keyframes rk-pulse { 50% { opacity: 0.25; } }
+
+/* Data states --------------------------------------------------------------------------------------------------- */
+/* A data region (.rk-region: a list, table or tile grid; its kicker sits above it, so the region starts at its first
+   hairline) is loading while aria-busy="true": after busy-delay a 2px line runs along that hairline, and still
+   placeholders (.rk-ghost) hold the layout. Nothing shimmers: movement is for live data. Empty and failed regions
+   say so in a sentence (.rk-empty), with the way on. */
+.rk-region { position: relative; }
+.rk-region[aria-busy='true']::before, .rk-btn[data-rk-pending]::after {
+  content: ''; position: absolute; inset: 0 0 auto; z-index: 1; height: 2px; pointer-events: none;
+  background: linear-gradient(var(--rk-text-primary), var(--rk-text-primary)) no-repeat -50% 0 / 30% 100%;
+  animation: rk-busy var(--rk-duration-busy) linear infinite, rk-wait 0s linear var(--rk-duration-busy-delay) backwards;
+}
+@keyframes rk-busy { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+@keyframes rk-wait { from { visibility: hidden; } }
+.rk-ghost { display: block; flex: none; width: 8em; max-width: 100%; height: 0.75em; border-radius: var(--rk-radius-s); background: var(--rk-surface); }
+.rk-rows > li:has(> .rk-ghost) { align-items: center; min-height: var(--rk-row-height); }
+.rk-empty { padding-block: var(--rk-space-m); border-top: 1px solid var(--rk-text-contrast-low); color: var(--rk-text-contrast-high); }
+.rk-empty > * + * { margin-top: var(--rk-space-s); }
+.rk-empty[data-status='error'] { color: var(--rk-text-primary); }
+.rk-empty[data-status='error'] > :first-child::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--_rk-mark); }
+/* Pending: the button keeps its width and says what it is doing ("saving…"); the line runs under it. */
+.rk-btn[data-rk-pending] { cursor: progress; }
+.rk-btn[data-rk-pending]::after { inset: auto 0 -6px; }
+
+/* Floating surfaces ---------------------------------------------------------------------------------------------- */
+/* Menus and lists that float next to their control: bg, a 1px text-contrast-medium edge, radius-s, no shadow. They
+   live in the top layer (popover); rekta.js places them below the control, or above when there is no room. */
+.rk-float {
+  position: fixed; inset: auto; margin: 0; z-index: var(--rk-layer-float);
+  min-width: 12rem; max-width: min(24rem, calc(100vw - 2 * var(--rk-space-m))); max-height: min(24rem, 60dvh); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--rk-space-xs) 0; border: 1px solid var(--rk-text-contrast-medium); border-radius: var(--rk-radius-s);
+  background: var(--rk-bg); color: var(--rk-text-primary); font: inherit; font-size: var(--rk-font-size-s); line-height: var(--rk-line-height-compact);
+}
+.rk-float:is(:popover-open, [data-rk-open]) { animation: rk-float-in var(--rk-duration-float) var(--rk-ease-in) both; }
+.rk-float[data-rk-side='above'] { --_rk-from: 4px; }
+@keyframes rk-float-in { from { opacity: 0; transform: translateY(var(--_rk-from, -4px)); } }
+/* A menu: one item per row at the density's row height; a check for a chosen option, a key hint at the end. */
+.rk-menu-item {
+  display: flex; align-items: center; gap: var(--rk-space-s); width: 100%; min-height: var(--rk-row-height); padding: 0 var(--rk-space-m);
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; white-space: nowrap;
+}
+.rk-menu-item:focus-visible { outline: 2px solid var(--rk-focus); outline-offset: -2px; background-color: var(--rk-hover); }
+.rk-menu-item[aria-disabled='true'] { color: var(--rk-disabled); cursor: not-allowed; }
+.rk-menu-item[role='menuitemcheckbox']::before, .rk-menu-item[role='menuitemradio']::before { content: ''; flex: none; width: 10px; height: 10px; border: 1px solid currentColor; }
+.rk-menu-item[aria-checked='true']::before { background: currentColor; }
+.rk-menu-key { margin-left: auto; padding-left: var(--rk-space-l); font-size: var(--rk-font-size-xxs); color: var(--rk-text-contrast-high); }
+.rk-menu-sep { height: 0; margin: var(--rk-space-xs) 0; border: 0; border-top: 1px solid var(--rk-text-contrast-low); }
+.rk-menu-label { padding: var(--rk-space-s) var(--rk-space-m) var(--rk-space-xs); font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-high); }
 
 /* Crumb: the way up from a place to its parent, first in the place's header. It is a link to the parent's address
    with data-rk-back: rekta.js goes back when the parent is the place below, else forward to it. The sideways
@@ -371,6 +419,7 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-input:hover:not(:disabled) { border-color: var(--rk-text-primary); }
   .rk-ab:hover { background-color: var(--rk-hover); }
   .rk-crumb:hover { color: var(--rk-text-primary); }
+  .rk-menu-item:hover:not([aria-disabled='true']) { background-color: var(--rk-hover); }
   .rk-toast-act:hover { background-color: var(--rk-hover); }
 }
 /* A fine pointer can select text inside tiles and rows (dragging never activates them: rekta.js); touch gets no
@@ -383,6 +432,9 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   .rk-tile { outline: 1px solid CanvasText; outline-offset: -1px; }
   .rk-tag::before, .rk-pulse, .rk-field[data-status='error'] .rk-hint::before { forced-color-adjust: none; background: CanvasText; }
   .rk-progress { forced-color-adjust: none; color: CanvasText; border: 1px solid CanvasText; }
+  .rk-region[aria-busy='true']::before, .rk-btn[data-rk-pending]::after, .rk-empty[data-status='error'] > :first-child::before { forced-color-adjust: none; background: CanvasText; }
+  .rk-ghost { forced-color-adjust: none; background: GrayText; }
+  .rk-float { border-color: CanvasText; }
 }
 
 /* Window-size classes -------------------------------------------------------------------------------------------- */
@@ -435,7 +487,9 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
   :root:not([data-motion='on']) :is(.rk-panorama, .rk-pivot) { scroll-behavior: auto; }
   :root:not([data-motion='on']) .rk-pulse { animation: none; }
   :root:not([data-motion='on']) .rk-tile[data-rk-pressed] { transform: scale(var(--rk-tile-press-scale)); }
+  :root:not([data-motion='on']) .rk-region[aria-busy='true']::before, :root:not([data-motion='on']) .rk-btn[data-rk-pending]::after { background-size: 100% 100%; background-color: var(--rk-text-contrast-medium); background-image: none; }
 }
 :root[data-motion='off'] :is(.rk-panorama, .rk-pivot) { scroll-behavior: auto; }
 :root[data-motion='off'] .rk-pulse { animation: none; }
 :root[data-motion='off'] .rk-tile[data-rk-pressed] { transform: scale(var(--rk-tile-press-scale)); }
+:root[data-motion='off'] .rk-region[aria-busy='true']::before, :root[data-motion='off'] .rk-btn[data-rk-pending]::after { background-size: 100% 100%; background-color: var(--rk-text-contrast-medium); background-image: none; }

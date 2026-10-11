@@ -13,10 +13,11 @@
   const now = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
   const app = Rekta.start();
-  const router = Rekta.places({ home: 'board', title: 'Rekta Board' });
+  const router = Rekta.places({ home: 'board', title: 'Rekta Board', onChange: ({ to }) => { if (to === 'queue') loadQueue(); } });
   const board = Rekta.panorama($('#pan'), { pivot: $('#nav') });
   const facets = Rekta.pivot($('#facet-strip'));
   const toasts = Rekta.toaster($('#toasts'));
+  const wait = (msec) => new Promise((r) => setTimeout(r, msec));
 
   /* ---------- look: theme, density, motion (Rekta prefs) and the demo's accent ---------- */
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -145,8 +146,8 @@
   }
   function empties() {
     for (const ul of [openList, doneList]) {
-      const empty = ul.nextElementSibling && ul.nextElementSibling.classList.contains('empty') ? ul.nextElementSibling : null;
-      if (!ul.children.length && !empty) { const p = document.createElement('p'); p.className = 'empty'; p.textContent = ul === openList ? 'Nothing open. Well done.' : 'Nothing done yet.'; ul.after(p); }
+      const empty = ul.nextElementSibling && ul.nextElementSibling.classList.contains('rk-empty') ? ul.nextElementSibling : null;
+      if (!ul.children.length && !empty) { const p = document.createElement('p'); p.className = 'rk-empty'; p.textContent = ul === openList ? 'Nothing open. Well done.' : 'Nothing done yet.'; ul.after(p); }
       if (ul.children.length && empty) empty.remove();
     }
     archiveBtn.disabled = !doneList.children.length;
@@ -180,6 +181,32 @@
     });
   });
   empties();
+
+  // More: a menu. Refresh loads the jobs again: the region keeps what it shows and runs the line; offline it fails
+  // and says so in the region, with the way on.
+  const jobsRegion = $('#jobs-region');
+  function refreshJobs() {
+    const failed = $('#jobs-error');
+    if (failed) failed.remove();
+    return Rekta.busy(jobsRegion, async () => {
+      await wait(1200);
+      if (banner.is('offline')) throw new Error('offline');
+    }).then(() => toasts.show('Jobs refreshed.', { key: 'refresh' }), () => {
+      const p = document.createElement('div');
+      p.className = 'rk-empty'; p.id = 'jobs-error'; p.dataset.status = 'error';
+      p.innerHTML = '<p>Could not load the jobs: the job server is offline. What you see is from before.</p><p class="rk-actions"><button class="rk-btn" type="button" id="jobs-retry">retry</button></p>';
+      jobsRegion.prepend(p);
+    });
+  }
+  document.addEventListener('click', (e) => { if (e.target.closest('#jobs-retry')) refreshJobs(); });
+  Rekta.menu($('#jobs-more'), $('#jobs-menu'), {
+    onSelect(item) {
+      const act = item.dataset.act;
+      if (act === 'refresh') refreshJobs();
+      if (act === 'show-done') { const on = item.getAttribute('aria-checked') === 'true'; $('#done-label').hidden = !on; doneList.hidden = !on; }
+      if (act === 'export') toasts.show('Exported 5 jobs as jobs.csv.', { key: 'export' });
+    },
+  });
 
   /* ---------- reviews: an action per row, the board's tile follows ---------- */
   function paintReviews() {
@@ -231,7 +258,7 @@
   $('#schedule-form').addEventListener('submit', (e) => {
     e.preventDefault();
     if (!validate()) { timeInput.focus(); return; }
-    toasts.show(`Schedule saved: ${$('#f-name').value.trim()} runs daily at ${timeInput.value.trim()}.`, { key: 'schedule' });
+    Rekta.pending(save, wait(900)).then(() => toasts.show(`Schedule saved: ${$('#f-name').value.trim()} runs daily at ${timeInput.value.trim()}.`, { key: 'schedule', from: save }));
   });
   $('#revert').addEventListener('click', () => { $('#f-name').value = 'Nightly import'; timeInput.value = '25:00'; $('#f-retry').checked = true; validate(); });
   validate();
@@ -254,6 +281,17 @@
     toasts.show('Nightly import retrying from the schema check.', { key: 'retry' });
   });
 
+  /* ---------- the queue place: its rows load on the first visit, with still placeholders ---------- */
+  let queueLoaded = false;
+  function loadQueue() {
+    if (queueLoaded) return;
+    queueLoaded = true;
+    Rekta.busy($('#queue-region'), wait(1000)).then(() => {
+      $('#running').innerHTML = [['Build #4182', 'web · 2 min'], ['Build #4183', 'api · 1 min'], ['Build #4179', 'docs · 6 min']]
+        .map(([b, m]) => `<li><b>${b}</b><span class="rk-meta">${m}</span><span class="rk-tag" data-status="info">active</span></li>`).join('');
+    });
+  }
+
   /* ---------- sheet and reset ---------- */
   const sheet = $('#sheet'), resetBtn = $('#reset');
   resetBtn.addEventListener('click', () => sheet.showModal());
@@ -266,6 +304,9 @@
     ORDER.forEach((n) => banner.set(n, false));
     paintState();
     openList.innerHTML = start.open; doneList.innerHTML = start.done; empties();
+    if ($('#jobs-error')) $('#jobs-error').remove();
+    $('#done-label').hidden = false; doneList.hidden = false;
+    $('#jobs-menu [data-act=show-done]').setAttribute('aria-checked', 'true');
     $('#tiles').innerHTML = start.tiles; seed();
     $('[data-rk-place=import]').innerHTML = start.importPlace;
     $('#review-list').innerHTML = start.reviews; paintReviews();

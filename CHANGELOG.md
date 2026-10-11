@@ -5,6 +5,28 @@ tokens, public hooks, `data-rk-*` attributes, events and the `rekta.js`
 API are the public surface. Before 1.0, a minor version may still break
 it; each entry says how.
 
+## Unreleased
+
+### Added
+
+- Data states: `rk-region` with `aria-busy` (a 2px line after
+  `busy-delay`, at least `busy-min`), still placeholders `rk-ghost`, and
+  `rk-empty` for empty and failed regions. `Rekta.busy()`.
+- Pending actions: `Rekta.pending()` keeps the button's width, says what
+  it does ("saving…") and runs the line under it.
+- Floating surfaces (`rk-float`: bg, 1px edge, no shadow) and menus
+  (`rk-menu-item`, `-sep`, `-label`, `-key`), `Rekta.menu()` and
+  `Rekta.place()`.
+- Tokens `timing.busy-delay`, `timing.busy-min`, `motion.duration.busy`,
+  `motion.duration.float`, `layer.float`.
+- [docs/states.md](docs/states.md): data states, pending, floating
+  surfaces, layers.
+
+### Fixed
+
+- The classic script carries `async` functions; `--check` now fails
+  when `rekta.global.js` does not parse.
+
 ## 0.2.0 — 2026-10-11
 
 The foundation for desktop apps and responsive web apps (including PWAs

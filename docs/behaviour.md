@@ -52,6 +52,9 @@ paint: load `rekta.global.js` in `<head>` and call
 | `data-rk-phase` | a toast, the banner | `leaving` while it goes; `clear` on the banner when no state stands. |
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls and the trailing spacer is gone. |
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
+| `data-rk-pending` | a button | Its action is running (`pending()`). |
+| `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
+| `aria-busy` | a `.rk-region` | Loading (`busy()`). |
 | `data-theme`, `data-density`, `data-motion` | the root | Prefs overrides (see `prefs`). |
 
 ### Public hooks
@@ -237,6 +240,36 @@ For `<dialog class="rk-sheet">` opened with `showModal()`. A tap on the
 shading cancels where `closedby` is not supported. Use
 `closedby="closerequest"` on a sheet with unsaved input. Returns
 `{ destroy }`.
+
+### `busy(region, work)`
+
+Marks a `.rk-region` `aria-busy` while `work` (a promise, or a function
+returning one) runs. The line shows only after `busy-delay` (CSS) and,
+once shown, stays at least `busy-min`. Resolves or rejects with the
+work. See [states.md](states.md).
+
+### `pending(button, work, { label })`
+
+The button says what it is doing (`label`, its `data-rk-pending-label`,
+or its text plus "…") at the same width, refuses more clicks and writes
+`data-rk-pending` (the line under it) until `work` settles. Resolves or
+rejects with the work.
+
+### `menu(trigger, el, { onSelect })`
+
+A menu button. `el` holds `.rk-menu-item` buttons (`role` `menuitem`,
+`menuitemcheckbox` or `menuitemradio`), `.rk-menu-sep` and
+`.rk-menu-label`; the script makes it a `.rk-float` popover with
+`role="menu"`, makes the trigger its invoker (`aria-haspopup`,
+`aria-expanded`, `aria-controls`), places it, and runs its keys (see
+[states.md](states.md#floating-surfaces)). A choice toggles a checkbox
+item or picks a radio item, closes the menu, returns focus to the
+trigger and calls `onSelect(item)`. Returns `{ open(index), close(), destroy }`.
+
+### `place(el, anchor)`
+
+Places a fixed floating surface below `anchor`, or above it when there
+is no room; writes `data-rk-side`. For your own floating surfaces.
 
 ### `tokens`
 

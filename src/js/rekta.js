@@ -15,6 +15,9 @@
      toaster    one toast at a time, with an undo window that holds while hovered or focused
      banner     one lasting system state at a time, the most severe first
      sheet      a short question from the top edge; a tap on the shading cancels
+     busy       a data region loads: the line after busy-delay, never a flash
+     pending    a button's action runs: it says what it is doing, at the same width
+     menu       a menu button with a floating list, placed next to its control
      start      the defaults for a page: prefs, press, sheets, arrival build-in
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
@@ -874,6 +877,143 @@ export function sheet(dialog) {
   if (!dialog.hasAttribute('closedby')) dialog.setAttribute('closedby', 'any');
   dialog.addEventListener('click', click);
   return { destroy() { dialog.removeEventListener('click', click); } };
+}
+
+// Data states ------------------------------------------------------------------------------------------------------
+// busy(region, work): the region is aria-busy while work (a promise or a function returning one) runs. The line shows
+// only after busy-delay (CSS), and once shown stays at least busy-min, so an answer never makes it flash. Resolves or
+// rejects with the work.
+export async function busy(region, work) {
+  const t0 = performance.now();
+  region.setAttribute('aria-busy', 'true');
+  try {
+    return await (typeof work === 'function' ? work() : work);
+  } finally {
+    const shown = performance.now() - t0 - ms('--rk-duration-busy-delay');
+    if (shown > 0) await new Promise((r) => setTimeout(r, Math.max(0, ms('--rk-duration-busy-min') - shown)));
+    region.removeAttribute('aria-busy');
+  }
+}
+// pending(button, work, { label }): the button says what it is doing ("saving…") at the same width, refuses further
+// clicks, and runs the line under it after busy-delay. Label: the option, data-rk-pending-label, or its text plus "…".
+export async function pending(button, work, { label } = {}) {
+  if (button.hasAttribute('data-rk-pending')) return undefined;
+  const nodes = [...button.childNodes], width = button.offsetWidth;
+  const block = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+  button.style.minWidth = `${width}px`;
+  button.textContent = label || button.dataset.rkPendingLabel || `${button.textContent.trim()}…`;
+  button.setAttribute('aria-disabled', 'true');
+  button.setAttribute('data-rk-pending', '');
+  button.addEventListener('click', block, true);
+  try {
+    return await (typeof work === 'function' ? work() : work);
+  } finally {
+    button.removeEventListener('click', block, true);
+    button.replaceChildren(...nodes);
+    button.removeAttribute('data-rk-pending');
+    button.removeAttribute('aria-disabled');
+    button.style.minWidth = '';
+  }
+}
+
+// Floating surfaces -------------------------------------------------------------------------------------------------
+// place(el, anchor): puts a fixed floating surface below its control, aligned to its leading edge, or above it when
+// there is no room below; it never leaves the viewport. data-rk-side says which side it took.
+export function place(el, anchor) {
+  const a = anchor.getBoundingClientRect(), gap = 4, edge = num('--rk-space-s') || 8;
+  el.style.left = '0px'; el.style.top = '0px';
+  const w = el.offsetWidth, h = el.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
+  const below = vh - a.bottom - gap - edge, above = a.top - gap - edge;
+  const side = h <= below || below >= above ? 'below' : 'above';
+  const top = side === 'below' ? a.bottom + gap : Math.max(edge, a.top - gap - h);
+  const left = Math.min(Math.max(edge, a.left), Math.max(edge, vw - w - edge));
+  el.style.left = `${Math.round(left)}px`; el.style.top = `${Math.round(top)}px`;
+  el.dataset.rkSide = side;
+}
+const canPopover = typeof HTMLElement !== 'undefined' && 'popover' in HTMLElement.prototype;
+function openFloat(el) { if (canPopover) { if (!el.matches(':popover-open')) el.showPopover(); } else { el.hidden = false; el.setAttribute('data-rk-open', ''); } }
+function closeFloat(el) { if (canPopover) { if (el.matches(':popover-open')) el.hidePopover(); } else { el.hidden = true; el.removeAttribute('data-rk-open'); } }
+const isOpen = (el) => (canPopover ? el.matches(':popover-open') : !el.hidden);
+
+// menu(trigger, el, { onSelect }): a menu button. el is a .rk-float of .rk-menu-item buttons (role menuitem,
+// menuitemcheckbox or menuitemradio), opened by a click, Enter, Space or ↓ (↑ from the end). In the menu: ↑ ↓ wrap,
+// Home End, a letter jumps to the next item starting with it; Enter or Space chooses; Escape, Tab or a click outside
+// closes and focus returns to the trigger after a choice or Escape.
+export function menu(trigger, el, { onSelect } = {}) {
+  el.id = el.id || `rk-menu-${Math.random().toString(36).slice(2, 8)}`;
+  el.setAttribute('role', 'menu');
+  if (canPopover) el.setAttribute('popover', 'auto'); else el.hidden = true;
+  el.classList.add('rk-float');
+  trigger.setAttribute('aria-haspopup', 'menu');
+  trigger.setAttribute('aria-controls', el.id);
+  trigger.setAttribute('aria-expanded', 'false');
+  const items = () => [...el.querySelectorAll('.rk-menu-item')].filter((i) => i.getClientRects().length);
+  const focusItem = (i) => { const list = items(); if (list.length) list[(i + list.length) % list.length].focus(); };
+  // With popovers the trigger is the menu's invoker: the browser toggles it on click and a click on the trigger
+  // never counts as a click outside. Placement and focus follow the toggle.
+  let first = 0;
+  if (canPopover && 'popoverTargetElement' in trigger) trigger.popoverTargetElement = el;
+  const shown = () => { place(el, trigger); trigger.setAttribute('aria-expanded', 'true'); focusItem(first); first = 0; };
+  function open(at = 0) {
+    if (isOpen(el)) { focusItem(at); return; }
+    first = at;
+    openFloat(el);
+    if (!canPopover) shown();
+  }
+  function close(refocus = true) {
+    if (!isOpen(el)) return;
+    closeFloat(el);
+    trigger.setAttribute('aria-expanded', 'false');
+    if (refocus) trigger.focus();
+  }
+  const toggle = (e) => { if (e.newState === 'open') shown(); else trigger.setAttribute('aria-expanded', 'false'); };
+  const click = (e) => {
+    if (canPopover && trigger.popoverTargetElement === el) return;                    // the browser toggles
+    e.preventDefault(); if (isOpen(el)) close(); else open(0);
+  };
+  const triggerKey = (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); open(e.key === 'ArrowUp' ? -1 : 0); }
+  };
+  const key = (e) => {
+    const list = items(), i = list.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); focusItem(i + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); focusItem(i - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); focusItem(0); }
+    else if (e.key === 'End') { e.preventDefault(); focusItem(-1); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'Tab') close(false);
+    else if (e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const k = e.key.toLowerCase(), order = [...list.slice(i + 1), ...list.slice(0, i + 1)];
+      const hit = order.find((it) => it.textContent.trim().toLowerCase().startsWith(k));
+      if (hit) hit.focus();
+    }
+  };
+  const choose = (e) => {
+    const item = e.target.closest('.rk-menu-item');
+    if (!item || item.getAttribute('aria-disabled') === 'true') { if (item) e.preventDefault(); return; }
+    if (item.getAttribute('role') === 'menuitemcheckbox') item.setAttribute('aria-checked', String(item.getAttribute('aria-checked') !== 'true'));
+    if (item.getAttribute('role') === 'menuitemradio') el.querySelectorAll('[role=menuitemradio]').forEach((r) => r.setAttribute('aria-checked', String(r === item)));
+    close();
+    if (onSelect) onSelect(item);
+  };
+  const outside = (e) => { if (!canPopover && isOpen(el) && !el.contains(e.target) && !trigger.contains(e.target)) close(false); };
+  const reflow = () => { if (isOpen(el)) place(el, trigger); };
+  trigger.addEventListener('click', click);
+  trigger.addEventListener('keydown', triggerKey);
+  el.addEventListener('keydown', key);
+  el.addEventListener('click', choose);
+  el.addEventListener('toggle', toggle);
+  document.addEventListener('pointerdown', outside, true);
+  addEventListener('resize', reflow);
+  addEventListener('scroll', reflow, true);
+  return {
+    open, close,
+    destroy() {
+      trigger.removeEventListener('click', click); trigger.removeEventListener('keydown', triggerKey);
+      el.removeEventListener('keydown', key); el.removeEventListener('click', choose); el.removeEventListener('toggle', toggle);
+      document.removeEventListener('pointerdown', outside, true); removeEventListener('resize', reflow); removeEventListener('scroll', reflow, true);
+    },
+  };
 }
 
 // Start --------------------------------------------------------------------------------------------------------------

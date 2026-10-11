@@ -21,7 +21,7 @@ html, body { margin: 0; background: var(--rk-bg); color: var(--rk-text-primary);
 .trend > li { display: grid; grid-template-columns: minmax(0, 1fr) 4.5rem 8rem; align-items: center; }
 .trend .rk-spark { width: 8rem; }
 .facet { padding-top: var(--rk-space-m); }
-.empty { padding: var(--rk-space-s) 0; font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); border-top: 1px solid var(--rk-text-contrast-low); }
+.rk-region { margin-top: var(--rk-space-xs); }
 
 /* Rows that act: the title (a link when it opens something), facts, the status tag, then the state switch or the
    action. Content over chrome: no box, only the hairline from rk-rows. */
