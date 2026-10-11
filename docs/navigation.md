@@ -41,7 +41,15 @@ large from the first paint of the new state.
 
 The same component works at every level: a top-level pivot picks the
 place the user is in; inside a place, a second pivot can pick a facet of
-that place (e.g. a record's different tabs). Above a width threshold
+that place (e.g. a record's different tabs).
+
+A place's top-level strip (`rk-pivot--nav`) **is** its title, as a
+Metro hub's was: no brand line or header above it. Where the place
+itself is a section (the home's overview), its entry carries the
+product's name, so the strip opens on it. Sideways it takes the nav
+level (`nav-active`, `nav-inactive`); compact, where it sticks to the
+top, it takes the facet level (`pivot-active`, `pivot-inactive`), so it
+holds less of a small screen. Above a width threshold
 (1300px in the source prototype — a project adopting Rekta Design can pick
 its own, it is not one of the four structural breakpoints), a pivot may
 render all its facets side by side as a panorama instead of one at a

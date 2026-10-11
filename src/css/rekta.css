@@ -118,6 +118,7 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 /* Fixed order, active title large and light; inactive titles scale down from the same line box, so the strip's
    height never depends on which title is active. Each title's hit area stays at least touch-target tall. */
 .rk-pivot {
+  --_rk-inactive: var(--rk-font-size-pivot-inactive);
   position: relative; display: flex; align-items: baseline; gap: var(--rk-space-l); min-height: var(--rk-touch-target);
   overflow-x: auto; overscroll-behavior-x: contain; white-space: nowrap; scrollbar-width: none; scroll-behavior: smooth;
 }
@@ -136,6 +137,7 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-pivot > a::after, .rk-pivot > button::after {
   content: ''; position: absolute; inset: auto 0 0; height: max(100%, calc(var(--rk-touch-target) / var(--_rk-s)));
 }
+.rk-pivot--nav { --_rk-inactive: var(--rk-font-size-nav-inactive); }
 .rk-pivot--nav > a, .rk-pivot--nav > button { font-size: var(--rk-font-size-nav-active); }
 .rk-pivot > [aria-current], .rk-pivot > [aria-selected='true'] { --_rk-s: 1; color: var(--rk-text-primary); }
 /* A strip whose titles all fit does not glide; its titles only change size. */
@@ -403,12 +405,15 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-sec + .rk-sec { border-top: 1px solid var(--rk-text-contrast-low); }
 .rk-sec > * + * { margin-top: var(--rk-space-m); }
 .rk-sec > .rk-kicker + * { margin-top: var(--rk-space-xs); }
-/* Compact: a section strip that is a direct child of the place sticks under the banner. It never shrinks. */
+/* Compact: a section strip that is a direct child of the place sticks under the banner. It never shrinks. A top-level
+   strip (rk-pivot--nav) takes the facet level here: sticking, it holds less of a small screen. */
 .rk-place > .rk-pivot {
   flex: none;
   position: sticky; top: var(--rk-banner-h, 0px); z-index: var(--rk-layer-sticky);
   padding-inline: var(--rk-space-m); background: var(--rk-bg); border-bottom: 1px solid var(--rk-text-contrast-low);
 }
+.rk-place > .rk-pivot--nav { --_rk-inactive: var(--rk-font-size-pivot-inactive); }
+.rk-place > .rk-pivot--nav > :is(a, button) { font-size: var(--rk-font-size-pivot-active); }
 
 /* Feedback: toast and status banner ------------------------------------------------------------------------------ */
 /* An event is ink and leaves; a state is a tile and stays.
@@ -618,6 +623,8 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
     .rk-panorama-end { flex: 0 0 max(0px, calc(100% - var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))) - var(--rk-space-xl))); }
     .rk-panorama[data-rk-fit] > .rk-panorama-end { display: none; }
     .rk-place > .rk-pivot { position: static; padding-inline: var(--rk-space-xl); background: none; border-bottom: 0; }
+    .rk-place > .rk-pivot--nav { --_rk-inactive: var(--rk-font-size-nav-inactive); }
+    .rk-place > .rk-pivot--nav > :is(a, button) { font-size: var(--rk-font-size-nav-active); }
     .rk-split {
       display: grid; min-height: 0;
       grid-template-columns: minmax(var(--rk-pane-min), var(--rk-split-w, calc(4 * var(--rk-tile-unit) + 3 * var(--rk-space-s)))) 1px minmax(var(--rk-pane-min), 1fr);

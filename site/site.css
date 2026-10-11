@@ -6,8 +6,7 @@ html, body { margin: 0; background: var(--rk-bg); color: var(--rk-text-primary);
 .top { padding: var(--rk-space-m) var(--rk-space-m) var(--rk-space-s); }
 .top > * + * { margin-top: var(--rk-space-xs); }
 .top > .rk-crumb { margin-left: calc(-1 * var(--rk-space-xs)); padding-inline: var(--rk-space-xs); }
-.brand { font-size: var(--rk-font-size-xl); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-title); }
-.brand b { font-weight: var(--rk-font-weight-semibold); }
+.place-home > .rk-pivot { padding-top: var(--rk-space-s); }
 
 .note { font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); max-width: 36rem; }
 .sec-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: var(--rk-space-s) var(--rk-space-m); }
@@ -71,6 +70,7 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
   html, body { height: 100%; }
   .app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .top { flex: none; padding-inline: var(--rk-space-xl); }
+  .place-home > .rk-pivot { padding-top: var(--rk-space-m); }
   .rk-place { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
   .place-detail { overflow-y: auto; }
   .place-split { overflow: hidden; }

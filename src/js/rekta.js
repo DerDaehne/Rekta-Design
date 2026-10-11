@@ -750,12 +750,12 @@ function stripWheel(e) {
 
 // Pivot --------------------------------------------------------------------------------------------------------------
 // Inactive titles scale down from the active title's line box by the token ratio (pivot-inactive / pivot-active, or
-// nav-inactive / nav-active for rk-pivot--nav), measured in the page so fluid sizes stay right.
+// nav-inactive / nav-active for rk-pivot--nav; the stylesheet names the inactive size in --_rk-inactive), measured in
+// the page so fluid sizes and window-size classes stay right.
 function pivotScale(strip) {
   if (!strip.getClientRects().length) return;
-  const nav = strip.classList.contains('rk-pivot--nav');
   const probe = document.createElement('span');
-  probe.style.cssText = 'position:absolute;visibility:hidden;font-size:var(--rk-font-size-' + (nav ? 'nav' : 'pivot') + '-inactive)';
+  probe.style.cssText = 'position:absolute;visibility:hidden;font-size:var(--_rk-inactive)';
   strip.appendChild(probe);
   const item = strip.querySelector('a, button');
   const inactive = parseFloat(getComputedStyle(probe).fontSize), active = item ? parseFloat(getComputedStyle(item).fontSize) : inactive;

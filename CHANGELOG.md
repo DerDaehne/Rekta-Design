@@ -75,6 +75,9 @@ it; each entry says how.
   fit moves by the active title's place in the order, so the titles
   before it stay in reach; the active title is always whole on screen.
   `rk-pivot-end` is gone: remove it from your markup.
+- **A top-level strip is the place's title.** `rk-pivot--nav` takes the
+  nav level sideways and the facet level compact, where it sticks. The
+  showcase drops its brand line; the strip opens on "rekta".
 
 ### Fixed
 
