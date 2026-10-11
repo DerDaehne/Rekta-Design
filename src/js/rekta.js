@@ -34,6 +34,7 @@
      virtual    a list of any length: only the rows in view exist
      undoStack  actions that can be taken back and done again (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z)
      live       a live region says how fresh it is, goes stale, and holds still while you look
+     chart      a line or bar chart in ink and grey: one axis, a tooltip at every point, a table of the numbers
      combobox   a field with a list of choices that filters as you type
      stepper    a number field between − and +, repeating while held
      drop       a zone that takes dropped or chosen files
@@ -1935,9 +1936,9 @@ function placeTip(t, anchor) {
   t.style.top = `${Math.round(above ? a.top - gap - h : a.bottom + gap)}px`;
   t.dataset.rkSide = above ? 'above' : 'below';
 }
-function showTip(el) {
+function showTip(el, given = null) {
   clearTimeout(tip.timer); tip.timer = 0;
-  const text = tipText(el), keysText = shortcutText(el);
+  const text = given || tipText(el), keysText = given ? '' : shortcutText(el);
   if (!text || !el.isConnected) return;
   if (tip.for && tip.for !== el) hideTip(false);
   if (!tip.el) {
@@ -2496,6 +2497,141 @@ export function live(region, { stale = 0, age = region.querySelector('.rk-age'),
       clearInterval(tick); more.remove();
       region.removeEventListener('pointerenter', enter); region.removeEventListener('pointerleave', leave); region.removeEventListener('focusin', fin); region.removeEventListener('focusout', fout);
     },
+  };
+}
+
+// Charts -----------------------------------------------------------------------------------------------------------
+// chart(el, { type, labels, series, unit, min, max, height, summary, table }): a line or bar chart in ink and grey,
+// drawn as SVG at the element's width and redrawn when it changes. series is [{ label, values }]: the first is ink
+// (text-primary), a second grey (text-contrast-medium); the accent marks only the point under the pointer. One axis,
+// hairline gridlines at round ticks, 2px lines, bars at most 24px wide with 2px between them, square ends. Two series
+// get a legend; lines get labels at their ends when they do not collide. Hover or ←→ on the focused chart shows every
+// value at that point in a tooltip (and to screen readers); a table of the same numbers follows it. Lines draw in and
+// bars grow from the baseline once, when first drawn.
+const SVGNS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs = {}, parent = null) => { const e = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
+function niceTicks(lo, hi, count = 4) {
+  if (hi === lo) hi = lo + 1;
+  const raw = (hi - lo) / count, mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+  const a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step, out = [];
+  for (let v = a; v <= b + step / 2; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+const compact = (v) => (Math.abs(v) >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : Math.abs(v) >= 1e3 ? `${+(v / 1e3).toFixed(1)}K` : `${+v.toFixed(2)}`);
+export function chart(el, opts = {}) {
+  let o = { type: 'line', labels: [], series: [], unit: '', min: undefined, max: undefined, height: 220, summary: '', table: true, ...opts };
+  el.classList.add('rk-chart');
+  const legend = document.createElement('ul'); legend.className = 'rk-legend';
+  const svg = svgEl('svg', { role: 'img', tabindex: '0', class: 'rk-chart-svg' });
+  const say = document.createElement('span'); say.className = 'rk-sr'; say.setAttribute('role', 'status');
+  const details = document.createElement('details'); details.className = 'rk-chart-table';
+  el.replaceChildren(legend, svg, say, details);
+  let drawn = false, active = -1, geo = null;
+  const fmt = (v) => `${compact(v)}${o.unit}`;
+  function draw() {
+    const W = Math.max(240, el.clientWidth), H = o.height, n = o.labels.length, bars = o.type === 'bars';
+    const all = o.series.flatMap((s) => s.values).filter((v) => Number.isFinite(v));
+    const ticks = niceTicks(o.min !== undefined ? o.min : bars ? 0 : Math.min(...all), o.max !== undefined ? o.max : Math.max(...all));
+    const lo = ticks[0], hi = ticks[ticks.length - 1];
+    const charW = (px('--rk-font-size-xs') || 12) * 0.62;
+    const ends = !bars && o.series.length <= 4 && (W >= 480 || o.series.length < 2);
+    const left = Math.ceil(Math.max(...ticks.map((t) => fmt(t).length)) * charW) + 10;
+    const right = ends ? Math.ceil(Math.max(...o.series.map((s) => s.label.length)) * charW) + 14 : 8;
+    const top = 8, bottom = 24, pw = W - left - right, ph = H - top - bottom;
+    const y = (v) => top + ph - ((v - lo) / (hi - lo || 1)) * ph;
+    const band = pw / Math.max(1, n), x = (i) => (bars ? left + band * (i + 0.5) : left + (n > 1 ? (pw * i) / (n - 1) : pw / 2));
+    svg.replaceChildren();
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+    svg.setAttribute('aria-label', o.summary || `${o.type === 'bars' ? 'Bar' : 'Line'} chart of ${o.series.map((s) => s.label).join(' and ')}, ${o.labels[0]} to ${o.labels[n - 1]}. Use the arrow keys to read each value; a table follows.`);
+    const grid = svgEl('g', { class: 'rk-chart-grid' }, svg);
+    for (const t of ticks) {
+      svgEl('line', { x1: left, x2: W - right, y1: y(t), y2: y(t) }, grid);
+      svgEl('text', { x: left - 8, y: y(t), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, grid).textContent = fmt(t);
+    }
+    const every = Math.max(1, Math.ceil((n * (Math.max(...o.labels.map((l) => String(l).length)) * charW + 12)) / pw));
+    const shown = o.labels.map((_, i) => i).filter((i) => i % every === 0);
+    if (n > 1 && shown[shown.length - 1] !== n - 1) { if (n - 1 - shown[shown.length - 1] < every) shown.pop(); shown.push(n - 1); }
+    o.labels.forEach((l, i) => { if (shown.includes(i)) svgEl('text', { x: x(i), y: H - 6, 'text-anchor': bars ? 'middle' : i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle', class: 'rk-chart-x' }, grid).textContent = l; });
+    const marks = svgEl('g', { class: 'rk-chart-marks' }, svg);
+    const motion = !drawn && ms('--rk-duration-long') > 0;
+    if (bars) {
+      const k = o.series.length, w = Math.max(2, Math.min(24, (band - 4) / k - 2)), y0 = y(Math.max(lo, 0));
+      let peak = { v: -Infinity };
+      o.series.forEach((s, si) => s.values.forEach((v, i) => {
+        if (!Number.isFinite(v)) return;
+        const bx = x(i) - (k * w + (k - 1) * 2) / 2 + si * (w + 2), by = Math.min(y(v), y0), bh = Math.max(1, Math.abs(y0 - y(v)));
+        const r = svgEl('rect', { x: bx, y: by, width: w, height: bh, class: `rk-bar rk-s${si}`, 'data-i': i }, marks);
+        if (motion) r.style.cssText = `animation-delay:${Math.min(i, 10) * ms('--rk-duration-stagger')}ms`;
+        if (si === 0 && v > peak.v) peak = { v, x: bx + w / 2, y: by, i };
+      }));
+      if (Number.isFinite(peak.v)) svgEl('text', { x: peak.x, y: peak.y - 6, 'text-anchor': 'middle', class: 'rk-chart-value' }, marks).textContent = fmt(peak.v);
+    } else {
+      const endYs = [];
+      o.series.forEach((s, si) => {
+        const pts = s.values.map((v, i) => (Number.isFinite(v) ? [x(i), y(v)] : null));
+        const d = pts.reduce((acc, p, i) => (p ? `${acc}${acc && pts[i - 1] ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}` : acc), '');
+        svgEl('path', { d, class: `rk-line rk-s${si}`, pathLength: '1', ...(motion ? { 'data-rk-draw': '' } : {}) }, marks);
+        const lastI = s.values.length - 1;
+        if (Number.isFinite(s.values[lastI])) endYs.push({ si, y: y(s.values[lastI]), label: s.label });
+      });
+      const clash = endYs.some((a, i) => endYs.some((b, j) => j > i && Math.abs(a.y - b.y) < 14));
+      if (ends && !clash) endYs.forEach((e) => { svgEl('text', { x: W - right + 6, y: e.y, 'dominant-baseline': 'middle', class: `rk-chart-end rk-t${e.si}` }, marks).textContent = e.label; });
+    }
+    const hot = svgEl('g', { class: 'rk-chart-hot', 'aria-hidden': 'true' }, svg);
+    geo = { x, y, n, band, left, right, W, top, ph, bars, hot };
+    svgEl('rect', { x: left, y: top, width: pw, height: ph, class: 'rk-chart-hit' }, svg);
+    legend.hidden = o.series.length < 2;
+    legend.replaceChildren(...o.series.map((s, si) => { const li = document.createElement('li'); li.innerHTML = `<i class="rk-key-${bars ? 'box' : 'line'} rk-s${si}"></i>`; li.append(s.label); return li; }));
+    if (o.table) {
+      details.hidden = false;
+      details.innerHTML = '<summary>show the numbers</summary><table class="rk-table"><thead><tr><th scope="col"></th></tr></thead><tbody></tbody></table>';
+      const hr = details.querySelector('thead tr'), body = details.querySelector('tbody');
+      o.series.forEach((s) => { const th = document.createElement('th'); th.scope = 'col'; th.className = 'rk-num'; th.textContent = s.label; hr.appendChild(th); });
+      o.labels.forEach((l, i) => { const tr = document.createElement('tr'); const th = document.createElement('th'); th.scope = 'row'; th.textContent = l; tr.appendChild(th); o.series.forEach((s) => { const td = document.createElement('td'); td.className = 'rk-num'; td.textContent = Number.isFinite(s.values[i]) ? fmt(s.values[i]) : '–'; tr.appendChild(td); }); body.appendChild(tr); });
+    } else details.hidden = true;
+    drawn = true;
+    if (active >= 0) mark(Math.min(active, n - 1), false);
+  }
+  function mark(i, speak = true) {
+    if (!geo) return;
+    active = i;
+    const { x, y, hot, top, ph, bars } = geo;
+    hot.replaceChildren();
+    svg.toggleAttribute('data-rk-hovering', i >= 0);
+    svg.querySelectorAll('[data-rk-hot]').forEach((b) => b.removeAttribute('data-rk-hot'));
+    if (i < 0) { hideTip(); return; }
+    let anchor;
+    if (bars) { svg.querySelectorAll(`.rk-bar[data-i="${i}"]`).forEach((b) => b.setAttribute('data-rk-hot', '')); anchor = svg.querySelector(`.rk-bar[data-i="${i}"]`); }
+    else {
+      anchor = svgEl('line', { x1: x(i), x2: x(i), y1: top, y2: top + ph, class: 'rk-chart-cross' }, hot);
+      o.series.forEach((s, si) => { if (Number.isFinite(s.values[i])) svgEl('circle', { cx: x(i), cy: y(s.values[i]), r: 4, class: `rk-chart-dot rk-s${si}` }, hot); });
+    }
+    const text = `${o.labels[i]} · ${o.series.map((s) => `${o.series.length > 1 ? `${s.label} ` : ''}${Number.isFinite(s.values[i]) ? fmt(s.values[i]) : 'no value'}`).join(' · ')}`;
+    if (anchor) showTip(anchor, text);
+    if (speak) say.textContent = text;
+  }
+  const at = (e) => { if (!geo) return -1; const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) * (geo.W / r.width), { n, left, bars, band } = geo; const pw = geo.W - left - geo.right; const i = bars ? Math.floor((sx - left) / band) : Math.round(((sx - left) / (pw || 1)) * (n - 1)); return i >= 0 && i < n ? i : -1; };
+  const move = (e) => { if (e.pointerType === 'touch' && e.type === 'pointermove' && !e.pressure) return; const i = at(e); if (i !== active) mark(i, false); };
+  const leave = () => { if (document.activeElement !== svg) mark(-1); };
+  const key = (e) => {
+    const n = geo ? geo.n : 0, to = { ArrowRight: active + 1, ArrowLeft: active - 1, Home: 0, End: n - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault(); mark(Math.max(0, Math.min(n - 1, active < 0 ? (e.key === 'ArrowLeft' || e.key === 'End' ? n - 1 : 0) : to)));
+  };
+  const blur = () => mark(-1);
+  svg.addEventListener('pointermove', move); svg.addEventListener('pointerdown', move); svg.addEventListener('pointerleave', leave);
+  svg.addEventListener('keydown', key); svg.addEventListener('blur', blur);
+  svg.addEventListener('focus', () => { if (active < 0) mark(geo ? geo.n - 1 : -1); });
+  let w0 = 0;
+  const ro = new ResizeObserver(() => { if (Math.abs(el.clientWidth - w0) > 1) { w0 = el.clientWidth; draw(); } });
+  ro.observe(el);
+  const theme = () => draw();
+  document.addEventListener('rk:prefs', theme);
+  draw();
+  return {
+    update(next) { o = { ...o, ...next }; draw(); },
+    get active() { return active; },
+    destroy() { ro.disconnect(); document.removeEventListener('rk:prefs', theme); hideTip(); },
   };
 }
 

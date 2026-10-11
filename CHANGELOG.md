@@ -33,6 +33,12 @@ it; each entry says how.
   stale (`timing.stale`) or offline and says so, and holds still while
   you look, with waiting updates behind a button. [docs/live.md](docs/live.md).
 - Tokens `timing.tip-delay`, `timing.long-press`, `timing.stale`.
+- Data: line and bar charts in ink and grey with one axis, a tooltip
+  and crosshair at every point, keys, a live region and a table of the
+  numbers (`Rekta.chart()`); meters that take a status colour only when
+  their value means one (`rk-meter`, `--rk-v`); an indeterminate
+  `rk-progress`; Metro's progress dots for a wait that blocks
+  (`rk-dots`, `motion.duration.dots`). [docs/data.md](docs/data.md).
 - Data states: `rk-region` with `aria-busy` (a 2px line after
   `busy-delay`, at least `busy-min`), still placeholders `rk-ghost`, and
   `rk-empty` for empty and failed regions. `Rekta.busy()`.

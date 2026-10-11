@@ -104,6 +104,9 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-progress::-webkit-progress-bar { background: transparent; }
 .rk-progress::-webkit-progress-value { background: currentColor; }
 .rk-progress::-moz-progress-bar { background: currentColor; }
+/* Without a value, the bar does not know how far it is: a segment runs along it, like the loading line. */
+.rk-progress:indeterminate { background: linear-gradient(currentColor, currentColor) no-repeat -50% 0 / 30% 100%, color-mix(in srgb, currentColor 20%, transparent); animation: rk-busy var(--rk-duration-busy) linear infinite; }
+.rk-progress:indeterminate::-moz-progress-bar { background: transparent; }
 
 /* Sparkline: an inline trend. Status mark colour on the ground; the tile's text colour on a tile. It draws in on
    arrival; afterwards new readings just move the line. */
@@ -394,6 +397,63 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 [data-rk-live='stale'] .rk-spark, [data-rk-live='offline'] .rk-spark { opacity: 0.35; }
 [data-rk-live='stale'] [data-rk-value], [data-rk-live='offline'] [data-rk-value] { color: var(--rk-text-contrast-high); }
 .rk-live-more { min-height: 0; padding: 2px var(--rk-space-s); font-size: var(--rk-font-size-xs); }
+
+/* Data ---------------------------------------------------------------------------------------------------------- */
+/* Charts, in ink and grey: the first series text-primary, a second text-contrast-medium; the accent only for the point
+   under the pointer. Hairline gridlines, 2px lines, square bar ends, every label in a text colour. */
+.rk-chart { position: relative; min-width: 0; }
+.rk-chart > * + * { margin-top: var(--rk-space-xs); }
+.rk-chart-svg { display: block; max-width: 100%; height: auto; overflow: visible; outline: none; font-size: var(--rk-font-size-xs); font-variant-numeric: tabular-nums; touch-action: pan-y; }
+.rk-chart-svg:focus-visible { outline: 2px solid var(--rk-focus); outline-offset: 4px; }
+.rk-chart-grid line { stroke: var(--rk-text-contrast-low); stroke-width: 1; shape-rendering: crispEdges; }
+.rk-chart-grid text { fill: var(--rk-text-contrast-high); }
+.rk-chart .rk-s0 { --_rk-series: var(--rk-text-primary); }
+.rk-chart .rk-s1 { --_rk-series: var(--rk-text-contrast-medium); }
+.rk-line { fill: none; stroke: var(--_rk-series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1 0; }
+.rk-line[data-rk-draw] { stroke-dasharray: 1; animation: rk-draw var(--rk-duration-long) var(--rk-ease-in) both; }
+@keyframes rk-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.rk-bar { fill: var(--_rk-series); transform-box: fill-box; transform-origin: bottom; animation: rk-grow var(--rk-duration-moderate) var(--rk-ease-in) both; transition: opacity var(--rk-duration-short) var(--rk-ease-base); }
+@keyframes rk-grow { from { transform: scaleY(0); } }
+.rk-chart-svg[data-rk-hovering] .rk-bar:not([data-rk-hot]) { opacity: 0.35; }
+.rk-bar.rk-s0[data-rk-hot] { fill: var(--rk-accent); }
+.rk-chart-value, .rk-chart-end.rk-t0 { fill: var(--rk-text-primary); font-weight: var(--rk-font-weight-semibold); }
+.rk-chart-end.rk-t1 { fill: var(--rk-text-contrast-high); }
+.rk-chart-hit { fill: transparent; cursor: crosshair; }
+.rk-chart-cross { stroke: var(--rk-text-contrast-medium); stroke-width: 1; shape-rendering: crispEdges; }
+.rk-chart-dot { fill: var(--_rk-series); stroke: var(--rk-bg); stroke-width: 2; }
+.rk-chart-dot.rk-s0 { fill: var(--rk-accent); }
+.rk-legend { display: flex; flex-wrap: wrap; gap: var(--rk-space-xs) var(--rk-space-m); margin: 0; padding: 0; list-style: none; font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
+.rk-legend > li { display: inline-flex; align-items: center; gap: 6px; }
+.rk-legend i { flex: none; background: var(--_rk-series); }
+.rk-key-line { width: 14px; height: 2px; }
+.rk-key-box { width: 10px; height: 10px; }
+.rk-chart-table > summary { width: max-content; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-high); cursor: pointer; }
+.rk-chart-table > table { margin-top: var(--rk-space-xs); }
+
+/* Meter: a quantity against its whole. A 6px hairline-grey track; the fill in ink, or in a status's full colour
+   when the value means that status (a disk nearly full). The label and the value sit above it. */
+.rk-meter { position: relative; height: 6px; overflow: hidden; background: var(--rk-text-contrast-low); }
+.rk-meter::before { content: ''; position: absolute; inset: 0 auto 0 0; width: calc(var(--rk-v, 0) * 100%); background: var(--_rk-mark, var(--rk-text-primary)); transition: width var(--rk-duration-moderate) var(--rk-ease-base); }
+.rk-meter-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rk-space-s); margin-bottom: var(--rk-space-xs); font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
+.rk-meter-head > b { font-size: var(--rk-font-size-s); font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; color: var(--rk-text-primary); }
+
+/* Progress dots, the Metro way, for a wait that blocks (signing in, installing, the first load): five small squares
+   fly in from the leading edge, bunch up slowly through the middle and speed off, one after another. Regions keep
+   the calm 2px line. Under reduced motion they stand still in the middle. */
+.rk-dots { position: relative; display: block; width: 100%; height: 4px; overflow: hidden; color: var(--rk-text-primary); }
+.rk-dots > i { position: absolute; top: 0; left: -2%; width: 4px; height: 4px; background: currentColor; opacity: 0; animation: rk-dots var(--rk-duration-dots) infinite; animation-delay: calc(var(--_rk-n, 0) * var(--rk-duration-dots) * 0.07); }
+.rk-dots > i:nth-child(2) { --_rk-n: 1; }
+.rk-dots > i:nth-child(3) { --_rk-n: 2; }
+.rk-dots > i:nth-child(4) { --_rk-n: 3; }
+.rk-dots > i:nth-child(5) { --_rk-n: 4; }
+@keyframes rk-dots {
+  0% { left: -2%; opacity: 0; animation-timing-function: cubic-bezier(0.1, 0.7, 0.4, 1); }
+  6% { opacity: 1; }
+  35% { left: 44%; animation-timing-function: linear; }
+  62% { left: 56%; animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.3); }
+  90% { opacity: 1; }
+  100% { left: 102%; opacity: 0; }
+}
 
 /* Touch: fields never set text below 16px, so iOS does not zoom the page when one takes focus. */
 @media (pointer: coarse) { .rk-input { font-size: max(16px, 1rem); } }
@@ -774,6 +834,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-range::-webkit-slider-runnable-track { background: linear-gradient(Highlight, Highlight) 0 / var(--_rk-v) 100% no-repeat, GrayText; }
   .rk-range::-webkit-slider-thumb { background: CanvasText; }
   .rk-tip, .rk-cell-error { border: 1px solid CanvasText; }
+  .rk-meter { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; }
+  .rk-meter::before, .rk-dots > i { forced-color-adjust: none; background: CanvasText; }
+  .rk-chart .rk-s0, .rk-chart .rk-s1 { forced-color-adjust: none; --_rk-series: CanvasText; }
+  .rk-chart .rk-s1 { stroke-dasharray: 4 3; }
   .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row { forced-color-adjust: none; background-color: Highlight; color: HighlightText; }
   .rk-grip::before { forced-color-adjust: none; background: CanvasText; }
   [data-rk-live='stale'] .rk-age::before, [data-rk-live='offline'] .rk-age::before { forced-color-adjust: none; background: CanvasText; }
@@ -871,9 +935,13 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   :root:not([data-motion='on']) .rk-tile[data-rk-pressed] { transform: scale(var(--rk-tile-press-scale)); }
   :root:not([data-motion='on']) [data-rk-press]:not(.rk-tile)[data-rk-pressed] { transform: scale(var(--rk-row-press-scale)); }
   :root:not([data-motion='on']) .rk-region[aria-busy='true']::before, :root:not([data-motion='on']) .rk-btn[data-rk-pending]::after { background-size: 100% 100%; background-color: var(--rk-text-contrast-medium); background-image: none; }
+  :root:not([data-motion='on']) .rk-dots > i { animation: none; opacity: 1; left: calc(50% - 22px + var(--_rk-n, 0) * 10px); }
+  :root:not([data-motion='on']) .rk-progress:indeterminate { animation: none; background-size: 100% 100%; }
 }
 :root[data-motion='off'] :is(.rk-panorama, .rk-pivot) { scroll-behavior: auto; }
 :root[data-motion='off'] .rk-pulse { animation: none; }
 :root[data-motion='off'] .rk-tile[data-rk-pressed] { transform: scale(var(--rk-tile-press-scale)); }
 :root[data-motion='off'] [data-rk-press]:not(.rk-tile)[data-rk-pressed] { transform: scale(var(--rk-row-press-scale)); }
 :root[data-motion='off'] .rk-region[aria-busy='true']::before, :root[data-motion='off'] .rk-btn[data-rk-pending]::after { background-size: 100% 100%; background-color: var(--rk-text-contrast-medium); background-image: none; }
+:root[data-motion='off'] .rk-dots > i { animation: none; opacity: 1; left: calc(50% - 22px + var(--_rk-n, 0) * 10px); }
+:root[data-motion='off'] .rk-progress:indeterminate { animation: none; background-size: 100% 100%; }

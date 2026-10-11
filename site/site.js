@@ -539,6 +539,40 @@
   $('#h-redo').addEventListener('click', () => { if (hist.canRedo) hist.redo(); });
   paintHistory();
 
+  /* ---------- data: charts in ink and grey, meters, progress, the dots ---------- */
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const dayLabels = Array.from({ length: 14 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - 13 + i); return `${MON[d.getMonth()]} ${d.getDate()}`; });
+  const lineChart = Rekta.chart($('#chart-line'), {
+    type: 'line', labels: dayLabels,
+    series: [
+      { label: 'these two weeks', values: dayLabels.map((_, i) => Math.round(26 + i * 1.2 + rnd(i + 40) * 12)) },
+      { label: 'the two before', values: dayLabels.map((_, i) => Math.round(22 + i * 0.6 + rnd(i + 90) * 10)) },
+    ],
+    summary: 'Deploys a day over the last two weeks, against the two weeks before. Both rise; these two weeks stay above.',
+  });
+  const RANGES = {
+    week: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], values: [412, 468, 431, 502, 377, 64, 41] },
+    weeks: { labels: Array.from({ length: 8 }, (_, i) => `wk ${33 + i}`), values: [2140, 2380, 2210, 2620, 2490, 2850, 2710, 2295] },
+    months: { labels: ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'], values: [9800, 10400, 8900, 11800, 12600, 7300] },
+  };
+  const barChart = Rekta.chart($('#chart-bars'), { type: 'bars', labels: RANGES.week.labels, series: [{ label: 'build minutes', values: RANGES.week.values }], unit: ' min', summary: 'Build minutes by weekday: busiest on Thursday, quiet at the weekend.' });
+  $$('input[name=bars-range]').forEach((r) => r.addEventListener('change', () => { const d = RANGES[r.value]; barChart.update({ labels: d.labels, series: [{ label: 'build minutes', values: d.values }], summary: `Build minutes ${r.parentElement.textContent.trim()}.` }); }));
+  let cpu = 42;
+  setInterval(() => {
+    if (!live()) return;
+    cpu = Math.max(8, Math.min(96, Math.round(cpu + (Math.random() - 0.5) * 18)));
+    const m = $('#m-cpu'); m.style.setProperty('--rk-v', cpu / 100); m.setAttribute('aria-valuenow', cpu); $('#m-cpu-v').textContent = `${cpu}%`;
+  }, 2000);
+  let imp = 0;
+  setInterval(() => { imp = imp >= 100 ? 0 : Math.min(100, imp + 3); $('#imp').value = imp; $('#imp-v').textContent = imp >= 100 ? 'done' : `${imp}%`; }, 400);
+  $('#signin').addEventListener('click', (e) => {
+    const b = e.currentTarget;
+    if (b.getAttribute('aria-disabled') === 'true') return;
+    b.setAttribute('aria-disabled', 'true'); b.textContent = 'signing in…';
+    $('#dots').hidden = false; $('#signin-msg').textContent = 'Signing in. Nothing else can happen until it is done.';
+    setTimeout(() => { $('#dots').hidden = true; b.removeAttribute('aria-disabled'); b.textContent = 'sign in'; $('#signin-msg').textContent = 'Signed in, as no one in particular.'; toasts.show('Signed in.', { key: 'signin', from: b }); }, 2600);
+  });
+
   /* ---------- inputs: build a tile, find a token, text size, a date, files ---------- */
   const built = $('#built');
   function build() {
@@ -623,5 +657,5 @@
   paintAccent();
   paintSeen();
   requestAnimationFrame(() => { measure(); env(); });
-  window.site = { app, router, home, facets, toasts, banner, hist, compTable, pick, files, steps, logList, feed, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard };
+  window.site = { app, router, home, facets, toasts, banner, hist, lineChart, barChart, compTable, pick, files, steps, logList, feed, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard };
 })();

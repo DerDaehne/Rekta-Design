@@ -77,6 +77,7 @@ paint: load `rekta.global.js` in `<head>` and call
 | Property | Written by | Read by |
 |---|---|---|
 | `--rk-i` | the page | A tile's build-in order (0–10). |
+| `--rk-v` | the page | A meter's value, 0 to 1. |
 | `--rk-sec-w` | the page | A panorama section's width when sideways. |
 | `--rk-split-w` | the page, `split()` | The width of a split's list pane; the handle writes it while dragged. |
 | `--rk-banner-h` | `banner()` | `scroll-padding`, the sticky strip, toasts without anchor positioning. |
@@ -511,6 +512,20 @@ after `stale` ms or `timing.stale`, `offline`) and `data-rk-held` while
 the pointer rests on it or focus is in it; `age` (`.rk-age` inside it by
 default) says how fresh it is, every second; a quiet `.rk-live-more`
 button after it shows and applies waiting updates. Returns `{ update, beat, offline, flush(), state, held, waiting, destroy }`.
+
+### `chart(el, { type, labels, series, unit, min, max, height, summary, table })`
+
+A line (`type: 'line'`) or bar (`'bars'`) chart drawn as SVG at `el`'s
+width, redrawn when it changes. `series` is `[{ label, values }]`; the
+first is ink, a second grey. Ticks are round and compact (`unit` follows
+each value); bars start at zero, lines at `min` or the data's lowest.
+Two series get a legend (`.rk-legend`); lines get end labels when wide
+enough and clear of each other; bars label their peak. Hover, or ← →
+Home End on the focused chart, marks a point (`data-rk-hot`, a crosshair
+and markers for lines), shows the values in a tooltip and says them in a
+live region. With `table` (default), a `details.rk-chart-table` holds the
+numbers. `summary` is the accessible name. See [data.md](data.md).
+Returns `{ update(options), active, destroy }`.
 
 ### `place(el, anchor)`
 

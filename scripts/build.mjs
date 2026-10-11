@@ -253,7 +253,7 @@ function check(tokens) {
   for (const g of ['color']) walk(tokens.color.light, ['color', 'light'], (p) => defined.add(tokenName(p)));
   for (const g of ['typography', 'spacing', 'radius', 'size', 'motion', 'timing', 'layer', 'breakpoint']) walk(tokens[g], [g], (p) => defined.add(tokenName(p)));
   walk(tokens.density.comfortable, ['density', 'comfortable'], (p) => defined.add(tokenName(p)));
-  const HOOKS = new Set(['i', 'sec-w', 'split-w', 'banner-h', 'pivot-scale', 'pivot-h']);
+  const HOOKS = new Set(['i', 'v', 'sec-w', 'split-w', 'banner-h', 'pivot-scale', 'pivot-h']);
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }

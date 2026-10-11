@@ -28,7 +28,7 @@
        the place, so it sticks on a phone. -->
   <main class="rk-place place-home" data-rk-place="home" aria-labelledby="overview-title">
     <nav class="rk-pivot rk-pivot--nav" id="nav" aria-label="Rekta Design, sections">
-      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#desktop">desktop</a><a href="#feedback">feedback</a><a href="#live-undo">live &amp; undo</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#inputs">inputs</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#platforms">platforms</a><a href="#start">get started</a>
+      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#desktop">desktop</a><a href="#feedback">feedback</a><a href="#live-undo">live &amp; undo</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#inputs">inputs</a><a href="#data">data</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#platforms">platforms</a><a href="#start">get started</a>
     </nav>
 
     <div class="rk-panorama" id="pan" tabindex="0" role="region" aria-label="Rekta Design, sections side by side">
@@ -465,6 +465,36 @@
         </div>
         <ul class="rk-rows files" id="files" aria-label="files" hidden></ul>
         <p class="note">Toggle switches act at once, so they live outside forms that are sent; a checkbox waits for “save”. Segments are for two to five options you see at a glance; more go in a select.</p>
+      </section>
+
+      <section class="rk-sec sec-wide" id="data" aria-labelledby="data-title">
+        <h2 class="rk-group" id="data-title">Data, quiet until it matters.</h2>
+        <p>Charts in ink and grey: one axis, round ticks on hairlines, the accent only where you point. Every chart reads out its values under the pointer or with ← → once it has focus, and shows its numbers as a table. A status colour appears only where a value means that status.</p>
+        <p class="rk-kicker group-label">deploys a day</p>
+        <div class="chart" id="chart-line"></div>
+        <div class="chart-head"><p class="rk-kicker">build minutes</p>
+          <div class="rk-segments" role="radiogroup" aria-label="range">
+            <label><input type="radio" name="bars-range" value="week" checked>by weekday</label><label><input type="radio" name="bars-range" value="weeks">by week</label><label><input type="radio" name="bars-range" value="months">by month</label>
+          </div>
+        </div>
+        <div class="chart" id="chart-bars"></div>
+        <p class="rk-kicker group-label">meters</p>
+        <div class="meters">
+          <div><div class="rk-meter-head"><span>processor</span><b id="m-cpu-v">42%</b></div><div class="rk-meter" id="m-cpu" role="meter" aria-label="processor" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" style="--rk-v:.42"></div></div>
+          <div><div class="rk-meter-head"><span>memory</span><b>63%</b></div><div class="rk-meter" role="meter" aria-label="memory" aria-valuemin="0" aria-valuemax="100" aria-valuenow="63" style="--rk-v:.63"></div></div>
+          <div><div class="rk-meter-head"><span>disk on runner 3 · <span class="rk-tag" data-status="warning">waiting</span></span><b>81%</b></div><div class="rk-meter" role="meter" aria-label="disk on runner 3" aria-valuemin="0" aria-valuemax="100" aria-valuenow="81" aria-valuetext="81%, nearly full" data-status="warning" style="--rk-v:.81"></div></div>
+          <div><div class="rk-meter-head"><span>artifact storage · <span class="rk-tag" data-status="error">failed</span></span><b>100%</b></div><div class="rk-meter" role="meter" aria-label="artifact storage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-valuetext="100%, full: uploads fail" data-status="error" style="--rk-v:1"></div></div>
+        </div>
+        <p class="rk-kicker group-label">progress</p>
+        <div class="meters">
+          <div><div class="rk-meter-head"><span>importing 1,284 runs</span><b id="imp-v">0%</b></div><progress class="rk-progress" id="imp" max="100" value="0" aria-label="importing 1,284 runs"></progress></div>
+          <div><div class="rk-meter-head"><span>reindexing, length unknown</span></div><progress class="rk-progress" aria-label="reindexing"></progress></div>
+          <div class="signin">
+            <p class="rk-actions"><button class="rk-btn rk-btn--primary" type="button" id="signin">sign in</button></p>
+            <div class="rk-dots" id="dots" role="progressbar" aria-label="signing in" hidden><i></i><i></i><i></i><i></i><i></i></div>
+            <p class="rk-meta" id="signin-msg" aria-live="polite">The dots are for a wait that blocks everything else.</p>
+          </div>
+        </div>
       </section>
 
       <section class="rk-sec" id="look" aria-labelledby="look-title">
