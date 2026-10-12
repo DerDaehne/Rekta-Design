@@ -12,12 +12,29 @@ is [include/rekta.h](include/rekta.h).
 - A software renderer: every platform draws the same pixels, and the tests
   check them without a screen.
 
+## Try it with Nix
+
+The flake at the root brings everything the demo needs, on Linux and macOS:
+
+```sh
+nix run github:DerDaehne/Rekta-Design    # build and start the demo
+nix develop                              # in a clone: the compiler, make, X11 and node; then make -C core
+nix flake check                          # builds and runs the tests and the reference images
+```
+
+The demo is a panorama of six sections, one for each part of the core: tiles
+(the press, the turn to a place, peek, flip, tiles that come and go, reflow),
+live data, motion (sheet, toasts, cross-fade), controls (every button, progress,
+rows, a custom view drawn with the canvas), type and icons, and the settings.
+Tab moves focus, Enter presses, Page Up and Page Down go by section, Escape goes
+back. `demo --shots DIR` takes the same tour without a screen.
+
 ## Build
 
 ```sh
 make               # build/librekta.a and build/demo
 make test          # 73 checks and 14 reference images, headless (the comparison needs node)
-make shots         # the demo's script as PNGs in build/shots
+make shots         # the demo's tour as PNGs in build/shots
 make sanitize      # tests and demo under AddressSanitizer and UBSan
 ```
 

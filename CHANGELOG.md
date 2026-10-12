@@ -22,8 +22,11 @@ it; each entry says how.
   toasts, the title bar, keyboard focus. A software renderer with exact
   anti-aliasing draws the same pixels on every platform; a headless
   platform with a virtual clock runs the tests (73 checks, 14 reference
-  images) and the demo's script. Stage 1 of docs/core.md: text fields,
+  images) and the demo's tour. Stage 1 of docs/core.md: text fields,
   menus and tables come next, screen-reader bridges after them.
+- `core/demo/demo.c` shows every feature of the core in six sections;
+  `flake.nix` builds it on Linux and macOS (`nix run`, `nix develop`,
+  `nix flake check` with the tests).
 - The token build also writes the C sources of rekta-core
   (`core/src/rk_tokens.h`, `rk_icons.h`, `rk_fonts.h`); `--check` fails
   when they are out of date.
