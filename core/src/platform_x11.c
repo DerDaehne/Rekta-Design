@@ -6,19 +6,26 @@
 #include <X11/Xlib.h>
 #include <X11/Xresource.h>
 #include <X11/Xutil.h>
+#include <X11/extensions/XShm.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include <X11/keysym.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <time.h>
 #include <unistd.h>
 
-typedef struct xwin { rk_window *w; Window win; GC gc; XIC ic; int pw, ph; bool maximized; } xwin;
+typedef struct xwin {
+  rk_window *w; Window win; GC gc; XIC ic; int pw, ph; bool maximized;
+  XImage *shm_img; XShmSegmentInfo shm;                      /* the frame in memory the X server reads directly */
+} xwin;
 
 static Display *dpy;
 static int screen;
 static XIM im;
 static int wake_pipe[2] = { -1, -1 };
 static float dpi_scale = 1;
+static bool use_shm, shm_failed;
 static Atom A_DELETE, A_PROTOCOLS, A_NET_NAME, A_UTF8, A_MOTIF, A_MOVERESIZE, A_STATE, A_MAX_V, A_MAX_H, A_XS_SEL, A_XS_SETTINGS;
 static xwin *wins[64];
 static int nwins;
@@ -68,6 +75,8 @@ static bool x_init(const rk_app_desc *d) {
   A_XS_SETTINGS = XInternAtom(dpy, "_XSETTINGS_SETTINGS", False);
   XSetLocaleModifiers("");
   im = XOpenIM(dpy, NULL, NULL, NULL);
+  const char *noshm = getenv("RK_NO_SHM");
+  use_shm = XShmQueryExtension(dpy) && !(noshm && *noshm == '1');
   read_dpi();
   /* follow XSETTINGS changes: the manager window's property */
   Window mgr = XGetSelectionOwner(dpy, A_XS_SEL);
@@ -89,11 +98,13 @@ static void *x_open(rk_window *w, const rk_window_desc *d) {
   x->pw = (int)(d->width * dpi_scale); x->ph = (int)(d->height * dpi_scale);
   XSetWindowAttributes a;
   memset(&a, 0, sizeof a);
-  a.background_pixel = BlackPixel(dpy, screen);
+  /* no background: the server never fills new area black before we draw it; contents stay put on a resize */
+  a.background_pixmap = None;
+  a.bit_gravity = NorthWestGravity;
   a.event_mask = ExposureMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
                  PointerMotionMask | EnterWindowMask | LeaveWindowMask | FocusChangeMask;
   x->win = XCreateWindow(dpy, RootWindow(dpy, screen), 0, 0, (unsigned)x->pw, (unsigned)x->ph, 0, CopyFromParent, InputOutput,
-                         CopyFromParent, CWBackPixel | CWEventMask, &a);
+                         CopyFromParent, CWBackPixmap | CWBitGravity | CWEventMask, &a);
   XSetWMProtocols(dpy, x->win, &A_DELETE, 1);
   XSizeHints *hints = XAllocSizeHints();
   hints->flags = PMinSize;
@@ -120,9 +131,42 @@ static void *x_open(rk_window *w, const rk_window_desc *d) {
   return x;
 }
 
+static void shm_free(xwin *x) {
+  if (!x->shm_img) return;
+  XShmDetach(dpy, &x->shm);
+  XSync(dpy, False);
+  XDestroyImage(x->shm_img);
+  shmdt(x->shm.shmaddr);
+  x->shm_img = NULL;
+}
+
+static int shm_error(Display *d, XErrorEvent *e) { (void)d; (void)e; shm_failed = true; return 0; }
+
+/* A shared image the size of the window; a remote display refuses the attach, and then XPutImage it is. */
+static bool shm_ensure(xwin *x, int w, int h) {
+  if (x->shm_img && x->shm_img->width == w && x->shm_img->height == h) return true;
+  shm_free(x);
+  XImage *img = XShmCreateImage(dpy, DefaultVisual(dpy, screen), (unsigned)DefaultDepth(dpy, screen), ZPixmap, NULL, &x->shm, (unsigned)w, (unsigned)h);
+  if (!img) { use_shm = false; return false; }
+  x->shm.shmid = shmget(IPC_PRIVATE, (size_t)img->bytes_per_line * h, IPC_CREAT | 0600);
+  if (x->shm.shmid < 0) { XDestroyImage(img); use_shm = false; return false; }
+  x->shm.shmaddr = img->data = shmat(x->shm.shmid, NULL, 0);
+  x->shm.readOnly = False;
+  shm_failed = false;
+  int (*old)(Display *, XErrorEvent *) = XSetErrorHandler(shm_error);
+  XShmAttach(dpy, &x->shm);
+  XSync(dpy, False);
+  XSetErrorHandler(old);
+  shmctl(x->shm.shmid, IPC_RMID, NULL);                        /* freed once both sides let go */
+  if (shm_failed) { shmdt(x->shm.shmaddr); XDestroyImage(img); use_shm = false; return false; }
+  x->shm_img = img;
+  return true;
+}
+
 static void x_close(void *n) {
   xwin *x = n;
   if (!x) return;
+  shm_free(x);
   for (int i = 0; i < nwins; i++) if (wins[i] == x) { wins[i] = wins[--nwins]; break; }
   if (x->ic) XDestroyIC(x->ic);
   XFreeGC(dpy, x->gc);
@@ -140,14 +184,26 @@ static void x_title(void *n, const char *t) {
   XChangeProperty(dpy, x->win, A_NET_NAME, A_UTF8, 8, PropModeReplace, (const unsigned char *)t, (int)strlen(t));
 }
 
-static void x_present(void *n, const rk_bitmap *fb) {
+/* Only the changed part goes up. The frame buffer is 0xAARRGGBB in memory order B, G, R, A: a 24-bit TrueColor
+   visual's layout. With MIT-SHM the server reads the pixels from shared memory; we wait for it (XSync) before the
+   next frame writes there. */
+static void x_present(void *n, const rk_bitmap *fb, rk_irect r) {
   xwin *x = n;
   if (!x || !fb) return;
-  /* the frame buffer is 0xAARRGGBB in memory order B, G, R, A: a 24-bit TrueColor visual's layout */
+  r = rk__irect_meet(r, (rk_irect){ 0, 0, fb->w, fb->h });
+  if (rk__irect_empty(r)) return;
+  int w = r.x1 - r.x0, h = r.y1 - r.y0;
+  if (use_shm && shm_ensure(x, fb->w, fb->h)) {
+    for (int y = r.y0; y < r.y1; y++)
+      memcpy(x->shm_img->data + (size_t)y * x->shm_img->bytes_per_line + (size_t)r.x0 * 4, fb->px + (size_t)y * fb->stride + r.x0, (size_t)w * 4);
+    XShmPutImage(dpy, x->win, x->gc, x->shm_img, r.x0, r.y0, r.x0, r.y0, (unsigned)w, (unsigned)h, False);
+    XSync(dpy, False);
+    return;
+  }
   XImage *img = XCreateImage(dpy, DefaultVisual(dpy, screen), (unsigned)DefaultDepth(dpy, screen), ZPixmap, 0, (char *)fb->px,
                              (unsigned)fb->w, (unsigned)fb->h, 32, fb->stride * 4);
   if (!img) return;
-  XPutImage(dpy, x->win, x->gc, img, 0, 0, 0, 0, (unsigned)fb->w, (unsigned)fb->h);
+  XPutImage(dpy, x->win, x->gc, img, r.x0, r.y0, r.x0, r.y0, (unsigned)w, (unsigned)h);
   img->data = NULL;
   XDestroyImage(img);
   XFlush(dpy);
@@ -221,9 +277,15 @@ static void handle(XEvent *ev) {
       if (ev->xconfigure.width != x->pw || ev->xconfigure.height != x->ph) {
         x->pw = ev->xconfigure.width; x->ph = ev->xconfigure.height;
         rk__window_resized(w, x->pw / dpi_scale, x->ph / dpi_scale, dpi_scale);
+        rk__window_frame(w, rk_app_now());                       /* the new size, drawn at once */
       }
       break;
-    case Expose: if (ev->xexpose.count == 0) rk__window_invalidate(w); break;
+    case Expose: {
+      rk_rect r = { ev->xexpose.x / k, ev->xexpose.y / k, ev->xexpose.width / k, ev->xexpose.height / k };
+      rk__window_damage(w, r);
+      if (ev->xexpose.count == 0) rk__window_frame(w, rk_app_now());
+      break;
+    }
     case ClientMessage:
       if ((Atom)ev->xclient.data.l[0] == A_DELETE) rk__window_close_request(w);
       break;

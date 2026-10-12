@@ -125,6 +125,15 @@ float rk_window_scale(rk_window *w) { return w->scale; }
 void rk_window_on_close(rk_window *w, bool (*fn)(rk_window *, void *), void *user) { w->should_close = fn; w->close_user = user; }
 
 void rk__window_invalidate(rk_window *w) {
+  w->damage_all = true;
+  if (!w->needs_draw) { w->needs_draw = true; rk__app_request_frame(); }
+}
+
+void rk__window_damage(rk_window *w, rk_rect r) {
+  float k = w->scale;
+  rk_irect d = { (int)floorf(r.x * k) - 2, (int)floorf(r.y * k) - 2, (int)ceilf((r.x + r.w) * k) + 2, (int)ceilf((r.y + r.h) * k) + 2 };
+  if (rk__irect_empty(w->damage)) w->damage = d;
+  else w->damage = (rk_irect){ RK_MIN(w->damage.x0, d.x0), RK_MIN(w->damage.y0, d.y0), RK_MAX(w->damage.x1, d.x1), RK_MAX(w->damage.y1, d.y1) };
   if (!w->needs_draw) { w->needs_draw = true; rk__app_request_frame(); }
 }
 
@@ -206,11 +215,23 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
   float k = c->scale;
   rk_transform t = v->ptransform;
   float x = pox + (v->pframe.x + t.translate_x) * k, y = poy + (v->pframe.y + t.translate_y) * k;
-  bool flip = v->transition == RK_TRANSITION_FLIP + 1 && v->snapshot;
-  if (!deep(&t) && v->popacity >= 0.999f && !flip) { draw_content(c, v, x, y, true); return; }
+  bool flip = v->transition == RK_TRANSITION_FLIP + 1 && v->snapshot, turned = deep(&t);
+  /* outside what this frame draws: skip it (a container that does not clip may still have children reaching in) */
+  float pad = turned ? RK_MAX(v->pframe.w, v->pframe.h) * 0.35f * k + 8 : 2;
+  rk_irect vb = { (int)floorf(x - pad), (int)floorf(y - pad), (int)ceilf(x + v->pframe.w * k + pad), (int)ceilf(y + v->pframe.h * k + pad) };
+  if (rk__irect_empty(rk__irect_meet(vb, rk__canvas_clip(c))) && (v->clip || !v->nkids || v->cls)) return;
+  if (!turned && v->popacity >= 0.999f && !flip) { draw_content(c, v, x, y, true); return; }
+  float opacity = v->popacity * c->alpha;
+  /* a fill with nothing on it (the shading behind a sheet) fades by itself: no layer */
+  if (!turned && !flip && !v->nkids && !v->cls) {
+    float sa = c->alpha;
+    c->alpha = opacity;
+    draw_content(c, v, x, y, true);
+    c->alpha = sa;
+    return;
+  }
   int lw = (int)ceilf(v->pframe.w * k), lh = (int)ceilf(v->pframe.h * k);
   if (lw <= 0 || lh <= 0) return;
-  float opacity = v->popacity * c->alpha;
   if (flip) {
     /* the old look turns away around the horizontal axis; at the half the new one turns in */
     float tt = v->transition_t;
@@ -230,7 +251,8 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
   rk__canvas_init(&sub, layer, k);
   draw_content(&sub, v, 0, 0, true);
   rk__path_free(&sub.path);
-  composite_layer(c, layer, v, &t, x, y, opacity);
+  if (!turned && !flip) rk__composite_at(c->target, rk__canvas_clip(c), layer, (int)lroundf(x), (int)lroundf(y), opacity);   /* a plain fade */
+  else composite_layer(c, layer, v, &t, x, y, opacity);
   if (!v->anims && !v->transition) { rk__bitmap_free(v->layer); v->layer = NULL; }
 }
 
@@ -286,16 +308,21 @@ rk_bitmap *rk__snapshot(rk_view *v, bool with_fill) {
 void rk__window_frame(rk_window *w, double now) {
   (void)now;
   if (w->closed) return;
-  if (w->needs_layout) layout_window(w);
+  if (w->needs_layout) { layout_window(w); w->damage_all = true; }
   if (!w->needs_draw) return;
   w->needs_draw = false;
   clock_t t0 = clock();
   int fw = (int)ceilf(w->size.w * w->scale), fh = (int)ceilf(w->size.h * w->scale);
-  if (!w->fb || w->fb->w != fw || w->fb->h != fh) { rk__bitmap_free(w->fb); w->fb = rk__bitmap_create(fw, fh); }
-  rk__bitmap_clear(w->fb, rk__pm(rk_color_of(RK_ROLE_BG), 1));
+  if (!w->fb || w->fb->w != fw || w->fb->h != fh) { rk__bitmap_free(w->fb); w->fb = rk__bitmap_create(fw, fh); w->damage_all = true; }
+  rk_irect all = { 0, 0, fw, fh }, clip = w->damage_all ? all : rk__irect_meet(w->damage, all);
+  w->damage = (rk_irect){ 0, 0, 0, 0 }; w->damage_all = false;
+  if (rk__irect_empty(clip)) return;
+  /* only what changed: the ground under it, then whatever reaches into it */
+  rk__fill_rect(w->fb, clip, (float)clip.x0, (float)clip.y0, (float)clip.x1, (float)clip.y1, rk__pm(rk_color_of(RK_ROLE_BG), 1));
   rk_canvas c;
   memset(&c, 0, sizeof c);
   rk__canvas_init(&c, w->fb, w->scale);
+  c.clips[0] = clip;
   rk__render_view(&c, w->root, 0, 0);
   if (w->focus && w->focus_visible && rk__view_visible(w->focus)) {
     rk_rect r = rk__window_rect(w->focus);
@@ -303,10 +330,10 @@ void rk__window_frame(rk_window *w, double now) {
     rk__draw_focus(&c, w->focus, r);
   }
   rk__path_free(&c.path);
-  rk__platform()->present(w->native, w->fb);
+  rk__platform()->present(w->native, w->fb, clip);
   rk__prof_ms += (double)(clock() - t0) * 1000.0 / CLOCKS_PER_SEC;
   rk__prof_frames++;
-  rk__prof_pixels += (long)fw * fh;
+  rk__prof_pixels += (long)(clip.x1 - clip.x0) * (clip.y1 - clip.y0);
 }
 
 /* Input ----------------------------------------------------------------------------------------------------------- */
@@ -440,7 +467,7 @@ void rk__window_event(rk_window *w, const rk_event *e) {
     case RK_EVENT_POINTER_MOVE: {
       w->pointer = e->position;
       rk_view *h = w->capture ? w->capture : hit_window(w, e->position.x, e->position.y);
-      if (h != w->hover) { w->hover = h; rk__window_invalidate(w); }
+      w->hover = h;                                            /* nothing is drawn differently under the pointer */
       dispatch(w, h, e);
       break;
     }
@@ -507,7 +534,7 @@ void rk_window_inject(rk_window *w, const rk_event *e) {
 
 bool rk_window_snapshot(rk_window *w, const char *path) {
   rk__layout_pending();
-  w->needs_draw = true;
+  w->needs_draw = true; w->damage_all = true;
   rk__window_frame(w, rk_app_now());
   return w->fb && rk__png_write(w->fb, path);
 }

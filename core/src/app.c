@@ -136,21 +136,22 @@ void rk__app_settings_changed(void) {
 
 /* The loop -------------------------------------------------------------------------------------------------------- */
 
+/* Input and timers run as they come; frames are drawn at a steady 60 a second while something moves (a burst of
+   pointer events never draws more often), and at once when something changed while nothing moved. */
 static void step(double max_wait) {
+  const double P = 1000.0 / 60.0;
   double now = rk_app_now();
   run_posts();
   run_timers(now);
-  bool moving = rk__anim_tick(now);
-  for (rk_window *w = rk__windows(); w; w = w->next) rk__window_frame(w, now);
+  if (!rk__anim_running() || now >= next_frame - 0.5) {
+    bool moving = rk__anim_tick(now);
+    for (rk_window *w = rk__windows(); w; w = w->next) rk__window_frame(w, now);
+    next_frame = moving && next_frame + P > now ? next_frame + P : now + P;
+  }
   if (!running) return;
-  /* while something moves, frames come at a steady 60 a second: wait until the next one is due, not a whole frame
-     after this one was drawn */
-  double wait;
-  if (moving || frame_wanted) {
-    double t = rk_app_now();
-    next_frame = next_frame > t - 1000.0 / 60.0 ? next_frame + 1000.0 / 60.0 : t + 1000.0 / 60.0;
-    wait = RK_MIN(next_frame - t, next_due() - t);
-  } else wait = next_due() - rk_app_now();
+  double t = rk_app_now(), wait;
+  if (rk__anim_running() || frame_wanted) wait = RK_MIN(RK_MAX(0.0, next_frame - t), next_due() - t);
+  else wait = next_due() - t;
   frame_wanted = false;
   if (!isfinite(wait)) wait = -1;
   if (wait < 0 && rk__headless()) wait = 1000.0 / 60.0;    /* headless never sleeps forever */

@@ -115,8 +115,9 @@ bool rk__anim_tick(double now) {
     anim *a = &anims[i];
     double t = a->dur > 0 ? (now - a->start - a->delay) / a->dur : 1;
     if (now < a->start + a->delay) t = 0;
+    rk__view_dirty(a->view);                                   /* where it was drawn */
     apply(a, (float)RK_CLAMP(t, 0.0, 1.0));
-    rk__view_dirty(a->view);
+    rk__view_dirty(a->view);                                   /* and where it is now */
     if (t >= 1) {
       finished = rk__grow(finished, &fcap, nf + 1, sizeof *finished);
       finished[nf++] = *a;

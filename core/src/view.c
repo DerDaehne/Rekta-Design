@@ -53,9 +53,22 @@ rk_window *rk__view_window(rk_view *v) {
 
 rk_window *rk_view_window(rk_view *v) { return rk__view_window(v); }
 
+static bool layered(const rk_view *v) {
+  const rk_transform *t = &v->ptransform;
+  return t->rotate_x != 0 || t->rotate_y != 0 || t->rotate_z != 0 || fabsf(t->scale_x - 1) > 1e-4f || fabsf(t->scale_y - 1) > 1e-4f || v->transition;
+}
+
+/* Only what changed is drawn again: the view's box, or, when it or an ancestor turns in depth, that ancestor's box
+   with room for the projection. */
 void rk__view_dirty(rk_view *v) {
   rk_window *w = rk__view_window(v);
-  if (w) rk__window_invalidate(w);
+  if (!w) return;
+  rk_view *top = NULL;
+  for (rk_view *p = v; p && !p->window; p = p->parent) if (layered(p)) top = p;
+  rk_rect r = rk__window_rect(top ? top : v);
+  float m = top ? RK_MAX(r.w, r.h) * 0.35f + 8 : 8;
+  r.x -= m; r.y -= m; r.w += 2 * m; r.h += 2 * m;
+  rk__window_damage(w, r);
 }
 
 void rk__view_relayout_up(rk_view *v) {

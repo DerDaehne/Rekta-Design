@@ -45,7 +45,7 @@ and link:
 
 | OS | link with |
 |---|---|
-| Linux | `-lX11 -lm -lpthread` |
+| Linux | `-lX11 -lXext -lm -lpthread` |
 | macOS | `-framework Cocoa -framework QuartzCore` |
 | Windows | `user32 gdi32 advapi32` |
 

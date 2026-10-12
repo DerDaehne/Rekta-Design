@@ -21,7 +21,7 @@ else ifneq (,$(findstring MINGW,$(UNAME))$(findstring MSYS,$(UNAME))$(OS))
   LIBS := -luser32 -lgdi32 -ladvapi32
   EXE := .exe
 else
-  LIBS := -lX11 -lm -lpthread
+  LIBS := -lX11 -lXext -lm -lpthread
 endif
 HEADLESS_LIBS := -lm $(if $(EXE),,-lpthread)
 

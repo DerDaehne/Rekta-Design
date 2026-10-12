@@ -197,6 +197,7 @@ struct rk_window {
   rk_bitmap *fb;
   float scale; rk_size size;
   bool system_frame, shown, closed, needs_draw, needs_layout;
+  rk_irect damage; bool damage_all;                        /* what the next frame draws, in device pixels */
   char *title;
   rk_view *focus, *hover, *pressed, *capture;
   rk_view *activated;                                      /* the view whose activate handler is running */
@@ -210,7 +211,8 @@ void rk__window_resized(rk_window *w, float width, float height, float scale);  
 void rk__window_event(rk_window *w, const rk_event *e);
 void rk__window_close_request(rk_window *w);
 void rk__window_frame(rk_window *w, double now);           /* layout, draw and present if needed */
-void rk__window_invalidate(rk_window *w);
+void rk__window_invalidate(rk_window *w);                 /* everything */
+void rk__window_damage(rk_window *w, rk_rect r);          /* a part, in logical window coordinates */
 void rk__render_view(rk_canvas *c, rk_view *v, float ox, float oy);
 rk_bitmap *rk__snapshot(rk_view *v, bool with_fill);     /* the view as drawn now, at the window's scale */
 void rk__layout_pending(void);                            /* lay out every window that needs it, now */
@@ -244,7 +246,7 @@ typedef struct rk_platform {
   void (*close)(void *native);
   void (*show)(void *native);
   void (*set_title)(void *native, const char *title);
-  void (*present)(void *native, const rk_bitmap *fb);
+  void (*present)(void *native, const rk_bitmap *fb, rk_irect changed);   /* only changed is new */
   void (*move)(void *native);                              /* start dragging the window (title bar) */
   void (*minimize)(void *native);
   void (*zoom)(void *native);

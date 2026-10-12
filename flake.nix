@@ -13,7 +13,7 @@
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];   # nixpkgs no longer builds for Intel Macs
       each = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
       # the system's windowing library is the only dependency: Xlib on Linux; Cocoa comes with the macOS SDK
-      windowing = pkgs: pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ (pkgs.libx11 or pkgs.xorg.libX11) ];
+      windowing = pkgs: pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ (pkgs.libx11 or pkgs.xorg.libX11) (pkgs.libxext or pkgs.xorg.libXext) ];
     in
     {
       packages = each (pkgs: rec {

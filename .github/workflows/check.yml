@@ -38,7 +38,7 @@ jobs:
         with:
           node-version: 24
       - name: Install X11 headers and a virtual display
-        run: sudo apt-get update -q && sudo apt-get install -y -q libx11-dev xvfb
+        run: sudo apt-get update -q && sudo apt-get install -y -q libx11-dev libxext-dev xvfb
       - name: The generated C sources are up to date
         run: node scripts/build.mjs --check
       - name: Build the library and the demo (X11)

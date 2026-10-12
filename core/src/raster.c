@@ -314,6 +314,10 @@ static inline uint32_t sample(const rk_bitmap *s, float u, float v) {
   u -= 0.5f; v -= 0.5f;
   int x = (int)floorf(u), y = (int)floorf(v);
   uint32_t fx = (uint32_t)((u - x) * 256.0f), fy = (uint32_t)((v - y) * 256.0f);
+  if (x >= 0 && y >= 0 && x + 1 < s->w && y + 1 < s->h) {      /* inside: no edge checks */
+    const uint32_t *p = s->px + (size_t)y * s->stride + x;
+    return lerp_px(lerp_px(p[0], p[1], fx), lerp_px(p[s->stride], p[s->stride + 1], fx), fy);
+  }
   #define PX(X, Y) (((X) < 0 || (Y) < 0 || (X) >= s->w || (Y) >= s->h) ? 0u : s->px[(size_t)(Y) * s->stride + (X)])
   uint32_t top = lerp_px(PX(x, y), PX(x + 1, y), fx), bot = lerp_px(PX(x, y + 1), PX(x + 1, y + 1), fx);
   #undef PX
@@ -343,16 +347,21 @@ void rk__composite(rk_bitmap *dst, rk_irect clip, const rk_bitmap *src, const fl
   rk__path_close(&quad_path);
   rk__path_fill(&cover, (rk_irect){ 0, 0, w, h }, &quad_path, 0xff000000u);
   uint32_t a = (uint32_t)(RK_CLAMP(opacity, 0.0f, 1.0f) * 256.0f + 0.5f);
+  /* the inverse map in source pixels, stepped along each row: one division a pixel, none when it is affine */
+  float a0 = (float)(inv[0] * src->w), a1 = (float)(inv[1] * src->w), a2 = (float)(inv[2] * src->w);
+  float b0 = (float)(inv[3] * src->h), b1 = (float)(inv[4] * src->h), b2 = (float)(inv[5] * src->h);
+  float c0 = (float)inv[6], c1 = (float)inv[7], c2 = (float)inv[8];
+  bool affine = fabsf(c0) < 1e-9f && fabsf(c1) < 1e-9f;
   for (int y = 0; y < h; y++) {
     uint32_t *d = dst->px + (size_t)(y + r.y0) * dst->stride + r.x0;
     const uint32_t *cv = cover.px + (size_t)y * w;
-    for (int x = 0; x < w; x++) {
+    float X = r.x0 + 0.5f, Y = y + r.y0 + 0.5f;
+    float nu = a0 * X + a1 * Y + a2, nv = b0 * X + b1 * Y + b2, nz = c0 * X + c1 * Y + c2;
+    for (int x = 0; x < w; x++, nu += a0, nv += b0, nz += c0) {
       uint32_t c = cv[x] >> 24;
       if (!c) continue;
-      double X = x + r.x0 + 0.5, Y = y + r.y0 + 0.5;
-      double zw = inv[6] * X + inv[7] * Y + inv[8];
-      double U = (inv[0] * X + inv[1] * Y + inv[2]) / zw, V = (inv[3] * X + inv[4] * Y + inv[5]) / zw;
-      uint32_t s = sample(src, (float)(U * src->w), (float)(V * src->h));
+      float z = affine ? 1.0f / c2 : 1.0f / nz;
+      uint32_t s = sample(src, nu * z, nv * z);
       if (!s) continue;
       d[x] = over(d[x], s, (c + (c >> 7)) * a >> 8);
     }
