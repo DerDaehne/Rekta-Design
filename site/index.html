@@ -163,6 +163,7 @@
             <span class="rk-stat"><b id="time-here">0 s</b><span>time on this page</span></span>
           </div>
         </div>
+        <p class="rk-actions"><button class="rk-btn" type="button" id="tile-pin">pin a tile</button><button class="rk-btn" type="button" id="tile-unpin" aria-disabled="true" data-rk-tip="nothing pinned yet">unpin it</button></p>
         <p class="note">The waiting tile is a button: it opens a sheet. The release notes tile is a link: it turns this place. Finished tiles drop their sparkline: stillness means done. Every chart has a text equivalent.</p>
       </section>
 
@@ -200,6 +201,10 @@
             <tr><th scope="row">facet change</th><td>0.75 × {{duration-moderate}}, {{slide-distance}} slide</td><td>same place, other facet</td></tr>
             <tr><th scope="row">tiles build in</th><td>{{duration-moderate}}, {{duration-stagger}} apart</td><td>assembling from live data</td></tr>
             <tr><th scope="row">reorder</th><td>{{duration-moderate}}</td><td>this moved because of you</td></tr>
+            <tr><th scope="row">resize, re-flow</th><td>{{duration-moderate}}</td><td>this grew; the rest made room</td></tr>
+            <tr><th scope="row">arrive, leave</th><td>{{duration-short}}, leaving faster</td><td>this one is new; that one is gone</td></tr>
+            <tr><th scope="row">live tile news</th><td>{{duration-moderate}}: peek, or flip</td><td>a new number; a new status</td></tr>
+            <tr><th scope="row">data morph</th><td>{{duration-long}}</td><td>the same thing, measured again</td></tr>
             <tr><th scope="row">sheet, toast</th><td>{{duration-short}}</td><td>a short question; something happened</td></tr>
             <tr><th scope="row">floating list</th><td>{{duration-float}}</td><td>options for this control</td></tr>
             <tr><th scope="row">loading</th><td>after {{duration-busy-delay}}, a line every {{duration-busy}}</td><td>working on it</td></tr>
@@ -451,6 +456,8 @@
           </form>
           <div class="rk-tiles builder-out" aria-live="polite">
             <div class="rk-tile" id="built" data-status="info"><span class="rk-tile-word">active</span><span class="rk-stat"><b>12</b><span>builds today</span></span></div>
+            <div class="rk-tile"><span class="rk-tile-word">idle</span><span class="rk-stat"><b>3</b><span>a neighbour</span></span></div>
+            <div class="rk-tile"><span class="rk-tile-word">idle</span><span class="rk-stat"><b>8</b><span>another one</span></span></div>
           </div>
         </div>
         <div class="input-grid">
@@ -481,7 +488,11 @@
       <section class="rk-sec sec-wide" id="data" aria-labelledby="data-title">
         <h2 class="rk-group" id="data-title">Data, quiet until it matters.</h2>
         <p>Charts in ink and grey: one axis, round ticks on hairlines, the accent only where you point. Every chart reads out its values under the pointer or with ← → once it has focus, and shows its numbers as a table. A status colour appears only where a value means that status.</p>
-        <p class="rk-kicker group-label">deploys a day</p>
+        <div class="chart-head"><p class="rk-kicker">a day</p>
+          <div class="rk-segments" role="radiogroup" aria-label="what to count">
+            <label><input type="radio" name="line-what" value="deploys" checked>deploys</label><label><input type="radio" name="line-what" value="reviews">reviews</label>
+          </div>
+        </div>
         <div class="chart" id="chart-line"></div>
         <div class="chart-head"><p class="rk-kicker">build minutes</p>
           <div class="rk-segments" role="radiogroup" aria-label="range">

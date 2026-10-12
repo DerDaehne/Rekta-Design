@@ -548,10 +548,53 @@ await m.goBack(); await m.waitForTimeout(TURN);
 ok(await m.evaluate(() => !document.querySelector('#tokens-list').hidden), 'phone: back returns to the list', await focused(m));
 await m.close();
 
+// Motion that follows a change of content: tiles re-flow, flip and peek; rows come and go; a sheet leaves.
+const q = await open();
+const anims = (sel) => q.evaluate((s) => [...document.querySelectorAll(s)].reduce((n, el) => n + el.getAnimations().length, 0), sel);
+const setSize = (pg, v) => pg.evaluate((x) => { const r = document.querySelector(`input[name=b-size][value="${x}"]`); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }, v);
+await setSize(q, 'h2'); await q.waitForTimeout(60);
+ok(await anims('#built') > 0 && await anims('#built ~ .rk-tile') > 0, 'a resized tile scales to its size and its neighbours glide');
+ok(await q.evaluate(() => !!document.querySelector('#builder .rk-segments-slide')), 'the segments accent slides to the new choice');
+await q.waitForTimeout(500);
+ok(await anims('#built, #built ~ .rk-tile') === 0 && await q.evaluate(() => document.querySelector('#built').classList.contains('rk-h2') && !document.querySelector('.rk-segments-slide')), 'the re-flow settles');
+await q.evaluate(() => { const v = document.querySelector('#b-value'); v.value = '13'; v.dispatchEvent(new Event('input', { bubbles: true })); });
+ok(await q.evaluate(() => document.querySelectorAll('#built > .rk-stat').length === 2 && document.querySelector('#built > .rk-stat[aria-hidden] b').textContent === '12'), 'a new number peeks in: the old one leaves upwards');
+await q.waitForTimeout(500);
+ok(await q.evaluate(() => document.querySelectorAll('#built > .rk-stat').length === 1 && document.querySelector('#built .rk-stat b').textContent === '13'), 'the peek settles on the new number');
+ok(await q.evaluate(() => { const v = document.querySelector('#b-status'); v.value = 'error'; v.dispatchEvent(new Event('change', { bubbles: true })); const t = document.querySelector('#built'); return t.getAnimations().length > 0 && t.dataset.status === 'info'; }), 'a new status turns the tile over first');
+await q.waitForTimeout(500);
+ok((await q.evaluate(() => document.querySelector('#built').dataset.status)) === 'error', 'and it comes back with the new status');
+await q.evaluate(() => document.querySelector('#tile-pin').click()); await q.waitForTimeout(60);
+ok(await q.evaluate(() => { const t = document.querySelector('#live-tiles [data-pinned]'); return !!t && t.previousElementSibling.id === 'tile-seen' && t.getAnimations().length > 0; }), 'a pinned tile builds in after the first one');
+await q.waitForTimeout(500);
+await q.evaluate(() => document.querySelector('#tile-unpin').click()); await q.waitForTimeout(600);
+ok(await q.evaluate(() => !document.querySelector('#live-tiles [data-pinned]') && document.querySelector('#tile-seen').nextElementSibling.dataset.live === 'moves'), 'unpinned, it leaves and the tiles close up');
+const filterComp = (pg, v) => pg.evaluate((x) => { const i = document.querySelector('#comp-q'); i.value = x; i.dispatchEvent(new Event('input', { bubbles: true })); }, v);
+ok(await q.evaluate(() => { const i = document.querySelector('#comp-q'); i.value = 'spark'; i.dispatchEvent(new Event('input', { bubbles: true })); const rows = [...document.querySelectorAll('#comp-body tr')]; return rows.every((r) => !r.hidden) && rows.some((r) => r.getAnimations().length); }), 'filtered rows leave before they hide');
+await q.waitForTimeout(700);
+ok((await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length)) === 1, 'then only the matching row stays', await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length));
+await filterComp(q, ''); await q.waitForTimeout(40);
+ok(await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length > 1 && [...document.querySelectorAll('#comp-body tr')].some((r) => r.getAnimations().length)), 'cleared, the rows come back and slide in');
+await q.waitForTimeout(600);
+await q.evaluate(() => document.querySelector('#press-sheet').showModal()); await q.waitForTimeout(300);
+ok(await q.evaluate(() => { const d = document.querySelector('#press-sheet'); d.close(); return d.open && d.dataset.rkPhase === 'leaving'; }), 'a closing sheet leaves before it closes');
+await q.waitForTimeout(400);
+ok(!(await q.evaluate(() => document.querySelector('#press-sheet').open)), 'then it is closed');
+const linePts = () => q.evaluate(() => document.querySelector('#chart-line path.rk-line').getAttribute('d'));
+const l0 = await linePts();
+await q.evaluate(() => { const r = document.querySelector('input[name=line-what][value=reviews]'); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); });
+await q.waitForTimeout(200); const l1 = await linePts(); await q.waitForTimeout(700); const l2 = await linePts();
+ok(l1 !== l0 && l1 !== l2 && (await q.evaluate(() => document.querySelectorAll('#chart-line path.rk-line:not([data-rk-draw])').length)) === 2, 'new figures on the same days: the lines bend to them, not drawn again');
+await q.evaluate(() => window.site.files.expandAll(false)); await q.waitForTimeout(600);
+ok(await q.evaluate(() => { window.site.files.expandAll(true); return [...document.querySelectorAll('#tree [role=group]')].some((u) => u.getAnimations().length); }), 'a tree branch opens to its height');
+await q.close();
+
 // Reduced motion: a place change is instant, never skipped.
 const r = await open({ reducedMotion: 'reduce' });
 await r.click('#tile-notes'); await r.waitForTimeout(150);
 ok(await visible(r, 'notes') && !(await visible(r, 'home')), 'reduced motion: the place changes at once');
+await setSize(r, 'w2'); await filterComp(r, 'spark'); await r.waitForTimeout(20);
+ok(await r.evaluate(() => document.querySelector('#built').getAnimations().length === 0 && document.querySelector('#built').classList.contains('rk-w2') && document.querySelectorAll('#comp-body tr:not([hidden])').length === 1), 'reduced motion: a resize and a filter apply at once');
 await r.close();
 
 await browser.close();

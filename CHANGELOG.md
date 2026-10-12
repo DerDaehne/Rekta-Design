@@ -106,8 +106,24 @@ it; each entry says how.
   (`{{token}}`, `<!--@block-->`), with the tokens as a place of their
   own and the components as a table.
 
+- Motion that follows a change of content, each with one meaning
+  ([motion.md](docs/motion.md)): `Rekta.reflow()` (a tile resized, the
+  grid re-flowing around it), `Rekta.enter()`, `Rekta.leave()` and
+  `Rekta.presence()` (rows and tiles that come and go: filters, archive
+  and undo, live events, files), `Rekta.tileUpdate()` (a live tile's new
+  number peeks in, a new status flips it), `Rekta.sparkTo()` and
+  `chart.update()` morphing to new figures, `Rekta.crossfade()` for the
+  theme and accent. Sheets leave the way they came; the app bar's
+  commands slide when the selection mode starts and ends; checkmarks draw
+  in after the nudge; the segments' accent block slides; tree branches
+  open to their height; a column put back to its width glides; error
+  summaries, a cell's refusal and waiting live updates arrive; progress
+  values glide.
+
 ### Changed
 
+- **Reordering takes `duration-moderate`** everywhere, as motion.md
+  says (a sortable list used `duration-short`).
 - **The accent marks the selection.** Selected rows take the accent fill
   with on-accent text (was the surface fill and a checkbox).
 - **The pivot glides by place, not to the edge.** A strip that does not

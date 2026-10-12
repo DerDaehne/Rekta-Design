@@ -63,6 +63,10 @@ paint: load `rekta.global.js` in `<head>` and call
 | `data-rk-over` | a drop zone | Files are dragged over it. |
 | `data-rk-live` | a live region | `fresh`, `stale` or `offline`. |
 | `data-rk-held` | a live region | Held still while the pointer rests on it or focus is in it. |
+| `data-rk-phase="leaving"` | a sheet | Leaving, before it closes. |
+| `data-rk-unselecting` | the app bar | Its own commands coming back after the selection mode. |
+| `data-rk-sliding` | segments, the chosen label | The accent block is sliding to the new choice. |
+| `data-rk-grow` | a chart's bars | Growing in on the first draw. |
 | `data-rk-dragging`, `data-rk-grabbed` | a sortable item | Being dragged; picked up from the keyboard. |
 | `data-rk-sorting` | a sortable list | An item is being dragged. |
 | `data-rk-editing` | a table cell | Being edited in place. |
@@ -285,8 +289,10 @@ Returns `{ set(name, on, { from }), toggle(name), is(name), shown, destroy }`.
 
 For `<dialog class="rk-sheet">` opened with `showModal()`. A tap on the
 shading cancels where `closedby` is not supported. Use
-`closedby="closerequest"` on a sheet with unsaved input. Returns
-`{ destroy }`.
+`closedby="closerequest"` on a sheet with unsaved input. The sheet leaves
+the way it came before it closes (`data-rk-phase="leaving"`): `close()`,
+Escape and a `method=dialog` form all wait for it, and `close` fires
+after. Returns `{ destroy }`.
 
 ### `busy(region, work)`
 
@@ -530,7 +536,37 @@ Home End on the focused chart, marks a point (`data-rk-hot`, a crosshair
 and markers for lines), shows the values in a tooltip and says them in a
 live region. With `table` (default), a `details.rk-chart-table` holds the
 numbers. `summary` is the accessible name. See [data.md](data.md).
-Returns `{ update(options), active, destroy }`.
+Returns `{ update(options), active, destroy }`: `update` with new values
+on the same labels moves the line or the bars to them, and the axis with
+them, over `duration-long`; new labels redraw.
+
+### Motion: `reflow`, `enter`, `leave`, `presence`, `tileUpdate`, `sparkTo`, `crossfade`
+
+The movements that follow a change of content ([motion.md](motion.md)).
+Each takes its duration from a token, so reduced motion makes it instant;
+the change itself always happens.
+
+- `reflow(scope, change, { items, size })`: FLIP. Runs `change()`; what it
+  moved or resized among `items` (`scope`'s children by default) glides
+  from where it was. A resized box scales from its old size and fades its
+  content back in (`size: false` for moves only). Resolves with
+  `change()`'s result once settled.
+- `enter(el)`: something new in a list (a row slides in) or a grid (a tile
+  builds in). Call it after inserting.
+- `leave(el)`: something goes; resolves with the held animation once it
+  has, so hide or remove the element, then `cancel()` it.
+- `presence(scope, { items, show })`: items come and go by `show(item)`
+  (they are hidden or shown): those that go leave, the rest close up,
+  those that come enter. A newer call finishes the running one at once.
+  Resolves when done.
+- `tileUpdate(tile, change, { kind })`: a live tile has news. `'peek'` (a
+  new number or line, the default) brings the new `.rk-stat` up from
+  below; `'flip'` (a new status) turns the tile over. A continuous reading
+  needs neither: change it in place.
+- `sparkTo(polyline, points)`: a line moves its points to new ones over
+  `duration-long`; a different number of points redraws at once.
+- `crossfade(change)`: a change of the whole look cross-fades, where view
+  transitions exist. `prefs.set('theme', …)` uses it.
 
 ### `icon(name, { label, src })`
 

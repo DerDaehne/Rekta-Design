@@ -70,12 +70,12 @@
   reduced.addEventListener('change', paintPrefs);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintPrefs);
   for (const name of ['theme', 'density', 'motion']) $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => prefs.set(name, r.value)));
-  $$('input[name=accent]').forEach((r) => r.addEventListener('change', () => {
+  $$('input[name=accent]').forEach((r) => r.addEventListener('change', () => Rekta.crossfade(() => {
     if (r.value === 'plum') { root.dataset.accent = 'plum'; store.set('rekta-site-accent', 'plum'); }
     else if (r.value === 'custom' && customAccent) { window.siteAccent(customAccent); store.set('rekta-site-accent', 'custom'); }
     else { delete root.dataset.accent; store.set('rekta-site-accent', null); }
     paintPrefs();
-  }));
+  })));
   const THEMES = ['system', 'light', 'dark'];
   $('#ab-theme').addEventListener('click', () => prefs.set('theme', THEMES[(THEMES.indexOf(prefs.get('theme')) + 1) % 3]));
   $('#ab-motion').addEventListener('click', () => prefs.set('motion', prefs.get('motion') === 'off' ? 'system' : 'off'));
@@ -125,7 +125,7 @@
     for (const tile of $$(`[data-live=${key}]`)) {
       $('[data-v]', tile).textContent = value;
       const svg = $('.rk-spark', tile), h = series[key];
-      $('polyline', svg).setAttribute('points', points(h));
+      Rekta.sparkTo($('polyline', svg), points(h));
       const trend = h.length > 1 ? (h[h.length - 1] > h[0] ? 'rising' : h[h.length - 1] < h[0] ? 'falling' : 'flat') : 'flat';
       svg.setAttribute('aria-label', `${label}: ${value}, ${trend} over the last ${h.length} seconds`);
     }
@@ -151,10 +151,39 @@
     if (n >= SECTIONS.length) { tile.dataset.status = 'success'; $('.rk-tile-word', tile).textContent = 'done'; $('#seen-msg').textContent = 'You have seen every section. Stillness means done.'; }
     else { tile.dataset.status = 'info'; $('.rk-tile-word', tile).textContent = 'active'; }
   }
-  const seenWatch = () => { const c = home.current; if (c && !seen.has(c.id)) { seen.add(c.id); paintSeen(); } };
+  const seenWatch = () => {
+    const c = home.current;
+    if (!c || seen.has(c.id)) return;
+    seen.add(c.id);
+    Rekta.tileUpdate($('#tile-seen'), paintSeen, { kind: seen.size >= SECTIONS.length ? 'flip' : 'peek' });
+  };
   $('#pan').addEventListener('scroll', seenWatch, { passive: true });
   addEventListener('scroll', seenWatch, { passive: true });
   $('#nav').addEventListener('click', () => setTimeout(seenWatch, 50));
+  // Pin and unpin: a tile comes into the grid after the first one, the others make room; unpinned, they close up.
+  const liveTiles = $('#live-tiles');
+  let pins = 0;
+  const paintPins = () => {
+    const n = $$('[data-pinned]', liveTiles).length;
+    $('#tile-unpin').setAttribute('aria-disabled', String(!n));
+    $('#tile-unpin').dataset.rkTip = n ? 'unpin the last pinned tile' : 'nothing pinned yet';
+  };
+  $('#tile-pin').addEventListener('click', () => {
+    pins += 1;
+    const t = document.createElement('div');
+    t.className = 'rk-tile'; t.dataset.pinned = '';
+    t.innerHTML = `<span class="rk-tile-word">idle</span><span class="rk-stat"><b>${pins}</b><span>pinned tile</span></span>`;
+    Rekta.reflow(liveTiles, () => $('#tile-seen').after(t), { size: false });
+    Rekta.enter(t);
+    paintPins();
+  });
+  $('#tile-unpin').addEventListener('click', async () => {
+    const t = $('[data-pinned]', liveTiles);
+    if (!t) return;
+    t.removeAttribute('data-pinned'); paintPins();
+    const a = await Rekta.leave(t);
+    Rekta.reflow(liveTiles, () => { t.remove(); if (a) a.cancel(); }, { size: false, items: () => [...liveTiles.children].filter((x) => x !== t) });
+  });
   $('#token-count').textContent = TOKENS.length;
   $('#tile-presses').addEventListener('click', () => {
     $('#press-text').textContent = `You have pressed ${presses === 1 ? '1 tile' : `${presses} tiles`} on this page. A button tile opens a sheet like this one; it never changes data itself.`;
@@ -225,13 +254,14 @@
   });
   function compFilter() {
     const q = $('#comp-q').value.trim().toLowerCase(), st = $$('#comp-status-menu [aria-checked="true"]').map((i) => i.dataset.v);
-    let shown = 0;
-    for (const tr of $$('#comp-body tr')) { const keep = !tr.hasAttribute('data-archived') && (!q || tr.textContent.toLowerCase().includes(q)) && (!st.length || st.includes(tr.dataset.statusV)); tr.hidden = !keep; if (keep) shown += 1; }
+    const rows = $$('#comp-body tr'), keep = (tr) => !tr.hasAttribute('data-archived') && (!q || tr.textContent.toLowerCase().includes(q)) && (!st.length || st.includes(tr.dataset.statusV));
+    const shown = rows.filter(keep).length;
     $('#comp-none').hidden = shown > 0;
     $('#comp-clear').hidden = !(q || st.length);
     const archived = $$('#comp-body tr[data-archived]').length;
     $('#comp-facts').textContent = `${COMPONENTS.length} components${shown < COMPONENTS.length ? ` · showing ${shown}` : ''}${archived ? ` · ${archived} archived` : ''} · ${COMPONENTS.filter((c) => c[2] === 'warning').length} waiting`;
-    compTable.refresh();
+    // Rows that go leave, the rest close up, rows that come back slide in (Rekta.presence).
+    return Rekta.presence($('#comp-body'), { items: rows, show: keep }).then(() => compTable.refresh());
   }
   const compStatus = Rekta.menu($('#comp-status'), $('#comp-status-menu'), { summary: 'status', onSelect: compFilter });
   $('#comp-q').addEventListener('input', compFilter);
@@ -505,8 +535,8 @@
     const list = $('#lv-events'), li = document.createElement('li');
     li.innerHTML = `<span></span><span class="rk-tag" data-status="${status}">${WORD[status]}</span>`;
     li.firstChild.textContent = text;
-    list.prepend(li);
-    while (list.children.length > 4) list.lastChild.remove();
+    Rekta.reflow(list, () => { list.prepend(li); while (list.children.length > 4) list.lastChild.remove(); }, { size: false });
+    Rekta.enter(li);
   }
   function liveTick() {
     if (!$('#lv-feed').checked || !$('#lv-online').checked || !live()) return;
@@ -515,16 +545,19 @@
     queue = Math.max(0, Math.min(40, queue + Math.round((rnd(tickN + 7) - 0.55) * 4)));
     doneToday += Math.round(rnd(tickN + 3) * 3);
     rpsSeries.push(rps); if (rpsSeries.length > 24) rpsSeries.shift();
-    feed.update(() => { $('#lv-rps').textContent = rps; $('#live-region .rk-spark polyline').setAttribute('points', points(rpsSeries)); }, 'rps');
-    feed.update(() => { $('#lv-queue').textContent = queue; }, 'queue');
-    feed.update(() => { $('#lv-done').textContent = doneToday; }, 'done');
+    feed.update(() => { $('#lv-rps').textContent = rps; Rekta.sparkTo($('#live-region .rk-spark polyline'), points(rpsSeries)); }, 'rps');
+    // A new count is news: it peeks in. Requests a second is a continuous reading: it changes in place.
+    feed.update(() => Rekta.tileUpdate($('#lv-queue').closest('.rk-tile'), () => { $('#lv-queue').textContent = queue; }), 'queue');
+    feed.update(() => Rekta.tileUpdate($('#lv-done').closest('.rk-tile'), () => { $('#lv-done').textContent = doneToday; }), 'done');
     if (tickN % 3 === 0) { const ev = EVENTS_LIVE[tickN % EVENTS_LIVE.length]; feed.update(() => pushEvent(ev)); }
   }
   setInterval(liveTick, 1500); liveTick();
   $('#lv-online').addEventListener('change', (e) => { feed.offline(!e.target.checked); toasts.show(e.target.checked ? 'Connected again. Figures are live.' : 'Connection lost. The figures stay, marked as offline.', { key: 'lv-online' }); });
   $('#lv-feed').addEventListener('change', (e) => toasts.show(e.target.checked ? 'Feed on.' : `Feed off: in ${Math.round(8)} seconds the figures say they are stale.`, { key: 'lv-feed' }));
+  let histSeen = 0;
   function paintHistory() {
-    const list = $('#h-list'), entries = hist.entries().slice().reverse();
+    const list = $('#h-list'), entries = hist.entries().slice().reverse(), grew = entries.length > histSeen;
+    histSeen = entries.length;
     for (const [btn, can, why] of [[$('#h-undo'), hist.canUndo, 'nothing to undo yet'], [$('#h-redo'), hist.canRedo, 'nothing undone to do again']]) {
       btn.setAttribute('aria-disabled', String(!can));
       btn.dataset.rkTip = can ? (btn.id === 'h-undo' ? 'undo the last action' : 'do it again') : why;
@@ -538,6 +571,7 @@
       if (!e.done) li.setAttribute('data-undone', '');
       return li;
     }));
+    if (grew) Rekta.enter(list.firstElementChild);
   }
   document.addEventListener('rk:historychange', paintHistory);
   $('#h-undo').addEventListener('click', () => { if (hist.canUndo) hist.undo(); });
@@ -555,6 +589,15 @@
     ],
     summary: 'Deploys a day over the last two weeks, against the two weeks before. Both rise; these two weeks stay above.',
   });
+  // Same days, other figures: the lines move to the new values instead of being drawn again.
+  const LINES = {
+    deploys: { a: (i) => Math.round(26 + i * 1.2 + rnd(i + 40) * 12), b: (i) => Math.round(22 + i * 0.6 + rnd(i + 90) * 10), summary: 'Deploys a day over the last two weeks, against the two weeks before. Both rise; these two weeks stay above.' },
+    reviews: { a: (i) => Math.round(18 - i * 0.4 + rnd(i + 140) * 9), b: (i) => Math.round(14 + rnd(i + 190) * 8), summary: 'Reviews a day over the last two weeks, against the two weeks before. Fewer each day now, still above the weeks before.' },
+  };
+  $$('input[name=line-what]').forEach((r) => r.addEventListener('change', () => {
+    const d = LINES[r.value];
+    lineChart.update({ series: [{ label: 'these two weeks', values: dayLabels.map((_, i) => d.a(i)) }, { label: 'the two before', values: dayLabels.map((_, i) => d.b(i)) }], summary: d.summary });
+  }));
   const RANGES = {
     week: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], values: [412, 468, 431, 502, 377, 64, 41] },
     weeks: { labels: Array.from({ length: 8 }, (_, i) => `wk ${33 + i}`), values: [2140, 2380, 2210, 2620, 2490, 2850, 2710, 2295] },
@@ -600,7 +643,18 @@
 
   /* ---------- inputs: build a tile, find a token, text size, a date, files ---------- */
   const built = $('#built');
+  let builtWas = null;
   function build() {
+    const st = $('#b-status').value, size = ($$('input[name=b-size]').find((r) => r.checked) || {}).value, value = $('#b-value').value;
+    const was = builtWas;
+    builtWas = { st, size, value };
+    // A new size re-flows the grid around the tile; a new status turns it over; a new number peeks in.
+    if (!was || (size === was.size && st === was.st && value === was.value)) paintBuilt();
+    else if (size !== was.size) Rekta.reflow(built.parentElement, paintBuilt);
+    else if (st !== was.st) Rekta.tileUpdate(built, paintBuilt, { kind: 'flip' });
+    else Rekta.tileUpdate(built, paintBuilt);
+  }
+  function paintBuilt() {
     const st = $('#b-status').value, size = ($$('input[name=b-size]').find((r) => r.checked) || {}).value;
     if (st) built.dataset.status = st; else delete built.dataset.status;
     built.className = `rk-tile${size === 'w2' ? ' rk-w2' : size === 'h2' ? ' rk-w2 rk-h2' : ''}`;
@@ -615,6 +669,7 @@
   $('#builder').addEventListener('input', build);
   $('#builder').addEventListener('change', build);
   $('#builder').addEventListener('submit', (e) => e.preventDefault());
+  build();
   const tokenFind = Rekta.combobox($('#find-token'), {
     options: () => TOKENS.map((t) => ({ label: `--rk-${t.name}`, value: t.name, hint: t.group, group: t.group, keywords: `${t.name} ${t.value || ''}` })),
     onSelect(o) {
@@ -636,13 +691,13 @@
   const kb = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} kB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
   Rekta.drop($('#drop'), {
     onFiles(files) {
-      const list = $('#files');
+      const list = $('#files'), added = [];
       list.hidden = false;
       for (const f of files) {
         const li = document.createElement('li');
+        added.push(li);
         li.innerHTML = `<b></b><span class="rk-tag" data-status="warning">waiting</span><span class="rk-meta"></span><progress class="rk-progress" max="100" value="0"></progress>`;
         $('b', li).textContent = f.name; $('.rk-meta', li).textContent = kb(f.size);
-        list.prepend(li);
         if (f.size > LIMIT) { const tag = $('.rk-tag', li); tag.dataset.status = 'error'; tag.textContent = 'failed'; $('.rk-meta', li).textContent = `${kb(f.size)} · larger than ${kb(LIMIT)}`; $('progress', li).remove(); continue; }
         let v = 0;
         const tag = $('.rk-tag', li), bar = $('progress', li), step = Math.max(4, 40 - f.size / 50000);
@@ -652,6 +707,8 @@
           if (v >= 100) { clearInterval(timer); tag.dataset.status = 'success'; tag.textContent = 'done'; bar.remove(); }
         }, 120);
       }
+      Rekta.reflow(list, () => added.forEach((li) => list.prepend(li)), { size: false });
+      added.forEach(Rekta.enter);
       toasts.show(`${files.length === 1 ? '1 file' : `${files.length} files`} added. Nothing leaves your device.`, { key: 'files' });
     },
   });
@@ -670,7 +727,7 @@
     customAccent = null; window.siteAccent(null); store.set('rekta-site-accent-def', null); store.set('rekta-site-accent', null);
     $('#a-name').value = ''; $('#a-light').value = ''; $('#a-dark').value = ''; accentForm.clear(); accentGuard.clean();
     if (root.dataset.accent === 'plum') { delete root.dataset.accent; }
-    presses = 0; $('#presses').textContent = '0'; seen.clear(); seen.add(home.current ? home.current.id : 'overview'); paintSeen();
+    presses = 0; $('#presses').textContent = '0'; seen.clear(); seen.add(home.current ? home.current.id : 'overview'); paintSeen(); $$('[data-pinned]', liveTiles).forEach((t) => t.remove()); pins = 0; paintPins();
     facets.select(0);
     $('#text-size').value = 100; $('#text-size').dispatchEvent(new Event('input', { bubbles: true }));
     $('#builder').reset(); build(); tokenFind.set(null); $('#files').replaceChildren(); $('#files').hidden = true;
