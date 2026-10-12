@@ -40,7 +40,7 @@
 
 /* A buffer sits in its own shared-memory pool with room to spare, so a window growing by a few pixels per resize step
    gets a new wl_buffer on the same memory instead of new memory. */
-typedef struct wbuf { struct wl_buffer *b; struct wl_shm_pool *pool; uint32_t *px; void *map; size_t cap; int w, h; bool busy; rk_irect stale; } wbuf;
+typedef struct wbuf { struct wl_buffer *b; struct wl_shm_pool *pool; uint32_t *px; void *map; size_t cap; int w, h; bool busy; rk_irect stale; struct wwin *owner; } wbuf;
 
 typedef struct wwin {
   rk_window *w;
@@ -53,7 +53,8 @@ typedef struct wwin {
   wbuf bufs[3];
   int lw, lh, pw, ph, fw, fh;                                   /* logical, pending, and floating (unmaximized) size */
   int int_scale; float frac_scale;                              /* buffer scale: an integer, or 120ths over a viewport */
-  bool configured, maximized, own_frame, frame_pending, deferred;
+  bool configured, maximized, own_frame, frame_pending, deferred, configure_pending;
+  uint32_t configure_serial;
   rk_irect deferred_rect;
   const rk_bitmap *fb;
   struct wl_callback *frame_cb;
@@ -87,7 +88,15 @@ static float scale_of(wwin *x) { return x->frac_scale > 0 ? x->frac_scale : (flo
 
 /* Buffers ------------------------------------------------------------------------------------------------------- */
 
-static void buf_release(void *data, struct wl_buffer *b) { (void)b; ((wbuf *)data)->busy = false; }
+static void commit(struct wwin *x, rk_irect changed);
+/* A buffer back from the compositor: a frame that waited for one goes now. */
+static void buf_release(void *data, struct wl_buffer *b) {
+  (void)b;
+  wbuf *wb = data;
+  wb->busy = false;
+  struct wwin *x = wb->owner;
+  if (x && x->deferred && !x->frame_pending) { x->deferred = false; rk_irect r = x->deferred_rect; x->deferred_rect = (rk_irect){ 0, 0, 0, 0 }; commit(x, r); }
+}
 static const struct wl_buffer_listener buf_listener = { buf_release };
 
 static void buf_free(wbuf *b) {
@@ -144,6 +153,7 @@ static const struct wl_callback_listener frame_listener = { frame_done };
 
 /* Into a free buffer goes what changed since that buffer was last shown; the compositor is told only about now. */
 static void commit(wwin *x, rk_irect changed) {
+  for (int i = 0; i < 3; i++) x->bufs[i].owner = x;
   const rk_bitmap *fb = x->fb;
   if (!fb || !x->configured) return;
   wbuf *b = NULL;
@@ -164,6 +174,7 @@ static void commit(wwin *x, rk_irect changed) {
   wl_region_add(opaque, 0, 0, x->lw, x->lh);
   wl_surface_set_opaque_region(x->surface, opaque);
   wl_region_destroy(opaque);
+  if (x->frame_cb) wl_callback_destroy(x->frame_cb);           /* one callback at a time: the newest frame's */
   x->frame_cb = wl_surface_frame(x->surface);
   wl_callback_add_listener(x->frame_cb, &frame_listener, x);
   x->frame_pending = true;
@@ -197,18 +208,27 @@ static void apply_size(wwin *x) {
   rk__window_resized(x->w, (float)x->lw, (float)x->lh, scale_of(x));
 }
 
+/* Configures are collected while events are read; only the last of a burst is acknowledged and drawn. */
 static void xs_configure(void *data, struct xdg_surface *xs, uint32_t s) {
+  (void)xs;
   wwin *x = data;
-  xdg_surface_ack_configure(xs, s);
+  x->configure_serial = s; x->configure_pending = true;
+}
+
+static void configure_now(wwin *x) {
+  x->configure_pending = false;
+  xdg_surface_ack_configure(x->xs, x->configure_serial);
   x->configured = true;
   /* no size from the compositor: ours, the one from before maximizing */
   if (x->pw > 0 && x->ph > 0) { x->lw = x->pw; x->lh = x->ph; } else { x->lw = x->fw; x->lh = x->fh; }
   if (!x->maximized) { x->fw = x->lw; x->fh = x->lh; }
   apply_size(x);
   /* the acknowledged size, drawn and committed now: the compositor shows both together */
-  x->frame_pending = false;
+  x->frame_pending = false;                                     /* a new size is answered at once */
   rk__window_frame(x->w, rk_app_now());
 }
+
+static void configures(void) { for (int i = 0; i < nwwins; i++) if (wwins[i]->configure_pending) configure_now(wwins[i]); }
 static const struct xdg_surface_listener xs_listener = { xs_configure };
 
 static void top_configure(void *data, struct xdg_toplevel *t, int32_t w, int32_t h, struct wl_array *states) {
@@ -296,7 +316,7 @@ static void wl_show(void *n) {
   wwin *x = n;
   if (!x) return;
   wl_surface_commit(x->surface);
-  for (int i = 0; i < 20 && !x->configured; i++) if (wl_display_roundtrip(wdpy) < 0) break;
+  for (int i = 0; i < 20 && !x->configured; i++) { if (wl_display_roundtrip(wdpy) < 0) break; configures(); }
 }
 
 static void wl_title(void *n, const char *t) { wwin *x = n; if (x) xdg_toplevel_set_title(x->top, t); }
@@ -575,6 +595,7 @@ static bool wl_wait(double ms) {
   if (n > 0 && (fds[0].revents & POLLIN)) wl_display_read_events(wdpy); else wl_display_cancel_read(wdpy);
   if (wpipe[0] >= 0 && (fds[1].revents & POLLIN)) { char b[64]; while (read(wpipe[0], b, sizeof b) > 0) {} }
   if (wl_display_dispatch_pending(wdpy) < 0) { fprintf(stderr, "rekta: the Wayland compositor went away\n"); rk_app_quit(1); return false; }
+  configures();
   if (repeat_key && wl_now() >= repeat_next) { key_event(repeat_key, true); repeat_next = wl_now() + 1000.0 / repeat_rate; }
   return true;
 }
