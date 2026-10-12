@@ -606,6 +606,22 @@ static void perf(void) {
   phase("resize");
   static const char *targets[] = { "presses", "notes", "pin", "unpin", "resize", "restart" };
   for (int i = 0; i < 6; i++) expect_hit(targets[i]);
+  /* the wheel turned in quick steps, sideways and back, then section by section from the keyboard */
+  D.feed = false;
+  rk_app_run_for(600);
+  stats(true);
+  rk_point mid = { rk_window_size(D.window).w / 2, 40 };
+  for (int dir = 1; dir >= -1; dir -= 2)
+    for (int i = 0; i < 14; i++) {
+      rk_event e = { sizeof e, RK_EVENT_WHEEL, 0, mid, 0, 0, 48.0f * dir, 0, 0, NULL };
+      rk_window_inject(D.window, &e);
+      rk_app_run_for(i < 10 ? 40 : 120);
+    }
+  rk_app_run_for(600);
+  for (int i = 0; i < 5; i++) { key(RK_KEY_PAGE_DOWN); rk_app_run_for(300); }
+  key(RK_KEY_HOME);
+  rk_app_run_for(900);
+  phase("scroll");
   /* presses, pins, reflows, turns and section changes, faster than any of them finishes */
   D.feed = false;
   rk_stats before = stats(false);

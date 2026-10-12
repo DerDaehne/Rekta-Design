@@ -136,21 +136,47 @@ void rk__app_settings_changed(void) {
 
 /* The loop -------------------------------------------------------------------------------------------------------- */
 
-/* Input and timers run as they come; frames are drawn at a steady 60 a second while something moves (a burst of
-   pointer events never draws more often), and at once when something changed while nothing moved. */
+/* The display's frame period: its refresh rate (RK_FPS overrides), 60 where it cannot be asked. */
+static double period(void) {
+  static double hz;
+  if (!hz) {
+    const char *e = getenv("RK_FPS");
+    hz = e && atof(e) > 0 ? atof(e) : plat && plat->refresh_hz ? plat->refresh_hz() : 60;
+    hz = RK_CLAMP(hz, 24.0, 480.0);
+  }
+  return 1000.0 / hz;
+}
+
+static bool ready(rk_window *w) { return !rk__platform()->ready || rk__platform()->ready(w->native); }
+
+/* One turn of the loop: input and timers as they come, then a frame if one is due, then sleep until something
+   happens. Frames come at the display's pace while something moves - where the compositor says when (Wayland), the
+   moment it takes one, so motion is sampled for the frame that shows it; elsewhere on a steady grid - and at once
+   when something changed while nothing moved. */
 static void step(double max_wait) {
-  const double P = 1000.0 / 60.0;
+  const double P = period();
+  static double last_tick;
   double now = rk_app_now();
   run_posts();
   run_timers(now);
-  if (!rk__anim_running() || now >= next_frame - 0.5) {
+  bool paced = rk__platform()->ready != NULL, any_ready = false;
+  for (rk_window *w = rk__windows(); w; w = w->next) any_ready |= ready(w);
+  /* paced: when a window can take a frame (or none could for a while: motion still moves on, unseen) */
+  bool due = paced ? any_ready || now - last_tick > 100 : !rk__anim_running() || now >= next_frame - 0.5;
+  if (due) {
     bool moving = rk__anim_tick(now);
-    for (rk_window *w = rk__windows(); w; w = w->next) rk__window_frame(w, now);
+    last_tick = now;
+    for (rk_window *w = rk__windows(); w; w = w->next) if (ready(w)) rk__window_frame(w, now);
     next_frame = moving && next_frame + P > now ? next_frame + P : now + P;
   }
   if (!running) return;
   double t = rk_app_now(), wait;
-  if (rk__anim_running() || frame_wanted) wait = RK_MIN(RK_MAX(0.0, next_frame - t), next_due() - t);
+  if (paced && (rk__anim_running() || frame_wanted)) {
+    bool can = false;
+    for (rk_window *w = rk__windows(); w; w = w->next) can |= ready(w) && (w->needs_draw || rk__anim_running());
+    /* a window can take the next frame now; otherwise its frame callback wakes the loop (2 periods at most) */
+    wait = RK_MIN(can && !due ? 0.0 : 2 * P, next_due() - t);
+  } else if (rk__anim_running() || frame_wanted) wait = RK_MIN(RK_MAX(0.0, next_frame - t), next_due() - t);
   else wait = next_due() - t;
   frame_wanted = false;
   if (!isfinite(wait)) wait = -1;

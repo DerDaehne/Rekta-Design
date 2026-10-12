@@ -302,6 +302,13 @@ static void w_settings(bool *dark, bool *reduced, bool *compact) {
   *compact = true;                                             /* a fine pointer: compact, as the web's media query */
 }
 
+static double w_refresh(void) {
+  DEVMODEW dm;
+  memset(&dm, 0, sizeof dm);
+  dm.dmSize = sizeof dm;
+  return EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmDisplayFrequency > 1 ? (double)dm.dmDisplayFrequency : 60;
+}
+
 static void w_resize(void *n, float w, float h) {
   wwin *x = n;
   if (!x || IsZoomed(x->hwnd)) return;
@@ -312,5 +319,5 @@ static void w_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "win32", w_init, w_shutdown, w_open, w_close, w_show, w_title, w_present, w_move, w_minimize, w_zoom,
-  w_wait, w_wake, w_now, w_settings, w_resize
+  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh
 };

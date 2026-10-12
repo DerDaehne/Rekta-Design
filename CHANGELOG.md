@@ -32,6 +32,13 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core scrolls and glides smoothly: a wheel step, a section from
+  the nav strip or the keyboard travels on a quintic that sets off and
+  comes to rest without a jolt, and a new step picks it up mid-way with
+  its speed (quick wheel steps go further). The strip's titles slide and
+  change size the same way. Frames follow the display: on Wayland the
+  compositor's frame callbacks pace them (any refresh rate), elsewhere
+  the display's rate (`RK_FPS` overrides).
 - `core/demo/demo.c` shows every feature of the core in six sections;
   `flake.nix` builds it on Linux and macOS (`nix run`, `nix develop`,
   `nix flake check` with the tests).

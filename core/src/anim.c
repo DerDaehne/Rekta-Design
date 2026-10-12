@@ -12,6 +12,7 @@ typedef struct anim {
   const float *ease;
   void (*done)(rk_view *v, void *user); void *user;
   group *grp;
+  bool spring; rk_glide g;                                 /* a glide instead of the eased line */
 } anim;
 
 static anim *anims; static int nanims, acap;
@@ -41,6 +42,7 @@ static void apply(anim *a, float t) {
   rk_view *v = a->view;
   float k = a->prop == RK_PROP_CONTENT || a->prop == RK_PROP_TRANSITION ? t : rk__ease(a->ease, t), x[10];
   for (int i = 0; i < a->n; i++) x[i] = a->from[i] + (a->to[i] - a->from[i]) * k;
+  if (a->spring) x[0] = rk__glide_at(&a->g, a->start + t * a->dur, NULL, NULL);
   switch (a->prop) {
     case RK_PROP_FRAME: v->pframe = (rk_rect){ x[0], x[1], x[2], x[3] }; break;
     case RK_PROP_OPACITY: v->popacity = x[0]; break;
@@ -107,6 +109,53 @@ void rk__anim_view_gone(rk_view *v) {
     if (anims[i].view == v) { group *g = anims[i].grp; anims[i] = anims[--nanims]; group_done(g); }
     else i++;
   }
+}
+
+/* A glide: a quintic from where the value is, with the speed and acceleration it has, to the target at rest. It
+   starts and ends without a jolt (acceleration zero at both ends), and a new target picks it up mid-way with no break
+   in speed or acceleration. */
+float rk__glide_at(const rk_glide *g, double now, float *vel, float *acc) {
+  if (g->dur <= 0 || now >= g->t0 + g->dur) { if (vel) *vel = 0; if (acc) *acc = 0; return g->p1; }
+  double T = g->dur / 1000.0, s = RK_MAX(0.0, (now - g->t0) / g->dur), s2 = s * s, s3 = s2 * s, s4 = s3 * s, s5 = s4 * s;
+  double p0 = g->p0, p1 = g->p1, v0 = g->v0, a0 = g->a0;
+  double H0 = 1 - 10 * s3 + 15 * s4 - 6 * s5, H1 = s - 6 * s3 + 8 * s4 - 3 * s5, H2 = 0.5 * s2 - 1.5 * s3 + 1.5 * s4 - 0.5 * s5, H5 = 10 * s3 - 15 * s4 + 6 * s5;
+  if (vel) {
+    double D0 = -30 * s2 + 60 * s3 - 30 * s4, D1 = 1 - 18 * s2 + 32 * s3 - 15 * s4, D2 = s - 4.5 * s2 + 6 * s3 - 2.5 * s4;
+    *vel = (float)((p1 - p0) * -D0 / T + v0 * D1 + a0 * T * D2);
+  }
+  if (acc) {
+    double E0 = -60 * s + 180 * s2 - 120 * s3, E1 = -36 * s + 96 * s2 - 60 * s3, E2 = 1 - 9 * s + 18 * s2 - 10 * s3;
+    *acc = (float)((p1 - p0) * -E0 / (T * T) + v0 * E1 / T + a0 * E2);
+  }
+  return (float)(p0 * H0 + v0 * T * H1 + a0 * T * T * H2 + p1 * H5);
+}
+
+void rk__glide_to(rk_glide *g, double now, float target, double dur) {
+  float v, a, p = rk__glide_at(g, now, &v, &a);
+  g->p0 = p; g->v0 = v; g->a0 = a; g->p1 = target; g->t0 = now; g->dur = rk__reduced() ? 0 : dur;
+}
+
+void rk__glide_set(rk_glide *g, float value) { memset(g, 0, sizeof *g); g->p0 = g->p1 = value; }
+bool rk__glide_moving(const rk_glide *g, double now) { return g->dur > 0 && now < g->t0 + g->dur; }
+
+/* Moves the value to target in about settle ms (a little longer the further it goes); a glide already on it is
+   picked up where it is. */
+void rk__animate_spring(rk_view *v, int prop, float target, double settle) {
+  double now = rk_app_now();
+  anim *a = NULL;
+  for (int i = 0; i < nanims; i++) if (anims[i].view == v && anims[i].prop == prop && anims[i].spring) a = &anims[i];
+  float p = a ? rk__glide_at(&a->g, now, NULL, NULL) : v->pvalue;
+  if (settle <= 0 || rk__reduced() || (!a && fabsf(p - target) < 0.2f)) { rk__anim_cancel(v, prop); v->pvalue = target; rk__view_dirty(v); return; }
+  double dur = settle * RK_CLAMP(sqrt(fabs(target - p) / 600.0), 0.8, 1.5);
+  if (!a) {
+    rk__animate(v, prop, &p, &target, 1, dur, 0, NULL);
+    a = &anims[nanims - 1];
+    a->spring = true;
+    rk__glide_set(&a->g, p);
+  }
+  rk__glide_to(&a->g, now, target, dur);
+  a->start = now; a->delay = 0; a->dur = dur;
+  rk__app_request_frame();
 }
 
 bool rk__anim_tick(double now) {

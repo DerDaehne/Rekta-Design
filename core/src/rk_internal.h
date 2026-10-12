@@ -191,6 +191,13 @@ void rk__animate(rk_view *v, int prop, const float *from, const float *to, int n
 void rk__animate_cb(rk_view *v, int prop, const float *from, const float *to, int n, double duration, double delay, const float *ease,
                     void (*done)(rk_view *v, void *user), void *user);
 void rk__anim_cancel(rk_view *v, int prop);
+void rk__animate_spring(rk_view *v, int prop, float target, double settle_ms);
+/* A glide: a quintic from a value, speed and acceleration to a target at rest, picked up mid-way by a new target. */
+typedef struct rk_glide { float p0, p1, v0, a0; double t0, dur; } rk_glide;
+float rk__glide_at(const rk_glide *g, double now, float *vel, float *acc);   /* vel, acc may be NULL; per second */
+void rk__glide_to(rk_glide *g, double now, float target, double dur_ms);
+void rk__glide_set(rk_glide *g, float value);                                /* there at once */
+bool rk__glide_moving(const rk_glide *g, double now);
 bool rk__anim_tick(double now);                            /* true while any animation runs */
 bool rk__anim_running(void);
 void rk__anim_view_gone(rk_view *v);
@@ -272,6 +279,8 @@ typedef struct rk_platform {
   double (*now)(void);
   void (*settings)(bool *dark, bool *reduced, bool *compact);
   void (*resize)(void *native, float width, float height);  /* logical px */
+  bool (*ready)(void *native);                             /* NULL, or whether the compositor takes a frame now */
+  double (*refresh_hz)(void);                              /* NULL, or the display's rate */
 } rk_platform;
 
 extern const rk_platform rk__platform_headless;

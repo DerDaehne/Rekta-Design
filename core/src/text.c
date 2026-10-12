@@ -154,7 +154,7 @@ int rk__text_wrap(const char *s, const rk_textfmt *f, float max_width, rk_line *
 /* Glyph cache ----------------------------------------------------------------------------------------------------- */
 
 typedef struct glyph { uint32_t key0, key1; int w, h, x, y; uint8_t *px; } glyph;
-#define CACHE 4096
+#define CACHE 16384                                        /* titles that change size in motion need many sizes */
 static glyph cache[CACHE];
 static int cached;
 

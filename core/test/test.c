@@ -244,6 +244,51 @@ static void go_place(rk_view *v, void *u) {
   rk_release(c);
 }
 
+/* Scrolling glides: it starts gently, never overshoots, keeps its speed when the target moves on, and comes to rest in
+   about the time it was given. */
+static void test_spring(void) {
+  rk_window *w = window(400, 300);
+  rk_view *v = rk_view_create();
+  rk_view_set_size(v, 100, 100);
+  rk_retain(v);
+  show(w, v, "spring");
+  v->pvalue = 0;
+  rk__animate_spring(v, RK_PROP_VALUE, 1000, 500);
+  float prev = 0, prev_step = 0, max_step = 0, max_jerk = 0;
+  bool monotonic = true;
+  double t0 = rk_app_now();
+  rk_app_run_for(1000.0 / 60);
+  CHECK(v->pvalue > 0 && v->pvalue < 40, "it sets off gently (%.1f after one frame)", v->pvalue);
+  while (rk__anim_running() && rk_app_now() - t0 < 2000) {
+    float step = v->pvalue - prev;
+    if (step < -0.01f || v->pvalue > 1000.01f) monotonic = false;
+    max_step = RK_MAX(max_step, step);
+    if (prev_step > 0) max_jerk = RK_MAX(max_jerk, fabsf(step - prev_step));
+    prev_step = step; prev = v->pvalue;
+    rk_app_run_for(1000.0 / 60);
+  }
+  double took = rk_app_now() - t0;
+  CHECK(monotonic, "no overshoot");
+  CHECK(v->pvalue == 1000, "it lands exactly (%.2f)", v->pvalue);
+  CHECK(took > 450 && took < 700, "it rests in about the time given (%.0f ms for 500, a long way)", took);
+  CHECK(max_jerk < 0.25f * max_step, "speed changes smoothly frame to frame (jerk %.1f, top step %.1f)", max_jerk, max_step);
+  /* a second wheel step while moving: no stop, no jump */
+  v->pvalue = 0;
+  rk__animate_spring(v, RK_PROP_VALUE, 48, 260);
+  rk_app_run_for(80);
+  float before = v->pvalue;
+  rk_app_run_for(1000.0 / 60);
+  float speed = v->pvalue - before;
+  rk__animate_spring(v, RK_PROP_VALUE, 96, 260);
+  before = v->pvalue;
+  rk_app_run_for(1000.0 / 60);
+  CHECK(v->pvalue - before >= speed * 0.8f, "a new target keeps the speed (%.2f, was %.2f)", v->pvalue - before, speed);
+  rk_app_run_for(600);
+  CHECK(v->pvalue == 96 && !rk__anim_running(), "and rests at the new target (%.2f)", v->pvalue);
+  rk_release(v);
+  done(w);
+}
+
 static void test_navigation(void) {
   rk_window *w = window(900, 600);
   rk_controller *home = rk_panorama_create();
@@ -422,6 +467,7 @@ static void launch(void *user) {
   test_layout();
   test_input();
   test_navigation();
+  test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */
   scene_type();

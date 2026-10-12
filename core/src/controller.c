@@ -333,33 +333,23 @@ void rk_places_back(rk_controller *c) {
 typedef struct strip {
   char **titles; int n, active;
   bool nav;
-  float *scale, *scale_from; double scale_t0;
-  float glide, glide_from, glide_to; double glide_t0;
+  rk_glide *scale;                                         /* each title's size, 1 active, INACTIVE otherwise */
+  rk_glide glide;                                          /* how far the strip has slid */
   void (*select)(void *owner, int index); void *owner;
 } strip;
 
-static const float ease_in_out[4] = { 0.42f, 0, 0.58f, 1 };
 #define INACTIVE 0.6f
 
 static rk_textfmt strip_fmt(rk_view *v, strip *s) { return rk__textfmt(s->nav ? RK_TEXT_NAV : RK_TEXT_PIVOT, rk__host_width(v)); }
 
-static float strip_scale(strip *s, int i, double now) {
-  float to = i == s->active ? 1 : INACTIVE;
-  double d = rk_duration_of(RK_DURATION_PIVOT_SIZE);
-  if (d <= 0 || !s->scale_from) return to;
-  float t = (float)RK_CLAMP((now - s->scale_t0) / d, 0.0, 1.0);
-  return s->scale_from[i] + (to - s->scale_from[i]) * rk__ease(ease_in_out, t);
-}
-
-static float strip_glide(strip *s, double now) {
-  double d = rk_duration_of(RK_DURATION_PIVOT_GLIDE);
-  if (d <= 0) return s->glide_to;
-  float t = (float)RK_CLAMP((now - s->glide_t0) / d, 0.0, 1.0);
-  return s->glide_from + (s->glide_to - s->glide_from) * rk__ease(rk__ease_glide, t);
-}
+/* Sizes and the slide glide: a change of section while one is under way carries on from its speed. */
+static float strip_scale(strip *s, int i, double now) { return s->scale ? rk__glide_at(&s->scale[i], now, NULL, NULL) : (i == s->active ? 1 : INACTIVE); }
+static float strip_glide(strip *s, double now) { return rk__glide_at(&s->glide, now, NULL, NULL); }
 
 static bool strip_moving(strip *s, double now) {
-  return now - s->scale_t0 < rk_duration_of(RK_DURATION_PIVOT_SIZE) || now - s->glide_t0 < rk_duration_of(RK_DURATION_PIVOT_GLIDE);
+  if (rk__glide_moving(&s->glide, now)) return true;
+  for (int i = 0; s->scale && i < s->n; i++) if (rk__glide_moving(&s->scale[i], now)) return true;
+  return false;
 }
 
 static float strip_pad(strip *s) { return s->nav ? rk_metric_of(RK_SPACE_XL) : 0; }
@@ -424,7 +414,7 @@ static bool strip_event(rk_view *v, const rk_event *e, void *st) {
 static void strip_destroy(void *st) {
   strip *s = st;
   for (int i = 0; i < s->n; i++) free(s->titles[i]);
-  free(s->titles); free(s->scale); free(s->scale_from); free(s);
+  free(s->titles); free(s->scale); free(s);
 }
 
 static const rk_class strip_class = { { sizeof(rk_view_class), "rk_strip", strip_draw, strip_measure, NULL, strip_event, strip_destroy }, NULL, NULL };
@@ -432,7 +422,6 @@ static const rk_class strip_class = { { sizeof(rk_view_class), "rk_strip", strip
 static rk_view *strip_create(bool nav, void (*select)(void *, int), void *owner) {
   strip *s = rk__alloc(sizeof *s);
   s->nav = nav; s->select = select; s->owner = owner;
-  s->scale_t0 = s->glide_t0 = -1e9;
   rk_view *v = rk__view_create(&strip_class, s);
   v->focusable = true;
   v->access = RK_ACCESS_TAB_LIST;
@@ -443,6 +432,8 @@ static void strip_add(rk_view *v, const char *title) {
   strip *s = v->state;
   s->titles = realloc(s->titles, (size_t)(s->n + 1) * sizeof *s->titles);
   s->titles[s->n++] = rk__strdup(title ? title : "");
+  s->scale = realloc(s->scale, (size_t)s->n * sizeof *s->scale);
+  rk__glide_set(&s->scale[s->n - 1], s->n - 1 == s->active ? 1 : INACTIVE);
   rk__view_relayout_up(v);
 }
 
@@ -450,13 +441,9 @@ static void strip_activate(rk_view *v, int index) {
   strip *s = v->state;
   if (index == s->active || index < 0 || index >= s->n) return;
   double now = rk_app_now();
-  float *from = rk__alloc((size_t)s->n * sizeof(float));
-  for (int i = 0; i < s->n; i++) from[i] = strip_scale(s, i, now);
-  free(s->scale_from); s->scale_from = from;
-  s->glide_from = strip_glide(s, now);
   s->active = index;
-  s->scale_t0 = s->glide_t0 = now;
-  s->glide_to = strip_target(v, s);
+  for (int i = 0; i < s->n; i++) rk__glide_to(&s->scale[i], now, i == index ? 1 : INACTIVE, rk_duration_of(RK_DURATION_PIVOT_SIZE));
+  rk__glide_to(&s->glide, now, strip_target(v, s), rk_duration_of(RK_DURATION_PIVOT_GLIDE));
   rk__view_dirty(v);
   rk__app_request_frame();
 }
@@ -467,6 +454,7 @@ typedef struct section { char *title; rk_view *view, *box; float width, x, max; 
 typedef struct panorama {
   rk_controller *self; section *secs; int n, cap; rk_view *strip, *track; float max_scroll;
   int latch; double latch_at;                                  /* what the current wheel gesture moves */
+  float boost;                                                 /* wheel acceleration */
 } panorama;
 
 static float section_width(section *s) {
@@ -523,16 +511,20 @@ static void pano_draw(rk_view *v, rk_canvas *c, void *st) {
   strip_activate(p->strip, pano_active(p, v->value));
 }
 
-static void scroll_value(rk_view *v, float to, float max, double d, const float *ease) {
+/* Scrolling rides a spring: it sets off gently, a new wheel step adds to where it is going without stopping it,
+   and it comes to rest without a bump. */
+static void scroll_value(rk_view *v, float to, float max, double settle) {
   to = RK_CLAMP(to, 0.0f, max);
   v->value = to;
-  if (d > 0) { float from = v->pvalue; rk__animate(v, RK_PROP_VALUE, &from, &to, 1, d, 0, ease); }
-  else { rk__anim_cancel(v, RK_PROP_VALUE); v->pvalue = to; }
+  rk__animate_spring(v, RK_PROP_VALUE, to, settle);
   rk__view_dirty(v);
 }
 
-static void pano_scroll_to(rk_view *v, panorama *p, float to, double d, const float *ease) {
-  scroll_value(v, to, p->max_scroll, d, ease);
+#define SETTLE_WHEEL 260.0                                     /* ms a wheel step takes to come to rest */
+#define SETTLE_GO 520.0                                        /* ms to bring a section in */
+
+static void pano_scroll_to(rk_view *v, panorama *p, float to, double settle) {
+  scroll_value(v, to, p->max_scroll, settle);
   strip_activate(p->strip, pano_active(p, v->value));
 }
 
@@ -540,7 +532,7 @@ static void pano_select(void *owner, int i) {
   panorama *p = owner;
   rk_view *v = p->self->view;
   if (i < 0 || i >= p->n) return;
-  pano_scroll_to(v, p, p->secs[i].x - rk_metric_of(RK_SPACE_XL), rk_duration_of(RK_DURATION_PIVOT_GLIDE), rk__ease_glide);
+  pano_scroll_to(v, p, p->secs[i].x - rk_metric_of(RK_SPACE_XL), SETTLE_GO);
 }
 
 /* One wheel gesture moves one thing: started over a section that can still scroll that way, it scrolls the
@@ -561,9 +553,12 @@ static bool pano_event(rk_view *v, const rk_event *e, void *st) {
         if (x >= s->x && x < s->x + section_width(s) && s->max > 0 && ((d > 0 && s->box->value < s->max) || (d < 0 && s->box->value > 0))) target = i;
       }
     }
+    /* wheel steps in quick succession go further each time (a touchpad's small, continuous steps as they are) */
+    if (fabsf(d) >= 40 && now - p->latch_at < 90) p->boost = RK_MIN(p->boost * 1.25f, 4.0f); else p->boost = 1;
+    d *= p->boost;
     p->latch = target; p->latch_at = now;
-    if (target >= 0) scroll_value(p->secs[target].box, p->secs[target].box->value + d, p->secs[target].max, rk_duration_of(RK_DURATION_SHORT), rk__ease_base);
-    else pano_scroll_to(v, p, v->value + d, rk_duration_of(RK_DURATION_SHORT), rk__ease_base);
+    if (target >= 0) scroll_value(p->secs[target].box, p->secs[target].box->value + d, p->secs[target].max, SETTLE_WHEEL);
+    else pano_scroll_to(v, p, v->value + d, SETTLE_WHEEL);
     return true;
   }
   if (e->type == RK_EVENT_KEY_DOWN) {
@@ -624,8 +619,8 @@ void rk__reveal(rk_view *v) {
       for (rk_view *x = v; x && x != content; x = x->parent) y += x->frame.y;
       float top = y + content->frame.y, bottom = top + v->frame.h, view_h = a->frame.h, off = a->value;
       float max = RK_MAX(0.0f, content->frame.h + 2 * content->frame.y - view_h);
-      if (top - off < 0) scroll_value(a, top - rk_metric_of(RK_SPACE_M), max, rk_duration_of(RK_DURATION_SHORT), rk__ease_base);
-      else if (bottom - off > view_h) scroll_value(a, bottom - view_h + rk_metric_of(RK_SPACE_M), max, rk_duration_of(RK_DURATION_SHORT), rk__ease_base);
+      if (top - off < 0) scroll_value(a, top - rk_metric_of(RK_SPACE_M), max, SETTLE_WHEEL);
+      else if (bottom - off > view_h) scroll_value(a, bottom - view_h + rk_metric_of(RK_SPACE_M), max, SETTLE_WHEEL);
     }
     if (a->cls == &pano_class) {
       panorama *p = a->state;

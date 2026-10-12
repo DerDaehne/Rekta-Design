@@ -632,6 +632,9 @@ static void wl_settings(bool *dark, bool *reduced, bool *compact) {
   }
 }
 
+/* The compositor paces the frames: a window is drawn when its last frame has been shown (its frame callback came). */
+static bool wl_ready(void *n) { wwin *x = n; return x && x->configured && !x->frame_pending; }
+
 /* A floating window may choose its own size: the next commit carries it. */
 static void wl_resize(void *n, float w, float h) {
   wwin *x = n;
@@ -642,5 +645,5 @@ static void wl_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_wayland = {
   "wayland", wl_init, wl_shutdown, wl_open, wl_close, wl_show, wl_title, wl_present_fb, wl_move, wl_minimize, wl_zoom,
-  wl_wait, wl_wake, wl_now, wl_settings, wl_resize
+  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL
 };
