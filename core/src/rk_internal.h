@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -214,6 +215,7 @@ void rk__render_view(rk_canvas *c, rk_view *v, float ox, float oy);
 rk_bitmap *rk__snapshot(rk_view *v, bool with_fill);     /* the view as drawn now, at the window's scale */
 void rk__layout_pending(void);                            /* lay out every window that needs it, now */
 rk_window *rk__windows(void);
+extern double rk__prof_ms; extern long rk__prof_frames, rk__prof_pixels;
 
 /* Controllers (controller.c) -------------------------------------------------------------------------------------- */
 

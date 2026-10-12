@@ -14,15 +14,21 @@ void rk__canvas_init(rk_canvas *c, rk_bitmap *target, float scale) {
 
 #define DX(c, x) ((c)->ox + (x) * (c)->scale)
 #define DY(c, y) ((c)->oy + (y) * (c)->scale)
+/* Fills land on whole device pixels, so an edge is one crisp step rather than a half-covered blur. */
+#define SX(c, x) roundf(DX(c, x))
+#define SY(c, y) roundf(DY(c, y))
 
 void rk_canvas_fill_rect(rk_canvas *c, rk_rect r, rk_color color) {
-  rk__fill_rect(c->target, rk__canvas_clip(c), DX(c, r.x), DY(c, r.y), DX(c, r.x + r.w), DY(c, r.y + r.h), rk__pm(color, c->alpha));
+  float x0 = SX(c, r.x), y0 = SY(c, r.y), x1 = SX(c, r.x + r.w), y1 = SY(c, r.y + r.h);
+  if (r.w > 0 && x1 <= x0) x1 = x0 + 1;                        /* a hairline stays one pixel */
+  if (r.h > 0 && y1 <= y0) y1 = y0 + 1;
+  rk__fill_rect(c->target, rk__canvas_clip(c), x0, y0, x1, y1, rk__pm(color, c->alpha));
 }
 
 void rk_canvas_fill_round_rect(rk_canvas *c, rk_rect r, float radius, rk_color color) {
   if (radius * c->scale < 0.25f) { rk_canvas_fill_rect(c, r, color); return; }
   rk__path_reset(&c->path);
-  rk__path_round_rect(&c->path, DX(c, r.x), DY(c, r.y), DX(c, r.x + r.w), DY(c, r.y + r.h), radius * c->scale);
+  rk__path_round_rect(&c->path, SX(c, r.x), SY(c, r.y), SX(c, r.x + r.w), SY(c, r.y + r.h), radius * c->scale);
   rk__path_fill(c->target, rk__canvas_clip(c), &c->path, rk__pm(color, c->alpha));
 }
 

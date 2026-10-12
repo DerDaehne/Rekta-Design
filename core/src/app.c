@@ -23,6 +23,7 @@ typedef struct listener { void (*fn)(void *); void *user; } listener;
 static const rk_platform *plat;
 static rk_app_desc app;
 static bool running, launched, frame_wanted;
+static double next_frame;                                   /* when the next frame is due while something moves */
 static int exit_code;
 static timer *timers; static int ntimers, tcap; static uint32_t next_id = 1;
 static post *posts; static int nposts, pcap;
@@ -142,7 +143,14 @@ static void step(double max_wait) {
   bool moving = rk__anim_tick(now);
   for (rk_window *w = rk__windows(); w; w = w->next) rk__window_frame(w, now);
   if (!running) return;
-  double wait = moving || frame_wanted ? 1000.0 / 60.0 : next_due() - rk_app_now();
+  /* while something moves, frames come at a steady 60 a second: wait until the next one is due, not a whole frame
+     after this one was drawn */
+  double wait;
+  if (moving || frame_wanted) {
+    double t = rk_app_now();
+    next_frame = next_frame > t - 1000.0 / 60.0 ? next_frame + 1000.0 / 60.0 : t + 1000.0 / 60.0;
+    wait = RK_MIN(next_frame - t, next_due() - t);
+  } else wait = next_due() - rk_app_now();
   frame_wanted = false;
   if (!isfinite(wait)) wait = -1;
   if (wait < 0 && rk__headless()) wait = 1000.0 / 60.0;    /* headless never sleeps forever */
@@ -187,6 +195,9 @@ int rk_app_main(const rk_app_desc *desc) {
     }
   }
   if (app.terminate) app.terminate(app.user);
+  const char *prof = getenv("RK_PROFILE");
+  if (prof && *prof == '1' && rk__prof_frames)
+    fprintf(stderr, "rekta: %ld frames, %.2f ms a frame on average, %.1f megapixels a frame drawn\n", rk__prof_frames, rk__prof_ms / rk__prof_frames, rk__prof_pixels / 1e6 / rk__prof_frames);
   while (rk__windows()) rk_window_close(rk__windows());
   plat->shutdown();
   rk__text_shutdown();

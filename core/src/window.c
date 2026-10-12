@@ -4,6 +4,9 @@
 #include "rk_tokens.h"
 
 static rk_window *open_windows;
+
+/* RK_PROFILE=1: the time spent drawing, printed when the app ends */
+double rk__prof_ms; long rk__prof_frames, rk__prof_pixels;
 rk_window *rk__windows(void) { return open_windows; }
 
 /* The root view places the title bar, the content and the layers above it. */
@@ -286,6 +289,7 @@ void rk__window_frame(rk_window *w, double now) {
   if (w->needs_layout) layout_window(w);
   if (!w->needs_draw) return;
   w->needs_draw = false;
+  clock_t t0 = clock();
   int fw = (int)ceilf(w->size.w * w->scale), fh = (int)ceilf(w->size.h * w->scale);
   if (!w->fb || w->fb->w != fw || w->fb->h != fh) { rk__bitmap_free(w->fb); w->fb = rk__bitmap_create(fw, fh); }
   rk__bitmap_clear(w->fb, rk__pm(rk_color_of(RK_ROLE_BG), 1));
@@ -300,6 +304,9 @@ void rk__window_frame(rk_window *w, double now) {
   }
   rk__path_free(&c.path);
   rk__platform()->present(w->native, w->fb);
+  rk__prof_ms += (double)(clock() - t0) * 1000.0 / CLOCKS_PER_SEC;
+  rk__prof_frames++;
+  rk__prof_pixels += (long)fw * fh;
 }
 
 /* Input ----------------------------------------------------------------------------------------------------------- */
