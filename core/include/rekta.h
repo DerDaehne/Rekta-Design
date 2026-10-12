@@ -323,7 +323,7 @@ RK_API rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, 
 
 RK_API rk_view *rk_icon_create(const char *name, rk_role color);   /* 20 × 20 from the icon set */
 RK_API rk_view *rk_progress_create(float progress);                /* < 0: indeterminate */
-RK_API void rk_progress_set(rk_view *progress, float progress);
+RK_API void rk_progress_set(rk_view *view, float progress);
 
 /* Controllers ----------------------------------------------------------------------------------------------------- */
 
