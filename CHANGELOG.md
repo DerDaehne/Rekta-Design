@@ -9,6 +9,45 @@ it; each entry says how.
 
 ### Added
 
+- Inputs, native where they can be: `select.rk-input` with a chevron;
+  number, date and time fields in Rekta's frame (the date and time
+  pickers' icons from Rekta's set); a combobox that filters as you type
+  (`rk-combo`, `Rekta.combobox()`); the Metro toggle switch
+  (`rk-toggle`: a square frame, the accent fill, an ink bar as the
+  thumb, the state word beside it); a stepper (`rk-stepper`,
+  `Rekta.stepper()`); a slider (`rk-range`, with an `<output>`);
+  segments (`rk-segments`); a drop zone for files (`rk-drop`,
+  `Rekta.drop()`).
+- Toasts take a plain action without a countdown (`act`).
+- Desktop: tooltips in ink (`data-rk-tip`, after `timing.tip-delay`, at
+  once on keyboard focus, never on touch); context menus at the pointer,
+  on a long press or Shift+F10 (`Rekta.contextMenu()`); a tree
+  (`rk-tree`, `Rekta.tree()`); ordering by a grip, with the pointer or the
+  keyboard (`rk-grip`, `Rekta.sortable()`); long lists where only the rows
+  in view exist (`rk-virtual`, `Rekta.virtual()`); table columns that size
+  and hide (`columns`), and cells that edit in place, with refusals below
+  the cell (`edit`).
+- Undo history: `Rekta.undoStack()`, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z
+  after the toast has gone, redo in the undo's toast.
+- The live contract: `Rekta.live()` says how fresh a region is, goes
+  stale (`timing.stale`) or offline and says so, and holds still while
+  you look, with waiting updates behind a button. [docs/live.md](docs/live.md).
+- Tokens `timing.tip-delay`, `timing.long-press`, `timing.stale`.
+- Data: line and bar charts in ink and grey with one axis, a tooltip
+  and crosshair at every point, keys, a live region and a table of the
+  numbers (`Rekta.chart()`); meters that take a status colour only when
+  their value means one (`rk-meter`, `--rk-v`); an indeterminate
+  `rk-progress`; Metro's progress dots for a wait that blocks
+  (`rk-dots`, `motion.duration.dots`). [docs/data.md](docs/data.md).
+- The app shell: fifty-one icons on a 20px grid (`src/icons/`,
+  `dist/rekta.icons.svg` as a sprite, `dist/rekta.icons.json` for other
+  platforms, `rk-icon`, `Rekta.icon()`); the title bar of an installed
+  app or a native shell (`rk-titlebar`, `Rekta.titlebar()`,
+  `data-rk-titlebar`); installing and offline (`Rekta.pwa()`: the service
+  worker, a "reload" toast for a waiting version, `install()`).
+  `rk:placechange`. [docs/shell.md](docs/shell.md).
+- The showcase is an installable app that works offline, with its own
+  title bar in a window-controls overlay.
 - Data states: `rk-region` with `aria-busy` (a 2px line after
   `busy-delay`, at least `busy-min`), still placeholders `rk-ghost`, and
   `rk-empty` for empty and failed regions. `Rekta.busy()`.

@@ -60,6 +60,17 @@ paint: load `rekta.global.js` in `<head>` and call
 | `data-rk-press` | an item of it | It nudges when pressed (`press()`). |
 | `data-rk-selecting` | the list, the app bar | In the selection mode; the bar carries the selection. |
 | `data-rk-dragging` | a split handle | Being dragged. |
+| `data-rk-over` | a drop zone | Files are dragged over it. |
+| `data-rk-live` | a live region | `fresh`, `stale` or `offline`. |
+| `data-rk-held` | a live region | Held still while the pointer rests on it or focus is in it. |
+| `data-rk-dragging`, `data-rk-grabbed` | a sortable item | Being dragged; picked up from the keyboard. |
+| `data-rk-sorting` | a sortable list | An item is being dragged. |
+| `data-rk-editing` | a table cell | Being edited in place. |
+| `data-rk-active` | a virtual row | The active row (`aria-activedescendant`). |
+| `data-rk-wco` | the root | An installed app's window-controls overlay is visible. |
+| `data-rk-titlebar` | the root | Set by a native shell: show the title bar. |
+| `data-value` | a combobox's input | The chosen option's value. |
+| `--_rk-v` | a slider | How far its value is along the track, for the fill. |
 | `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
 | `data-theme`, `data-density`, `data-motion` | the root | Prefs overrides (see `prefs`). |
 
@@ -68,6 +79,8 @@ paint: load `rekta.global.js` in `<head>` and call
 | Property | Written by | Read by |
 |---|---|---|
 | `--rk-i` | the page | A tile's build-in order (0–10). |
+| `--rk-v` | the page | A meter's value, 0 to 1. |
+| `--rk-titlebar-controls` | a native shell | Room kept at the title bar's end for the window's own buttons (140px by default) when `data-rk-titlebar` shows it. |
 | `--rk-sec-w` | the page | A panorama section's width when sideways. |
 | `--rk-split-w` | the page, `split()` | The width of a split's list pane; the handle writes it while dragged. |
 | `--rk-banner-h` | `banner()` | `scroll-padding`, the sticky strip, toasts without anchor positioning. |
@@ -80,7 +93,11 @@ paint: load `rekta.global.js` in `<head>` and call
 |---|---|---|
 | `rk:prefs` | `document` | `{ name, value }` after `prefs.set`. |
 | `rk:bannerchange` | the banner (bubbles) | `{ state }`, the state now shown or `null`. |
-| `rk:selectionchange` | a list or table body (bubbles) | `{ count, mode, items }` after the selection changes. |
+| `rk:selectionchange` | a list, table body or virtual list (bubbles) | `{ count, mode, items }` (`indices` for a virtual list) after the selection changes. |
+| `rk:edit` | a table (bubbles) | `{ row, cell, value }` after an edit is kept. |
+| `rk:historychange` | `document` | `{ undo, redo }`, the labels next in line. |
+| `rk:placechange` | `document` | `{ from, to, back }` after a place change has finished. |
+| `rk:pwa` | `document` | The app's install and offline state (see `pwa()`). |
 
 ## API
 
@@ -88,8 +105,10 @@ paint: load `rekta.global.js` in `<head>` and call
 
 The defaults for a page: restores prefs (unless `restore: false`, for an
 embedded page whose host owns theme, density and motion), attaches
-`press` to `root`, attaches `sheet` to every `dialog.rk-sheet`, and
-marks the first paint as an arrival. Returns `{ destroy }`.
+`press` to `root`, attaches `sheet` to every `dialog.rk-sheet` and
+`stepper` to every `.rk-stepper`, keeps every `input.rk-range` filled
+to its value, gives every `.rk-toggle` checkbox `role="switch"`, turns on
+tooltips (`tips()`), and marks the first paint as an arrival. Returns `{ destroy }`.
 
 ### `prefs`
 
@@ -231,14 +250,15 @@ add nothing to history. Returns `{ select(index, { focus }), destroy }`.
 `aria-atomic="false"`, placed after the content whose actions raise
 toasts.
 
-`toaster.show(text, { key, undo, from, action })` shows one toast,
+`toaster.show(text, { key, undo, from, action, act })` shows one toast,
 replacing the one open. With `undo`, the toast has an undo button and a
 `duration-toast` window that counts down once a second and holds while
 it is hovered or has focus. The same `key` with `undo` updates the open
 toast and restarts its window. Ctrl/Cmd+Z undoes while the window is
 open, except in a text field; Escape inside a toast dismisses it. When
 the toast had focus as it goes, focus returns to `from`, or to the
-place's title. Undo is a shortcut, never the only way back.
+place's title. Undo is a shortcut, never the only way back. `act:
+{ label, run }` adds a plain action without a countdown ("reload").
 
 Returns `{ show, open, dismiss(), destroy }`.
 
@@ -315,7 +335,7 @@ its `.rk-ab-count` the count, and its `[data-rk-clear]` button clears.
 change. Returns `{ selected(), only(item, { show }), toggle(item), clear(), selectAll(), mode, refresh(), destroy }`
 (`refresh` after adding, removing or hiding items).
 
-### `table(el, { onSort, select, onShow, onSelect, appbar })`
+### `table(el, { onSort, select, onShow, onSelect, appbar, columns, edit })`
 
 `el` is a `.rk-table`. A `.rk-sort` button in a head cell sorts by its
 column (ascending, then descending; `aria-sort`), moving the rows with
@@ -324,8 +344,21 @@ FLIP; with `onSort({ column, dir, th })` the app sorts instead. With
 chosen with `select()` (`onShow`, `onSelect` as its `onChange`,
 `appbar`); the `.rk-check` cell holds the checkmark. Cells get
 `data-label` from their head for the stacked layout. Returns
-`{ selected(), only(row, { show }), clear(), selectAll(), mode, sort(column, dir), refresh(), destroy }`
+`{ selected(), only(row, { show }), clear(), selectAll(), mode, sort(column, dir), hide(i), show(i), hidden(), width(i, px), edit(cell), refresh(), destroy }`
 (`refresh` after adding, removing or hiding rows).
+
+With `columns` (`true` or `{ key }`), each head cell gets a `.rk-col-handle`
+separator on its trailing edge: dragged or moved with ← → (Shift: four
+times) and Home, it sizes its column (the table switches to a fixed
+layout); a double click resets it. `hide(i)` and `show(i)` take a column
+out and back. Widths and hidden columns are remembered under `key`.
+
+With `edit: { onCommit(row, cell, value, old) }`, cells with
+`data-rk-edit` edit in place on a double click or F2 on their row: Enter
+or Tab keeps (Tab moves on, Shift+Tab back), Escape puts the old value
+back. If `onCommit` returns a promise, the cell waits (`aria-busy`); a
+rejection's `message` shows below the cell (`.rk-cell-error`) and the
+field stays open. A kept edit fires `rk:edit` (`{ row, cell, value }`).
 
 ### `split(el, { key })`
 
@@ -384,6 +417,145 @@ button and takes focus. Escape and the shading answer cancel.
 The control cannot act now and says why in a `.rk-hint` beside it
 (`aria-describedby`); it stays focusable (`aria-disabled`) and clicks do
 nothing. `disable(control, null)` enables it again.
+
+### `combobox(input, { options, source, onSelect, free })`
+
+`input` is a `.rk-input` inside a `.rk-combo` (optionally with a
+`.rk-combo-btn` chevron). `options` is a list of strings or
+`{ label, value, group, hint, keywords }` (or a function returning one);
+`source(q)` instead returns a promise of them, for a remote list. Typing
+filters (every word must start a word of the label or its keywords);
+the list floats below like a menu (`role=listbox`, `aria-activedescendant`).
+↓ or Alt+↓ opens, ↑ ↓ move, Enter chooses, Escape closes, then clears.
+Without `free`, leaving the field with text that is not a choice puts
+the last choice back. `onSelect(option | null)` follows a choice; the
+input gets `data-value`. Returns `{ open, close, value, set(value), destroy }`.
+
+### `stepper(el)`
+
+`el` is a `.rk-stepper`: a button with `data-rk-step="-1"`, an
+`input[type=number]`, a button with `data-rk-step="1"`. A press steps
+once (firing `input` and `change`); held, it repeats after 400ms every
+80ms. A button at the limit gets `aria-disabled`. The buttons are out of
+the tab order: ↑ ↓ in the field do the same. `start()` attaches it.
+
+### `drop(el, { onFiles, accept })`
+
+`el` is a `.rk-drop` label around an `input[type=file]`. Files dropped on
+it or chosen with the input go to `onFiles(accepted, refused)` (`accept`
+as in the input's attribute). While files are dragged over it, it gets
+`data-rk-over`. While it is mounted, files dropped elsewhere on the page
+are not opened by the browser. Returns `{ destroy }`.
+
+### `tips()`
+
+Started by `start()`. Any element with `data-rk-tip="text"` gets an ink
+tooltip (`.rk-tip`, `role=tooltip`) after a rest of `timing.tip-delay`
+under a mouse or pen, at once on keyboard focus or after another tip,
+never on touch; its `aria-keyshortcuts` adds the keys. `data-rk-tip="overflow"`
+shows the element's own text, only while its box cuts it off. Escape
+(key layer 45), a press, scrolling or leaving hide it. While shown, it
+describes its control (`aria-describedby`) unless it repeats its name.
+
+### `contextMenu(scope, el, { target, onOpen, onSelect })`
+
+`el` is a `.rk-float` of `.rk-menu-item`s, as for `menu()`. A right click,
+a long press on touch (`timing.long-press`), or Shift+F10 / the
+context-menu key on a focused `target` (a selector, inside `scope`)
+opens it at the pointer or below the target, turned to stay on screen.
+`onOpen(target, event)` prepares it (return `false` to leave the
+browser's menu); `onSelect(item, target)` acts. Keys as in a menu;
+Escape or a choice returns focus to the target; a press outside,
+scrolling or resizing closes it. Returns `{ open(target), close, target, destroy }`.
+
+### `tree(el, { onShow, onToggle })`
+
+`el` is a `ul.rk-tree` of `li`s, each its row first, then a `ul` of
+children (`aria-expanded` on an `li` sets it open). The script adds the
+roles, levels, a `.rk-tree-row` and a `.rk-tree-twisty` (the chevron), and
+a roving tab stop. A click selects and calls `onShow(li)`; the chevron or
+a double click opens and closes (`onToggle(li, open)`). Keys: ↑ ↓, → ←,
+Home End, Enter Space, `*`, letters. Returns `{ expand(li, open), expandAll(open), select(li, show), selected(), refresh(), destroy }`.
+
+### `sortable(list, { items, handle, onMove })`
+
+Items (`:scope > li` by default) move by their grip (`.rk-grip`, a button):
+dragged, the item gets `data-rk-dragging` and the list
+`data-rk-sorting`; the others make room and everything settles with FLIP.
+Keys on the grip: Space or Enter picks up (`data-rk-grabbed`,
+`aria-pressed`), ↑ ↓ move, Space or Enter puts down, Escape puts back;
+Alt+↑ ↓ moves at once. A live region after the list says each move.
+`onMove(from, to, item)` follows a move. Returns `{ move(item, to), refresh(), destroy }`.
+
+### `virtual(el, { count, render, onShow, onChange, appbar, label })`
+
+`el` is a `.rk-virtual` with a bounded height. Only the rows in view and
+six either side exist (`.rk-virtual-row`, placed by `top`, the density's
+row height); `render(i, row)` fills one. It is a listbox with one tab
+stop (`aria-activedescendant`, `aria-posinset`, `aria-setsize`) chosen the
+Metro way like `select()`, on indices: `onShow(i)`, `onChange(indices, { mode })`,
+`rk:selectionchange` with `{ count, mode, indices }`, the app bar's mode.
+Returns `{ refresh(count), scrollTo(i), selected(), only(i), clear(), mode, count, destroy }`.
+
+### `undoStack({ toaster, limit })`
+
+`do({ label, run, undo, redo })` runs an action and remembers it (up to
+`limit`, 50); with `toaster`, its toast offers undo. `undo()` and `redo()`
+step back and forth; an undo's toast offers redo. Ctrl/Cmd+Z and
+Ctrl/Cmd+Shift+Z (Ctrl+Y off Apple) work outside text fields (key layer
+4, below an open toast's own). `entries()` lists `{ label, at, done }`
+for a history view. `rk:historychange` on `document` after each change.
+Returns `{ do, undo, redo, canUndo, canRedo, entries(), clear(), destroy }`.
+
+### `live(region, { stale, age, hold })`
+
+The live contract for a region (see [live.md](live.md)). `update(apply, key)`
+applies a change, or queues it while the region is held (the same `key`
+replaces a waiting one); `beat()` is a heartbeat without a change;
+`offline(true | false)`. The region gets `data-rk-live` (`fresh`, `stale`
+after `stale` ms or `timing.stale`, `offline`) and `data-rk-held` while
+the pointer rests on it or focus is in it; `age` (`.rk-age` inside it by
+default) says how fresh it is, every second; a quiet `.rk-live-more`
+button after it shows and applies waiting updates. Returns `{ update, beat, offline, flush(), state, held, waiting, destroy }`.
+
+### `chart(el, { type, labels, series, unit, min, max, height, summary, table })`
+
+A line (`type: 'line'`) or bar (`'bars'`) chart drawn as SVG at `el`'s
+width, redrawn when it changes. `series` is `[{ label, values }]`; the
+first is ink, a second grey. Ticks are round and compact (`unit` follows
+each value); bars start at zero, lines at `min` or the data's lowest.
+Two series get a legend (`.rk-legend`); lines get end labels when wide
+enough and clear of each other; bars label their peak. Hover, or ← →
+Home End on the focused chart, marks a point (`data-rk-hot`, a crosshair
+and markers for lines), shows the values in a tooltip and says them in a
+live region. With `table` (default), a `details.rk-chart-table` holds the
+numbers. `summary` is the accessible name. See [data.md](data.md).
+Returns `{ update(options), active, destroy }`.
+
+### `icon(name, { label, src })`
+
+An `<svg class="rk-icon">` using `#rk-i-NAME` from the sprite (inlined in
+the page, or at `src`, e.g. `'rekta.icons.svg'`). Without `label` it is
+`aria-hidden`; with one, `role=img` with that name.
+
+### `titlebar(el, { router })`
+
+`el` is a `.rk-titlebar` (a direct child of `.rk`): shown in an
+installed PWA's window-controls overlay, or when the root has
+`data-rk-titlebar`. Its `[data-rk-back]` button follows the router like
+the app bar's; its `.rk-titlebar-place` names the current place (none
+at home). The root gets `data-rk-wco` while the overlay is visible.
+Returns `{ destroy }`.
+
+### `pwa({ sw, toaster, onChange })`
+
+Registers the service worker `sw` where a web app manifest is linked and
+the page is in a secure context. When a new version waits, `toaster`
+shows "A new version is ready" with a plain "reload" action, which asks
+it to take over and reloads. Keeps the browser's install prompt for
+`install()`. `onChange(state)` and `rk:pwa` on `document` follow every
+change of `{ supported, installed, canInstall, offlineReady, updateReady }`.
+Returns `{ state, install(), update(), check(), destroy }`.
 
 ### `place(el, anchor)`
 

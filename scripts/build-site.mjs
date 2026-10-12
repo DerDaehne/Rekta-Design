@@ -11,11 +11,12 @@
 //                                                file, such as an artifact
 //   node scripts/build-site.mjs --serve          then serves _site/ on http://127.0.0.1:4199 (Ctrl+C to stop)
 
+import { createHash } from 'node:crypto';
 import { copyFileSync, cpSync, createReadStream, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildDist, cssValue, loadTokens, tokenName, walk } from './build.mjs';
+import { buildDist, cssValue, loadIcons, loadTokens, tokenName, walk } from './build.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, '_site');
@@ -60,6 +61,9 @@ const blocks = {
   ].map(([fg, bg, min]) => `<tr><th scope="row"><code>${fg}</code> on <code>${bg}</code></th><td class="rk-num">${min} : 1</td><td class="rk-num"><b data-contrast="${fg} ${bg}" data-min="${min}">–</b></td></tr>`).join('')}</tbody></table>`,
   typescale: () => `<ul class="rk-rows scale">${data.filter((t) => t.group === 'type' && t.name.startsWith('font-size-')).map((t) => `<li><span class="scale-sample" style="font-size:var(--rk-${t.name})">Rekta</span><span><code>${t.name.slice(10)}</code> <span class="rk-meta">${esc(t.value)}</span></span></li>`).join('')}</ul>`,
   'tokens-data': () => `<script type="application/json" id="tokens-data">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`,
+  // The icon sprite inline, so <use href="#rk-i-NAME"> works in the page and in the single-file build alike.
+  icons: () => readFileSync(join(dist, 'rekta.icons.svg'), 'utf8').trim().replace('<svg ', '<svg aria-hidden="true" '),
+  'icon-gallery': () => `<ul class="icon-gallery">${Object.keys(loadIcons()).map((n) => `<li><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-${n}"/></svg><code>${n}</code></li>`).join('')}</ul>`,
 };
 function render(text) {
   return text
@@ -75,10 +79,16 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 for (const f of readdirSync(site)) {
   if (/\.html$/.test(f)) writeFileSync(join(out, f), render(readFileSync(join(site, f), 'utf8')));
-  else if (/\.(css|js)$/.test(f)) copyFileSync(join(site, f), join(out, f));
+  else if (/\.(css|js|png|svg|webmanifest)$/.test(f) && f !== 'sw.js') copyFileSync(join(site, f), join(out, f));
 }
 for (const f of readdirSync(dist)) if (f.startsWith('rekta.')) copyFileSync(join(dist, f), join(out, f));
 cpSync(join(dist, 'fonts'), join(out, 'fonts'), { recursive: true });
+// The service worker caches every file of the site; its version is a hash of them, so each change makes a new one.
+const files = [];
+(function list(dir, rel) { for (const f of readdirSync(dir).sort()) { const p = join(dir, f); if (statSync(p).isDirectory()) list(p, `${rel}${f}/`); else files.push(`${rel}${f}`); } }(out, ''));
+const hash = createHash('sha256');
+for (const f of files) hash.update(f).update(readFileSync(join(out, f)));
+writeFileSync(join(out, 'sw.js'), readFileSync(join(site, 'sw.js'), 'utf8').replace('__RK_VERSION__', `${version}-${hash.digest('hex').slice(0, 10)}`).replace('__RK_FILES__', JSON.stringify(['./', ...files])));
 console.log(`✓ _site/ written (Rekta Design ${version} showcase)`);
 
 const single = process.argv.indexOf('--single');
@@ -103,7 +113,7 @@ if (single > 0) {
     .replace(/<link rel="stylesheet" href="([\w.-]+)">/g, (_, f) => style(f))
     .replace(/<script src="([\w.-]+)"><\/script>/g, (_, f) => script(f));
   // The dist files do not travel with one page, so their download links become plain names.
-  const page = (inline(head).replace(/^\s*<meta[^>]*>\n/gm, '') + inline(body)).replace(/<a href="(rekta\.[\w.]+)" download>([^<]*)<\/a>/g, '<code>$2</code>');
+  const page = (inline(head).replace(/^\s*<meta[^>]*>\n/gm, '').replace(/^\s*<link rel="(manifest|icon|apple-touch-icon)"[^>]*>\n/gm, '') + inline(body)).replace(/<a href="(rekta\.[\w.]+)" download>([^<]*)<\/a>/g, '<code>$2</code>');
   writeFileSync(target, page.trim() + '\n');
   console.log(`✓ ${target} written (${Math.round(page.length / 1024)} kB, self-contained)`);
 }

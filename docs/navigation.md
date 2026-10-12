@@ -139,6 +139,17 @@ Controls that do not fit move into "more", the least important first
 state and a selection's controls never move. Nothing is hidden for good:
 every control is reachable at every width.
 
+## Tooltips
+
+A tooltip is a small ink strip, like a toast, above its control (below
+when there is no room). It shows after the pointer has rested for
+`timing.tip-delay`, at once when focus arrives by keyboard, and at once
+when moving on from another tip; never on touch. Escape, a press,
+scrolling or leaving hide it. It names an icon-only control, completes a
+label with its shortcut, or shows the whole of a text its box cuts off
+(`data-rk-tip="overflow"`). It never holds the only way to learn what a
+control does: an icon-only control still has its accessible name.
+
 ## Keyboard
 
 Every pointer action has a keyboard path.
@@ -151,7 +162,12 @@ Every pointer action has a keyboard path.
 | A facet pivot (tabs) | ← → Home End | The previous, next, first or last facet; focus follows |
 | A tile | Enter (Space on a button tile) | Presses it; release activates |
 | Anywhere | Escape | Closes the innermost thing that is open (see below) |
-| Anywhere but a text field | Ctrl/Cmd+Z | Undoes the action of the open toast |
+| Anywhere but a text field | Ctrl/Cmd+Z | Undoes the last action (the open toast's first) |
+| Anywhere but a text field | Ctrl/Cmd+Shift+Z, Ctrl+Y | Does the undone action again |
+| A row, a file, a focused item | Shift+F10, the context-menu key | Its context menu |
+| A table row | F2 | Edits its first editable cell |
+| A tree | ← → ↑ ↓ Home End, * | Close or go up, open or go in, move, open the siblings |
+| A grip | Space, ↑ ↓, Escape; Alt+↑ ↓ | Pick up, move, put back; move at once |
 | Anywhere | Ctrl/Cmd+K | Go to: the palette |
 | Anywhere but a text field | ? | The keyboard shortcuts |
 | A table | Ctrl/Cmd+A, Shift+click | Select all, select a range |
@@ -164,11 +180,14 @@ and an entry in the palette), never only in a manual.
 Keys are layered: the innermost thing that is open gets the key first,
 and once it uses it nothing else does.
 
-1. A floating surface (menu, palette, a combobox's list), a modal sheet
-   or a popover: Escape closes it.
+1. A tooltip: Escape hides it. Then a floating surface (menu, context
+   menu, palette, a combobox's list), a modal sheet or a popover:
+   Escape closes it; a field being edited in a table puts its old value
+   back.
 2. A toast that has focus: Escape dismisses it.
 3. The open toast's undo window: Ctrl/Cmd+Z undoes, except in a text
-   field, where it is the field's own undo.
+   field, where it is the field's own undo. With no toast open, the
+   undo history takes Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z.
 4. A selection: Escape clears it.
 5. The place: Escape goes back.
 

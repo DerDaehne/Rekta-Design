@@ -8,6 +8,11 @@
 <meta name="referrer" content="no-referrer">
 <meta name="description" content="Rekta Design, a platform-neutral design language of panoramas, pivots, full-colour live tiles and meaningful motion, shown in itself.">
 <title>Rekta Design</title>
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0e12" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="rekta.tokens.css">
 <link rel="stylesheet" href="rekta.fonts.css">
 <link rel="stylesheet" href="rekta.css">
@@ -17,7 +22,13 @@
 <script src="site-head.js"></script>
 </head>
 <body>
+<!--@icons-->
 <div class="rk app" id="app">
+  <!-- The title bar of the installed app: shown only in a window-controls overlay or a native shell. -->
+  <header class="rk-titlebar" id="titlebar">
+    <button class="rk-ab" type="button" data-rk-back aria-label="back" hidden><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-back"/></svg></button>
+    <span class="rk-titlebar-name"><b>Rekta</b> Design</span><span class="rk-titlebar-place"></span>
+  </header>
   <div class="rk-banner" id="banner" data-rk-phase="clear">
     <div class="rk-banner-live"><p role="alert"></p><p role="status"></p></div>
     <p class="rk-actions"><button class="rk-btn" id="remedy" type="button">release stop</button></p>
@@ -28,7 +39,7 @@
        the place, so it sticks on a phone. -->
   <main class="rk-place place-home" data-rk-place="home" aria-labelledby="overview-title">
     <nav class="rk-pivot rk-pivot--nav" id="nav" aria-label="Rekta Design, sections">
-      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#feedback">feedback</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#platforms">platforms</a><a href="#start">get started</a>
+      <a href="#overview" aria-current="location">rekta</a><a href="#roots">roots</a><a href="#principles">principles</a><a href="#colour">colour</a><a href="#typography">typography</a><a href="#tiles">tiles</a><a href="#panorama">panorama &amp; pivot</a><a href="#motion">motion</a><a href="#lists">lists &amp; tables</a><a href="#desktop">desktop</a><a href="#feedback">feedback</a><a href="#live-undo">live &amp; undo</a><a href="#navigation">navigation</a><a href="#forms">forms</a><a href="#inputs">inputs</a><a href="#data">data</a><a href="#look">look</a><a href="#accessibility">accessibility</a><a href="#icons">icons</a><a href="#shell">app shell</a><a href="#platforms">platforms</a><a href="#start">get started</a>
     </nav>
 
     <div class="rk-panorama" id="pan" tabindex="0" role="region" aria-label="Rekta Design, sections side by side">
@@ -63,7 +74,7 @@
           </div>
           <div class="rk-tile" data-status="warning" style="--rk-i:5">
             <span class="rk-tile-word">waiting</span>
-            <span class="rk-stat"><b>next</b><span>the live contract</span></span>
+            <span class="rk-stat"><b>next</b><span>date ranges</span></span>
           </div>
         </div>
         <p class="note">Move sideways with the mouse wheel, a trackpad swipe, or ← → once the panorama has focus. On a phone, just scroll down. <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">K</kbd> goes anywhere; <kbd class="rk-key">?</kbd> lists every key.</p>
@@ -214,14 +225,27 @@
       </section>
 
       <section class="rk-sec sec-wide" id="lists" aria-labelledby="lists-title">
-        <div class="sec-head"><h2 class="rk-group" id="lists-title">Rows on hairlines, chosen the Metro way.</h2><p class="rk-actions"><button class="rk-btn" type="button" id="comp-more">more</button></p></div>
+        <div class="sec-head"><h2 class="rk-group" id="lists-title">Rows on hairlines, chosen the Metro way.</h2><p class="rk-actions"><button class="rk-btn" type="button" id="comp-cols">columns</button><button class="rk-btn" type="button" id="comp-more">more</button></p></div>
+        <div id="comp-cols-menu">
+          <p class="rk-menu-label">show columns</p>
+          <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="true" type="button" data-col="2">group</button>
+          <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="true" type="button" data-col="3">status</button>
+          <button class="rk-menu-item" role="menuitemcheckbox" aria-checked="true" type="button" data-col="4">since</button>
+        </div>
+        <div id="comp-ctx">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="show">show</button>
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="edit">edit the group<span class="rk-menu-key">F2</span></button>
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="copy">copy the name</button>
+          <hr class="rk-menu-sep">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="archive">archive</button>
+        </div>
         <div id="comp-menu">
           <button class="rk-menu-item" role="menuitem" type="button" data-act="refresh">refresh</button>
           <button class="rk-menu-item" role="menuitem" type="button" data-act="fail">refresh, and fail</button>
           <hr class="rk-menu-sep">
           <button class="rk-menu-item" role="menuitem" type="button" aria-disabled="true">print (needs a printer)</button>
         </div>
-        <p>A click selects a row and shows it. <kbd class="rk-key">Ctrl</kbd>+click adds another and starts the selection mode: then every click adds or removes, and the app bar carries the selection. <kbd class="rk-key">Shift</kbd>+click takes a range, <kbd class="rk-key">Esc</kbd> ends it. A selected row nudges, takes the accent and a checkmark.</p>
+        <p>A click selects a row and shows it. <kbd class="rk-key">Ctrl</kbd>+click adds another and starts the selection mode: then every click adds or removes, and the app bar carries the selection. <kbd class="rk-key">Shift</kbd>+click takes a range, <kbd class="rk-key">Esc</kbd> ends it. A selected row nudges, takes the accent and a checkmark. Drag a column's edge to size it; double-click a group to edit it; right-click a row for its menu.</p>
         <div class="rk-filters">
           <div class="rk-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13 13 4 4"/></svg><input class="rk-input" type="search" id="comp-q" placeholder="search components" aria-label="search components"></div>
           <button class="rk-btn" type="button" id="comp-status">status</button>
@@ -252,6 +276,68 @@
         <p class="note">Every value of the system in a table, the current one beside it: <a href="#tokens">the tokens</a>. Narrower than {{bp-sideways-scroll-min}}, rows stack as “label value”: no sideways scrolling on a phone.</p>
       </section>
 
+      <section class="rk-sec sec-wide" id="desktop" aria-labelledby="desktop-title">
+        <h2 class="rk-group" id="desktop-title">A desktop app, by mouse and by keys.</h2>
+        <p>Rest the pointer on a control: a tooltip. Right-click, long-press or <kbd class="rk-key">Shift</kbd> <kbd class="rk-key">F10</kbd> on a file: a context menu. A tree that opens and closes, a list you order by its grip, and ten thousand lines that scroll like ten.</p>
+        <div class="desk">
+          <div class="desk-tree">
+            <div class="toolbar" role="toolbar" aria-label="files">
+              <button class="rk-ab" type="button" id="tree-open" aria-label="open every folder" data-rk-tip="open every folder" aria-keyshortcuts="*"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-chevron-down"/></svg></button>
+              <button class="rk-ab" type="button" id="tree-close" aria-label="close every folder" data-rk-tip="close every folder"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-chevron-up"/></svg></button>
+              <button class="rk-ab" type="button" id="tree-copy" aria-label="copy the path" data-rk-tip="copy the path of the selected file" aria-keyshortcuts="Control+C Meta+C"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-copy"/></svg></button>
+            </div>
+            <ul class="rk-tree" id="tree" aria-label="the files of Rekta Design">
+              <li aria-expanded="true"><span>tokens</span><ul><li data-about="The one source of every value: colours per theme, type, space, sizes per density, motion, timing, layers. DTCG format."><span>rekta.tokens.json</span></li></ul></li>
+              <li aria-expanded="true"><span>src</span><ul>
+                <li aria-expanded="false"><span>css</span><ul><li data-about="Every component, on the tokens only. No framework, no build step needed to read it."><span>rekta.css</span></li></ul></li>
+                <li aria-expanded="false"><span>js</span><ul><li data-about="The behaviour: press, places and back, panorama, menus, selection, forms, tooltips, live regions… one framework-free module."><span>rekta.js</span></li></ul></li>
+                <li aria-expanded="false"><span>icons</span><ul><li data-about="The icon set: 20px grid, 1.6 stroke, square ends."><span>back.svg</span></li><li data-about="The icon set: 20px grid, 1.6 stroke, square ends."><span>search.svg</span></li></ul></li>
+              </ul></li>
+              <li aria-expanded="false"><span>docs</span><ul>
+                <li data-about="The contract every platform implements: state, hooks, events, the API."><span>behaviour.md</span></li>
+                <li data-about="Tables, Metro selection, trees, long lists, split views."><span>collections.md</span></li>
+                <li data-about="Status is a fill, not an accent; the one accent slot."><span>colour.md</span></li>
+                <li data-about="Inputs, checks, refusals, leaving, dialog levels."><span>forms.md</span></li>
+                <li data-about="Pivot, places and back, the app bar, keys."><span>navigation.md</span></li>
+                <li data-about="The same numbers on every platform: units, names, input."><span>platforms.md</span></li>
+              </ul></li>
+              <li aria-expanded="false"><span>scripts</span><ul><li data-about="Writes dist/ from the tokens and checks contrast and colour-blind separation."><span>build.mjs</span></li><li data-about="Builds this site; the numbers in its text come from the tokens."><span>build-site.mjs</span></li></ul></li>
+              <li aria-expanded="false"><span>site</span><ul><li data-about="This page."><span>index.html</span></li><li data-about="This page's glue: layout only, every value a token."><span>site.css</span></li><li data-about="This page's data and wiring."><span>site.js</span></li></ul></li>
+              <li aria-expanded="false"><span>test</span><ul><li data-about="Clicks through this page in a browser and checks the behaviour contract."><span>smoke.mjs</span></li></ul></li>
+            </ul>
+          </div>
+          <div class="desk-detail" id="tree-detail" aria-live="polite">
+            <p class="rk-kicker" id="file-path">files</p>
+            <h3 class="rk-group" id="file-name">Choose a file.</h3>
+            <p id="file-about">Click a file, or move with the arrow keys: → opens a folder, ← closes it.</p>
+          </div>
+        </div>
+        <div id="tree-menu">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="show">show</button>
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="copy">copy the path<span class="rk-menu-key">Ctrl C</span></button>
+          <hr class="rk-menu-sep">
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="open">open every folder</button>
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="rename" aria-disabled="true">rename (read-only here)</button>
+        </div>
+        <p class="rk-kicker group-label">order the release, by its grip</p>
+        <ol class="rk-rows sort-list" id="steps">
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>write the release notes</b><span class="rk-meta">docs</span></li>
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>check contrast in dark</b><span class="rk-meta">tokens</span></li>
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>run the smoke test</b><span class="rk-meta">test</span></li>
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>tag the release</b><span class="rk-meta">git</span></li>
+          <li><button class="rk-grip" type="button" data-rk-tip="drag, or Space then ↑ ↓"></button><b>publish the tokens</b><span class="rk-meta">dist</span></li>
+        </ol>
+        <p class="rk-kicker group-label">ten thousand lines</p>
+        <div class="rk-filters">
+          <div class="rk-segments" role="radiogroup" aria-label="show">
+            <label><input type="radio" name="log-f" value="all" checked>all</label><label><input type="radio" name="log-f" value="error">failed</label><label><input type="radio" name="log-f" value="warning">waiting</label>
+          </div>
+          <p class="rk-facts" id="log-facts">–</p>
+        </div>
+        <div class="rk-virtual log" id="log"></div>
+        <p class="rk-facts" id="log-shown">Click a line, or focus the list and move with ↑ ↓ PageUp PageDown. Only the lines in view exist.</p>
+      </section>
+
       <section class="rk-sec" id="feedback" aria-labelledby="feedback-title">
         <h2 class="rk-group" id="feedback-title">An event leaves, a state stays.</h2>
         <p>Something that just happened is a <b>toast</b>: ink, one at a time, with an undo window you can hold by pointing at it. A lasting state of the whole system takes the <b>banner</b> on top: one at a time, the most severe first, its end reported as a toast.</p>
@@ -273,6 +359,28 @@
           <div class="rk-region"><div class="rk-empty" data-status="error"><p>Could not load: the server is offline.</p></div></div>
         </div>
         <p class="note">Nothing shimmers: placeholders stand still, and the line comes only after {{duration-busy-delay}}, so a fast answer never flickers.</p>
+      </section>
+
+      <section class="rk-sec sec-wide" id="live-undo" aria-labelledby="live-title">
+        <h2 class="rk-group" id="live-title">Live, and honest about it.</h2>
+        <p>Live values say how fresh they are, and say so when they stop. Rest the pointer on them and they hold still while you read; updates wait behind a button. Turn the feed off and watch it go stale.</p>
+        <div class="live-region" id="live-region">
+          <div class="rk-tiles live-tiles">
+            <div class="rk-tile rk-w2" data-status="info"><span class="rk-tile-word">active</span><span class="rk-stat"><b data-rk-value id="lv-rps">–</b><span>requests a second</span></span><svg class="rk-spark" viewBox="0 0 200 28" role="img" aria-label="requests a second"><polyline pathLength="1" points="0,14 200,14"/></svg></div>
+            <div class="rk-tile" data-status="warning"><span class="rk-tile-word">waiting</span><span class="rk-stat"><b data-rk-value id="lv-queue">–</b><span>jobs in the queue</span></span></div>
+            <div class="rk-tile" data-status="success"><span class="rk-tile-word">done</span><span class="rk-stat"><b data-rk-value id="lv-done">–</b><span>finished today</span></span></div>
+          </div>
+          <p class="live-line"><span class="rk-age"></span></p>
+          <ul class="rk-rows" id="lv-events" aria-label="latest events"></ul>
+        </div>
+        <div class="live-controls">
+          <label class="rk-toggle"><span class="rk-toggle-label">feed</span><input type="checkbox" id="lv-feed" checked><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+          <label class="rk-toggle"><span class="rk-toggle-label">connection</span><input type="checkbox" id="lv-online" checked><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+        </div>
+        <p class="rk-kicker group-label">undo history</p>
+        <p class="rk-actions"><button class="rk-btn" type="button" id="h-undo" data-rk-tip="undo the last action" aria-keyshortcuts="Control+Z Meta+Z">undo</button><button class="rk-btn" type="button" id="h-redo" data-rk-tip="do it again" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">redo</button></p>
+        <ol class="rk-rows history" id="h-list" aria-label="what you did"><li class="rk-empty">Nothing yet. Archive a component, edit a group, or order the release.</li></ol>
+        <p class="note">Everything you archive, edit or move on this page lands here. <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd> takes the last step back, <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Shift</kbd> <kbd class="rk-key">Z</kbd> does it again; the toast offers the same.</p>
       </section>
 
       <section class="rk-sec" id="navigation" aria-labelledby="navigation-title">
@@ -313,6 +421,91 @@
           </div>
           <p class="rk-actions"><button class="rk-btn rk-btn--primary" type="submit" id="a-save" data-rk-pending-label="applying…">apply accent</button><button class="rk-btn" type="button" id="a-remove">remove accent</button></p>
         </form>
+      </section>
+
+      <section class="rk-sec sec-wide" id="inputs" aria-labelledby="inputs-title">
+        <h2 class="rk-group" id="inputs-title">Native where it can be, Rekta where it shows.</h2>
+        <p>Every input here changes something you can see. A select, a number, a date and a time are the platform's own controls in Rekta's frame, so their pickers, keys and screen readers come for free; the rest are Rekta's own.</p>
+        <div class="builder">
+          <form class="fields" id="builder" aria-label="build a tile">
+            <div class="rk-field">
+              <label class="rk-label" for="b-status">status</label>
+              <select class="rk-input" id="b-status">
+                <option value="info">active</option><option value="success">done</option><option value="warning">waiting</option><option value="error">failed</option><option value="">idle</option>
+              </select>
+            </div>
+            <div class="rk-field">
+              <label class="rk-label" for="b-value">number</label>
+              <div class="rk-stepper"><button data-rk-step="-1" aria-label="one less">−</button><input class="rk-input" type="number" id="b-value" value="12" min="0" max="999"><button data-rk-step="1" aria-label="one more">+</button></div>
+            </div>
+            <div class="rk-field">
+              <label class="rk-label" for="b-label">label</label>
+              <input class="rk-input" id="b-label" value="builds today" maxlength="40">
+            </div>
+            <fieldset class="rk-field rk-choices-plain"><legend class="rk-label">size</legend>
+              <div class="rk-segments" role="radiogroup" aria-label="size">
+                <label><input type="radio" name="b-size" value="1" checked>1 × 1</label><label><input type="radio" name="b-size" value="w2">2 × 1</label><label><input type="radio" name="b-size" value="h2">2 × 2</label>
+              </div>
+            </fieldset>
+            <label class="rk-toggle"><span class="rk-toggle-label">sparkline</span><input type="checkbox" id="b-spark"><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+          </form>
+          <div class="rk-tiles builder-out" aria-live="polite">
+            <div class="rk-tile" id="built" data-status="info"><span class="rk-tile-word">active</span><span class="rk-stat"><b>12</b><span>builds today</span></span></div>
+          </div>
+        </div>
+        <div class="input-grid">
+          <div class="rk-field">
+            <label class="rk-label" for="find-token">find a token</label>
+            <div class="rk-combo"><input class="rk-input" id="find-token" placeholder="type a name, a group or a value" aria-describedby="find-hint"><button class="rk-combo-btn" type="button" aria-label="show all tokens"></button></div>
+            <span class="rk-hint" id="find-hint">A combobox: it filters as you type and keeps only a choice from its list.</span>
+          </div>
+          <div class="rk-field">
+            <label class="rk-label" for="text-size">text size</label>
+            <div class="rk-slider"><input class="rk-range" type="range" id="text-size" min="87.5" max="125" step="12.5" value="100"><output data-unit="%">100%</output></div>
+            <span class="rk-hint">Sizes are in rem: the whole page follows, as it follows your browser's text size.</span>
+          </div>
+          <div class="rk-field">
+            <label class="rk-label" for="when-d">remind me on</label>
+            <div class="when"><input class="rk-input" type="date" id="when-d"><input class="rk-input" type="time" id="when-t" value="09:00" aria-label="at"></div>
+            <span class="rk-hint" id="when-hint">The browser's own date and time pickers, in Rekta's frame.</span>
+          </div>
+          <div class="rk-field">
+            <span class="rk-label" id="files-label">files</span>
+            <label class="rk-drop" id="drop" aria-labelledby="files-label"><input type="file" multiple><b>Drop files here</b><span>or choose them · nothing leaves your device</span></label>
+          </div>
+        </div>
+        <ul class="rk-rows files" id="files" aria-label="files" hidden></ul>
+        <p class="note">Toggle switches act at once, so they live outside forms that are sent; a checkbox waits for “save”. Segments are for two to five options you see at a glance; more go in a select.</p>
+      </section>
+
+      <section class="rk-sec sec-wide" id="data" aria-labelledby="data-title">
+        <h2 class="rk-group" id="data-title">Data, quiet until it matters.</h2>
+        <p>Charts in ink and grey: one axis, round ticks on hairlines, the accent only where you point. Every chart reads out its values under the pointer or with ← → once it has focus, and shows its numbers as a table. A status colour appears only where a value means that status.</p>
+        <p class="rk-kicker group-label">deploys a day</p>
+        <div class="chart" id="chart-line"></div>
+        <div class="chart-head"><p class="rk-kicker">build minutes</p>
+          <div class="rk-segments" role="radiogroup" aria-label="range">
+            <label><input type="radio" name="bars-range" value="week" checked>by weekday</label><label><input type="radio" name="bars-range" value="weeks">by week</label><label><input type="radio" name="bars-range" value="months">by month</label>
+          </div>
+        </div>
+        <div class="chart" id="chart-bars"></div>
+        <p class="rk-kicker group-label">meters</p>
+        <div class="meters">
+          <div><div class="rk-meter-head"><span>processor</span><b id="m-cpu-v">42%</b></div><div class="rk-meter" id="m-cpu" role="meter" aria-label="processor" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" style="--rk-v:.42"></div></div>
+          <div><div class="rk-meter-head"><span>memory</span><b>63%</b></div><div class="rk-meter" role="meter" aria-label="memory" aria-valuemin="0" aria-valuemax="100" aria-valuenow="63" style="--rk-v:.63"></div></div>
+          <div><div class="rk-meter-head"><span>disk on runner 3 · <span class="rk-tag" data-status="warning">waiting</span></span><b>81%</b></div><div class="rk-meter" role="meter" aria-label="disk on runner 3" aria-valuemin="0" aria-valuemax="100" aria-valuenow="81" aria-valuetext="81%, nearly full" data-status="warning" style="--rk-v:.81"></div></div>
+          <div><div class="rk-meter-head"><span>artifact storage · <span class="rk-tag" data-status="error">failed</span></span><b>100%</b></div><div class="rk-meter" role="meter" aria-label="artifact storage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-valuetext="100%, full: uploads fail" data-status="error" style="--rk-v:1"></div></div>
+        </div>
+        <p class="rk-kicker group-label">progress</p>
+        <div class="meters">
+          <div><div class="rk-meter-head"><span>importing 1,284 runs</span><b id="imp-v">0%</b></div><progress class="rk-progress" id="imp" max="100" value="0" aria-label="importing 1,284 runs"></progress></div>
+          <div><div class="rk-meter-head"><span>reindexing, length unknown</span></div><progress class="rk-progress" aria-label="reindexing"></progress></div>
+          <div class="signin">
+            <p class="rk-actions"><button class="rk-btn rk-btn--primary" type="button" id="signin">sign in</button></p>
+            <div class="rk-dots" id="dots" role="progressbar" aria-label="signing in" hidden><i></i><i></i><i></i><i></i><i></i></div>
+            <p class="rk-meta" id="signin-msg" aria-live="polite">The dots are for a wait that blocks everything else.</p>
+          </div>
+        </div>
       </section>
 
       <section class="rk-sec" id="look" aria-labelledby="look-title">
@@ -359,6 +552,33 @@
           <a class="rk-tile" href="#colour" data-goto="colour" data-status="error"><span class="rk-tile-word">failed</span></a>
           <a class="rk-tile" href="#colour" data-goto="colour" data-status="success"><span class="rk-tile-word">done</span></a>
         </div>
+      </section>
+
+      <section class="rk-sec sec-wide" id="icons" aria-labelledby="icons-title">
+        <h2 class="rk-group" id="icons-title">Fifty-one icons on one grid.</h2>
+        <p>20 × 20, a 1.6 stroke, square ends, in the text colour, so they follow every theme. An icon goes beside a word; alone, it has a name and a tooltip. The web takes <code>rekta.icons.svg</code> (a sprite: <code>&lt;use href="#rk-i-search"&gt;</code>); other platforms take <code>rekta.icons.json</code>, the same shapes as data.</p>
+        <!--@icon-gallery-->
+        <p class="note">Rest the pointer on one of the toolbar buttons in “desktop”: an icon alone gets its name as a tooltip, and its accessible name stays.</p>
+      </section>
+
+      <section class="rk-sec sec-wide" id="shell" aria-labelledby="shell-title">
+        <h2 class="rk-group" id="shell-title">An app, not a tab.</h2>
+        <p>Install this site and it opens in a window of its own, with Rekta's title bar where the browser's was. It works offline, and a new version waits until you say “reload”. A native shell (Electron, Tauri, a WebView) gets the same title bar by setting <code>data-rk-titlebar</code>.</p>
+        <div class="window" role="img" aria-label="An installed Rekta app: its title bar holds back, the app's name and the place's name, the window's own buttons at the end">
+          <div class="rk-titlebar rk-titlebar--inline">
+            <span class="rk-ab"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-back"/></svg></span>
+            <span class="rk-titlebar-name"><b>Rekta</b> Design</span><span class="rk-titlebar-place">Every value, a token.</span>
+            <span class="window-controls" aria-hidden="true"><i><svg class="rk-icon rk-icon--16"><use href="#rk-i-minus"/></svg></i><i><svg class="rk-icon rk-icon--16"><use href="#rk-i-stop"/></svg></i><i><svg class="rk-icon rk-icon--16"><use href="#rk-i-close"/></svg></i></span>
+          </div>
+          <div class="window-body"><p class="rk-kicker">tokens</p><p class="rk-title">Every value, a token.</p><p class="rk-facts">the same names on every platform</p></div>
+        </div>
+        <ul class="rk-rows" id="pwa-state">
+          <li>works offline<span class="rk-tag" id="pwa-offline">–</span></li>
+          <li>installed<span class="rk-tag" id="pwa-installed">–</span></li>
+          <li>connection<span class="rk-tag" id="pwa-online">–</span></li>
+        </ul>
+        <p class="rk-actions"><button class="rk-btn rk-btn--primary" type="button" id="pwa-install"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-install"/></svg>install</button><button class="rk-btn" type="button" id="pwa-check"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-refresh"/></svg>check for a new version</button></p>
+        <p class="note">Offline, the banner says so and the page keeps working from what it saved. A new version is announced by a toast with “reload”; it never replaces the page while you are in it.</p>
       </section>
 
       <section class="rk-sec sec-wide" id="platforms" aria-labelledby="platforms-title">
@@ -445,7 +665,7 @@
       <div class="rk-tiles">
         <div class="rk-tile rk-w2" data-status="success" style="--rk-i:0"><span class="rk-tile-word">done</span><span class="rk-stat"><b>1</b><span>token source for every platform</span></span></div>
         <div class="rk-tile" data-status="success" style="--rk-i:1"><span class="rk-tile-word">done</span><span class="rk-stat"><b>0</b><span>frameworks needed</span></span></div>
-        <div class="rk-tile" data-status="warning" style="--rk-i:2"><span class="rk-tile-word">waiting</span><span class="rk-stat"><b>next</b><span>live contract</span></span></div>
+        <div class="rk-tile" data-status="warning" style="--rk-i:2"><span class="rk-tile-word">waiting</span><span class="rk-stat"><b>next</b><span>date ranges</span></span></div>
       </div>
       <p class="rk-kicker group-label">new</p>
       <ul class="rk-rows defs">
@@ -455,6 +675,14 @@
         <li><b>density</b><span>Compact with a mouse, comfortable with touch, yours to choose.</span></li>
         <li><b>lists</b><span>Tables that sort and stack, selection the Metro way, splits, search and filters in the address.</span></li>
         <li><b>forms</b><span>Late checks, early corrections, a summary, server answers at the field, a guard against lost input.</span></li>
+      </ul>
+      <p class="rk-kicker group-label">unreleased, on its way</p>
+      <ul class="rk-rows defs">
+        <li><b>inputs</b><span>Select, combobox, the Metro toggle switch, stepper, slider, date and time, segments, a drop zone for files.</span></li>
+        <li><b>desktop</b><span>Tooltips, context menus, a tree, ordering by a grip, ten thousand lines, columns that size and hide, editing in place.</span></li>
+        <li><b>live and undo</b><span>Live regions that say how fresh they are and hold still while you look; an undo history behind Ctrl+Z.</span></li>
+        <li><b>data</b><span>Line and bar charts in ink and grey, meters, progress, Metro's flying dots.</span></li>
+        <li><b>app shell</b><span>Fifty-one icons, the title bar of an installed app, installable and offline.</span></li>
       </ul>
       <p class="rk-actions"><a class="rk-btn" href="#tokens">open the tokens</a></p>
     </div>
@@ -473,6 +701,7 @@
     <div class="rk-ab-selection" role="group" aria-label="selection">
       <span class="rk-ab-count" role="status">0 selected</span>
       <button class="rk-ab" id="sel-copy" type="button"><span>copy</span></button>
+      <button class="rk-ab" id="sel-archive" type="button"><span>archive</span></button>
       <button class="rk-ab" type="button" data-rk-clear><span>clear</span></button>
     </div>
   </div>
@@ -495,7 +724,11 @@
         <li>select another row, start the selection mode<span><kbd class="rk-key">Ctrl</kbd> + click</span></li>
         <li>select a range<span><kbd class="rk-key">Shift</kbd> + click</span></li>
         <li>select all rows (table focused)<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">A</kbd></span></li>
-        <li>undo what the toast reports<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd></span></li>
+        <li>undo the last action<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd></span></li>
+        <li>do it again<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Shift</kbd> <kbd class="rk-key">Z</kbd></span></li>
+        <li>the menu of a row or a file<span><kbd class="rk-key">Shift</kbd> <kbd class="rk-key">F10</kbd></span></li>
+        <li>edit a cell (table row focused)<span><kbd class="rk-key">F2</kbd></span></li>
+        <li>move an item by its grip<span><kbd class="rk-key">Space</kbd> <kbd class="rk-key">↑</kbd> <kbd class="rk-key">↓</kbd></span></li>
       </ul>
       <p class="rk-actions"><button class="rk-btn rk-btn--primary" value="ok">close</button></p>
     </form>

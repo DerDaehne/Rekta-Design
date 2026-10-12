@@ -6,6 +6,40 @@ A label above, the control, a hint below that turns into the error when
 there is one (see the Field component). Required fields carry no mark;
 an optional one says "(optional)" in its label (`rk-optional`).
 
+## Inputs
+
+Native where it can be: a select, a number, a date and a time are the
+platform's own controls in Rekta's frame (`rk-input`), so their pickers,
+keyboard handling and screen-reader support come for free. The rest are
+Rekta's own.
+
+| Need | Control | Notes |
+|---|---|---|
+| one of many, a list you know | `select.rk-input` | a chevron, the system's list |
+| one of many, a long list or one to search | combobox (`rk-combo`, `Rekta.combobox()`) | filters as you type; floats below like a menu; without `free`, keeps only a choice from its list |
+| two to five options seen at a glance | segments (`rk-segments`) | joined buttons, the chosen one in the accent; radios underneath |
+| on or off, acting at once | toggle switch (`rk-toggle`) | `role="switch"`; outside forms that are sent |
+| on or off, sent with a form | checkbox (`rk-switch`) | waits for "save" |
+| a whole number | stepper (`rk-stepper`) | − field +, repeats while held, says when its limit is reached |
+| a value on a scale | slider (`rk-range`) | the accent fills up to the value; an `<output>` shows it |
+| a date or a time | `input[type=date | time].rk-input` | the browser's own pickers |
+| files | drop zone (`rk-drop`, `Rekta.drop()`) | dashed until files are dragged over it; dropping files elsewhere never opens them |
+
+- **Toggle switch, the Metro way:** a square-cornered frame (2px
+  `text-primary`), the `accent` fill growing from the leading edge when
+  on, a solid ink bar as the thumb, and the state word ("on", "off")
+  beside it. It acts at once, so it never sits in a form that waits for
+  "save": use a checkbox there.
+- **Combobox:** ↓ or Alt+↓ opens, ↑ ↓ move, Enter chooses, Escape
+  closes, then clears (it never goes back while it has something to
+  close or clear). The current choice carries a check. A remote list
+  shows the loading line while it waits, and says so when it fails.
+- **Segments** are for options that fit on one line; more than five, or
+  long labels, go in a select.
+- **Files:** each file becomes a row with its size, a progress bar while
+  it uploads and its status; a file that is too large says why in its
+  row, never in a dialog.
+
 ## Check late, correct early
 
 - A field is checked when it is left after an edit, never while it is

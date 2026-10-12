@@ -27,7 +27,21 @@
      guard      unsaved input asks before it is left behind
      confirm    a short question in a sheet, the safe answer first
      disable    a control that cannot act now says why
-     start      the defaults for a page: prefs, press, sheets, arrival build-in
+     tips       a short ink label for a control, after a rest of the pointer or on keyboard focus
+     contextMenu a menu where the pointer is: a right click, a long press, Shift+F10
+     tree       a hierarchy that opens and closes, one tab stop
+     sortable   items reordered by their grip, with the pointer or the keyboard
+     virtual    a list of any length: only the rows in view exist
+     undoStack  actions that can be taken back and done again (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z)
+     live       a live region says how fresh it is, goes stale, and holds still while you look
+     chart      a line or bar chart in ink and grey: one axis, a tooltip at every point, a table of the numbers
+     icon       an icon from the sprite, decoration or an image with a name
+     titlebar   the title bar of an installed app: the drag area, back, the place's name
+     pwa        installable and offline: the service worker, the update toast, install()
+     combobox   a field with a list of choices that filters as you type
+     stepper    a number field between − and +, repeating while held
+     drop       a zone that takes dropped or chosen files
+     start      the defaults for a page: prefs, press, sheets, steppers, sliders, switches, arrival build-in
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
 export const version = '0.2.0';
@@ -378,7 +392,7 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
   const scrollers = (el) => [el, ...el.querySelectorAll('.rk-panorama, .rk-sec, .rk-split-list, .rk-split-detail, [data-rk-scroll]')];
   let current = home, item = null, params = '', index = 0, below = null, pushedItem = false, busy = Promise.resolve();
   const watchers = new Map();
-  const backButtons = () => document.querySelectorAll('.rk-ab-back[data-rk-back]');
+  const backButtons = () => document.querySelectorAll('.rk-ab-back[data-rk-back], .rk-titlebar [data-rk-back]');
   const showBack = () => backButtons().forEach((b) => { b.hidden = current === home && index === 0; });
   const rk = () => (history.state && history.state.rk) || {};
   function snapshot(opener) {
@@ -422,6 +436,7 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
       const f = focusTarget(to, state, back);
       if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f });
       if (onChange) onChange({ from: prev, to: name, back });
+      document.dispatchEvent(new CustomEvent('rk:placechange', { detail: { from: prev, to: name, back } }));
     };
     busy = busy.then(run, run);
     return busy;
@@ -839,7 +854,7 @@ export function toaster(region) {
     sr.textContent = `, ${windowSec()} seconds to${again ? ' undo' : ''}`;
     msg.appendChild(sr);
   }
-  function show(text, { key = text, undo = null, from = null, action = 'undo' } = {}) {
+  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null } = {}) {
     if (open && open.key === key && open.undo && undo) { open.update(text, undo); return open; }
     if (open) open.leave(false);
     const WIN = windowSec();
@@ -859,6 +874,11 @@ export function toaster(region) {
       const line = el.appendChild(document.createElement('span'));
       line.className = 'rk-toast-line'; line.setAttribute('aria-hidden', 'true');
       btn.addEventListener('click', () => leave(true));
+    } else if (act) {
+      // A plain action ("reload"): no countdown; the toast stays its usual time and holds like any other.
+      const btn = el.appendChild(document.createElement('button'));
+      btn.type = 'button'; btn.className = 'rk-toast-act'; btn.textContent = act.label;
+      btn.addEventListener('click', () => { leave(false); act.run(); });
     }
     say(msg, text, !!undo);
     const paint = () => { if (count) { count.textContent = left; el.style.setProperty('--_rk-left', left / WIN); } };
@@ -889,7 +909,7 @@ export function toaster(region) {
       }
     }
     const api = {
-      key, el,
+      key, el, action,
       leave,
       undo: undo ? () => leave(true) : null,
       update(t, u) { undo = u; say(msg, t, !!u, true); left = WIN; paint(); clearTimeout(timer); timer = 0; hold(); },
@@ -909,7 +929,7 @@ export function toaster(region) {
     open.leave(false); return true;
   });
   const offUndo = keys.on(25, (e) => {
-    if (!open || !open.undo || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || isEditable(e.target)) return false;
+    if (!open || !open.undo || open.action !== 'undo' || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || isEditable(e.target)) return false;
     open.undo(); return true;
   });
   return {
@@ -1184,6 +1204,15 @@ export function menu(trigger, el, { onSelect, summary = null } = {}) {
 // and a checkmark; it nudges where it is pressed (data-rk-press). Items a filter hides drop out. With an appbar, the
 // bar carries the selection in the mode (data-rk-selecting, .rk-ab-count, [data-rk-clear]).
 const selecting = new WeakMap();                                       // app bar → the selections in their mode
+function selectionMode(appbar, owner, mode, n) {
+  const modes = selecting.get(appbar) || new Set();
+  selecting.set(appbar, modes);
+  if (mode) modes.add(owner); else modes.delete(owner);
+  appbar.toggleAttribute('data-rk-selecting', modes.size > 0);
+  const c = appbar.querySelector('.rk-ab-count');
+  if (c && (mode || !modes.size)) c.textContent = `${n} selected`;
+  return modes.size > 0;
+}
 export function select(el, { items = ':scope > li, :scope > tr', onShow = null, onChange = null, appbar = null } = {}) {
   const list = () => [...el.querySelectorAll(items)];
   const visible = () => list().filter((i) => !i.hidden);
@@ -1212,12 +1241,7 @@ export function select(el, { items = ':scope > li, :scope > tr', onShow = null, 
     if (!n) mode = false;
     el.toggleAttribute('data-rk-selecting', mode);
     if (appbar) {
-      const modes = selecting.get(appbar) || new Set();
-      selecting.set(appbar, modes);
-      if (mode) modes.add(el); else modes.delete(el);
-      appbar.toggleAttribute('data-rk-selecting', modes.size > 0);
-      const c = appbar.querySelector('.rk-ab-count');
-      if (c && (mode || !modes.size)) c.textContent = `${n} selected`;
+      selectionMode(appbar, el, mode, n);
       if (!mode && appbar.contains(document.activeElement)) { const t = chosen()[0] || visible()[0]; if (t) t.focus(); }
     }
     if (onChange) onChange(chosen(), { mode });
@@ -1298,7 +1322,7 @@ export function select(el, { items = ':scope > li, :scope > tr', onShow = null, 
     refresh() { prepare(); sync(); },
     destroy() {
       el.removeEventListener('click', click); el.removeEventListener('keydown', key); offEsc();
-      if (appbar) { appbar.removeEventListener('click', clearClick); const modes = selecting.get(appbar); if (modes) { modes.delete(el); appbar.toggleAttribute('data-rk-selecting', modes.size > 0); } }
+      if (appbar) { appbar.removeEventListener('click', clearClick); selectionMode(appbar, el, false, 0); }
     },
   };
 }
@@ -1308,7 +1332,7 @@ export function select(el, { items = ':scope > li, :scope > tr', onShow = null, 
 // column, ascending then descending, with the rows moving to their new places (FLIP); onSort takes over for data
 // sorted elsewhere. With select (or a .rk-check cell in its rows), rows are selected the Metro way (select()). Cells
 // get data-label from their head for the stacked layout of a narrow place.
-export function table(el, { onSort, select: selectable = null, onShow = null, onSelect = null, appbar = null } = {}) {
+export function table(el, { onSort, select: selectable = null, onShow = null, onSelect = null, appbar = null, columns = null, edit = null } = {}) {
   const head = () => (el.tHead ? [...el.tHead.rows[0].cells] : []);
   const rows = () => (el.tBodies[0] ? [...el.tBodies[0].rows] : []);
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -1344,6 +1368,132 @@ export function table(el, { onSort, select: selectable = null, onShow = null, on
   label();
   const wantSelect = selectable !== null ? selectable : !!el.querySelector('tbody .rk-check');
   const sel = wantSelect && el.tBodies[0] ? select(el.tBodies[0], { items: ':scope > tr', onShow, onChange: onSelect, appbar }) : null;
+
+  // Columns: a handle on each head cell's trailing edge drags its width (← → by space-m, Shift: four times; a double
+  // click resets); hide(i) and show(i) take a column out and back. Both are remembered under columns.key.
+  const cols = columns ? (columns === true ? {} : columns) : null;
+  const saved = { w: {}, hidden: [] };
+  const store = { get() { try { return cols && cols.key ? JSON.parse(localStorage.getItem(cols.key) || 'null') : null; } catch { return null; } }, set() { try { if (cols && cols.key) localStorage.setItem(cols.key, JSON.stringify(saved)); } catch { /* this visit only */ } } };
+  const cells = (i) => [head()[i], ...rows().map((r) => r.cells[i])].filter(Boolean);
+  function fix() {
+    if (el.style.tableLayout === 'fixed') return;
+    head().forEach((th) => { if (!th.hidden && !th.style.width) th.style.width = `${th.offsetWidth}px`; });
+    el.style.tableLayout = 'fixed';
+  }
+  function setWidth(i, w, remember = true) {
+    const th = head()[i];
+    fix();
+    th.style.width = `${Math.round(Math.max(48, w))}px`;
+    const h = th.querySelector('.rk-col-handle');
+    if (h) h.setAttribute('aria-valuenow', String(Math.round(th.offsetWidth)));
+    if (remember) { saved.w[i] = th.offsetWidth; store.set(); }
+  }
+  function resetWidth(i) {
+    delete saved.w[i]; store.set();
+    if (!Object.keys(saved.w).length) { el.style.tableLayout = ''; head().forEach((th) => { th.style.width = ''; }); } else head()[i].style.width = '';
+  }
+  function hideCol(i, hidden = true) {
+    cells(i).forEach((c) => { c.hidden = hidden; });
+    saved.hidden = hidden ? [...new Set([...saved.hidden, i])] : saved.hidden.filter((x) => x !== i);
+    store.set();
+  }
+  let resizing = null;
+  const colDown = (e) => {
+    const h = e.target.closest('.rk-col-handle');
+    if (!h || e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    const th = h.closest('th');
+    resizing = { i: th.cellIndex, x: e.clientX, w: th.offsetWidth, h };
+    h.setPointerCapture(e.pointerId); h.setAttribute('data-rk-dragging', '');
+  };
+  const colMove = (e) => { if (resizing) setWidth(resizing.i, resizing.w + (e.clientX - resizing.x) * (getComputedStyle(el).direction === 'rtl' ? -1 : 1), false); };
+  const colUp = () => { if (!resizing) return; saved.w[resizing.i] = head()[resizing.i].offsetWidth; store.set(); resizing.h.removeAttribute('data-rk-dragging'); resizing = null; };
+  const colKey = (e) => {
+    const h = e.target.closest('.rk-col-handle');
+    if (!h) return;
+    const i = h.closest('th').cellIndex, step = (num('--rk-space-m') || 16) * (e.shiftKey ? 4 : 1), w = head()[i].offsetWidth;
+    if (e.key === 'ArrowRight') setWidth(i, w + step); else if (e.key === 'ArrowLeft') setWidth(i, w - step);
+    else if (e.key === 'Home') setWidth(i, 48); else return;
+    e.preventDefault();
+  };
+  const colDbl = (e) => { const h = e.target.closest('.rk-col-handle'); if (h) resetWidth(h.closest('th').cellIndex); };
+  if (cols) {
+    head().forEach((th) => {
+      if (th.classList.contains('rk-check') || th.querySelector('.rk-col-handle')) return;
+      const h = document.createElement('span');
+      h.className = 'rk-col-handle'; h.tabIndex = 0;
+      h.setAttribute('role', 'separator'); h.setAttribute('aria-orientation', 'vertical');
+      h.setAttribute('aria-label', `width of ${th.textContent.trim()}`);
+      th.appendChild(h);
+    });
+    const was = store.get();
+    if (was) { Object.entries(was.w || {}).forEach(([i, w]) => setWidth(+i, w)); (was.hidden || []).forEach((i) => hideCol(+i)); }
+    el.addEventListener('pointerdown', colDown); el.addEventListener('pointermove', colMove);
+    el.addEventListener('pointerup', colUp); el.addEventListener('pointercancel', colUp);
+    el.addEventListener('keydown', colKey); el.addEventListener('dblclick', colDbl);
+  }
+
+  // Editing: a cell with data-rk-edit edits in place on a double click, or F2 on its row (the row's first such cell).
+  // Enter or Tab keeps the value (Tab goes on to the next editable cell, Shift+Tab back), Escape puts the old one
+  // back. edit.onCommit(row, cell, value, old) may return a promise: the cell waits, and a refusal says why below it
+  // and keeps the field open.
+  let editing = null;
+  function startEdit(td) {
+    if (!edit || !td || editing) return;
+    const old = td.dataset.value !== undefined ? td.dataset.value : td.textContent.trim();
+    const input = document.createElement('input');
+    input.className = 'rk-input rk-cell-input'; input.value = old;
+    input.setAttribute('aria-label', `${td.dataset.label || head()[td.cellIndex].textContent.trim()}, ${td.parentElement.querySelector('th') ? td.parentElement.querySelector('th').textContent.trim() : ''}`);
+    editing = { td, old, input };
+    td.setAttribute('data-rk-editing', '');
+    td.replaceChildren(input);
+    input.focus(); input.select();
+    const onKey = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(old, true); }
+      else if (e.key === 'Tab') {
+        e.preventDefault();
+        const list = [...td.parentElement.querySelectorAll('td[data-rk-edit]')], next = list[list.indexOf(td) + (e.shiftKey ? -1 : 1)];
+        commit().then((ok) => { if (ok && next) startEdit(next); });
+      }
+    };
+    input.addEventListener('keydown', onKey);
+    input.addEventListener('blur', () => { if (editing && editing.input === input && !td.hasAttribute('aria-busy')) commit(); });
+  }
+  async function commit() {
+    if (!editing) return false;
+    const { td, old, input } = editing, value = input.value.trim();
+    if (value === old) { finish(old); return true; }
+    td.setAttribute('aria-busy', 'true'); input.readOnly = true;
+    const said = td.querySelector('.rk-cell-error'); if (said) said.remove();
+    try {
+      await (edit.onCommit ? edit.onCommit(td.parentElement, td, value, old) : null);
+      finish(value);
+      return true;
+    } catch (err) {
+      td.removeAttribute('aria-busy'); input.readOnly = false;
+      td.dataset.status = 'error'; input.setAttribute('aria-invalid', 'true');
+      const msg = document.createElement('span');
+      msg.className = 'rk-cell-error'; msg.id = uid('rk-cell-error'); msg.textContent = (err && err.message) || 'That value was not taken.';
+      td.appendChild(msg); input.setAttribute('aria-describedby', msg.id);
+      input.focus();
+      return false;
+    }
+  }
+  function finish(value, cancelled = false) {
+    if (!editing) return;
+    const { td } = editing;
+    editing = null;
+    td.removeAttribute('data-rk-editing'); td.removeAttribute('aria-busy'); delete td.dataset.status;
+    td.textContent = value; if (td.dataset.value !== undefined) td.dataset.value = value;
+    const row = td.parentElement;
+    if (row.tabIndex >= 0 || row.hasAttribute('tabindex')) row.focus({ preventScroll: true });
+    if (!cancelled) el.dispatchEvent(new CustomEvent('rk:edit', { bubbles: true, detail: { row, cell: td, value } }));
+  }
+  const editDbl = (e) => { const td = e.target.closest('td[data-rk-edit]'); if (td && el.contains(td) && !e.target.closest('input')) startEdit(td); };
+  const editKey = (e) => { if (e.key === 'F2' && e.target.matches('tr')) { e.preventDefault(); startEdit(e.target.querySelector('td[data-rk-edit]')); } };
+  if (edit) { el.addEventListener('dblclick', editDbl); el.addEventListener('keydown', editKey); }
+
   return {
     selected: () => (sel ? sel.selected() : []),
     only: (row, o) => sel && sel.only(row, o),
@@ -1351,8 +1501,17 @@ export function table(el, { onSort, select: selectable = null, onShow = null, on
     selectAll: () => sel && sel.selectAll(),
     get mode() { return sel ? sel.mode : false; },
     sort: (column, dir = 'ascending') => sort(head()[column], dir),
-    refresh() { label(); if (sel) sel.refresh(); },
-    destroy() { el.removeEventListener('click', click); if (sel) sel.destroy(); },
+    hide: (i) => hideCol(i, true), show: (i) => hideCol(i, false),
+    hidden: () => [...saved.hidden],
+    width: (i, w) => (w === undefined ? resetWidth(i) : setWidth(i, w)),
+    edit: (cell) => startEdit(cell),
+    refresh() { label(); saved.hidden.forEach((i) => cells(i).forEach((c) => { c.hidden = true; })); if (sel) sel.refresh(); },
+    destroy() {
+      el.removeEventListener('click', click); if (sel) sel.destroy();
+      el.removeEventListener('pointerdown', colDown); el.removeEventListener('pointermove', colMove); el.removeEventListener('pointerup', colUp);
+      el.removeEventListener('pointercancel', colUp); el.removeEventListener('keydown', colKey); el.removeEventListener('dblclick', colDbl);
+      el.removeEventListener('dblclick', editDbl); el.removeEventListener('keydown', editKey);
+    },
   };
 }
 
@@ -1431,6 +1590,16 @@ export function split(el, { key = null } = {}) {
   };
 }
 
+// How well a label matches what was typed: every typed word must start a word of the label or its keywords (3 when the
+// label starts with the text, 2 otherwise), or the label must contain the text (1); 0 is no match.
+const words = (t) => t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+function matchScore(label, keywords, q) {
+  if (!q) return 1;
+  const hay = words(`${label} ${keywords || ''}`), l = label.toLowerCase();
+  if (!words(q).every((w) => hay.some((h) => h.startsWith(w)))) return l.includes(q.toLowerCase()) ? 1 : 0;
+  return l.startsWith(q.toLowerCase()) ? 3 : 2;
+}
+
 // Palette ----------------------------------------------------------------------------------------------------------
 // palette(el, { items, trigger, router, shortcut }): go to a place or run a command, from a list that rises from the
 // app bar at every width. el is a .rk-palette holding an input and a list; items() returns { label, group, keys,
@@ -1447,13 +1616,7 @@ export function palette(el, { items = () => [], trigger = null, router = null, s
   list.setAttribute('role', 'listbox');
   if (trigger) { trigger.setAttribute('aria-haspopup', 'dialog'); trigger.setAttribute('aria-controls', el.id); trigger.setAttribute('aria-expanded', 'false'); }
   let shown = [], active = 0, opener = null;
-  const words = (t) => t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  function match(it, q) {
-    if (!q) return 1;
-    const hay = words(`${it.label} ${it.keywords || ''}`), label = it.label.toLowerCase();
-    if (!words(q).every((w) => hay.some((h) => h.startsWith(w)))) return label.includes(q.toLowerCase()) ? 1 : 0;
-    return label.startsWith(q.toLowerCase()) ? 3 : 2;
-  }
+  const match = (it, q) => matchScore(it.label, it.keywords, q);
   function render() {
     const q = input.value.trim(), all = (typeof items === 'function' ? items() : items) || [];
     const groups = [];
@@ -1749,13 +1912,1023 @@ export function guard(el, { router = null, what = 'This form' } = {}) {
   return { get dirty() { return changed().length > 0; }, changed, clean, restore, destroy() { removeEventListener('beforeunload', unload); off(); } };
 }
 
+// Tooltip ----------------------------------------------------------------------------------------------------------
+// tips(): a short ink label for a control that has one (data-rk-tip="text"; the control's aria-keyshortcuts adds
+// its keys), or for text its box cuts off (data-rk-tip="overflow": the element's own text, only while it is cut). It
+// shows after tip-delay under a mouse or pen, at once after another tip or on keyboard focus, never on touch;
+// Escape, a press, scrolling or leaving hide it. It repeats or completes what the control says: never the only way to
+// learn what it does. start() turns it on.
+const tip = { el: null, for: null, timer: 0, hid: 0, described: null, on: false };
+const KEY_NAMES = { Control: 'Ctrl', Meta: '⌘', Alt: 'Alt', Shift: 'Shift', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' };
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+function shortcutText(el) {
+  const all = (el.getAttribute('aria-keyshortcuts') || '').split(/\s+/).filter(Boolean);
+  const pick = all.find((k) => (isMac ? /Meta/.test(k) : !/Meta/.test(k))) || all[0];
+  return pick ? pick.split('+').map((k) => KEY_NAMES[k] || k.toUpperCase()).join(isMac ? '' : ' ') : '';
+}
+function tipText(el) {
+  const t = el.getAttribute('data-rk-tip');
+  if (t === 'overflow') return el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1 ? el.textContent.trim() : '';
+  return t || '';
+}
+function placeTip(t, anchor) {
+  const a = anchor.getBoundingClientRect(), gap = 6, edge = num('--rk-space-s') || 8;
+  t.style.left = '0px'; t.style.top = '0px';
+  const w = t.offsetWidth, h = t.offsetHeight, vw = document.documentElement.clientWidth;
+  const above = a.top - gap - h >= edge;
+  t.style.left = `${Math.round(Math.min(Math.max(edge, a.left + a.width / 2 - w / 2), vw - w - edge))}px`;
+  t.style.top = `${Math.round(above ? a.top - gap - h : a.bottom + gap)}px`;
+  t.dataset.rkSide = above ? 'above' : 'below';
+}
+function showTip(el, given = null) {
+  clearTimeout(tip.timer); tip.timer = 0;
+  const text = given || tipText(el), keysText = given ? '' : shortcutText(el);
+  if (!text || !el.isConnected) return;
+  if (tip.for && tip.for !== el) hideTip(false);
+  if (!tip.el) {
+    tip.el = document.createElement('div');
+    tip.el.className = 'rk-tip'; tip.el.id = 'rk-tip'; tip.el.setAttribute('role', 'tooltip');
+    if (canPopover) tip.el.setAttribute('popover', 'manual'); else tip.el.hidden = true;
+    (document.querySelector('.rk') || document.body).appendChild(tip.el);
+  }
+  tip.el.replaceChildren(text);
+  if (keysText) { const k = document.createElement('span'); k.className = 'rk-key'; k.textContent = keysText; tip.el.append(' ', k); }
+  openFloat(tip.el); placeTip(tip.el, el);
+  const name = (el.getAttribute('aria-label') || el.textContent || '').trim();
+  if (text !== name) { tip.described = el.getAttribute('aria-describedby'); el.setAttribute('aria-describedby', `${tip.described ? `${tip.described} ` : ''}rk-tip`); }
+  else tip.described = undefined;
+  tip.for = el;
+}
+function hideTip(remember = true) {
+  clearTimeout(tip.timer); tip.timer = 0;
+  if (!tip.for) return;
+  const el = tip.for;
+  if (tip.described !== undefined) { if (tip.described) el.setAttribute('aria-describedby', tip.described); else el.removeAttribute('aria-describedby'); }
+  closeFloat(tip.el); tip.for = null;
+  if (remember) tip.hid = Date.now();
+}
+function tips() {
+  if (tip.on) return { destroy() {} };
+  tip.on = true;
+  const over = (e) => {
+    if (e.pointerType === 'touch') return;
+    const el = e.target.closest && e.target.closest('[data-rk-tip]');
+    if (!el || el === tip.for) return;
+    clearTimeout(tip.timer);
+    const wait = ms('--rk-duration-tip-delay');
+    if (tip.for || Date.now() - tip.hid < wait) showTip(el); else tip.timer = setTimeout(() => showTip(el), wait);
+  };
+  const out = (e) => {
+    const el = e.target.closest && e.target.closest('[data-rk-tip]');
+    if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;
+    if (tip.for === el || tip.timer) hideTip();
+  };
+  const focus = (e) => { const el = e.target.closest && e.target.closest('[data-rk-tip]'); if (el && e.target.matches(':focus-visible')) showTip(el); };
+  const blur = (e) => { if (tip.for && tip.for.contains(e.target)) hideTip(); };
+  const away = () => hideTip();
+  const offEsc = keys.on(45, (e) => { if (e.key !== 'Escape' || !tip.for) return false; hideTip(); return true; });
+  document.addEventListener('pointerover', over); document.addEventListener('pointerout', out);
+  document.addEventListener('focusin', focus); document.addEventListener('focusout', blur);
+  document.addEventListener('pointerdown', away, true); addEventListener('scroll', away, true); addEventListener('blur', away);
+  return {
+    destroy() {
+      tip.on = false; hideTip(); offEsc();
+      document.removeEventListener('pointerover', over); document.removeEventListener('pointerout', out);
+      document.removeEventListener('focusin', focus); document.removeEventListener('focusout', blur);
+      document.removeEventListener('pointerdown', away, true); removeEventListener('scroll', away, true); removeEventListener('blur', away);
+    },
+  };
+}
+
+// Context menu ------------------------------------------------------------------------------------------------------
+// placeAt(el, x, y): a floating surface at a point (a context menu at the pointer), turned to stay in the viewport.
+function placeAt(el, x, y) {
+  const edge = num('--rk-space-s') || 8;
+  el.style.left = '0px'; el.style.top = '0px';
+  const w = el.offsetWidth, h = el.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
+  const left = x + w > vw - edge ? Math.max(edge, x - w) : x, top = y + h > vh - edge ? Math.max(edge, y - h) : y;
+  el.style.left = `${Math.round(left)}px`; el.style.top = `${Math.round(top)}px`;
+  el.dataset.rkSide = top < y ? 'above' : 'below';
+}
+// The keys of an open menu: ↑ ↓ wrap, Home End, a letter jumps; Escape and Tab close.
+function menuKeys(e, list, close) {
+  const i = list.indexOf(document.activeElement), go = (k) => { if (list.length) list[(k + list.length) % list.length].focus(); };
+  if (e.key === 'ArrowDown') { e.preventDefault(); go(i + 1); } else if (e.key === 'ArrowUp') { e.preventDefault(); go(i < 0 ? -1 : i - 1); }
+  else if (e.key === 'Home') { e.preventDefault(); go(0); } else if (e.key === 'End') { e.preventDefault(); go(-1); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); } else if (e.key === 'Tab') { e.preventDefault(); close(true); }
+  else if (e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const k = e.key.toLowerCase(), hit = [...list.slice(i + 1), ...list.slice(0, i + 1)].find((it) => it.textContent.trim().toLowerCase().startsWith(k));
+    if (hit) hit.focus();
+  }
+}
+// contextMenu(scope, el, { target, onOpen, onSelect }): a menu opened where the pointer is: a right click, a long
+// press on touch (long-press), or Shift+F10 or the context-menu key on a focused target, then below it. target picks
+// what has a menu inside scope; onOpen(target, event) prepares the menu for it (return false to leave the browser's
+// own); onSelect(item, target) acts. Keys as in a menu; Escape or a choice returns focus to the target.
+export function contextMenu(scope, el, { target = '[tabindex], a, button', onOpen = null, onSelect = null } = {}) {
+  el.id = el.id || uid('rk-context');
+  el.setAttribute('role', 'menu');
+  // Manual: the press that opens it has already happened, so the browser's light dismiss would close it at once.
+  if (canPopover) el.setAttribute('popover', 'manual'); else el.hidden = true;
+  el.classList.add('rk-float');
+  let current = null, hold = 0, start = null, swallow = false;
+  const items = () => [...el.querySelectorAll('.rk-menu-item')].filter((i) => i.getClientRects().length);
+  function openAt(t, x, y, e) {
+    if (onOpen && onOpen(t, e) === false) return false;
+    current = t;
+    openFloat(el); placeAt(el, x, y);
+    const first = items().find((i) => i.getAttribute('aria-disabled') !== 'true') || items()[0];
+    if (first) first.focus();
+    return true;
+  }
+  function close(refocus = true) {
+    if (!isOpen(el)) return;
+    closeFloat(el);
+    if (refocus && current && current.isConnected) { const f = current.matches('[tabindex], a, button, input') ? current : current.querySelector('[tabindex], a, button'); if (f) f.focus({ preventScroll: true }); }
+  }
+  const find = (n) => { const t = n && n.closest && n.closest(target); return t && scope.contains(t) ? t : null; };
+  const atElement = (t) => { const r = t.getBoundingClientRect(); return [r.left + Math.min(24, r.width / 2), r.top + Math.min(r.height, 32)]; };
+  const ctx = (e) => {
+    const t = find(e.target);
+    if (!t || (isOpen(el) && current === t && hold === -1)) { if (t) e.preventDefault(); return; }
+    const r = t.getBoundingClientRect(), inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    const [x, y] = inside ? [e.clientX, e.clientY] : atElement(t);
+    if (openAt(t, x, y, e)) e.preventDefault();
+  };
+  const keydown = (e) => {
+    if (!(e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) return;
+    const t = find(document.activeElement);
+    if (!t) return;
+    e.preventDefault();
+    const [x, y] = atElement(t);
+    openAt(t, x, y, e);
+  };
+  const down = (e) => {
+    if (e.pointerType !== 'touch') return;
+    const t = find(e.target);
+    if (!t) return;
+    start = { x: e.clientX, y: e.clientY, t };
+    clearTimeout(hold);
+    hold = setTimeout(() => { hold = -1; swallow = true; openAt(t, start.x, start.y, e); }, ms('--rk-duration-long-press') || 500);
+  };
+  const move = (e) => { if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) { clearTimeout(hold); hold = 0; start = null; } };
+  const up = () => { if (hold > 0) clearTimeout(hold); hold = 0; start = null; };
+  const click = (e) => { if (swallow) { swallow = false; e.preventDefault(); e.stopPropagation(); } };
+  const key = (e) => menuKeys(e, items(), close);
+  const choose = (e) => {
+    const item = e.target.closest('.rk-menu-item');
+    if (!item || item.getAttribute('aria-disabled') === 'true') { if (item) e.preventDefault(); return; }
+    const t = current;
+    close(true);
+    if (onSelect) onSelect(item, t);
+  };
+  const outside = (e) => { if (isOpen(el) && !el.contains(e.target)) close(false); };
+  el.addEventListener('focusout', (e) => { if (isOpen(el) && e.relatedTarget && !el.contains(e.relatedTarget)) close(false); });
+  const away = (e) => { if (isOpen(el) && !(e.target instanceof Node && el.contains(e.target))) close(false); };
+  scope.addEventListener('contextmenu', ctx);
+  scope.addEventListener('keydown', keydown);
+  scope.addEventListener('pointerdown', down);
+  scope.addEventListener('pointermove', move);
+  for (const ev of ['pointerup', 'pointercancel']) scope.addEventListener(ev, up);
+  scope.addEventListener('click', click, true);
+  el.addEventListener('keydown', key);
+  el.addEventListener('click', choose);
+  document.addEventListener('pointerdown', outside, true);
+  addEventListener('scroll', away, true); addEventListener('resize', away); addEventListener('blur', away);
+  return {
+    open(t) { const [x, y] = atElement(t); return openAt(t, x, y, null); },
+    close,
+    get target() { return current; },
+    destroy() {
+      scope.removeEventListener('contextmenu', ctx); scope.removeEventListener('keydown', keydown); scope.removeEventListener('pointerdown', down);
+      scope.removeEventListener('pointermove', move); scope.removeEventListener('click', click, true);
+      for (const ev of ['pointerup', 'pointercancel']) scope.removeEventListener(ev, up);
+      el.removeEventListener('keydown', key); el.removeEventListener('click', choose);
+      document.removeEventListener('pointerdown', outside, true); removeEventListener('scroll', away, true); removeEventListener('resize', away); removeEventListener('blur', away);
+    },
+  };
+}
+
+// Tree -------------------------------------------------------------------------------------------------------------
+// tree(el, { onShow, onToggle }): a hierarchy (ul.rk-tree of li, each its row first, then a ul of children). A click
+// selects an item and shows it; the chevron or a double click opens and closes it. Keys: ↑ ↓, → opens or goes in,
+// ← closes or goes up, Home End, Enter or Space shows, * opens the siblings, a letter jumps. One tab stop.
+export function tree(el, { onShow = null, onToggle = null } = {}) {
+  el.setAttribute('role', 'tree');
+  function prepare(ul, level) {
+    for (const li of ul.children) {
+      if (li.tagName !== 'LI') continue;
+      li.setAttribute('role', 'treeitem'); li.setAttribute('aria-level', String(level));
+      li.style.setProperty('--_rk-level', String(level - 1));
+      let row = li.firstElementChild;
+      if (!row || row.tagName === 'UL') { row = document.createElement('span'); li.prepend(row); }
+      row.classList.add('rk-tree-row');
+      const sub = li.querySelector(':scope > ul');
+      if (!row.querySelector(':scope > .rk-tree-twisty')) { const tw = document.createElement('span'); tw.className = 'rk-tree-twisty'; tw.setAttribute('aria-hidden', 'true'); row.prepend(tw); }
+      if (sub) {
+        sub.setAttribute('role', 'group');
+        if (!li.hasAttribute('aria-expanded')) li.setAttribute('aria-expanded', 'false');
+        sub.hidden = li.getAttribute('aria-expanded') !== 'true';
+        prepare(sub, level + 1);
+      } else li.removeAttribute('aria-expanded');
+      if (!li.hasAttribute('aria-selected')) li.setAttribute('aria-selected', 'false');
+      if (li.tabIndex !== 0) li.tabIndex = -1;
+    }
+  }
+  prepare(el, 1);
+  const all = () => [...el.querySelectorAll('[role=treeitem]')];
+  const shownItems = () => all().filter((li) => !li.parentElement.closest('[role=group][hidden]'));
+  const roving = (li) => { for (const x of all()) x.tabIndex = x === li ? 0 : -1; };
+  roving(all().find((li) => li.getAttribute('aria-selected') === 'true') || all()[0]);
+  const rowOf = (li) => li.querySelector(':scope > .rk-tree-row');
+  function expand(li, open) {
+    const sub = li.querySelector(':scope > ul');
+    if (!sub || (li.getAttribute('aria-expanded') === 'true') === open) return;
+    li.setAttribute('aria-expanded', String(open));
+    sub.hidden = !open;
+    const d = ms('--rk-duration-short');
+    if (open && d) sub.animate([{ opacity: 0, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'none' }], { duration: d, easing: css('--rk-ease-in') });
+    if (onToggle) onToggle(li, open);
+  }
+  function choose(li, show = true) {
+    for (const x of all()) x.setAttribute('aria-selected', String(x === li));
+    roving(li);
+    if (show && onShow) onShow(li);
+  }
+  const click = (e) => {
+    const row = e.target.closest('.rk-tree-row'), li = row && row.parentElement;
+    if (!li || !el.contains(li)) return;
+    if (e.target.closest('a[href]')) e.preventDefault();
+    if (e.target.closest('.rk-tree-twisty') && li.hasAttribute('aria-expanded')) { expand(li, li.getAttribute('aria-expanded') !== 'true'); roving(li); li.focus({ preventScroll: true }); return; }
+    choose(li); li.focus({ preventScroll: true });
+  };
+  const dbl = (e) => { const row = e.target.closest('.rk-tree-row'), li = row && row.parentElement; if (li && li.hasAttribute('aria-expanded') && !e.target.closest('.rk-tree-twisty')) expand(li, li.getAttribute('aria-expanded') !== 'true'); };
+  const key = (e) => {
+    const li = e.target.closest('[role=treeitem]');
+    if (!li || e.target !== li || e.altKey || e.ctrlKey || e.metaKey) return;
+    const list = shownItems(), i = list.indexOf(li), go = (x) => { if (x) { roving(x); x.focus(); } };
+    const open = li.getAttribute('aria-expanded');
+    if (e.key === 'ArrowDown') go(list[i + 1]);
+    else if (e.key === 'ArrowUp') go(list[i - 1]);
+    else if (e.key === 'Home') go(list[0]);
+    else if (e.key === 'End') go(list[list.length - 1]);
+    else if (e.key === 'ArrowRight') { if (open === 'false') expand(li, true); else if (open === 'true') go(li.querySelector(':scope > ul > li')); else return; }
+    else if (e.key === 'ArrowLeft') { if (open === 'true') expand(li, false); else go(li.parentElement.closest('[role=treeitem]')); }
+    else if (e.key === 'Enter' || e.key === ' ') choose(li);
+    else if (e.key === '*') [...li.parentElement.children].forEach((x) => expand(x, true));
+    else if (e.key.length === 1 && /\S/.test(e.key)) {
+      const k = e.key.toLowerCase(), hit = [...list.slice(i + 1), ...list.slice(0, i + 1)].find((x) => rowOf(x).textContent.trim().toLowerCase().startsWith(k));
+      go(hit); if (!hit) return;
+    } else return;
+    e.preventDefault();
+  };
+  el.addEventListener('click', click); el.addEventListener('dblclick', dbl); el.addEventListener('keydown', key);
+  return {
+    expand, select: choose,
+    expandAll(open = true) { all().forEach((li) => expand(li, open)); },
+    selected: () => all().find((li) => li.getAttribute('aria-selected') === 'true') || null,
+    refresh() { prepare(el, 1); },
+    destroy() { el.removeEventListener('click', click); el.removeEventListener('dblclick', dbl); el.removeEventListener('keydown', key); },
+  };
+}
+
+// Sortable ---------------------------------------------------------------------------------------------------------
+// sortable(list, { items, handle, onMove }): items reordered by dragging their grip (.rk-grip, a button): the item
+// lifts as a floating surface, the others make room, and on release everything settles (FLIP). Keys on the grip:
+// Space or Enter picks the item up, ↑ ↓ move it, Space or Enter puts it down, Escape puts it back; Alt+↑ ↓ moves it
+// at once. Each move is said in a live region. onMove(from, to, item) after a move.
+export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onMove = null } = {}) {
+  const all = () => [...list.querySelectorAll(items)];
+  const itemOf = (n) => all().find((it) => it.contains(n)) || null;
+  const live = document.createElement('span');
+  live.className = 'rk-sr'; live.setAttribute('role', 'status');
+  list.after(live);
+  const say = (t) => { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
+  const name = (it) => (it.querySelector('b, a, span:not(.rk-grip)') || it).textContent.trim();
+  let drag = null, grabbed = null, moving = false;
+  function flip(change) {
+    const els = all(), before = new Map(els.map((x) => [x, x.getBoundingClientRect().top]));
+    change();
+    const d = ms('--rk-duration-short');
+    if (!d) return;
+    for (const x of els) { const dy = before.get(x) - x.getBoundingClientRect().top; if (dy) x.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') }); }
+  }
+  function moveTo(item, to) {
+    const els = all(), from = els.indexOf(item);
+    if (to === from || to < 0 || to >= els.length) return false;
+    const grip = item.querySelector(handle), had = grip && document.activeElement === grip;
+    moving = true;                                                     // moving the node blurs it for a moment
+    flip(() => { const rest = els.filter((x) => x !== item); if (to >= rest.length) rest[rest.length - 1].after(item); else rest[to].before(item); });
+    if (had) grip.focus({ preventScroll: true });
+    moving = false;
+    if (onMove) onMove(from, to, item);
+    return true;
+  }
+  const down = (e) => {
+    const grip = e.target.closest(handle), item = grip && itemOf(grip);
+    if (!item || e.button !== 0 || grabbed) return;
+    e.preventDefault();
+    const els = all();
+    drag = { item, grip, id: e.pointerId, y: e.clientY, from: els.indexOf(item), to: els.indexOf(item), rects: els.map((x) => x.getBoundingClientRect()), els, moved: false };
+    grip.setPointerCapture(e.pointerId);
+  };
+  const move = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved) { if (Math.abs(dy) < 4) return; drag.moved = true; drag.item.setAttribute('data-rk-dragging', ''); list.setAttribute('data-rk-sorting', ''); }
+    drag.item.style.transform = `translateY(${dy}px)`;
+    const r = drag.rects[drag.from], mid = r.top + r.height / 2 + dy, h = r.height + (drag.rects[1] ? Math.max(0, drag.rects[1].top - drag.rects[0].bottom) : 0);
+    let to = drag.from;
+    drag.rects.forEach((x, i) => { const m = x.top + x.height / 2; if (i > drag.from && mid > m) to = i; if (i < drag.from && mid < m && to === drag.from) to = i; });
+    if (to < drag.from) { const first = drag.rects.findIndex((x, i) => i < drag.from && mid < x.top + x.height / 2); to = first; }
+    drag.to = to;
+    drag.els.forEach((x, i) => { if (x === drag.item) return; const shift = drag.from < to && i > drag.from && i <= to ? -h : drag.from > to && i >= to && i < drag.from ? h : 0; x.style.transform = shift ? `translateY(${shift}px)` : ''; });
+  };
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { item, from, to, moved, els } = drag, cancel = e.type === 'pointercancel';
+    drag = null;
+    if (!moved) return;
+    const before = new Map(els.map((x) => [x, x.getBoundingClientRect().top]));
+    els.forEach((x) => { x.style.transform = ''; });
+    item.removeAttribute('data-rk-dragging'); list.removeAttribute('data-rk-sorting');
+    if (!cancel && to !== from) { const rest = els.filter((x) => x !== item); if (to >= rest.length) rest[rest.length - 1].after(item); else rest[to].before(item); }
+    const d = ms('--rk-duration-short');
+    if (d) for (const x of els) { const dy = before.get(x) - x.getBoundingClientRect().top; if (dy) x.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') }); }
+    if (!cancel && to !== from) { if (onMove) onMove(from, to, item); say(`${name(item)}: position ${to + 1} of ${els.length}.`); }
+  };
+  const key = (e) => {
+    const grip = e.target.closest(handle), item = grip && itemOf(grip);
+    if (!item) return;
+    const els = all(), i = els.indexOf(item);
+    if (grabbed === item) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(`position ${all().indexOf(item) + 1} of ${els.length}`); }
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); grabbed.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(`${name(item)} put down at position ${i + 1} of ${els.length}.`); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); moveTo(item, +item.dataset.rkFrom); item.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(`${name(item)} put back.`); }
+      return;
+    }
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(`${name(item)}: position ${all().indexOf(item) + 1} of ${els.length}.`); return; }
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault(); grabbed = item; item.dataset.rkFrom = String(i); item.setAttribute('data-rk-grabbed', ''); grip.setAttribute('aria-pressed', 'true');
+      say(`${name(item)} picked up, position ${i + 1} of ${els.length}. ↑ ↓ to move, Space to put down, Escape to put back.`);
+    }
+  };
+  const blur = (e) => { if (grabbed && !moving && !grabbed.contains(e.relatedTarget)) { grabbed.removeAttribute('data-rk-grabbed'); const g = grabbed.querySelector(handle); if (g) g.setAttribute('aria-pressed', 'false'); grabbed = null; } };
+  function prepare() { for (const it of all()) { const g = it.querySelector(handle); if (g) { g.setAttribute('aria-pressed', 'false'); if (!g.getAttribute('aria-label')) g.setAttribute('aria-label', `move ${name(it)}`); } } }
+  prepare();
+  list.addEventListener('pointerdown', down); list.addEventListener('pointermove', move);
+  list.addEventListener('pointerup', end); list.addEventListener('pointercancel', end);
+  list.addEventListener('keydown', key); list.addEventListener('focusout', blur);
+  return {
+    move: moveTo, refresh: prepare,
+    destroy() {
+      list.removeEventListener('pointerdown', down); list.removeEventListener('pointermove', move); list.removeEventListener('pointerup', end);
+      list.removeEventListener('pointercancel', end); list.removeEventListener('keydown', key); list.removeEventListener('focusout', blur); live.remove();
+    },
+  };
+}
+
+// Virtual list -----------------------------------------------------------------------------------------------------
+// virtual(el, { count, render, onShow, onChange, appbar, label }): a list of any length in a .rk-virtual scroller
+// with a bounded height. Only the rows in view (and a few more) exist; render(i, row) fills a row. It is one tab stop
+// (a listbox; the active row by aria-activedescendant) chosen the Metro way like select(): a click selects and shows,
+// Ctrl/Cmd+click starts the selection mode, Shift takes a range, Ctrl/Cmd+A all, Escape ends the mode. ↑ ↓ PageUp
+// PageDown Home End move. The row height is the density's.
+export function virtual(el, { count = 0, render, onShow = null, onChange = null, appbar = null, label = '' } = {}) {
+  const id = uid('rk-virtual');
+  el.setAttribute('role', 'listbox'); el.setAttribute('aria-multiselectable', 'true'); el.tabIndex = 0;
+  if (label) el.setAttribute('aria-label', label);
+  const body = document.createElement('div');
+  body.className = 'rk-virtual-body';
+  el.replaceChildren(body);
+  let n = count, h = 0, first = 0, last = 0, active = -1, anchor = -1, mode = false, frame = 0;
+  const sel = new Set();
+  function paint(force = false) {
+    frame = 0;
+    h = px('--rk-row-height') || 44;
+    body.style.height = `${n * h}px`;
+    const top = el.scrollTop, vh = el.clientHeight || 400, over = 6;
+    const a = Math.max(0, Math.floor(top / h) - over), b = Math.min(n, Math.ceil((top + vh) / h) + over);
+    if (force || a !== first || b !== last) {
+      const rows = [];
+      for (let i = a; i < b; i++) {
+        const row = document.createElement('div');
+        row.className = 'rk-virtual-row'; row.id = `${id}-${i}`; row.dataset.index = String(i);
+        row.setAttribute('role', 'option'); row.setAttribute('aria-posinset', String(i + 1)); row.setAttribute('aria-setsize', String(n));
+        row.setAttribute('data-rk-press', '');
+        row.style.top = `${i * h}px`;
+        render(i, row);
+        rows.push(row);
+      }
+      body.replaceChildren(...rows);
+      first = a; last = b;
+    }
+    mark();
+  }
+  function mark() {
+    for (const row of body.children) {
+      const i = +row.dataset.index;
+      row.setAttribute('aria-selected', String(sel.has(i)));
+      row.toggleAttribute('data-rk-active', i === active);
+    }
+    if (active >= first && active < last) el.setAttribute('aria-activedescendant', `${id}-${active}`); else el.removeAttribute('aria-activedescendant');
+  }
+  const queue = () => { if (!frame) frame = requestAnimationFrame(() => paint()); };
+  function sync() {
+    if (!sel.size) mode = false;
+    el.toggleAttribute('data-rk-selecting', mode);
+    if (appbar) selectionMode(appbar, el, mode, sel.size);
+    mark();
+    const list = [...sel].sort((x, y) => x - y);
+    if (onChange) onChange(list, { mode });
+    el.dispatchEvent(new CustomEvent('rk:selectionchange', { bubbles: true, detail: { count: sel.size, mode, indices: list } }));
+  }
+  function reveal(i) {
+    const top = i * h, bottom = top + h;
+    if (top < el.scrollTop) el.scrollTop = top; else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight;
+    paint();
+  }
+  function only(i, { show = true } = {}) { mode = false; sel.clear(); if (i >= 0) sel.add(i); active = anchor = i; sync(); if (show && i >= 0 && onShow) onShow(i); }
+  function toggle(i) { mode = true; if (sel.has(i)) sel.delete(i); else sel.add(i); active = anchor = i; sync(); }
+  function range(i, add) { const a = anchor < 0 ? i : anchor; if (!add) sel.clear(); for (let k = Math.min(a, i); k <= Math.max(a, i); k++) sel.add(k); mode = sel.size > 1; active = i; sync(); }
+  function act(i, { add = false, extend = false } = {}) { if (extend) range(i, add || mode); else if (add || mode) toggle(i); else only(i); }
+  const click = (e) => {
+    const row = e.target.closest('.rk-virtual-row');
+    if (!row || e.button !== 0) return;
+    act(+row.dataset.index, { add: e.ctrlKey || e.metaKey, extend: e.shiftKey });
+    el.focus({ preventScroll: true });
+  };
+  const key = (e) => {
+    if (e.target !== el || e.altKey) return;
+    const page = Math.max(1, Math.floor(el.clientHeight / h) - 1);
+    const to = { ArrowDown: active + 1, ArrowUp: active - 1, PageDown: active + page, PageUp: active - page, Home: 0, End: n - 1 }[e.key];
+    if (to !== undefined) {
+      e.preventDefault();
+      const i = Math.max(0, Math.min(n - 1, active < 0 ? 0 : to));
+      if (e.shiftKey) range(i, mode); else { active = i; mark(); }
+      reveal(i);
+      return;
+    }
+    if ((e.key === ' ' || e.key === 'Enter') && active >= 0) { e.preventDefault(); act(active, { add: e.ctrlKey || e.metaKey, extend: e.shiftKey }); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); mode = true; for (let i = 0; i < n; i++) sel.add(i); sync(); }
+  };
+  const focus = () => { if (active < 0 && n) { active = Math.min(n - 1, Math.floor(el.scrollTop / (h || 1))); mark(); } };
+  const offEsc = keys.on(20, (e) => {
+    if (e.key !== 'Escape' || !mode || (!el.contains(e.target) && !(appbar && appbar.contains(e.target)))) return false;
+    sel.clear(); sync(); return true;
+  });
+  const clearClick = (e) => { if (e.target.closest('[data-rk-clear]') && mode) { sel.clear(); sync(); } };
+  const ro = new ResizeObserver(() => paint(true));
+  ro.observe(el);
+  const dens = () => paint(true);
+  el.addEventListener('scroll', queue, { passive: true });
+  el.addEventListener('click', click); el.addEventListener('keydown', key); el.addEventListener('focus', focus);
+  document.addEventListener('rk:prefs', dens);
+  if (appbar) appbar.addEventListener('click', clearClick);
+  paint(true);
+  return {
+    refresh(count = n) { n = count; for (const i of [...sel]) if (i >= n) sel.delete(i); if (active >= n) active = n - 1; paint(true); sync(); },
+    scrollTo(i) { active = i; reveal(i); },
+    selected: () => [...sel].sort((x, y) => x - y),
+    only, clear() { sel.clear(); sync(); },
+    get mode() { return mode; },
+    get count() { return n; },
+    destroy() {
+      ro.disconnect(); offEsc(); el.removeEventListener('scroll', queue); el.removeEventListener('click', click); el.removeEventListener('keydown', key);
+      el.removeEventListener('focus', focus); document.removeEventListener('rk:prefs', dens);
+      if (appbar) { appbar.removeEventListener('click', clearClick); selectionMode(appbar, el, false, 0); }
+    },
+  };
+}
+
+// Undo history -----------------------------------------------------------------------------------------------------
+// undoStack({ toaster, limit }): actions that can be taken back. do({ label, run, undo, redo }) runs and remembers one;
+// its toast offers undo. Ctrl/Cmd+Z undoes the last (outside text fields), Ctrl/Cmd+Shift+Z or Ctrl+Y redoes; an undo's
+// toast offers redo. entries() lists them for a history view. rk:historychange on document after each change.
+export function undoStack({ toaster: toasts = null, limit = 50 } = {}) {
+  const done = [], undone = [];
+  const fire = () => document.dispatchEvent(new CustomEvent('rk:historychange', { detail: { undo: done.length ? done[done.length - 1].label : null, redo: undone.length ? undone[undone.length - 1].label : null } }));
+  const lower = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+  async function doIt({ label, run, undo, redo = run }) {
+    await run();
+    done.push({ label, undo, redo, at: Date.now() });
+    if (done.length > limit) done.shift();
+    undone.length = 0;
+    if (toasts) toasts.show(label, { key: `rk-history-${label}`, undo: () => undoIt() });
+    fire();
+  }
+  async function undoIt() {
+    const e = done.pop();
+    if (!e) { if (toasts) toasts.show('Nothing to undo.', { key: 'rk-history-none' }); return false; }
+    await e.undo();
+    undone.push(e);
+    if (toasts) toasts.show(`Undone: ${lower(e.label)}`, { key: `rk-history-undone-${e.label}`, undo: () => redoIt(), action: 'redo' });
+    fire();
+    return true;
+  }
+  async function redoIt() {
+    const e = undone.pop();
+    if (!e) return false;
+    await e.redo();
+    done.push(e);
+    if (toasts) toasts.show(e.label, { key: `rk-history-${e.label}`, undo: () => undoIt() });
+    fire();
+    return true;
+  }
+  const off = keys.on(4, (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || isEditable(e.target)) return false;
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { if (!done.length) return false; undoIt(); return true; }
+    if ((k === 'z' && e.shiftKey) || (k === 'y' && !isMac)) { if (!undone.length) return false; redoIt(); return true; }
+    return false;
+  });
+  return {
+    do: doIt, undo: undoIt, redo: redoIt,
+    get canUndo() { return done.length > 0; },
+    get canRedo() { return undone.length > 0; },
+    entries: () => [...done.map((e) => ({ label: e.label, at: e.at, done: true })), ...undone.slice().reverse().map((e) => ({ label: e.label, at: e.at, done: false }))],
+    clear() { done.length = 0; undone.length = 0; fire(); },
+    destroy() { off(); },
+  };
+}
+
+// Live contract ----------------------------------------------------------------------------------------------------
+// live(region, { stale, age, hold }): a region of live values keeps its promise. It says how fresh it is (.rk-age:
+// "updated 4 s ago"); with no update or heartbeat for stale (timing.stale) it is stale, and offline when told, and
+// says that too (data-rk-live = fresh | stale | offline). While the pointer rests on it or focus is in it, it holds
+// still (data-rk-held): updates wait, a button says how many, and they apply when it is let go or the button is
+// pressed. update(apply, key) applies or queues one (the same key replaces a waiting one); beat() is a heartbeat
+// without a change.
+export function live(region, { stale = 0, age = region.querySelector('.rk-age'), hold = true } = {}) {
+  let last = Date.now(), held = false, offline = false, waiting = [];
+  const limit = () => stale || ms('--rk-duration-stale') || 30000;
+  const more = document.createElement('button');
+  more.type = 'button'; more.className = 'rk-btn rk-btn--quiet rk-live-more'; more.hidden = true;
+  (age || region).after(more);
+  const ago = (t) => { const s = Math.round(t / 1000); return s < 5 ? 'just now' : s < 60 ? `${s} s ago` : s < 3600 ? `${Math.floor(s / 60)} min ago` : `at ${new Date(Date.now() - t).toTimeString().slice(0, 5)}`; };
+  const state = () => (offline ? 'offline' : Date.now() - last > limit() ? 'stale' : 'fresh');
+  function paint() {
+    const s = state(), t = Date.now() - last;
+    if (region.dataset.rkLive !== s) region.dataset.rkLive = s;
+    if (age) age.textContent = s === 'offline' ? `offline · last update ${ago(t)}` : s === 'stale' ? `stale · no update for ${ago(t).replace(' ago', '')}` : held ? `held while you look · updated ${ago(t)}` : `updated ${ago(t)}`;
+    more.hidden = !waiting.length;
+    more.textContent = waiting.length === 1 ? '1 update waiting · show' : `${waiting.length} updates waiting · show`;
+  }
+  function flush() { const list = waiting; waiting = []; list.forEach((w) => w.apply()); paint(); }
+  function update(apply, key = null) {
+    last = Date.now();
+    if (held && hold) { if (key) waiting = waiting.filter((w) => w.key !== key); waiting.push({ apply, key }); } else apply();
+    paint();
+  }
+  const setHeld = (v) => { if (held === v) return; held = v; region.toggleAttribute('data-rk-held', v); if (!v) flush(); else paint(); };
+  let pointer = false, focusIn = false;
+  const enter = (e) => { if (e.pointerType !== 'touch') { pointer = true; setHeld(true); } };
+  const leave = (e) => { if (e.pointerType !== 'touch') { pointer = false; setHeld(focusIn); } };
+  const fin = () => { focusIn = true; setHeld(true); };
+  const fout = (e) => { if (!region.contains(e.relatedTarget) && e.relatedTarget !== more) { focusIn = false; setHeld(pointer); } };
+  const tick = setInterval(paint, 1000);
+  if (hold) { region.addEventListener('pointerenter', enter); region.addEventListener('pointerleave', leave); region.addEventListener('focusin', fin); region.addEventListener('focusout', fout); }
+  more.addEventListener('click', flush);
+  paint();
+  return {
+    update, flush,
+    beat() { last = Date.now(); paint(); },
+    offline(v = true) { offline = v; if (!v) last = Date.now(); paint(); },
+    get state() { return state(); },
+    get held() { return held; },
+    get waiting() { return waiting.length; },
+    destroy() {
+      clearInterval(tick); more.remove();
+      region.removeEventListener('pointerenter', enter); region.removeEventListener('pointerleave', leave); region.removeEventListener('focusin', fin); region.removeEventListener('focusout', fout);
+    },
+  };
+}
+
+// Charts -----------------------------------------------------------------------------------------------------------
+// chart(el, { type, labels, series, unit, min, max, height, summary, table }): a line or bar chart in ink and grey,
+// drawn as SVG at the element's width and redrawn when it changes. series is [{ label, values }]: the first is ink
+// (text-primary), a second grey (text-contrast-medium); the accent marks only the point under the pointer. One axis,
+// hairline gridlines at round ticks, 2px lines, bars at most 24px wide with 2px between them, square ends. Two series
+// get a legend; lines get labels at their ends when they do not collide. Hover or ←→ on the focused chart shows every
+// value at that point in a tooltip (and to screen readers); a table of the same numbers follows it. Lines draw in and
+// bars grow from the baseline once, when first drawn.
+const SVGNS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs = {}, parent = null) => { const e = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
+function niceTicks(lo, hi, count = 4) {
+  if (hi === lo) hi = lo + 1;
+  const raw = (hi - lo) / count, mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+  const a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step, out = [];
+  for (let v = a; v <= b + step / 2; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+const compact = (v) => (Math.abs(v) >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : Math.abs(v) >= 1e3 ? `${+(v / 1e3).toFixed(1)}K` : `${+v.toFixed(2)}`);
+export function chart(el, opts = {}) {
+  let o = { type: 'line', labels: [], series: [], unit: '', min: undefined, max: undefined, height: 220, summary: '', table: true, ...opts };
+  el.classList.add('rk-chart');
+  const legend = document.createElement('ul'); legend.className = 'rk-legend';
+  const svg = svgEl('svg', { role: 'img', tabindex: '0', class: 'rk-chart-svg' });
+  const say = document.createElement('span'); say.className = 'rk-sr'; say.setAttribute('role', 'status');
+  const details = document.createElement('details'); details.className = 'rk-chart-table';
+  el.replaceChildren(legend, svg, say, details);
+  let drawn = false, active = -1, geo = null;
+  const fmt = (v) => `${compact(v)}${o.unit}`;
+  function draw() {
+    const W = Math.max(240, el.clientWidth), H = o.height, n = o.labels.length, bars = o.type === 'bars';
+    const all = o.series.flatMap((s) => s.values).filter((v) => Number.isFinite(v));
+    const ticks = niceTicks(o.min !== undefined ? o.min : bars ? 0 : Math.min(...all), o.max !== undefined ? o.max : Math.max(...all));
+    const lo = ticks[0], hi = ticks[ticks.length - 1];
+    const charW = (px('--rk-font-size-xs') || 12) * 0.62;
+    const ends = !bars && o.series.length <= 4 && (W >= 480 || o.series.length < 2);
+    const left = Math.ceil(Math.max(...ticks.map((t) => fmt(t).length)) * charW) + 10;
+    const right = ends ? Math.ceil(Math.max(...o.series.map((s) => s.label.length)) * charW) + 14 : 8;
+    const top = 8, bottom = 24, pw = W - left - right, ph = H - top - bottom;
+    const y = (v) => top + ph - ((v - lo) / (hi - lo || 1)) * ph;
+    const band = pw / Math.max(1, n), x = (i) => (bars ? left + band * (i + 0.5) : left + (n > 1 ? (pw * i) / (n - 1) : pw / 2));
+    svg.replaceChildren();
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+    svg.setAttribute('aria-label', o.summary || `${o.type === 'bars' ? 'Bar' : 'Line'} chart of ${o.series.map((s) => s.label).join(' and ')}, ${o.labels[0]} to ${o.labels[n - 1]}. Use the arrow keys to read each value; a table follows.`);
+    const grid = svgEl('g', { class: 'rk-chart-grid' }, svg);
+    for (const t of ticks) {
+      svgEl('line', { x1: left, x2: W - right, y1: y(t), y2: y(t) }, grid);
+      svgEl('text', { x: left - 8, y: y(t), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, grid).textContent = fmt(t);
+    }
+    const every = Math.max(1, Math.ceil((n * (Math.max(...o.labels.map((l) => String(l).length)) * charW + 12)) / pw));
+    const shown = o.labels.map((_, i) => i).filter((i) => i % every === 0);
+    if (n > 1 && shown[shown.length - 1] !== n - 1) { if (n - 1 - shown[shown.length - 1] < every) shown.pop(); shown.push(n - 1); }
+    o.labels.forEach((l, i) => { if (shown.includes(i)) svgEl('text', { x: x(i), y: H - 6, 'text-anchor': bars ? 'middle' : i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle', class: 'rk-chart-x' }, grid).textContent = l; });
+    const marks = svgEl('g', { class: 'rk-chart-marks' }, svg);
+    const motion = !drawn && ms('--rk-duration-long') > 0;
+    if (bars) {
+      const k = o.series.length, w = Math.max(2, Math.min(24, (band - 4) / k - 2)), y0 = y(Math.max(lo, 0));
+      let peak = { v: -Infinity };
+      o.series.forEach((s, si) => s.values.forEach((v, i) => {
+        if (!Number.isFinite(v)) return;
+        const bx = x(i) - (k * w + (k - 1) * 2) / 2 + si * (w + 2), by = Math.min(y(v), y0), bh = Math.max(1, Math.abs(y0 - y(v)));
+        const r = svgEl('rect', { x: bx, y: by, width: w, height: bh, class: `rk-bar rk-s${si}`, 'data-i': i }, marks);
+        if (motion) r.style.cssText = `animation-delay:${Math.min(i, 10) * ms('--rk-duration-stagger')}ms`;
+        if (si === 0 && v > peak.v) peak = { v, x: bx + w / 2, y: by, i };
+      }));
+      if (Number.isFinite(peak.v)) svgEl('text', { x: peak.x, y: peak.y - 6, 'text-anchor': 'middle', class: 'rk-chart-value' }, marks).textContent = fmt(peak.v);
+    } else {
+      const endYs = [];
+      o.series.forEach((s, si) => {
+        const pts = s.values.map((v, i) => (Number.isFinite(v) ? [x(i), y(v)] : null));
+        const d = pts.reduce((acc, p, i) => (p ? `${acc}${acc && pts[i - 1] ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}` : acc), '');
+        svgEl('path', { d, class: `rk-line rk-s${si}`, pathLength: '1', ...(motion ? { 'data-rk-draw': '' } : {}) }, marks);
+        const lastI = s.values.length - 1;
+        if (Number.isFinite(s.values[lastI])) endYs.push({ si, y: y(s.values[lastI]), label: s.label });
+      });
+      const clash = endYs.some((a, i) => endYs.some((b, j) => j > i && Math.abs(a.y - b.y) < 14));
+      if (ends && !clash) endYs.forEach((e) => { svgEl('text', { x: W - right + 6, y: e.y, 'dominant-baseline': 'middle', class: `rk-chart-end rk-t${e.si}` }, marks).textContent = e.label; });
+    }
+    const hot = svgEl('g', { class: 'rk-chart-hot', 'aria-hidden': 'true' }, svg);
+    geo = { x, y, n, band, left, right, W, top, ph, bars, hot };
+    svgEl('rect', { x: left, y: top, width: pw, height: ph, class: 'rk-chart-hit' }, svg);
+    legend.hidden = o.series.length < 2;
+    legend.replaceChildren(...o.series.map((s, si) => { const li = document.createElement('li'); li.innerHTML = `<i class="rk-key-${bars ? 'box' : 'line'} rk-s${si}"></i>`; li.append(s.label); return li; }));
+    if (o.table) {
+      details.hidden = false;
+      details.innerHTML = '<summary>show the numbers</summary><table class="rk-table"><thead><tr><th scope="col"></th></tr></thead><tbody></tbody></table>';
+      const hr = details.querySelector('thead tr'), body = details.querySelector('tbody');
+      o.series.forEach((s) => { const th = document.createElement('th'); th.scope = 'col'; th.className = 'rk-num'; th.textContent = s.label; hr.appendChild(th); });
+      o.labels.forEach((l, i) => { const tr = document.createElement('tr'); const th = document.createElement('th'); th.scope = 'row'; th.textContent = l; tr.appendChild(th); o.series.forEach((s) => { const td = document.createElement('td'); td.className = 'rk-num'; td.textContent = Number.isFinite(s.values[i]) ? fmt(s.values[i]) : '–'; tr.appendChild(td); }); body.appendChild(tr); });
+    } else details.hidden = true;
+    drawn = true;
+    if (active >= 0) mark(Math.min(active, n - 1), false);
+  }
+  function mark(i, speak = true) {
+    if (!geo) return;
+    active = i;
+    const { x, y, hot, top, ph, bars } = geo;
+    hot.replaceChildren();
+    svg.toggleAttribute('data-rk-hovering', i >= 0);
+    svg.querySelectorAll('[data-rk-hot]').forEach((b) => b.removeAttribute('data-rk-hot'));
+    if (i < 0) { hideTip(); return; }
+    let anchor;
+    if (bars) { svg.querySelectorAll(`.rk-bar[data-i="${i}"]`).forEach((b) => b.setAttribute('data-rk-hot', '')); anchor = svg.querySelector(`.rk-bar[data-i="${i}"]`); }
+    else {
+      anchor = svgEl('line', { x1: x(i), x2: x(i), y1: top, y2: top + ph, class: 'rk-chart-cross' }, hot);
+      o.series.forEach((s, si) => { if (Number.isFinite(s.values[i])) svgEl('circle', { cx: x(i), cy: y(s.values[i]), r: 4, class: `rk-chart-dot rk-s${si}` }, hot); });
+    }
+    const text = `${o.labels[i]} · ${o.series.map((s) => `${o.series.length > 1 ? `${s.label} ` : ''}${Number.isFinite(s.values[i]) ? fmt(s.values[i]) : 'no value'}`).join(' · ')}`;
+    if (anchor) showTip(anchor, text);
+    if (speak) say.textContent = text;
+  }
+  const at = (e) => { if (!geo) return -1; const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) * (geo.W / r.width), { n, left, bars, band } = geo; const pw = geo.W - left - geo.right; const i = bars ? Math.floor((sx - left) / band) : Math.round(((sx - left) / (pw || 1)) * (n - 1)); return i >= 0 && i < n ? i : -1; };
+  const move = (e) => { if (e.pointerType === 'touch' && e.type === 'pointermove' && !e.pressure) return; const i = at(e); if (i !== active) mark(i, false); };
+  const leave = () => { if (document.activeElement !== svg) mark(-1); };
+  const key = (e) => {
+    const n = geo ? geo.n : 0, to = { ArrowRight: active + 1, ArrowLeft: active - 1, Home: 0, End: n - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault(); mark(Math.max(0, Math.min(n - 1, active < 0 ? (e.key === 'ArrowLeft' || e.key === 'End' ? n - 1 : 0) : to)));
+  };
+  const blur = () => mark(-1);
+  svg.addEventListener('pointermove', move); svg.addEventListener('pointerdown', move); svg.addEventListener('pointerleave', leave);
+  svg.addEventListener('keydown', key); svg.addEventListener('blur', blur);
+  svg.addEventListener('focus', () => { if (active < 0) mark(geo ? geo.n - 1 : -1); });
+  let w0 = 0;
+  const ro = new ResizeObserver(() => { if (Math.abs(el.clientWidth - w0) > 1) { w0 = el.clientWidth; draw(); } });
+  ro.observe(el);
+  const theme = () => draw();
+  document.addEventListener('rk:prefs', theme);
+  draw();
+  return {
+    update(next) { o = { ...o, ...next }; draw(); },
+    get active() { return active; },
+    destroy() { ro.disconnect(); document.removeEventListener('rk:prefs', theme); hideTip(); },
+  };
+}
+
+// Shell ------------------------------------------------------------------------------------------------------------
+// icon(name, { label, src }): an <svg class="rk-icon"> that uses the icon from the sprite (rekta.icons.svg, inlined in
+// the page, or at src). Without label it is decoration (aria-hidden); with one, an image with that name.
+export function icon(name, { label = '', src = '' } = {}) {
+  const s = document.createElementNS(SVGNS, 'svg');
+  s.setAttribute('class', 'rk-icon');
+  if (label) { s.setAttribute('role', 'img'); s.setAttribute('aria-label', label); } else s.setAttribute('aria-hidden', 'true');
+  const u = document.createElementNS(SVGNS, 'use');
+  u.setAttribute('href', `${src}#rk-i-${name}`);
+  s.appendChild(u);
+  return s;
+}
+
+// titlebar(el, { router }): the title bar of an installed app (.rk-titlebar), shown in the window-controls overlay of
+// an installed PWA, or when a native shell (Electron, Tauri, a WebView) sets data-rk-titlebar on the root. It is the
+// window's drag area; its back button follows the router and its place line names the current place. The window's
+// own controls keep their room (titlebar-area-*).
+export function titlebar(el, { router = null } = {}) {
+  const place = el.querySelector('.rk-titlebar-place');
+  const wco = typeof navigator !== 'undefined' ? navigator.windowControlsOverlay : null;
+  const paint = () => {
+    if (!place || !router) return;
+    const p = document.querySelector(`[data-rk-place="${CSS.escape(router.current || '')}"]`), h = p && p.querySelector('.rk-title');
+    place.textContent = p && p.dataset.rkParent && h ? h.textContent.trim() : '';
+  };
+  const geometry = () => docEl.toggleAttribute('data-rk-wco', !!(wco && wco.visible));
+  document.addEventListener('rk:placechange', paint);
+  if (wco) wco.addEventListener('geometrychange', geometry);
+  paint(); geometry();
+  return { destroy() { document.removeEventListener('rk:placechange', paint); if (wco) wco.removeEventListener('geometrychange', geometry); } };
+}
+
+// pwa({ sw, toaster, onChange }): the page as an installable app. Registers the service worker (only where a web app
+// manifest is linked and the page is in a secure context), says once it works offline, offers "reload" in a toast
+// when a new version waits, and keeps the browser's install prompt for install(). onChange(state) and rk:pwa on
+// document follow every change of { supported, installed, canInstall, offlineReady, updateReady }.
+export function pwa({ sw = 'sw.js', toaster: toasts = null, onChange = null } = {}) {
+  const standalone = () => matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay), (display-mode: minimal-ui)').matches;
+  const state = { supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator && isSecureContext, installed: standalone(), canInstall: false, offlineReady: false, updateReady: false };
+  let prompt = null, waiting = null, reg = null, reloading = false;
+  const fire = () => { const s = { ...state }; if (onChange) onChange(s); document.dispatchEvent(new CustomEvent('rk:pwa', { detail: s })); };
+  const before = (e) => { e.preventDefault(); prompt = e; state.canInstall = true; fire(); };
+  const installed = () => { prompt = null; state.canInstall = false; state.installed = true; fire(); if (toasts) toasts.show('Installed. It opens in a window of its own.', { key: 'rk-pwa' }); };
+  function wait(w) {
+    waiting = w; state.updateReady = true; fire();
+    if (toasts) toasts.show('A new version is ready.', { key: 'rk-pwa-update', act: { label: 'reload', run: () => update() } });
+  }
+  async function register() {
+    if (!state.supported || !sw || !document.querySelector('link[rel="manifest"]')) return;
+    try {
+      reg = await navigator.serviceWorker.register(sw);
+      if (reg.waiting && navigator.serviceWorker.controller) wait(reg.waiting);
+      reg.addEventListener('updatefound', () => {
+        const w = reg.installing;
+        if (w) w.addEventListener('statechange', () => { if (w.state !== 'installed') return; if (navigator.serviceWorker.controller) wait(w); else { state.offlineReady = true; fire(); } });
+      });
+      navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) location.reload(); });
+      await navigator.serviceWorker.ready;
+      if (!state.offlineReady) { state.offlineReady = true; fire(); }
+    } catch { state.supported = false; fire(); }
+  }
+  function update() {
+    if (!waiting) { if (reg) reg.update(); return false; }
+    reloading = true; waiting.postMessage('skip-waiting'); return true;
+  }
+  async function install() {
+    if (!prompt) return false;
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    prompt = null; state.canInstall = false; fire();
+    return outcome === 'accepted';
+  }
+  addEventListener('beforeinstallprompt', before);
+  addEventListener('appinstalled', installed);
+  register();
+  return {
+    get state() { return { ...state }; },
+    install, update,
+    check() { if (reg) return reg.update(); return Promise.resolve(); },
+    destroy() { removeEventListener('beforeinstallprompt', before); removeEventListener('appinstalled', installed); },
+  };
+}
+
+// Inputs -----------------------------------------------------------------------------------------------------------
+// combobox(input, { options, source, onSelect, free }): a text field with a list of choices that filters as you type.
+// options is a list of strings or { label, value, group, hint, keywords }, or a function returning one; source(q)
+// instead returns them as a promise (the list shows the loading line while it waits). The list floats below the
+// field like a menu. ↓ or Alt+↓ opens, ↑ ↓ move, Enter chooses, Escape closes, then clears; a click chooses. Without
+// free, the field only keeps a choice from the list: leaving it with other text puts the last choice back.
+export function combobox(input, { options = [], source = null, onSelect = null, free = false } = {}) {
+  const wrap = input.closest('.rk-combo') || input.parentElement;
+  const button = wrap.querySelector('.rk-combo-btn');
+  const list = document.createElement('ul');
+  list.className = 'rk-float rk-combo-list';
+  list.id = uid('rk-combo');
+  list.setAttribute('role', 'listbox');
+  if (canPopover) list.setAttribute('popover', 'manual'); else list.hidden = true;
+  wrap.appendChild(list);
+  input.setAttribute('role', 'combobox'); input.setAttribute('aria-controls', list.id); input.setAttribute('aria-expanded', 'false');
+  input.setAttribute('aria-autocomplete', 'list'); input.setAttribute('autocomplete', 'off'); input.spellcheck = false;
+  if (button) { button.tabIndex = -1; button.setAttribute('aria-hidden', 'true'); }
+  const norm = (o) => (typeof o === 'string' ? { label: o, value: o } : { value: o.label, ...o });
+  let shown = [], active = -1, chosen = input.value ? { label: input.value, value: input.dataset.value || input.value } : null, asked = 0;
+  const all = () => (typeof options === 'function' ? options() : options).map(norm);
+  async function render() {
+    const q = input.value.trim(), n = ++asked;
+    let opts;
+    if (source) {
+      const wait = setTimeout(() => list.setAttribute('aria-busy', 'true'), ms('--rk-duration-busy-delay'));
+      try { opts = (await source(q)).map(norm); } catch { opts = null; }
+      clearTimeout(wait); list.removeAttribute('aria-busy');
+      if (n !== asked) return;
+    } else opts = all();
+    shown = [];
+    if (opts) opts.forEach((o, i) => { const s = source ? 1 : matchScore(o.label, o.keywords, q === (chosen && chosen.label) ? '' : q); if (s) shown.push({ o, s, i }); });
+    if (!source && q && q !== (chosen && chosen.label)) shown.sort((a, b) => b.s - a.s || a.i - b.i);
+    list.replaceChildren();
+    let group = null;
+    shown.forEach(({ o }, k) => {
+      if ((o.group || '') !== group) {
+        group = o.group || '';
+        if (group) { const h = document.createElement('li'); h.className = 'rk-menu-label'; h.setAttribute('role', 'presentation'); h.textContent = group; list.appendChild(h); }
+      }
+      const li = document.createElement('li');
+      li.className = 'rk-menu-item'; li.id = `${list.id}-o${k}`; li.setAttribute('role', 'option');
+      if (chosen && o.value === chosen.value) li.setAttribute('data-rk-chosen', '');
+      li.append(o.label);
+      if (o.hint) { const h = document.createElement('span'); h.className = 'rk-menu-key'; h.textContent = o.hint; li.appendChild(h); }
+      li.addEventListener('pointermove', () => mark(k));
+      li.addEventListener('pointerdown', (e) => e.preventDefault());               // keep focus in the field
+      li.addEventListener('click', () => choose(k));
+      list.appendChild(li);
+    });
+    if (!shown.length) {
+      const li = document.createElement('li'); li.className = 'rk-empty rk-palette-empty'; li.setAttribute('role', 'presentation');
+      li.textContent = opts ? (q ? `Nothing matches “${q}”.` : 'Nothing to choose yet.') : 'Could not load the choices. Type to try again.';
+      list.appendChild(li);
+    }
+    const at = chosen ? shown.findIndex(({ o }) => o.value === chosen.value) : -1;
+    mark(q && q !== (chosen && chosen.label) ? 0 : at);
+    if (isOpen(list)) place(list, input);
+  }
+  function mark(k) {
+    active = shown.length ? Math.max(-1, Math.min(k, shown.length - 1)) : -1;
+    list.querySelectorAll('[role=option]').forEach((o, i) => o.setAttribute('aria-selected', String(i === active)));
+    const o = active >= 0 && list.querySelector(`#${CSS.escape(`${list.id}-o${active}`)}`);
+    if (o) { input.setAttribute('aria-activedescendant', o.id); o.scrollIntoView({ block: 'nearest' }); } else input.removeAttribute('aria-activedescendant');
+  }
+  function open() {
+    if (isOpen(list)) return;
+    list.style.minWidth = `${input.offsetWidth}px`;
+    openFloat(list); place(list, input);
+    input.setAttribute('aria-expanded', 'true');
+    render();
+  }
+  function close() {
+    if (!isOpen(list)) return;
+    closeFloat(list); input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant');
+  }
+  function choose(k) {
+    const pick = shown[k];
+    if (!pick) return;
+    chosen = { label: pick.o.label, value: pick.o.value };
+    input.value = pick.o.label; input.dataset.value = pick.o.value;
+    close();
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    if (onSelect) onSelect(pick.o);
+  }
+  function settle() {
+    const q = input.value.trim();
+    if (free || !q || (chosen && q === chosen.label)) { if (!q && chosen && !free) { chosen = null; delete input.dataset.value; if (onSelect) onSelect(null); } return; }
+    const exact = all().find((o) => o.label.toLowerCase() === q.toLowerCase());
+    if (exact && !source) { chosen = { label: exact.label, value: exact.value }; input.value = exact.label; input.dataset.value = exact.value; if (onSelect) onSelect(exact); }
+    else input.value = chosen ? chosen.label : '';
+  }
+  const key = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!isOpen(list)) open(); else mark(active + 1 >= shown.length ? 0 : active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (isOpen(list)) mark(active <= 0 ? shown.length - 1 : active - 1); }
+    else if (e.key === 'Enter') { if (isOpen(list)) { e.preventDefault(); choose(active); } }
+    else if (e.key === 'Escape') {
+      if (isOpen(list)) { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (input.value) { e.preventDefault(); e.stopPropagation(); input.value = ''; settle(); }
+    } else if (e.key === 'Tab') close();
+  };
+  const typed = () => { if (!isOpen(list)) open(); else render(); };
+  const blur = () => { close(); settle(); };
+  const toggle = (e) => { e.preventDefault(); if (isOpen(list)) close(); else { input.focus(); open(); } };
+  const outside = (e) => { if (isOpen(list) && !list.contains(e.target) && !wrap.contains(e.target)) close(); };
+  const reflow = () => { if (isOpen(list)) place(list, input); };
+  input.addEventListener('keydown', key);
+  input.addEventListener('input', typed);
+  input.addEventListener('blur', blur);
+  input.addEventListener('click', () => { if (!isOpen(list)) open(); });
+  if (button) { button.addEventListener('pointerdown', (e) => e.preventDefault()); button.addEventListener('click', toggle); }
+  document.addEventListener('pointerdown', outside, true);
+  addEventListener('resize', reflow); addEventListener('scroll', reflow, true);
+  return {
+    open, close,
+    get value() { return chosen ? chosen.value : (free ? input.value : null); },
+    set(value) { const o = all().find((x) => x.value === value); chosen = o ? { label: o.label, value: o.value } : null; input.value = o ? o.label : ''; if (o) input.dataset.value = o.value; else delete input.dataset.value; },
+    destroy() {
+      input.removeEventListener('keydown', key); input.removeEventListener('input', typed); input.removeEventListener('blur', blur);
+      document.removeEventListener('pointerdown', outside, true); removeEventListener('resize', reflow); removeEventListener('scroll', reflow, true); list.remove();
+    },
+  };
+}
+
+// stepper(el): a number field between − and + buttons (.rk-stepper holding an input[type=number] and two buttons with
+// data-rk-step="-1" and "1"). A press steps once; held, it repeats. The buttons say when the limit is reached.
+export function stepper(el) {
+  const input = el.querySelector('input'), btns = [...el.querySelectorAll('[data-rk-step]')];
+  let repeat = 0, delay = 0;
+  const paint = () => {
+    const v = input.valueAsNumber, min = input.min === '' ? -Infinity : +input.min, max = input.max === '' ? Infinity : +input.max;
+    for (const b of btns) { const up = +b.dataset.rkStep > 0, at = Number.isFinite(v) && (up ? v >= max : v <= min); b.setAttribute('aria-disabled', String(at)); }
+  };
+  function step(b) {
+    if (b.getAttribute('aria-disabled') === 'true' || input.disabled) return false;
+    const n = +b.dataset.rkStep;
+    try { if (n > 0) input.stepUp(n); else input.stepDown(-n); } catch { input.value = String((+input.value || 0) + n); }
+    input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
+    paint();
+    return true;
+  }
+  const stop = () => { clearTimeout(delay); clearInterval(repeat); delay = repeat = 0; };
+  const down = (e) => {
+    const b = e.target.closest('[data-rk-step]');
+    if (!b || e.button !== 0) return;
+    e.preventDefault(); input.focus({ preventScroll: true });
+    if (!step(b)) return;
+    delay = setTimeout(() => { repeat = setInterval(() => { if (!step(b)) stop(); }, 80); }, 400);
+  };
+  const click = (e) => { const b = e.target.closest('[data-rk-step]'); if (b && e.detail === 0) step(b); };    // keyboard
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('click', click);
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) el.addEventListener(ev, stop);
+  input.addEventListener('input', paint);
+  for (const b of btns) { b.type = 'button'; b.tabIndex = -1; }
+  paint();
+  return { destroy() { stop(); el.removeEventListener('pointerdown', down); el.removeEventListener('click', click); input.removeEventListener('input', paint); } };
+}
+
+// A slider (.rk-range) fills up to its value; an <output> right after it shows the value (with data-unit).
+function rangeFill(r) {
+  const min = +r.min || 0, max = r.max === '' ? 100 : +r.max, v = +r.value;
+  r.style.setProperty('--_rk-v', `${((v - min) / (max - min || 1)) * 100}%`);
+  const out = r.nextElementSibling;
+  if (out && out.tagName === 'OUTPUT') out.textContent = `${r.value}${out.dataset.unit || ''}`;
+}
+const onRange = (e) => { if (e.target.matches && e.target.matches('input.rk-range')) rangeFill(e.target); };
+
+// drop(el, { onFiles, accept }): a .rk-drop zone around a file input takes files dropped on it or chosen with the
+// input. While files are dragged over it, it gets data-rk-over. Dropping files elsewhere on the page never opens
+// them in the browser while a zone is mounted.
+export function drop(el, { onFiles = null, accept = null } = {}) {
+  const input = el.querySelector('input[type=file]');
+  let depth = 0;
+  const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  const ok = (f) => !accept || accept.split(',').some((a) => { a = a.trim(); return a.startsWith('.') ? f.name.toLowerCase().endsWith(a.toLowerCase()) : a.endsWith('/*') ? f.type.startsWith(a.slice(0, -1)) : f.type === a; });
+  const give = (files) => { const list = [...files].filter(ok); if (list.length && onFiles) onFiles(list, [...files].filter((f) => !ok(f))); };
+  const enter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth += 1; el.setAttribute('data-rk-over', ''); };
+  const over = (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
+  const leave = () => { depth = Math.max(0, depth - 1); if (!depth) el.removeAttribute('data-rk-over'); };
+  const dropped = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; el.removeAttribute('data-rk-over'); give(e.dataTransfer.files); };
+  const page = (e) => { if (hasFiles(e) && !el.contains(e.target)) { e.preventDefault(); if (e.type === 'dragover') e.dataTransfer.dropEffect = 'none'; } };
+  const chose = () => { give(input.files); input.value = ''; };
+  el.addEventListener('dragenter', enter); el.addEventListener('dragover', over); el.addEventListener('dragleave', leave); el.addEventListener('drop', dropped);
+  addEventListener('dragover', page); addEventListener('drop', page);
+  if (input) { if (accept) input.accept = accept; input.addEventListener('change', chose); }
+  return {
+    destroy() {
+      el.removeEventListener('dragenter', enter); el.removeEventListener('dragover', over); el.removeEventListener('dragleave', leave); el.removeEventListener('drop', dropped);
+      removeEventListener('dragover', page); removeEventListener('drop', page); if (input) input.removeEventListener('change', chose);
+    },
+  };
+}
+
 // Start --------------------------------------------------------------------------------------------------------------
-// The defaults for a page: restore the user's prefs, press on tiles, sheets, and the first paint's build-in. An
-// embedded page whose host owns theme, density and motion passes restore: false.
+// The defaults for a page: restore the user's prefs, press on tiles, sheets, steppers, sliders, switches, and the
+// first paint's build-in. An embedded page whose host owns theme, density and motion passes restore: false.
 export function start({ root = document, restore = true } = {}) {
   if (restore) prefs.restore();
   const parts = [press(root)];
   root.querySelectorAll('dialog.rk-sheet').forEach((d) => parts.push(sheet(d)));
+  root.querySelectorAll('.rk-stepper').forEach((s) => parts.push(stepper(s)));
+  root.querySelectorAll('input.rk-range').forEach(rangeFill);
+  root.querySelectorAll('.rk-toggle input[type=checkbox]').forEach((i) => i.setAttribute('role', 'switch'));
+  parts.push(tips());
+  document.addEventListener('input', onRange);
+  parts.push({ destroy() { document.removeEventListener('input', onRange); } });
   arrive(docEl);
   return { destroy() { parts.forEach((p) => p.destroy()); } };
 }

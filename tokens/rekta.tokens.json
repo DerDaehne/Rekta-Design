@@ -763,6 +763,11 @@
         "$type": "duration",
         "$value": "150ms",
         "$description": "A floating surface (menu, list) appearing next to its control: a fade and a 4px shift away from the control. It leaves at once."
+      },
+      "dots": {
+        "$type": "duration",
+        "$value": "2400ms",
+        "$description": "One flight of the five progress dots across their track: fast in from the leading edge, slow through the middle, fast out. The dots leave one after another."
       }
     },
     "easing": {
@@ -892,6 +897,21 @@
       "$type": "duration",
       "$value": "500ms",
       "$description": "Once a loading indicator shows, it stays at least this long, so it never flashes."
+    },
+    "tip-delay": {
+      "$type": "duration",
+      "$value": "500ms",
+      "$description": "A tooltip shows after the pointer has rested this long on its control (at once on keyboard focus, never on touch). Moving on to the next control within this time after one hid shows its tip at once."
+    },
+    "long-press": {
+      "$type": "duration",
+      "$value": "500ms",
+      "$description": "A touch held this long without moving opens a context menu, as a right click does."
+    },
+    "stale": {
+      "$type": "duration",
+      "$value": "30000ms",
+      "$description": "A live region with no update or heartbeat for this long is stale: it says so, and its values stop looking current."
     }
   },
   "layer": {

@@ -81,3 +81,58 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
   .rk-panorama { flex: 1 1 auto; }
   .sec-wide { --rk-sec-w: calc(4 * var(--rk-tile-unit) + 4 * var(--rk-space-s)); }
 }
+
+/* Inputs: the tile builder beside its tile; the other inputs in a grid. */
+.builder { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--rk-space-l); align-items: start; }
+.builder-out { grid-template-columns: repeat(2, var(--rk-tile-unit)); grid-auto-rows: var(--rk-tile-unit); }
+.builder-out > .rk-tile { min-height: var(--rk-tile-unit); }
+.rk-choices-plain { margin: 0; padding: 0; border: 0; min-width: 0; }
+.input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--rk-space-m) var(--rk-space-l); }
+.when { display: grid; grid-template-columns: 1fr 8rem; gap: var(--rk-space-s); }
+.files > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--rk-space-m); align-items: center; }
+.files .rk-progress { grid-column: 1 / -1; }
+@media (max-width: 759.98px), (max-height: 480px) {
+  .builder { grid-template-columns: 1fr; }
+  .builder-out { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(8rem, auto); }
+}
+
+/* Desktop: a tree beside its detail; a toolbar of icon buttons; the release steps; the long list. */
+.desk { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(0, 1.2fr); gap: var(--rk-space-l); align-items: start; }
+.toolbar { display: flex; gap: 2px; margin-bottom: var(--rk-space-xs); border-bottom: 1px solid var(--rk-text-contrast-low); }
+.toolbar .rk-ab { min-width: 40px; min-height: 40px; padding: 0; justify-content: center; }
+.desk-detail { padding-top: var(--rk-space-xs); }
+.desk-detail > * + * { margin-top: var(--rk-space-xs); }
+.sort-list > li { justify-content: flex-start; align-items: center; gap: var(--rk-space-s); padding-block: 0; padding-left: 0; }
+.sort-list > li > .rk-meta { margin-left: auto; }
+.log { height: calc(8 * var(--rk-row-height)); }
+.log .rk-virtual-row > :last-child { margin-left: auto; }
+.log .rk-virtual-row > span:nth-child(3) { overflow: hidden; text-overflow: ellipsis; }
+.log .rk-virtual-row > .rk-meta:first-child { min-width: 4.5em; }
+.log .rk-virtual-row > .rk-tag { min-width: 5.2em; }
+
+/* Live and undo. */
+.live-tiles { grid-template-columns: repeat(auto-fill, var(--rk-tile-unit)); }
+.live-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rk-space-s); margin-top: var(--rk-space-s); }
+.live-controls { display: flex; flex-wrap: wrap; gap: var(--rk-space-s) var(--rk-space-xl); }
+.history > li[data-undone] { color: var(--rk-text-contrast-medium); }
+.history > li[data-undone] > b { font-weight: var(--rk-font-weight-regular); text-decoration: line-through; }
+@media (max-width: 759.98px), (max-height: 480px) {
+  .desk { grid-template-columns: 1fr; }
+}
+
+/* Data. */
+.chart-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--rk-space-s); margin-top: var(--rk-space-l) !important; }
+.meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--rk-space-m) var(--rk-space-l); }
+.signin > * + * { margin-top: var(--rk-space-s); }
+.signin .rk-dots { margin-block: var(--rk-space-m); }
+
+/* Icons and the app shell. */
+.icon-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 0 var(--rk-space-m); margin: 0; padding: 0; list-style: none; }
+.icon-gallery > li { display: flex; align-items: center; gap: var(--rk-space-s); min-height: var(--rk-row-height); border-top: 1px solid var(--rk-text-contrast-low); }
+.icon-gallery code { font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
+.window { max-width: 36rem; border: 1px solid var(--rk-text-contrast-medium); border-radius: var(--rk-radius-s); overflow: hidden; }
+.window .window-controls { display: flex; gap: 0; margin-left: auto; align-self: stretch; }
+.window .window-controls > i { display: grid; place-items: center; width: 40px; border-left: 1px solid var(--rk-text-contrast-low); color: var(--rk-text-contrast-high); }
+.window-body { padding: var(--rk-space-m); }
+.window-body > * + * { margin-top: var(--rk-space-xs); }
+.rk-btn .rk-icon { margin-left: -4px; }
