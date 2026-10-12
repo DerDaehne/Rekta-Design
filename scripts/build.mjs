@@ -11,12 +11,18 @@
 //     rekta.fonts.css     @font-face rules for the bundled Barlow files, copied to dist/fonts/
 //     rekta.js            the behaviour as an ES module (src/js/rekta.js)
 //     rekta.global.js     the same as a classic script that sets window.Rekta
-//   node scripts/build.mjs --check   checks the tokens and the stylesheet instead of writing (exit 1 on failure)
+//   and core/src/ (committed, so the C library builds without Node):
+//     rk_tokens.h         the tokens as C tables in the order of the enums in core/include/rekta.h
+//     rk_icons.h          the icons as polylines on the 20-unit grid
+//     rk_fonts.h          the Barlow files in core/fonts/ as byte arrays
+//   node scripts/build.mjs --check   checks the tokens and the stylesheet instead of writing (exit 1 on failure),
+//                                    and that core/src/ is up to date
 
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contrast, distance, parse, toHex8 } from './lib/color.mjs';
+import { coreFonts, coreIcons, coreTokens } from './lib/core.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -299,15 +305,31 @@ export function buildDist() {
   const icons = loadIcons();
   writeFileSync(join(dist, 'rekta.icons.svg'), iconsSprite(icons));
   writeFileSync(join(dist, 'rekta.icons.json'), JSON.stringify({ name: 'Rekta Design icons', version: pkg.version, grid: 20, strokeWidth: 1.6, lineCap: 'butt', lineJoin: 'miter', color: 'text colour (currentColor); a filled shape says fill', icons: Object.fromEntries(Object.entries(icons).map(([n, i]) => [n, i.shapes])) }, null, 1) + '\n');
+  for (const [file, text] of Object.entries(coreFiles(tokens, pkg.version, icons))) writeFileSync(join(root, 'core', 'src', file), text);
   return pkg.version;
 }
 
+// The generated C sources of rekta-core, by file name.
+function coreFiles(tokens, version, icons) {
+  const { out, problems } = coreTokens(buildTokensJson(tokens, version));
+  if (problems.length) throw new Error(problems.join('\n'));
+  return { 'rk_tokens.h': out, 'rk_icons.h': coreIcons(icons), 'rk_fonts.h': coreFonts(join(root, 'core', 'fonts')) };
+}
+
 export function checkAll() {
-  const problems = check(loadTokens());
-  for (const [n, i] of Object.entries(loadIcons())) {
+  const tokens = loadTokens(), problems = check(tokens), icons = loadIcons();
+  for (const [n, i] of Object.entries(icons)) {
     if (i.viewBox !== '0 0 20 20') problems.push(`icon ${n} is not on the 20px grid (viewBox ${i.viewBox})`);
     if (!i.shapes.length) problems.push(`icon ${n} has no shapes`);
   }
+  try {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    for (const [file, text] of Object.entries(coreFiles(tokens, pkg.version, icons))) {
+      let now = '';
+      try { now = readFileSync(join(root, 'core', 'src', file), 'utf8'); } catch { /* missing */ }
+      if (now !== text) problems.push(`core/src/${file} is out of date: run node scripts/build.mjs`);
+    }
+  } catch (e) { problems.push(`the C target: ${e.message}`); }
   return problems;
 }
 
