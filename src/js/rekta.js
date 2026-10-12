@@ -38,6 +38,11 @@
      icon       an icon from the sprite, decoration or an image with a name
      titlebar   the title bar of an installed app: the drag area, back, the place's name
      pwa        installable and offline: the service worker, the update toast, install()
+     reflow     FLIP: what a change moves or resizes glides there (a tile resized, a grid re-flowed)
+     enter, leave, presence   things arrive in and leave a list or a grid; the rest close the gap
+     tileUpdate a live tile has news: the new number peeks up, a new status flips the tile
+     sparkTo    a live line moves to its new points
+     crossfade  a change of the whole look fades instead of flipping
      combobox   a field with a list of choices that filters as you type
      stepper    a number field between − and +, repeating while held
      drop       a zone that takes dropped or chosen files
@@ -99,9 +104,14 @@ export const prefs = {
   get(name) { return docEl.dataset[name] || PREF_DEFAULT[name]; },
   set(name, value, { remember = true } = {}) {
     if (!(name in PREF_DEFAULT)) throw new Error(`unknown pref ${name}`);
-    if (!value || value === PREF_DEFAULT[name]) delete docEl.dataset[name]; else docEl.dataset[name] = value;
-    if (remember) { const all = this.read(); all[name] = this.get(name); this.write(all); }
-    document.dispatchEvent(new CustomEvent('rk:prefs', { detail: { name, value: this.get(name) } }));
+    const commit = () => {
+      if (!value || value === PREF_DEFAULT[name]) delete docEl.dataset[name]; else docEl.dataset[name] = value;
+      if (remember) { const all = this.read(); all[name] = this.get(name); this.write(all); }
+      document.dispatchEvent(new CustomEvent('rk:prefs', { detail: { name, value: this.get(name) } }));
+    };
+    // A theme chosen by the user cross-fades (view transitions); a restored one applies before the first paint.
+    if (name === 'theme' && remember && this.get('theme') !== (value || PREF_DEFAULT.theme) && typeof document.startViewTransition === 'function' && ms('--rk-duration-short')) document.startViewTransition(commit);
+    else commit();
   },
   restore() { const all = this.read(); for (const name of Object.keys(PREF_DEFAULT)) if (all[name]) this.set(name, all[name], { remember: false }); },
 };
@@ -1035,15 +1045,33 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
 
 // Sheet --------------------------------------------------------------------------------------------------------------
 // <dialog class="rk-sheet"> opened with showModal(). A tap on the shading cancels where closedby is not supported.
+// It leaves the way it came, back up to the top edge, over duration-short: its answer counts once it has gone.
 export function sheet(dialog) {
+  const close = HTMLDialogElement.prototype.close;
+  let leaving = false;
+  function leaveThen(value) {
+    const d = ms('--rk-duration-short') * 0.8;
+    if (!dialog.open) return;
+    if (!d || leaving) { leaving = false; close.call(dialog, value); return; }
+    leaving = true;
+    dialog.setAttribute('data-rk-phase', 'leaving');
+    const anims = [dialog.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: d, easing: css('--rk-ease-out'), fill: 'forwards' })];
+    try { anims.push(dialog.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, easing: 'linear', fill: 'forwards', pseudoElement: '::backdrop' })); } catch { /* no pseudo-element animation */ }
+    finished(anims).then(() => { leaving = false; dialog.removeAttribute('data-rk-phase'); close.call(dialog, value); anims.forEach((a) => a.cancel()); });
+  }
   const click = (e) => {
     if ('closedBy' in HTMLDialogElement.prototype || e.target !== dialog || dialog.getAttribute('closedby') === 'closerequest') return;
     const r = dialog.getBoundingClientRect();
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialog.close('cancel');
   };
+  const submit = (e) => { if (e.target.getAttribute('method') !== 'dialog' || e.defaultPrevented) return; e.preventDefault(); leaveThen(e.submitter ? e.submitter.value : ''); };
+  const cancel = (e) => { if (!e.cancelable) return; e.preventDefault(); leaveThen('cancel'); };
   if (!dialog.hasAttribute('closedby')) dialog.setAttribute('closedby', 'any');
+  dialog.close = (value) => leaveThen(value);
   dialog.addEventListener('click', click);
-  return { destroy() { dialog.removeEventListener('click', click); } };
+  dialog.addEventListener('submit', submit);
+  dialog.addEventListener('cancel', cancel);
+  return { destroy() { dialog.removeEventListener('click', click); dialog.removeEventListener('submit', submit); dialog.removeEventListener('cancel', cancel); delete dialog.close; } };
 }
 
 // Data states ------------------------------------------------------------------------------------------------------
@@ -1208,7 +1236,9 @@ function selectionMode(appbar, owner, mode, n) {
   const modes = selecting.get(appbar) || new Set();
   selecting.set(appbar, modes);
   if (mode) modes.add(owner); else modes.delete(owner);
+  const was = appbar.hasAttribute('data-rk-selecting');
   appbar.toggleAttribute('data-rk-selecting', modes.size > 0);
+  if (was && !modes.size) { appbar.setAttribute('data-rk-unselecting', ''); setTimeout(() => appbar.removeAttribute('data-rk-unselecting'), ms('--rk-duration-short') + 20); }
   const c = appbar.querySelector('.rk-ab-count');
   if (c && (mode || !modes.size)) c.textContent = `${n} selected`;
   return modes.size > 0;
@@ -1389,8 +1419,11 @@ export function table(el, { onSort, select: selectable = null, onShow = null, on
     if (remember) { saved.w[i] = th.offsetWidth; store.set(); }
   }
   function resetWidth(i) {
+    const before = head().map((th) => th.offsetWidth);
     delete saved.w[i]; store.set();
     if (!Object.keys(saved.w).length) { el.style.tableLayout = ''; head().forEach((th) => { th.style.width = ''; }); } else head()[i].style.width = '';
+    const d = ms('--rk-duration-short');
+    if (d) head().forEach((th, k) => { const w = th.offsetWidth; if (Math.abs(w - before[k]) > 1) th.animate([{ width: `${before[k]}px` }, { width: `${w}px` }], { duration: d, easing: css('--rk-ease-base') }); });
   }
   function hideCol(i, hidden = true) {
     cells(i).forEach((c) => { c.hidden = hidden; });
@@ -2145,9 +2178,18 @@ export function tree(el, { onShow = null, onToggle = null } = {}) {
     const sub = li.querySelector(':scope > ul');
     if (!sub || (li.getAttribute('aria-expanded') === 'true') === open) return;
     li.setAttribute('aria-expanded', String(open));
-    sub.hidden = !open;
     const d = ms('--rk-duration-short');
-    if (open && d) sub.animate([{ opacity: 0, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'none' }], { duration: d, easing: css('--rk-ease-in') });
+    sub.getAnimations().forEach((a) => a.cancel());
+    if (!d) sub.hidden = !open;
+    else if (open) {
+      sub.hidden = false;
+      const h = sub.offsetHeight;
+      sub.animate([{ height: '0px', opacity: 0, overflow: 'hidden' }, { height: `${h}px`, opacity: 1, overflow: 'hidden' }], { duration: d, easing: css('--rk-ease-in') });
+    } else {
+      const h = sub.offsetHeight;
+      sub.animate([{ height: `${h}px`, opacity: 1, overflow: 'hidden' }, { height: '0px', opacity: 0, overflow: 'hidden' }], { duration: d * 0.7, easing: css('--rk-ease-out') })
+        .finished.then(() => { if (li.getAttribute('aria-expanded') === 'false') sub.hidden = true; }, () => {});
+    }
     if (onToggle) onToggle(li, open);
   }
   function choose(li, show = true) {
@@ -2209,7 +2251,7 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
   function flip(change) {
     const els = all(), before = new Map(els.map((x) => [x, x.getBoundingClientRect().top]));
     change();
-    const d = ms('--rk-duration-short');
+    const d = ms('--rk-duration-moderate');
     if (!d) return;
     for (const x of els) { const dy = before.get(x) - x.getBoundingClientRect().top; if (dy) x.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') }); }
   }
@@ -2253,7 +2295,7 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
     els.forEach((x) => { x.style.transform = ''; });
     item.removeAttribute('data-rk-dragging'); list.removeAttribute('data-rk-sorting');
     if (!cancel && to !== from) { const rest = els.filter((x) => x !== item); if (to >= rest.length) rest[rest.length - 1].after(item); else rest[to].before(item); }
-    const d = ms('--rk-duration-short');
+    const d = ms('--rk-duration-moderate');
     if (d) for (const x of els) { const dy = before.get(x) - x.getBoundingClientRect().top; if (dy) x.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') }); }
     if (!cancel && to !== from) { if (onMove) onMove(from, to, item); say(`${name(item)}: position ${to + 1} of ${els.length}.`); }
   };
@@ -2565,7 +2607,7 @@ export function chart(el, opts = {}) {
         if (!Number.isFinite(v)) return;
         const bx = x(i) - (k * w + (k - 1) * 2) / 2 + si * (w + 2), by = Math.min(y(v), y0), bh = Math.max(1, Math.abs(y0 - y(v)));
         const r = svgEl('rect', { x: bx, y: by, width: w, height: bh, class: `rk-bar rk-s${si}`, 'data-i': i }, marks);
-        if (motion) r.style.cssText = `animation-delay:${Math.min(i, 10) * ms('--rk-duration-stagger')}ms`;
+        if (motion) { r.setAttribute('data-rk-grow', ''); r.style.cssText = `animation-delay:${Math.min(i, 10) * ms('--rk-duration-stagger')}ms`; }
         if (si === 0 && v > peak.v) peak = { v, x: bx + w / 2, y: by, i };
       }));
       if (Number.isFinite(peak.v)) svgEl('text', { x: peak.x, y: peak.y - 6, 'text-anchor': 'middle', class: 'rk-chart-value' }, marks).textContent = fmt(peak.v);
@@ -2632,8 +2674,29 @@ export function chart(el, opts = {}) {
   const theme = () => draw();
   document.addEventListener('rk:prefs', theme);
   draw();
+  let tween = 0;
   return {
-    update(next) { o = { ...o, ...next }; draw(); },
+    // New numbers glide to their place over duration-long (bars grow or shrink, lines bend); new labels redraw, and
+    // lines draw in and bars grow from the baseline again.
+    update(next) {
+      const was = o, d = ms('--rk-duration-long');
+      o = { ...o, ...next };
+      cancelAnimationFrame(tween);
+      const same = was.labels.length === o.labels.length && was.series.length === o.series.length && o.labels.every((l, i) => l === was.labels[i]);
+      if (!same) drawn = false;
+      if (!same || !d) { draw(); return; }
+      const target = o, t0 = performance.now(), ease = bezier('--rk-ease-base');
+      // The axis travels with the values: from the old extent to the new one, so it ends where a fresh draw would.
+      const extent = (x) => { const v = x.series.flatMap((s) => s.values).filter(Number.isFinite); return [x.min !== undefined ? x.min : x.type === 'bars' ? Math.min(0, ...v) : Math.min(...v), x.max !== undefined ? x.max : Math.max(...v)]; };
+      const [lo0, hi0] = extent(was), [lo1, hi1] = extent(target);
+      const frame = (now) => {
+        const t = Math.min(1, (now - t0) / d), k = ease(t);
+        o = { ...target, series: target.series.map((s, si) => ({ ...s, values: s.values.map((v, i) => { const f = was.series[si].values[i]; return Number.isFinite(f) && Number.isFinite(v) ? f + (v - f) * k : v; }) })), min: lo0 + (lo1 - lo0) * k, max: hi0 + (hi1 - hi0) * k };
+        draw();
+        if (t < 1) tween = requestAnimationFrame(frame); else { o = target; draw(); }
+      };
+      tween = requestAnimationFrame(frame);
+    },
     get active() { return active; },
     destroy() { ro.disconnect(); document.removeEventListener('rk:prefs', theme); hideTip(); },
   };
@@ -2720,6 +2783,125 @@ export function pwa({ sw = 'sw.js', toaster: toasts = null, onChange = null } = 
     check() { if (reg) return reg.update(); return Promise.resolve(); },
     destroy() { removeEventListener('beforeinstallprompt', before); removeEventListener('appinstalled', installed); },
   };
+}
+
+// Motion -----------------------------------------------------------------------------------------------------------
+// The movements that follow a change of content. Each one has one meaning (docs/motion.md) and takes its duration
+// from a token, so reduced motion makes it instant, never skipped.
+const shown = (el) => el.getClientRects().length > 0;
+const finished = (anims) => Promise.all(anims.map((a) => a.finished.catch(() => {})));
+// reflow(scope, change, { items, size }): FLIP. Whatever change() moves or resizes among the items (scope's children
+// by default) glides from where it was to where it is, over duration-moderate. A box that changes size scales from
+// its old size and fades its content back in near the end, so text is never seen stretched: a tile resized, a grid
+// re-flowed around it. Resolves with change()'s result once everything has settled.
+export function reflow(scope, change, { items = null, size = true } = {}) {
+  const list = () => (items ? [...(typeof items === 'function' ? items() : items)] : [...scope.children]);
+  const before = new Map(list().filter(shown).map((el) => [el, el.getBoundingClientRect()]));
+  const out = change();
+  const d = ms('--rk-duration-moderate');
+  if (!d) return Promise.resolve(out);
+  const anims = [], ease = css('--rk-ease-base');
+  for (const el of list()) {
+    const a = before.get(el);
+    if (!a || !shown(el)) continue;
+    const b = el.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top, sx = size && b.width ? a.width / b.width : 1, sy = size && b.height ? a.height / b.height : 1;
+    const resized = Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && !resized) continue;
+    anims.push(el.animate([{ transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` }, { transformOrigin: '0 0', transform: 'none' }], { duration: d, easing: ease }));
+    if (resized) for (const c of el.children) anims.push(c.animate([{ opacity: 0 }, { opacity: 0, offset: 0.55 }, { opacity: 1 }], { duration: d, easing: 'linear' }));
+  }
+  return finished(anims).then(() => out);
+}
+// enter(el): something new arrives in a list or a grid: a row slides in by 6px and fades up, a tile builds in.
+export function enter(el) {
+  const d = ms('--rk-duration-short');
+  if (!d || !shown(el)) return Promise.resolve();
+  const tile = el.classList.contains('rk-tile');
+  const frames = tile ? [{ opacity: 0, transform: 'translateY(6px) scale(0.96)' }, { opacity: 1, transform: 'none' }] : [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }];
+  return el.animate(frames, { duration: tile ? ms('--rk-duration-moderate') : d, easing: css('--rk-ease-in'), fill: 'backwards' }).finished.catch(() => {});
+}
+// leave(el): something goes: a row fades and drifts 12px towards its trailing edge, a tile shrinks and fades. The
+// animation holds its end until the caller hides or removes the element; resolves with it (cancel it afterwards).
+export function leave(el) {
+  const d = ms('--rk-duration-short') * 0.6;
+  if (!d || !shown(el)) return Promise.resolve(null);
+  const tile = el.classList.contains('rk-tile');
+  const a = el.animate(tile ? [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.9)' }] : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(12px)' }], { duration: d, easing: css('--rk-ease-out'), fill: 'forwards' });
+  return a.finished.then(() => a, () => a);
+}
+// presence(scope, { items, show }): items come and go by show(item). Those that go leave first; then the rest close
+// the gap (FLIP) while those that come enter. A newer call finishes the one still running at once. More than 60
+// changes at a time are shown at once: motion is for a few things moving, not for a whole list replaced.
+const presenceRuns = new WeakMap();
+export async function presence(scope, { items = () => [...scope.children], show }) {
+  const prev = presenceRuns.get(scope);
+  if (prev) prev.finish();
+  const all = typeof items === 'function' ? items() : [...items];
+  const going = all.filter((el) => !el.hidden && !show(el)), coming = all.filter((el) => el.hidden && show(el));
+  let done = false, leaving = [];
+  const apply = () => { going.forEach((el) => { el.hidden = true; }); coming.forEach((el) => { el.hidden = false; }); };
+  const run = { finish() { if (done) return; done = true; leaving.forEach((a) => a && a.cancel()); apply(); } };
+  presenceRuns.set(scope, run);
+  if (!going.length && !coming.length) { done = true; return; }
+  if (!ms('--rk-duration-short') || going.length + coming.length > 60) { run.finish(); return; }
+  leaving = await Promise.all(going.map(leave));
+  if (done) return;
+  done = true;
+  await reflow(scope, () => { apply(); leaving.forEach((a) => a && a.cancel()); coming.forEach(enter); }, { items: () => all.filter((el) => !el.hidden || going.includes(el)), size: false });
+  if (presenceRuns.get(scope) === run) presenceRuns.delete(scope);
+}
+// tileUpdate(tile, change, { kind }): a live tile has news. 'peek' (a new number or line): the new content rises
+// from below while the old one leaves upwards, over duration-moderate. 'flip' (a new status): the tile turns away
+// around its horizontal axis, changes, and turns back. A continuous reading (frames a second) is no news: it updates
+// in place. Inside a live region (live()) the change already waits while the region is held.
+export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
+  const d = ms('--rk-duration-moderate');
+  if (!d || !shown(tile)) { change(); return Promise.resolve(); }
+  if (kind === 'flip') {
+    const p = num('--rk-turnstile-perspective') || 800;
+    const a = tile.animate([{ transform: `perspective(${p}px) rotateX(0deg)` }, { transform: `perspective(${p}px) rotateX(-90deg)` }], { duration: d / 2, easing: css('--rk-ease-out'), fill: 'forwards' });
+    return a.finished.catch(() => {}).then(() => {
+      change();
+      a.cancel();
+      return tile.animate([{ transform: `perspective(${p}px) rotateX(90deg)` }, { transform: `perspective(${p}px) rotateX(0deg)` }], { duration: d / 2, easing: css('--rk-ease-in') }).finished.catch(() => {});
+    });
+  }
+  const target = tile.querySelector('.rk-stat') || tile;
+  const was = target.textContent;
+  const ghost = target.cloneNode(true);
+  const tr = tile.getBoundingClientRect(), r = target.getBoundingClientRect();
+  change();
+  if (target.textContent === was || target === tile) return Promise.resolve();
+  ghost.setAttribute('aria-hidden', 'true'); ghost.removeAttribute('id'); ghost.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id'));
+  ghost.style.cssText = `position:absolute;left:${r.left - tr.left}px;top:${r.top - tr.top}px;width:${r.width}px;margin:0;pointer-events:none`;
+  tile.appendChild(ghost);
+  tile.style.overflow = 'hidden';                                                    // the old number leaves through the edge
+  const out = ghost.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-40%)' }], { duration: d * 0.6, easing: css('--rk-ease-out'), fill: 'forwards' });
+  const inn = target.animate([{ opacity: 0, transform: 'translateY(40%)' }, { opacity: 1, transform: 'none' }], { duration: d * 0.8, delay: d * 0.2, easing: css('--rk-ease-in'), fill: 'backwards' });
+  return finished([out, inn]).then(() => { ghost.remove(); if (!tile.querySelector('.rk-stat[aria-hidden]')) tile.style.overflow = ''; });
+}
+// sparkTo(line, points): a live line moves to its new points over duration-long instead of jumping. Points are an
+// SVG points list; with the same number of points each one travels, otherwise the line is redrawn at once.
+const sparkRuns = new WeakMap();
+export function sparkTo(line, points) {
+  const parse = (s) => (s || '').trim().split(/\s+/).map((p) => p.split(',').map(Number));
+  const from = parse(line.getAttribute('points')), to = parse(points), d = ms('--rk-duration-long');
+  cancelAnimationFrame(sparkRuns.get(line) || 0);
+  if (!d || from.length !== to.length) { line.setAttribute('points', points); return; }
+  const t0 = performance.now(), ease = bezier('--rk-ease-base');
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / d), k = ease(t);
+    line.setAttribute('points', to.map(([x, y], i) => `${(from[i][0] + (x - from[i][0]) * k).toFixed(1)},${(from[i][1] + (y - from[i][1]) * k).toFixed(1)}`).join(' '));
+    if (t < 1) sparkRuns.set(line, requestAnimationFrame(step));
+  };
+  sparkRuns.set(line, requestAnimationFrame(step));
+}
+// crossfade(change): a change of the whole look (theme, accent) fades over duration-short instead of flipping, where
+// the browser has view transitions.
+export function crossfade(change) {
+  if (!ms('--rk-duration-short') || !document.startViewTransition) { change(); return Promise.resolve(); }
+  return document.startViewTransition(change).finished.catch(() => {});
 }
 
 // Inputs -----------------------------------------------------------------------------------------------------------
@@ -2881,6 +3063,34 @@ export function stepper(el) {
   return { destroy() { stop(); el.removeEventListener('pointerdown', down); el.removeEventListener('click', click); input.removeEventListener('input', paint); } };
 }
 
+// Segments: the accent block slides from the old choice to the new one over duration-short; the new segment takes
+// its fill when the block arrives.
+const segChosen = new WeakMap();
+const segOf = (g) => { const i = g.querySelector('input:checked'); return i ? i.closest('label') : null; };
+function onSegment(e) {
+  const input = e.target;
+  if (!input.matches || !input.matches('.rk-segments input[type=radio]')) return;
+  const g = input.closest('.rk-segments'), to = input.closest('label'), from = segChosen.get(g);
+  segChosen.set(g, to);
+  const d = ms('--rk-duration-short');
+  if (!from || from === to || !d || !shown(from)) return;
+  const gr = g.getBoundingClientRect(), a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+  const block = document.createElement('span');
+  block.className = 'rk-segments-slide'; block.setAttribute('aria-hidden', 'true');
+  block.style.cssText = `left:${b.left - gr.left}px;top:${b.top - gr.top}px;width:${b.width}px;height:${b.height}px`;
+  g.querySelectorAll('.rk-segments-slide').forEach((x) => x.remove());
+  g.querySelectorAll('label[data-rk-sliding]').forEach((x) => x.removeAttribute('data-rk-sliding'));
+  g.appendChild(block);
+  g.setAttribute('data-rk-sliding', ''); to.setAttribute('data-rk-sliding', '');
+  block.animate([{ transform: `translateX(${a.left - b.left}px) scaleX(${a.width / b.width})` }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') })
+    .finished.catch(() => {}).then(() => {
+      if (!block.isConnected) return;                                                  // a newer slide took over
+      block.remove(); to.removeAttribute('data-rk-sliding');
+      getComputedStyle(to).backgroundColor;                                            // settle without a transition
+      g.removeAttribute('data-rk-sliding');
+    });
+}
+
 // A slider (.rk-range) fills up to its value; an <output> right after it shows the value (with data-unit).
 function rangeFill(r) {
   const min = +r.min || 0, max = r.max === '' ? 100 : +r.max, v = +r.value;
@@ -2927,8 +3137,10 @@ export function start({ root = document, restore = true } = {}) {
   root.querySelectorAll('input.rk-range').forEach(rangeFill);
   root.querySelectorAll('.rk-toggle input[type=checkbox]').forEach((i) => i.setAttribute('role', 'switch'));
   parts.push(tips());
+  root.querySelectorAll('.rk-segments').forEach((g) => segChosen.set(g, segOf(g)));
   document.addEventListener('input', onRange);
-  parts.push({ destroy() { document.removeEventListener('input', onRange); } });
+  document.addEventListener('change', onSegment);
+  parts.push({ destroy() { document.removeEventListener('input', onRange); document.removeEventListener('change', onSegment); } });
   arrive(docEl);
   return { destroy() { parts.forEach((p) => p.destroy()); } };
 }
