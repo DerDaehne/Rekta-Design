@@ -3,6 +3,7 @@
 
 static void view_destroy(void *self) {
   rk_view *v = self;
+  rk__live_views--;
   rk__anim_view_gone(v);
   for (int i = 0; i < v->nkids; i++) { v->kids[i]->parent = NULL; rk_release(v->kids[i]); }
   free(v->kids);
@@ -14,9 +15,11 @@ static void view_destroy(void *self) {
 }
 
 const rk_type rk__view_type = { "rk_view", view_destroy };
+int rk__live_views;
 
 rk_view *rk__view_create(const rk_class *cls, void *state) {
   rk_view *v = rk__new(&rk__view_type, sizeof *v);
+  rk__live_views++;
   v->opacity = v->popacity = 1;
   v->transform = v->ptransform = rk_transform_identity();
   v->main = RK_ALIGN_START; v->cross = RK_ALIGN_STRETCH;
@@ -384,7 +387,8 @@ static void stack(rk_view *v, bool column) {
   for (int j = 0; j < n; j++) {
     rk_view *k = v->kids[idx[j]];
     float cs = cross_len, co = 0;
-    if (v->cross != RK_ALIGN_STRETCH) {
+    float fixed = column ? k->fixed_w : k->fixed_h;
+    if (v->cross != RK_ALIGN_STRETCH || fixed > 0) {                   /* a fixed size is not stretched */
       cs = RK_MIN(cross[j], cross_len);
       if (v->cross == RK_ALIGN_CENTER) co = (cross_len - cs) / 2;
       else if (v->cross == RK_ALIGN_END) co = cross_len - cs;

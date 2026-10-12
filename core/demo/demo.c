@@ -341,7 +341,7 @@ static void script(void) {
 
 static void launch(void *user) {
   (void)user;
-  rk_window_desc wd = { sizeof wd, "Rekta core", 1280, 760, 0, 0, false };
+  rk_window_desc wd = { sizeof wd, "Rekta core", 1280, 820, 0, 0, false };
   D.window = rk_window_create(&wd);
   if (!D.window) { rk_app_quit(1); return; }
   D.home = rk_panorama_create();

@@ -166,7 +166,7 @@ static void cache_clear(void) {
 void rk__text_shutdown(void) { cache_clear(); }
 
 /* Coverage is lifted slightly, as browsers do, so thin strokes keep their weight on a light ground. */
-static uint8_t lift[256];
+static uint8_t gamma_lift[256];
 
 static glyph *glyph_get(font *f, int g, float px_size, int sub) {
   uint32_t size_q = (uint32_t)(px_size * 4 + 0.5f);
@@ -177,7 +177,7 @@ static glyph *glyph_get(font *f, int g, float px_size, int sub) {
     if (e->key0 == k0 && e->key1 == k1) return e;
     if (!e->key0) {
       if (cached > CACHE * 3 / 4) { cache_clear(); return glyph_get(f, g, px_size, sub); }
-      if (!lift[255]) for (int i = 0; i < 256; i++) lift[i] = (uint8_t)(255.0 * pow(i / 255.0, 0.82) + 0.5);
+      if (!gamma_lift[255]) for (int i = 0; i < 256; i++) gamma_lift[i] = (uint8_t)(255.0 * pow(i / 255.0, 0.82) + 0.5);
       float scale = px_size / f->upem, shift = sub / 4.0f;
       int x0, y0, x1, y1;
       stbtt_GetGlyphBitmapBoxSubpixel(&f->info, g, scale, scale, shift, 0, &x0, &y0, &x1, &y1);
@@ -185,7 +185,7 @@ static glyph *glyph_get(font *f, int g, float px_size, int sub) {
       if (e->w > 0 && e->h > 0) {
         e->px = rk__alloc((size_t)e->w * e->h);
         stbtt_MakeGlyphBitmapSubpixel(&f->info, e->px, e->w, e->h, e->w, scale, scale, shift, 0, g);
-        for (int i = 0; i < e->w * e->h; i++) e->px[i] = lift[e->px[i]];
+        for (int i = 0; i < e->w * e->h; i++) e->px[i] = gamma_lift[e->px[i]];
       }
       cached++;
       return e;

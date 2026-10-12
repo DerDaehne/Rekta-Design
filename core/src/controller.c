@@ -463,33 +463,49 @@ static void strip_activate(rk_view *v, int index) {
 
 /* Panorama -------------------------------------------------------------------------------------------------------- */
 
-typedef struct section { char *title; rk_view *view; float width; float x; } section;
-typedef struct panorama { rk_controller *self; section *secs; int n, cap; rk_view *strip, *track; float max_scroll; } panorama;
+typedef struct section { char *title; rk_view *view, *box; float width, x, max; } section;
+typedef struct panorama {
+  rk_controller *self; section *secs; int n, cap; rk_view *strip, *track; float max_scroll;
+  int latch; double latch_at;                                  /* what the current wheel gesture moves */
+} panorama;
 
 static float section_width(section *s) {
   if (s->width > 0) return s->width;
   return 3 * rk_metric_of(RK_TILE_UNIT) + 2 * rk_metric_of(RK_SPACE_S) + 2 * rk_metric_of(RK_SPACE_XL);
 }
 
+/* A section's box clips it and scrolls it up and down when it is taller than the panorama. */
+static void secbox_draw(rk_view *v, rk_canvas *c, void *st) {
+  (void)c; (void)st;
+  if (v->nkids) v->kids[0]->ptransform.translate_y = -v->pvalue;
+}
+static const rk_class secbox_class = { { sizeof(rk_view_class), "rk_section", secbox_draw, NULL, NULL, NULL, NULL }, NULL, NULL };
+
 static void pano_layout(rk_view *v, void *st) {
   panorama *p = st;
-  float W = v->frame.w, H = v->frame.h, xl = rk_metric_of(RK_SPACE_XL), l = rk_metric_of(RK_SPACE_L);
+  float W = v->frame.w, H = v->frame.h, xl = rk_metric_of(RK_SPACE_XL), l = rk_metric_of(RK_SPACE_L), sp = rk_metric_of(RK_SPACE_S);
   rk_size ss = rk__measure(p->strip, (rk_size){ W, INFINITY });
   float top = rk_metric_of(RK_SPACE_S);
   rk__set_frame(p->strip, (rk_rect){ 0, top, W, ss.h });
-  float ty = top + ss.h;
+  float ty = top + ss.h, th = H - ty;
   float x = xl;
   for (int i = 0; i < p->n; i++) {
     section *s = &p->secs[i];
     float w = section_width(s);
     s->x = x;
-    rk__set_frame(s->view, (rk_rect){ x, l, w, H - ty - 2 * l });
+    rk__set_frame(s->box, (rk_rect){ x, 0, w, th });
+    float inner = w - sp;                                       /* room for the scroll edge, as padding-right */
+    rk_size n = rk__measure(s->view, (rk_size){ inner, INFINITY });
+    float h = RK_MAX(n.h, th - 2 * l);
+    rk__set_frame(s->view, (rk_rect){ 0, l, inner, h });
+    s->max = RK_MAX(0.0f, h + 2 * l - th);
+    if (s->box->value > s->max) s->box->value = s->box->pvalue = s->max;
     x += w + xl;
   }
-  /* the last section may reach the left edge: the track ends one window past its start */
+  /* the last section may reach the left edge */
   p->max_scroll = p->n ? RK_MAX(0.0f, RK_MIN(p->secs[p->n - 1].x - xl, x - W)) : 0;
   if (p->n && x - xl <= W) p->max_scroll = 0;
-  rk__set_frame(p->track, (rk_rect){ 0, ty, RK_MAX(W, x), H - ty });
+  rk__set_frame(p->track, (rk_rect){ 0, ty, RK_MAX(W, x), th });
   if (v->value > p->max_scroll) { v->value = v->pvalue = p->max_scroll; }
 }
 
@@ -507,13 +523,17 @@ static void pano_draw(rk_view *v, rk_canvas *c, void *st) {
   strip_activate(p->strip, pano_active(p, v->value));
 }
 
-static void pano_scroll_to(rk_view *v, panorama *p, float to, double d, const float *ease) {
-  to = RK_CLAMP(to, 0.0f, p->max_scroll);
+static void scroll_value(rk_view *v, float to, float max, double d, const float *ease) {
+  to = RK_CLAMP(to, 0.0f, max);
   v->value = to;
   if (d > 0) { float from = v->pvalue; rk__animate(v, RK_PROP_VALUE, &from, &to, 1, d, 0, ease); }
   else { rk__anim_cancel(v, RK_PROP_VALUE); v->pvalue = to; }
-  strip_activate(p->strip, pano_active(p, to));
   rk__view_dirty(v);
+}
+
+static void pano_scroll_to(rk_view *v, panorama *p, float to, double d, const float *ease) {
+  scroll_value(v, to, p->max_scroll, d, ease);
+  strip_activate(p->strip, pano_active(p, v->value));
 }
 
 static void pano_select(void *owner, int i) {
@@ -523,13 +543,27 @@ static void pano_select(void *owner, int i) {
   pano_scroll_to(v, p, p->secs[i].x - rk_metric_of(RK_SPACE_XL), rk_duration_of(RK_DURATION_PIVOT_GLIDE), rk__ease_glide);
 }
 
-/* One wheel gesture moves one thing: the panorama goes sideways (horizontal input is used as it is). */
+/* One wheel gesture moves one thing: started over a section that can still scroll that way, it scrolls the
+   section; otherwise the panorama goes sideways. The choice holds for the gesture (wheel-latch). */
 static bool pano_event(rk_view *v, const rk_event *e, void *st) {
   panorama *p = st;
   if (e->type == RK_EVENT_WHEEL) {
-    float d = fabsf(e->wheel_x) > fabsf(e->wheel_y) ? e->wheel_x : e->wheel_y;
+    bool sideways = fabsf(e->wheel_x) > fabsf(e->wheel_y);
+    float d = sideways ? e->wheel_x : e->wheel_y;
     if (d == 0) return false;
-    pano_scroll_to(v, p, v->value + d, rk_duration_of(RK_DURATION_SHORT), rk__ease_base);
+    double now = rk_app_now();
+    int target = -1;                                            /* -1: the panorama */
+    if (now - p->latch_at < RK_TOK_TIMING_WHEEL_LATCH && p->latch >= -1) target = p->latch;
+    else if (!sideways) {
+      float x = e->position.x + v->pvalue;
+      for (int i = 0; i < p->n; i++) {
+        section *s = &p->secs[i];
+        if (x >= s->x && x < s->x + section_width(s) && s->max > 0 && ((d > 0 && s->box->value < s->max) || (d < 0 && s->box->value > 0))) target = i;
+      }
+    }
+    p->latch = target; p->latch_at = now;
+    if (target >= 0) scroll_value(p->secs[target].box, p->secs[target].box->value + d, p->secs[target].max, rk_duration_of(RK_DURATION_SHORT), rk__ease_base);
+    else pano_scroll_to(v, p, v->value + d, rk_duration_of(RK_DURATION_SHORT), rk__ease_base);
     return true;
   }
   if (e->type == RK_EVENT_KEY_DOWN) {
@@ -553,6 +587,7 @@ rk_controller *rk_panorama_create(void) {
   rk_controller *c = rk_controller_create(NULL, NULL);
   panorama *p = rk__alloc(sizeof *p);
   p->self = c;
+  p->latch = -2;
   c->kind = K_PANORAMA; c->impl = p; c->impl_free = pano_free;
   c->view = rk__view_create(&pano_class, p);
   c->view->controller = c;
@@ -570,10 +605,39 @@ void rk_panorama_add(rk_controller *c, const char *title, rk_view *section_view,
   p->secs = rk__grow(p->secs, &p->cap, p->n + 1, sizeof *p->secs);
   section *s = &p->secs[p->n++];
   s->title = rk__strdup(title); s->view = section_view; s->width = width;
-  section_view->access = RK_ACCESS_GROUP;
-  rk__setstr(&section_view->access_label, title);
-  rk_view_add(p->track, section_view);
+  s->box = rk__view_create(&secbox_class, NULL);
+  s->box->clip = true;
+  s->box->access = RK_ACCESS_GROUP;
+  rk__setstr(&s->box->access_label, title);
+  rk_view_add(s->box, section_view);
+  rk_view_add(p->track, s->box);
+  rk_release(s->box);
   strip_add(p->strip, title);
+}
+
+/* Keyboard focus never lands out of sight: the section scrolls it into view, the panorama brings the section. */
+void rk__reveal(rk_view *v) {
+  for (rk_view *a = v->parent; a; a = a->parent) {
+    if (a->cls == &secbox_class && a->nkids) {
+      rk_view *content = a->kids[0];
+      float y = 0;
+      for (rk_view *x = v; x && x != content; x = x->parent) y += x->frame.y;
+      float top = y + content->frame.y, bottom = top + v->frame.h, view_h = a->frame.h, off = a->value;
+      float max = RK_MAX(0.0f, content->frame.h + 2 * content->frame.y - view_h);
+      if (top - off < 0) scroll_value(a, top - rk_metric_of(RK_SPACE_M), max, rk_duration_of(RK_DURATION_SHORT), rk__ease_base);
+      else if (bottom - off > view_h) scroll_value(a, bottom - view_h + rk_metric_of(RK_SPACE_M), max, rk_duration_of(RK_DURATION_SHORT), rk__ease_base);
+    }
+    if (a->cls == &pano_class) {
+      panorama *p = a->state;
+      for (int i = 0; i < p->n; i++) {
+        for (rk_view *x = v; x; x = x->parent) if (x == p->secs[i].box) {
+          float left = p->secs[i].x - a->value, W = a->frame.w;
+          if (left < 0 || left + section_width(&p->secs[i]) > W) pano_select(p, i);
+          return;
+        }
+      }
+    }
+  }
 }
 
 /* Pivot ----------------------------------------------------------------------------------------------------------- */

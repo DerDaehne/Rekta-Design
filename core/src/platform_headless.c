@@ -25,7 +25,7 @@ static void hl_settings(bool *dark, bool *reduced, bool *compact) {
   const char *t = getenv("RK_THEME"), *m = getenv("RK_REDUCED_MOTION");
   *dark = t && !strcmp(t, "dark");
   *reduced = m && *m == '1';
-  *compact = false;
+  *compact = true;                                             /* as a desktop with a mouse */
 }
 
 const rk_platform rk__platform_headless = {

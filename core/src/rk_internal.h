@@ -154,6 +154,7 @@ struct rk_view {
 };
 
 extern const rk_type rk__view_type;
+extern int rk__live_views;                                 /* views alive: tests check nothing is left over */
 rk_view *rk__view_create(const rk_class *cls, void *state);
 void rk__view_dirty(rk_view *v);                           /* redraw its window */
 void rk__view_relayout_up(rk_view *v);
@@ -221,6 +222,7 @@ bool rk__controller_event(rk_controller *c, const rk_event *e);
 void rk__controller_attach(rk_controller *c, rk_window *w);
 bool rk__window_key(rk_window *w, const rk_event *e);     /* window-level keys: sheets, places back */
 rk_view *rk__controller_key_view(rk_controller *c);       /* where keys go when nothing has focus */
+void rk__reveal(rk_view *v);                               /* scroll it into view (keyboard focus) */
 
 /* Built-in views (widgets.c) -------------------------------------------------------------------------------------- */
 

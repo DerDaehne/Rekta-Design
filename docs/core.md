@@ -138,6 +138,12 @@ UI Automation, AT-SPI) only translate it. The bridges come after the first
 stage; until then a Rekta app is not usable with a screen reader, and the
 changelog says so.
 
+## Status
+
+Stage 1 is done: the renderer, views, controllers, motion, input, the
+headless platform and X11 are tested here (73 checks, 14 reference images,
+AddressSanitizer and UBSan clean); Win32 and Cocoa are built and tested in CI.
+
 ## Stages
 
 1. **Foundation.** Tokens for C, the renderer, views, controllers, motion,

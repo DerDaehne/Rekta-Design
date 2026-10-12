@@ -424,6 +424,7 @@ static void focus_step(rk_window *w, int dir) {
   int next = at < 0 ? (dir > 0 ? 0 : n - 1) : (at + dir + n) % n;
   w->focus_visible = true;
   rk_window_focus(w, list[next]);
+  rk__reveal(list[next]);
 }
 
 void rk__window_event(rk_window *w, const rk_event *e) {

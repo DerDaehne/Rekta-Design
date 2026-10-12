@@ -120,6 +120,7 @@ bool rk__anim_tick(double now) {
     if (t >= 1) {
       finished = rk__grow(finished, &fcap, nf + 1, sizeof *finished);
       finished[nf++] = *a;
+      rk_retain(a->view);                                      /* a callback may let it go; hold it until all ran */
       a->view->anims--;
       anims[i] = anims[--nanims];
     } else i++;
@@ -132,6 +133,7 @@ bool rk__anim_tick(double now) {
     if (a->done) a->done(a->view, a->user);
     group_done(a->grp);
   }
+  for (int i = 0; i < nf; i++) rk_release(finished[i].view);
   return nanims > 0;
 }
 

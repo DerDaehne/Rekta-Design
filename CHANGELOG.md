@@ -9,6 +9,25 @@ it; each entry says how.
 
 ### Added
 
+- **rekta-core** (`core/`): Rekta Design as native views in C for
+  Windows (Win32), macOS (Cocoa) and Linux (Xlib), with no dependency
+  beyond the system and a vendored `stb_truetype.h`. One header
+  (`core/include/rekta.h`) with a clean ABI: opaque reference-counted
+  objects, size-prefixed descriptors, 32-bit enums, callbacks with a user
+  pointer. Windows, controllers and views composed as in UIKit; column,
+  row, tile-grid and overlay layouts; implicit animations named by their
+  meaning (`RK_MOTION_STATE`, `REFLOW`, `ENTER`, `LEAVE`, `MORPH`) and
+  transitions (`PEEK`, `FLIP`, `CROSSFADE`); the press, the turnstile,
+  panoramas with a gliding strip and scrolling sections, pivots, sheets,
+  toasts, the title bar, keyboard focus. A software renderer with exact
+  anti-aliasing draws the same pixels on every platform; a headless
+  platform with a virtual clock runs the tests (73 checks, 14 reference
+  images) and the demo's script. Stage 1 of docs/core.md: text fields,
+  menus and tables come next, screen-reader bridges after them.
+- The token build also writes the C sources of rekta-core
+  (`core/src/rk_tokens.h`, `rk_icons.h`, `rk_fonts.h`); `--check` fails
+  when they are out of date.
+
 - Inputs, native where they can be: `select.rk-input` with a chevron;
   number, date and time fields in Rekta's frame (the date and time
   pickers' icons from Rekta's set); a combobox that filters as you type

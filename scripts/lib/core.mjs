@@ -56,6 +56,7 @@ export function coreTokens(json) {
     if (k.startsWith('ease-')) defs.push(`#define RK_TOK_EASE_${C(k.slice(5))} { ${v.map(f).join(', ')} }`);
     else if (!k.startsWith('duration-')) defs.push(`#define RK_TOK_${C(k)} ${f(v)}`);
   }
+  for (const [k, v] of Object.entries(json.timing)) defs.push(`#define RK_TOK_TIMING_${C(k.replace(/^duration-/, ''))} ${f(v)}`);
   for (const [k, v] of Object.entries(json.breakpoint)) defs.push(`#define RK_TOK_${C(k)} ${f(v)}`);
   defs.push(`#define RK_TOK_TILE_UNIT_ULTRAWIDE ${f(json.size['tile-unit-ultrawide'])}`);
   const out = HEAD(`Rekta Design ${json.version} tokens for rekta-core`)

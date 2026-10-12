@@ -452,7 +452,7 @@ rk_view *rk__toast_create(const char *message, const char *action, void (*on_act
 
 /* Title bar ------------------------------------------------------------------------------------------------------- */
 
-typedef struct titlebar { rk_window *w; } titlebar;
+typedef struct titlebar { rk_window *w; float inset; } titlebar;   /* inset: room for the system's buttons (macOS) */
 
 static void titlebar_draw(rk_view *v, rk_canvas *c, void *st) {
   titlebar *tb = st;
@@ -460,7 +460,7 @@ static void titlebar_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_canvas_fill_rect(c, (rk_rect){ 0, H - 1, v->pframe.w, 1 }, rk_color_of(RK_ROLE_TEXT_LOW));
   rk_textfmt name = rk__textfmt(RK_TEXT_LABEL, 0), place = rk__textfmt(RK_TEXT_SMALL, 0);
   name.color = RK_ROLE_TEXT; place.weight = RK_TOK_WEIGHT_LIGHT; place.line = name.line;
-  float x = rk_metric_of(RK_SPACE_S) + 4, ty = (H - name.size * name.line) / 2;
+  float x = tb->inset + rk_metric_of(RK_SPACE_S) + 4, ty = (H - name.size * name.line) / 2;
   const char *title = tb->w->title && *tb->w->title ? tb->w->title : "Rekta";
   rk__text_draw(c, title, -1, x, ty, &name, rk_color_of(RK_ROLE_TEXT));
   x += rk__text_width(title, -1, &name) + rk_metric_of(RK_SPACE_S);
@@ -502,6 +502,8 @@ rk_view *rk__titlebar_create(rk_window *w) {
   tb->w = w;
   rk_view *v = rk__view_create(&titlebar_class, tb);
   v->fill_role = RK_ROLE_BG; v->pfill = rk_color_of(RK_ROLE_BG);
+  /* macOS keeps its traffic lights on the left; elsewhere Rekta draws minimize, maximize and close on the right */
+  if (!strcmp(rk__platform()->name, "cocoa")) { tb->inset = 70; return v; }
   static const char *icons[3] = { "minus", "window", "close" }, *names[3] = { "minimize", "maximize", "close" };
   void (*fns[3])(rk_view *, void *) = { tb_min, tb_zoom, tb_close };
   for (int i = 0; i < 3; i++) {
