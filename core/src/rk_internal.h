@@ -48,10 +48,15 @@ rk_color rk__mix(rk_color a, rk_color b, float t);
 
 /* Raster (raster.c): premultiplied 32-bit pixels, 0xAARRGGBB in memory order B, G, R, A ------------------------------ */
 
-typedef struct rk_bitmap { int w, h, stride; uint32_t *px; size_t cap; } rk_bitmap;   /* stride and cap in pixels */
+typedef struct rk_bitmap {
+  int w, h, stride; uint32_t *px; size_t cap;              /* stride and cap in pixels */
+  uint8_t *occ;                                            /* which 16 x 16 blocks hold anything; NULL until asked */
+} rk_bitmap;
+void rk__bitmap_changed(rk_bitmap *b);                     /* drawn into: the block map is out of date */
 typedef struct rk_irect { int x0, y0, x1, y1; } rk_irect;
 
 rk_bitmap *rk__bitmap_create(int w, int h);
+void rk__view_moved(rk_view *v);                           /* only its place, size or opacity changed: its own layer holds */
 void rk__bitmap_fit(rk_bitmap **slot, int w, int h);       /* reshapes in place while it fits; contents undefined */
 void rk__bitmap_free(rk_bitmap *b);
 void rk__bitmap_clear(rk_bitmap *b, uint32_t pm);
@@ -75,7 +80,10 @@ void rk__path_free(rk_path *p);
 void rk__blit_mask(rk_bitmap *b, rk_irect clip, int x, int y, const uint8_t *mask, int w, int h, int stride, uint32_t pm);
 /* Draws src mapped onto the quad (four device points: top left, top right, bottom right, bottom left), with
    anti-aliased edges and bilinear sampling. */
-void rk__composite(rk_bitmap *dst, rk_irect clip, const rk_bitmap *src, const float quad[8], float opacity);
+void rk__composite(rk_bitmap *dst, rk_irect clip, rk_bitmap *src, const float quad[8], float opacity);   /* src gets its block map */
+double rk__wall_ms(void);
+typedef void (*rk_rows_fn)(void *ctx, int y0, int y1);
+void rk__parallel_rows(rk_rows_fn fn, void *ctx, int y0, int y1, long pixels);   /* bands of rows over the cores */
 void rk__composite_at(rk_bitmap *dst, rk_irect clip, const rk_bitmap *src, int x, int y, float opacity);
 
 bool rk__png_write(const rk_bitmap *b, const char *path);   /* png.c */
@@ -146,6 +154,7 @@ struct rk_view {
   rk_class *own_cls;                                       /* a copy of a custom view's class */
   /* drawing */
   rk_bitmap *layer;                                        /* while turning or fading */
+  bool layer_ok; uint32_t layer_gen;                       /* the layer still shows the content: drawn again only if not */
   int anims;                                               /* animations running on it */
   float content_alpha;                                     /* while a size animates: the content fades back in */
   int transition; float transition_t; rk_bitmap *snapshot;  /* rk_transition + 1 while one runs */
@@ -156,6 +165,7 @@ struct rk_view {
 };
 
 extern const rk_type rk__view_type;
+extern uint32_t rk__layer_gen;                             /* bumped when everything is drawn again */
 extern int rk__live_views;                                 /* views alive: tests check nothing is left over */
 rk_view *rk__view_create(const rk_class *cls, void *state);
 void rk__view_dirty(rk_view *v);                           /* redraw its window */
@@ -211,6 +221,7 @@ struct rk_window {
 void rk__window_resized(rk_window *w, float width, float height, float scale);   /* from the platform */
 void rk__window_event(rk_window *w, const rk_event *e);
 void rk__window_close_request(rk_window *w);
+void rk__window_pointer_cancel(rk_window *w);
 void rk__window_frame(rk_window *w, double now);           /* layout, draw and present if needed */
 void rk__window_invalidate(rk_window *w);                 /* everything */
 void rk__window_damage(rk_window *w, rk_rect r);          /* a part, in logical window coordinates */
@@ -218,7 +229,12 @@ void rk__render_view(rk_canvas *c, rk_view *v, float ox, float oy);
 rk_bitmap *rk__snapshot(rk_view *v, bool with_fill);     /* the view as drawn now, at the window's scale */
 void rk__layout_pending(void);                            /* lay out every window that needs it, now */
 rk_window *rk__windows(void);
-extern double rk__prof_ms; extern long rk__prof_frames, rk__prof_pixels;
+typedef struct rk_meter {                                 /* behind rk_app_stats */
+  uint32_t frames, glyphs, slow; double draw_ms, last_ms, max_ms, pixels, latency_ms, max_latency_ms;
+  double input_at;                                         /* an input event not yet shown, by the platform clock; 0 if none */
+} rk_meter;
+extern rk_meter rk__meter;
+uint32_t rk__anim_count(void);
 
 /* Controllers (controller.c) -------------------------------------------------------------------------------------- */
 
@@ -255,6 +271,7 @@ typedef struct rk_platform {
   void (*wake)(void);                                      /* any thread */
   double (*now)(void);
   void (*settings)(bool *dark, bool *reduced, bool *compact);
+  void (*resize)(void *native, float width, float height);  /* logical px */
 } rk_platform;
 
 extern const rk_platform rk__platform_headless;

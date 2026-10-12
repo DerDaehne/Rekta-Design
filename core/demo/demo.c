@@ -9,7 +9,9 @@
  *   settings  theme, density, motion and accent, as the system or as chosen
  *
  * Keys: Tab moves focus, Enter or Space presses, Page Up and Page Down go by section, Escape goes back.
- * `demo --shots DIR` runs a tour without a screen and writes what it sees as PNGs. */
+ * `demo --shots DIR` runs a tour without a screen and writes what it sees as PNGs.
+ * `demo --perf` puts the loop under load and measures it (resizing, a storm of presses, settling), without a screen;
+ * `demo --perf --screen` does it in a real window. RK_HUD=1 shows the numbers in any run, RK_TRACE=1 prints frames. */
 #include "../include/rekta.h"
 #include <math.h>
 #include <stdio.h>
@@ -28,6 +30,7 @@ typedef struct demo {
   float task_done, series[24]; int nseries;
   bool feed, big;
   const char *shots;
+  bool perf, screen;
 } demo;
 
 static demo D;
@@ -560,6 +563,75 @@ static void tour(void) {
   rk_app_quit(0);
 }
 
+/* --perf: the loop under load. Each phase prints what drawing cost and how long input took to show; a phase fails
+   when a press lands on the wrong view, motion does not come to rest, or views are left over. */
+
+static int perf_fails;
+
+static rk_stats stats(bool reset) { rk_stats s = { .size = sizeof s }; rk_app_stats(&s, reset); return s; }
+
+static void phase(const char *name) {
+  rk_stats s = stats(true);
+  bool slow = s.max_ms > 33 || (s.frames && s.draw_ms / s.frames > 8);
+  printf("%-10s %5u frames  draw %6.2f ms avg %7.2f max  %3u slow  input %5.1f ms max  %5u glyphs  %3u moving%s\n", name, s.frames,
+         s.frames ? s.draw_ms / s.frames : 0.0, s.max_ms, s.slow, s.max_latency_ms, s.glyphs, s.animations, slow ? "  SLOW" : "");
+}
+
+static void fail(const char *what, const char *detail) { perf_fails++; printf("  FAIL %s: %s\n", what, detail); }
+
+static void tap(rk_point p) { pointer(RK_EVENT_POINTER_DOWN, p); rk_app_run_for(16); pointer(RK_EVENT_POINTER_UP, p); rk_app_run_for(24); }
+
+static void expect_hit(const char *name) {
+  rk_view *v = rk_view_find(rk_controller_view(D.places), name);
+  rk_view *h = v ? rk_window_view_at(D.window, center(name)) : NULL;
+  while (h && h != v) h = rk_view_parent(h);
+  if (!h) fail("a press misses", name);
+}
+
+static void perf(void) {
+  rk_size home = rk_window_size(D.window);
+  rk_app_run_for(1500);
+  phase("open");
+  D.feed = true;
+  for (int i = 0; i < 3; i++) { live_tick(NULL); rk_app_run_for(2000); }
+  phase("idle");
+  /* the window's edge dragged about for two seconds, a frame apart */
+  for (int i = 0; i <= 120; i++) {
+    float t = i / 120.0f * 6.2831853f;
+    rk_window_set_size(D.window, home.w + 520 * sinf(t), home.h + 260 * sinf(2 * t));
+    rk_app_run_for(1000.0 / 60.0);
+  }
+  rk_window_set_size(D.window, home.w + 400, home.h + 200);
+  rk_app_run_for(300);
+  phase("resize");
+  static const char *targets[] = { "presses", "notes", "pin", "unpin", "resize", "restart" };
+  for (int i = 0; i < 6; i++) expect_hit(targets[i]);
+  /* presses, pins, reflows, turns and section changes, faster than any of them finishes */
+  D.feed = false;
+  rk_stats before = stats(false);
+  static const char *storm[] = { "presses", "pin", "resize", ">", "<", "presses", "unpin", "notes", "^", "pin", "grow", "presses", "toast-plain" };
+  for (int i = 0; i < 78; i++) {
+    const char *a = storm[i % 13];
+    if (*a == '>') key(RK_KEY_PAGE_DOWN); else if (*a == '<') key(RK_KEY_PAGE_UP); else if (*a == '^') key(RK_KEY_ESCAPE);
+    else { rk_view *v = rk_view_find(rk_controller_view(D.places), a); if (v) tap(center(a)); }
+    rk_app_run_for(24);
+  }
+  phase("storm");
+  key(RK_KEY_ESCAPE); key(RK_KEY_HOME);
+  rk_app_run_for(2500);
+  rk_stats rest = stats(false);
+  if (rest.animations) { char b[64]; snprintf(b, sizeof b, "%u animations still running", rest.animations); fail("motion does not rest", b); }
+  phase("settle");
+  rk_app_run_for(1000);
+  rk_stats quiet = stats(false);
+  if (quiet.frames > 2) { char b[64]; snprintf(b, sizeof b, "%u frames drawn with nothing moving", quiet.frames); fail("the loop does not sleep", b); }
+  if (quiet.views > before.views + 64) { char b[64]; snprintf(b, sizeof b, "%u views, %u before the storm", quiet.views, before.views); fail("views are left over", b); }
+  phase("quiet");
+  for (int i = 0; i < 6; i++) expect_hit(targets[i]);
+  printf(perf_fails ? "perf: %d failed\n" : "perf: all phases pass\n", perf_fails);
+  rk_app_quit(perf_fails ? 1 : 0);
+}
+
 /* The app ------------------------------------------------------------------------------------------------------- */
 
 static void add_section(const char *title, rk_view *content) {
@@ -585,12 +657,18 @@ static void launch(void *user) {
   rk_window_set_root(w, D.places);
   rk_window_show(w);
   if (D.shots) { tour(); return; }
+  if (D.perf) { perf(); return; }
   rk_app_after(2000, true, live_tick, NULL);
 }
 
 int main(int argc, char **argv) {
   rk_app_desc desc = { .size = sizeof desc, .name = "Rekta core", .id = "de.rekta.demo", .launch = launch };
-  for (int i = 1; i < argc; i++) if (!strcmp(argv[i], "--shots") && i + 1 < argc) { D.shots = argv[++i]; desc.headless = true; }
+  for (int i = 1; i < argc; i++) {
+    if (!strcmp(argv[i], "--shots") && i + 1 < argc) { D.shots = argv[++i]; desc.headless = true; }
+    else if (!strcmp(argv[i], "--perf")) D.perf = true;
+    else if (!strcmp(argv[i], "--screen")) D.screen = true;
+  }
+  if (D.perf && !D.screen) desc.headless = true;
   int code = rk_app_main(&desc);
   rk_release(sheet_ctl);
   rk_release(D.places); rk_release(D.home);

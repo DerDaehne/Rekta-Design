@@ -21,6 +21,7 @@ static group *ctx_group[16];
 bool rk__animating_block(void) { return depth > 0; }
 rk_motion rk__current_motion(void) { return depth ? ctx[depth - 1].motion : RK_MOTION_STATE; }
 bool rk__anim_running(void) { return nanims > 0; }
+uint32_t rk__anim_count(void) { return (uint32_t)nanims; }
 
 double rk__motion_duration(rk_motion m, bool tile) {
   switch (m) {
@@ -115,9 +116,11 @@ bool rk__anim_tick(double now) {
     anim *a = &anims[i];
     double t = a->dur > 0 ? (now - a->start - a->delay) / a->dur : 1;
     if (now < a->start + a->delay) t = 0;
-    rk__view_dirty(a->view);                                   /* where it was drawn */
+    /* where it was drawn, and where it is now; a move, a fade or a turn leaves the view's own layer as it is */
+    bool moves = a->prop == RK_PROP_FRAME || a->prop == RK_PROP_OPACITY || a->prop == RK_PROP_TRANSFORM;
+    if (moves) rk__view_moved(a->view); else rk__view_dirty(a->view);
     apply(a, (float)RK_CLAMP(t, 0.0, 1.0));
-    rk__view_dirty(a->view);                                   /* and where it is now */
+    if (moves) rk__view_moved(a->view); else rk__view_dirty(a->view);
     if (t >= 1) {
       finished = rk__grow(finished, &fcap, nf + 1, sizeof *finished);
       finished[nf++] = *a;

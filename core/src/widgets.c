@@ -475,9 +475,10 @@ static void titlebar_draw(rk_view *v, rk_canvas *c, void *st) {
 
 static bool titlebar_event(rk_view *v, const rk_event *e, void *st) {
   titlebar *tb = st;
-  (void)v;
-  if (e->type == RK_EVENT_POINTER_DOWN && e->button == 0) {
+  /* a press on the bar itself moves the window (twice: maximizes); its buttons press as buttons */
+  if (e->type == RK_EVENT_POINTER_DOWN && e->button == 0 && (!tb->w->pressed || tb->w->pressed == v)) {
     static double last;
+    rk__window_pointer_cancel(tb->w);                          /* the system takes the pointer: no release comes */
     if (e->time - last < 400) rk__platform()->zoom(tb->w->native); else rk__platform()->move(tb->w->native);
     last = e->time;
     return true;

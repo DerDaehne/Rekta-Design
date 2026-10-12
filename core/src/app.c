@@ -164,6 +164,20 @@ void rk__app_window_closed(rk_window *w) {
   if (!rk__windows()) running = false;                     /* the last window closed: the app ends */
 }
 
+void rk_app_stats(rk_stats *s, bool reset) {
+  if (s) {
+    rk_stats o;
+    memset(&o, 0, sizeof o);
+    o.size = sizeof o;
+    const rk_meter *m = &rk__meter;
+    o.frames = m->frames; o.animations = rk__anim_count(); o.views = (uint32_t)rk__live_views; o.glyphs = m->glyphs; o.slow = m->slow;
+    o.draw_ms = m->draw_ms; o.last_ms = m->last_ms; o.max_ms = m->max_ms; o.pixels = m->pixels;
+    o.latency_ms = m->latency_ms; o.max_latency_ms = m->max_latency_ms;
+    memcpy(s, &o, RK_MIN((size_t)s->size, sizeof o));
+  }
+  if (reset) { double at = rk__meter.input_at; memset(&rk__meter, 0, sizeof rk__meter); rk__meter.input_at = at; }
+}
+
 void rk_app_quit(int code) { exit_code = code; running = false; rk__platform()->wake(); }
 
 void rk_app_run_for(double ms) {
@@ -205,8 +219,10 @@ int rk_app_main(const rk_app_desc *desc) {
   }
   if (app.terminate) app.terminate(app.user);
   const char *prof = getenv("RK_PROFILE");
-  if (prof && *prof == '1' && rk__prof_frames)
-    fprintf(stderr, "rekta: %ld frames, %.2f ms a frame on average, %.1f megapixels a frame drawn\n", rk__prof_frames, rk__prof_ms / rk__prof_frames, rk__prof_pixels / 1e6 / rk__prof_frames);
+  const rk_meter *m = &rk__meter;
+  if (prof && *prof == '1' && m->frames)
+    fprintf(stderr, "rekta: %u frames, %.2f ms a frame on average, %.2f the slowest, %u over 8 ms, %.1f megapixels a frame, %u glyphs\n",
+            m->frames, m->draw_ms / m->frames, m->max_ms, m->slow, m->pixels / 1e6 / m->frames, m->glyphs);
   while (rk__windows()) rk_window_close(rk__windows());
   plat->shutdown();
   rk__text_shutdown();

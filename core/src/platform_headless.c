@@ -21,6 +21,7 @@ static void hl_nop(void *n) { (void)n; }
 static bool hl_wait(double ms) { vclock += ms < 0 ? 1000.0 / 60.0 : ms; return true; }
 static void hl_wake(void) {}
 static double hl_now(void) { return vclock; }
+static void hl_resize(void *n, float w, float h) { rk_window *win = n; rk__window_resized(win, w, h, win->scale); }
 static void hl_settings(bool *dark, bool *reduced, bool *compact) {
   const char *t = getenv("RK_THEME"), *m = getenv("RK_REDUCED_MOTION");
   *dark = t && !strcmp(t, "dark");
@@ -30,12 +31,12 @@ static void hl_settings(bool *dark, bool *reduced, bool *compact) {
 
 const rk_platform rk__platform_headless = {
   "headless", hl_init, hl_shutdown, hl_open, hl_close, hl_show, hl_title, hl_present, hl_nop, hl_nop, hl_nop,
-  hl_wait, hl_wake, hl_now, hl_settings
+  hl_wait, hl_wake, hl_now, hl_settings, hl_resize
 };
 
 #if defined(RK_HEADLESS_ONLY)
 const rk_platform rk__platform_native = {
   "headless", hl_init, hl_shutdown, hl_open, hl_close, hl_show, hl_title, hl_present, hl_nop, hl_nop, hl_nop,
-  hl_wait, hl_wake, hl_now, hl_settings
+  hl_wait, hl_wake, hl_now, hl_settings, hl_resize
 };
 #endif

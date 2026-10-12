@@ -22,6 +22,7 @@
 #endif
 #include "object.c"
 #include "tokens.c"
+#include "pool.c"
 #include "raster.c"
 #include "png.c"
 #include "text.c"

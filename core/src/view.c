@@ -60,7 +60,20 @@ static bool layered(const rk_view *v) {
 
 /* Only what changed is drawn again: the view's box, or, when it or an ancestor turns in depth, that ancestor's box
    with room for the projection. */
+static void damage(rk_view *v);
+
+/* What contains the view shows it differently now: the layers of the view and of everything around it are stale. */
 void rk__view_dirty(rk_view *v) {
+  for (rk_view *p = v; p; p = p->parent) p->layer_ok = false;
+  damage(v);
+}
+
+void rk__view_moved(rk_view *v) {
+  for (rk_view *p = v->parent; p; p = p->parent) p->layer_ok = false;
+  damage(v);
+}
+
+static void damage(rk_view *v) {
   rk_window *w = rk__view_window(v);
   if (!w) return;
   rk_view *top = NULL;

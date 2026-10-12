@@ -611,7 +611,15 @@ static void wl_settings(bool *dark, bool *reduced, bool *compact) {
   }
 }
 
+/* A floating window may choose its own size: the next commit carries it. */
+static void wl_resize(void *n, float w, float h) {
+  wwin *x = n;
+  if (!x || x->maximized) return;
+  x->fw = x->lw = (int)lroundf(w); x->fh = x->lh = (int)lroundf(h);
+  apply_size(x);
+}
+
 const rk_platform rk__platform_wayland = {
   "wayland", wl_init, wl_shutdown, wl_open, wl_close, wl_show, wl_title, wl_present_fb, wl_move, wl_minimize, wl_zoom,
-  wl_wait, wl_wake, wl_now, wl_settings
+  wl_wait, wl_wake, wl_now, wl_settings, wl_resize
 };

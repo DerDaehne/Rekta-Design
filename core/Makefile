@@ -4,6 +4,7 @@
 #   make test       headless tests and the reference images (needs node for the image comparison)
 #   make shots      the demo's script without a screen, as PNGs in build/shots
 #   make sanitize   the tests and the demo script under AddressSanitizer and UBSan
+#   make perf       the loop under load (resize, a storm of presses, settling), measured at 1x and 2x
 # On Windows: build.bat (MSVC) or make with MinGW.
 
 CC ?= cc
@@ -66,6 +67,10 @@ shots: $(BUILD)/demo-headless$(EXE)
 	mkdir -p $(BUILD)/shots
 	$(BUILD)/demo-headless$(EXE) --shots $(BUILD)/shots
 
+perf: $(BUILD)/demo-headless$(EXE)
+	$(BUILD)/demo-headless$(EXE) --perf
+	RK_SCALE=2 $(BUILD)/demo-headless$(EXE) --perf
+
 sanitize: | $(BUILD)
 	$(CC) -std=c99 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined -DRK_HEADLESS_ONLY test/test.c -lm -lpthread -o $(BUILD)/test-asan
 	$(CC) -std=c99 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined -DRK_HEADLESS_ONLY demo/demo.c src/rekta.c -lm -lpthread -o $(BUILD)/demo-asan
@@ -76,4 +81,4 @@ sanitize: | $(BUILD)
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all test shots sanitize clean
+.PHONY: all test shots perf sanitize clean

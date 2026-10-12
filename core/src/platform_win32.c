@@ -302,7 +302,15 @@ static void w_settings(bool *dark, bool *reduced, bool *compact) {
   *compact = true;                                             /* a fine pointer: compact, as the web's media query */
 }
 
+static void w_resize(void *n, float w, float h) {
+  wwin *x = n;
+  if (!x || IsZoomed(x->hwnd)) return;
+  RECT r = { 0, 0, (LONG)lroundf(w * x->scale), (LONG)lroundf(h * x->scale) };
+  if (!x->own_frame) AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
+  SetWindowPos(x->hwnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 const rk_platform rk__platform_native = {
   "win32", w_init, w_shutdown, w_open, w_close, w_show, w_title, w_present, w_move, w_minimize, w_zoom,
-  w_wait, w_wake, w_now, w_settings
+  w_wait, w_wake, w_now, w_settings, w_resize
 };

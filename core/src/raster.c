@@ -19,13 +19,14 @@ void rk__bitmap_fit(rk_bitmap **slot, int w, int h) {
   w = RK_MAX(w, 1); h = RK_MAX(h, 1);
   if (b && b->w == w && b->h == h) return;
   size_t need = (size_t)w * h;
-  if (b && need <= b->cap) { b->w = w; b->h = h; b->stride = w; return; }
+  if (b && need <= b->cap) { b->w = w; b->h = h; b->stride = w; rk__bitmap_changed(b); return; }
   rk__bitmap_free(b);
   *slot = b = rk__bitmap_create(w, h);
   if (need > 4096) { free(b->px); b->cap = need + need / 4; b->px = rk__alloc(b->cap * 4); }
 }
 
-void rk__bitmap_free(rk_bitmap *b) { if (b) { free(b->px); free(b); } }
+void rk__bitmap_free(rk_bitmap *b) { if (b) { free(b->px); free(b->occ); free(b); } }
+void rk__bitmap_changed(rk_bitmap *b) { if (b) { free(b->occ); b->occ = NULL; } }
 
 void rk__bitmap_clear(rk_bitmap *b, uint32_t pm) {
   for (int y = 0; y < b->h; y++) {
@@ -337,46 +338,115 @@ static inline uint32_t sample(const rk_bitmap *s, float u, float v) {
   return lerp_px(top, bot, fy);
 }
 
-static rk_path quad_path;
+/* The quad's extent along one scanline: where its edges cross height y (it is convex: the image of a square under a
+   perspective that keeps it in front). */
+static bool quad_span(const float q[8], float y, float *l, float *r) {
+  float lo = INFINITY, hi = -INFINITY;
+  for (int i = 0; i < 4; i++) {
+    float x0 = q[i * 2], y0 = q[i * 2 + 1], x1 = q[(i + 1) % 4 * 2], y1 = q[(i + 1) % 4 * 2 + 1];
+    if ((y < y0) == (y < y1)) continue;
+    float x = x0 + (y - y0) / (y1 - y0) * (x1 - x0);
+    lo = RK_MIN(lo, x); hi = RK_MAX(hi, x);
+  }
+  *l = lo; *r = hi;
+  return lo <= hi;
+}
 
-void rk__composite(rk_bitmap *dst, rk_irect clip, const rk_bitmap *src, const float q[8], float opacity) {
+/* A layer drawn through a projective map onto a quad. Each row is cut where the quad's edges cross sixteen heights
+   inside it: between the crossings every pixel is fully covered, at the ends coverage is the mean of the sixteen horizontal
+   overlaps. Source positions step in 16.16 fixed point along spans of 16 pixels, with the perspective division only
+   at the span ends; sampling is bilinear. */
+static void occupancy(rk_bitmap *b) {
+  int bw = (b->w + 15) / 16, bh = (b->h + 15) / 16;
+  b->occ = rk__alloc((size_t)bw * bh);
+  for (int y = 0; y < b->h; y++) {
+    const uint32_t *p = b->px + (size_t)y * b->stride;
+    uint8_t *o = b->occ + (size_t)(y / 16) * bw;
+    for (int bx = 0; bx < bw; bx++) {
+      if (o[bx]) continue;
+      for (int x = bx * 16, e = RK_MIN(b->w, x + 16); x < e; x++) if (p[x]) { o[bx] = 1; break; }
+    }
+  }
+}
+
+/* Whether any source pixel a span samples, from (u0, v0) to (u1, v1) in 16.16, lies in a block with something in it. */
+static bool span_empty(const rk_bitmap *b, int32_t u0, int32_t v0, int32_t u1, int32_t v1) {
+  int bw = (b->w + 15) / 16, bh = (b->h + 15) / 16;
+  int x0 = (RK_MIN(u0, u1) >> 16) - 1, x1 = (RK_MAX(u0, u1) >> 16) + 2, y0 = (RK_MIN(v0, v1) >> 16) - 1, y1 = (RK_MAX(v0, v1) >> 16) + 2;
+  x0 = RK_MAX(x0, 0) / 16; y0 = RK_MAX(y0, 0) / 16; x1 = RK_MIN(x1 / 16, bw - 1); y1 = RK_MIN(y1 / 16, bh - 1);
+  for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) if (b->occ[(size_t)y * bw + x]) return false;
+  return true;
+}
+
+#define SUB 16                                             /* heights a row is cut at, for edge coverage */
+
+typedef struct comp_job { rk_bitmap *dst; const rk_bitmap *src; const float *q; rk_irect r; float A[9]; uint32_t alpha; } comp_job;
+
+static void comp_rows(void *ctx, int row0, int row1) {
+  const comp_job *j = ctx;
+  rk_bitmap *dst = j->dst; const rk_bitmap *src = j->src; const float *q = j->q, *A = j->A; rk_irect r = j->r;
+  uint32_t alpha = j->alpha;
+  const int sw = src->w, sh = src->h, ss = src->stride;
+  for (int py = row0; py < row1; py++) {
+    float L[SUB], R[SUB], minl = INFINITY, maxl = -INFINITY, minr = INFINITY, maxr = -INFINITY;
+    bool all = true;
+    for (int k = 0; k < SUB; k++) {
+      if (!quad_span(q, py + (k + 0.5f) / SUB, &L[k], &R[k])) { all = false; L[k] = 1; R[k] = 0; continue; }
+      minl = RK_MIN(minl, L[k]); maxl = RK_MAX(maxl, L[k]); minr = RK_MIN(minr, R[k]); maxr = RK_MAX(maxr, R[k]);
+    }
+    if (minl > maxr) continue;
+    int x0 = RK_MAX(r.x0, (int)floorf(minl)), x1 = RK_MIN(r.x1, (int)ceilf(maxr));
+    int f0 = all ? (int)ceilf(maxl) : x1, f1 = all ? (int)floorf(minr) : x1;   /* fully covered: [f0, f1) */
+    uint32_t *d = dst->px + (size_t)py * dst->stride;
+    float Y = py + 0.5f;
+    for (int x = x0; x < x1;) {
+      int end = RK_MIN(x1, x + 16);
+      float X0 = x + 0.5f, X1 = end + 0.5f;
+      float z0 = 1.0f / (A[6] * X0 + A[7] * Y + A[8]), z1 = 1.0f / (A[6] * X1 + A[7] * Y + A[8]);
+      float u0 = (A[0] * X0 + A[1] * Y + A[2]) * z0 - 0.5f, v0 = (A[3] * X0 + A[4] * Y + A[5]) * z0 - 0.5f;
+      float u1 = (A[0] * X1 + A[1] * Y + A[2]) * z1 - 0.5f, v1 = (A[3] * X1 + A[4] * Y + A[5]) * z1 - 0.5f;
+      int n = end - x;
+      int32_t U = (int32_t)(u0 * 65536.0f), V = (int32_t)(v0 * 65536.0f);
+      int32_t dU = (int32_t)((u1 - u0) * 65536.0f / n), dV = (int32_t)((v1 - v0) * 65536.0f / n);
+      if (span_empty(src, U, V, U + dU * n, V + dV * n)) { x = end; continue; }   /* empty ground: nothing to sample */
+      for (; x < end; x++, U += dU, V += dV) {
+        uint32_t cov = 256;
+        if (x < f0 || x >= f1) {
+          float c = 0;
+          for (int k = 0; k < SUB; k++) { float o = RK_MIN(R[k], x + 1.0f) - RK_MAX(L[k], (float)x); if (o > 0) c += RK_MIN(o, 1.0f); }
+          cov = (uint32_t)(c * (256.0f / SUB) + 0.5f);
+          if (!cov) continue;
+        }
+        int sx = U >> 16, sy = V >> 16;
+        uint32_t fx = (uint32_t)(U >> 8) & 255u, fy = (uint32_t)(V >> 8) & 255u, s;
+        if ((unsigned)sx < (unsigned)(sw - 1) && (unsigned)sy < (unsigned)(sh - 1)) {
+          const uint32_t *p = src->px + (size_t)sy * ss + sx;
+          s = p[0];
+          if (s != p[1] || s != p[ss] || s != p[ss + 1]) s = lerp_px(lerp_px(s, p[1], fx), lerp_px(p[ss], p[ss + 1], fx), fy);   /* flat: as it is */
+        } else {
+          #define PX(X, Y) (((X) < 0 || (Y) < 0 || (X) >= sw || (Y) >= sh) ? 0u : src->px[(size_t)(Y) * ss + (X)])
+          s = lerp_px(lerp_px(PX(sx, sy), PX(sx + 1, sy), fx), lerp_px(PX(sx, sy + 1), PX(sx + 1, sy + 1), fx), fy);
+          #undef PX
+        }
+        if (s) d[x] = over(d[x], s, cov * alpha >> 8);
+      }
+    }
+  }
+}
+
+void rk__composite(rk_bitmap *dst, rk_irect clip, rk_bitmap *src, const float q[8], float opacity) {
   if (opacity <= 0.002f) return;
   double m[9], inv[9];
   square_to_quad(q, m);
   if (!invert3(m, inv)) return;
-  /* the quad's coverage first, as a mask in a scratch layer the size of the quad's box */
   float minx = q[0], maxx = q[0], miny = q[1], maxy = q[1];
   for (int i = 1; i < 4; i++) { minx = RK_MIN(minx, q[i * 2]); maxx = RK_MAX(maxx, q[i * 2]); miny = RK_MIN(miny, q[i * 2 + 1]); maxy = RK_MAX(maxy, q[i * 2 + 1]); }
   rk_irect r = rk__irect_meet(rk__irect_meet(clip, (rk_irect){ 0, 0, dst->w, dst->h }), (rk_irect){ (int)floorf(minx), (int)floorf(miny), (int)ceilf(maxx), (int)ceilf(maxy) });
   if (rk__irect_empty(r)) return;
-  static rk_bitmap cover = { 0, 0, 0, NULL, 0 };
-  int w = r.x1 - r.x0, h = r.y1 - r.y0;
-  if ((size_t)w * h > cover.cap) { free(cover.px); cover.cap = (size_t)w * h; cover.px = rk__alloc(cover.cap * 4); }
-  cover.w = w; cover.h = h; cover.stride = w;
-  memset(cover.px, 0, (size_t)w * h * 4);
-  rk__path_reset(&quad_path);
-  rk__path_move(&quad_path, q[0] - r.x0, q[1] - r.y0);
-  for (int i = 1; i < 4; i++) rk__path_line(&quad_path, q[i * 2] - r.x0, q[i * 2 + 1] - r.y0);
-  rk__path_close(&quad_path);
-  rk__path_fill(&cover, (rk_irect){ 0, 0, w, h }, &quad_path, 0xff000000u);
-  uint32_t a = (uint32_t)(RK_CLAMP(opacity, 0.0f, 1.0f) * 256.0f + 0.5f);
-  /* the inverse map in source pixels, stepped along each row: one division a pixel, none when it is affine */
-  float a0 = (float)(inv[0] * src->w), a1 = (float)(inv[1] * src->w), a2 = (float)(inv[2] * src->w);
-  float b0 = (float)(inv[3] * src->h), b1 = (float)(inv[4] * src->h), b2 = (float)(inv[5] * src->h);
-  float c0 = (float)inv[6], c1 = (float)inv[7], c2 = (float)inv[8];
-  bool affine = fabsf(c0) < 1e-9f && fabsf(c1) < 1e-9f;
-  for (int y = 0; y < h; y++) {
-    uint32_t *d = dst->px + (size_t)(y + r.y0) * dst->stride + r.x0;
-    const uint32_t *cv = cover.px + (size_t)y * w;
-    float X = r.x0 + 0.5f, Y = y + r.y0 + 0.5f;
-    float nu = a0 * X + a1 * Y + a2, nv = b0 * X + b1 * Y + b2, nz = c0 * X + c1 * Y + c2;
-    for (int x = 0; x < w; x++, nu += a0, nv += b0, nz += c0) {
-      uint32_t c = cv[x] >> 24;
-      if (!c) continue;
-      float z = affine ? 1.0f / c2 : 1.0f / nz;
-      uint32_t s = sample(src, nu * z, nv * z);
-      if (!s) continue;
-      d[x] = over(d[x], s, (c + (c >> 7)) * a >> 8);
-    }
-  }
+  uint32_t alpha = (uint32_t)(RK_CLAMP(opacity, 0.0f, 1.0f) * 256.0f + 0.5f);
+  if (!src->occ) occupancy(src);
+  comp_job j = { dst, src, q, r, { (float)(inv[0] * src->w), (float)(inv[1] * src->w), (float)(inv[2] * src->w),
+                                   (float)(inv[3] * src->h), (float)(inv[4] * src->h), (float)(inv[5] * src->h),
+                                   (float)inv[6], (float)inv[7], (float)inv[8] }, alpha };
+  rk__parallel_rows(comp_rows, &j, r.y0, r.y1, (long)(r.x1 - r.x0) * (r.y1 - r.y0));
 }

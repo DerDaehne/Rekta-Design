@@ -188,6 +188,7 @@ static glyph *glyph_get(font *f, int g, float px_size, int sub) {
         for (int i = 0; i < e->w * e->h; i++) e->px[i] = gamma_lift[e->px[i]];
       }
       cached++;
+      rk__meter.glyphs++;
       return e;
     }
   }

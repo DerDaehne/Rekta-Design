@@ -154,10 +154,12 @@ RK_API void rk_window_show(rk_window *window);
 RK_API void rk_window_close(rk_window *window);
 RK_API void rk_window_set_title(rk_window *window, const char *title);
 RK_API rk_size rk_window_size(rk_window *window);
+RK_API void rk_window_set_size(rk_window *window, float width, float height);   /* logical px; not while maximized */
 RK_API float rk_window_scale(rk_window *window);   /* device pixels per logical px */
 RK_API void rk_window_on_close(rk_window *window, bool (*should_close)(rk_window *window, void *user), void *user);
 RK_API bool rk_window_focus(rk_window *window, rk_view *view);  /* false if the view cannot take focus */
 RK_API rk_view *rk_window_focused(rk_window *window);
+RK_API rk_view *rk_window_view_at(rk_window *window, rk_point point);   /* what a press there reaches, or NULL */
 /* A toast: a short message from the top edge, with an optional action (undo, retry) that keeps it for the toast
    timing and shows the time running out. */
 RK_API void rk_window_toast(rk_window *window, const char *message, const char *action, void (*on_action)(void *user), void *user);
@@ -403,6 +405,21 @@ RK_API rk_size rk_text_measure(const char *text, rk_text_style style, float max_
 RK_API void rk_window_inject(rk_window *window, const rk_event *event);   /* as if it came from the system */
 RK_API bool rk_window_snapshot(rk_window *window, const char *png_path);  /* the window's pixels as a PNG */
 RK_API void rk_app_run_for(double ms);             /* headless: advance the virtual clock, running every frame */
+
+/* What the loop did, to measure an app by. RK_HUD=1 shows it in the window's corner; RK_TRACE=1 prints each frame. */
+typedef struct rk_stats {
+  uint32_t size;                                   /* set by the caller: sizeof(rk_stats) */
+  uint32_t frames;                                 /* frames drawn */
+  uint32_t animations;                             /* running now */
+  uint32_t views;                                  /* alive now */
+  uint32_t glyphs;                                 /* glyphs rasterized (each a cache miss) */
+  uint32_t slow;                                   /* frames that took longer than 8 ms to draw */
+  double draw_ms;                                  /* time spent drawing all frames */
+  double last_ms, max_ms;                          /* the last frame, the slowest */
+  double pixels;                                   /* device pixels drawn */
+  double latency_ms, max_latency_ms;               /* from an input event to the end of the frame that showed it */
+} rk_stats;
+RK_API void rk_app_stats(rk_stats *stats, bool reset);   /* reset: the counts start again from zero */
 
 #ifdef __cplusplus
 }

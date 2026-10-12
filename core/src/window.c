@@ -5,8 +5,7 @@
 
 static rk_window *open_windows;
 
-/* RK_PROFILE=1: the time spent drawing, printed when the app ends */
-double rk__prof_ms; long rk__prof_frames, rk__prof_pixels;
+rk_meter rk__meter;
 rk_window *rk__windows(void) { return open_windows; }
 
 /* The root view places the title bar, the content and the layers above it. */
@@ -121,11 +120,15 @@ void rk_window_set_title(rk_window *w, const char *title) {
 }
 
 rk_size rk_window_size(rk_window *w) { return w->size; }
+void rk_window_set_size(rk_window *w, float width, float height) { if (!w->closed) rk__platform()->resize(w->native, RK_MAX(width, 1.0f), RK_MAX(height, 1.0f)); }
 float rk_window_scale(rk_window *w) { return w->scale; }
 void rk_window_on_close(rk_window *w, bool (*fn)(rk_window *, void *), void *user) { w->should_close = fn; w->close_user = user; }
 
+uint32_t rk__layer_gen;
+
 void rk__window_invalidate(rk_window *w) {
   w->damage_all = true;
+  rk__layer_gen++;                                               /* the theme, the size: layers are drawn again */
   if (!w->needs_draw) { w->needs_draw = true; rk__app_request_frame(); }
 }
 
@@ -192,7 +195,7 @@ static bool deep(const rk_transform *t) {
 
 static void draw_content(rk_canvas *c, rk_view *v, float x, float y, bool fill);
 
-static void composite_layer(rk_canvas *c, const rk_bitmap *layer, rk_view *v, const rk_transform *t, float x, float y, float opacity) {
+static void composite_layer(rk_canvas *c, rk_bitmap *layer, rk_view *v, const rk_transform *t, float x, float y, float opacity) {
   float k = c->scale, q[8];
   float w = layer->w / k, h = layer->h / k;
   float cx[4] = { 0, w, w, 0 }, cy[4] = { 0, 0, h, h };
@@ -245,12 +248,18 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
     ft.rotate_x += 90 * (1 - rk__ease(rk__ease_in, (tt - 0.5f) / 0.5f));
     t = ft;
   }
-  rk_bitmap *layer = ensure_layer(&v->layer, lw, lh);
-  rk_canvas sub;
-  memset(&sub, 0, sizeof sub);
-  rk__canvas_init(&sub, layer, k);
-  draw_content(&sub, v, 0, 0, true);
-  rk__path_free(&sub.path);
+  /* the layer is drawn again only when what is in it changed: a page that turns is drawn once */
+  rk_bitmap *layer = v->layer;
+  if (!layer || layer->w != lw || layer->h != lh || !v->layer_ok || v->layer_gen != rk__layer_gen) {
+    layer = ensure_layer(&v->layer, lw, lh);
+    rk_canvas sub;
+    memset(&sub, 0, sizeof sub);
+    rk__canvas_init(&sub, layer, k);
+    draw_content(&sub, v, 0, 0, true);
+    rk__path_free(&sub.path);
+    rk__bitmap_changed(layer);
+    v->layer_ok = true; v->layer_gen = rk__layer_gen;
+  }
   if (!turned && !flip) rk__composite_at(c->target, rk__canvas_clip(c), layer, (int)lroundf(x), (int)lroundf(y), opacity);   /* a plain fade */
   else composite_layer(c, layer, v, &t, x, y, opacity);
   if (!v->anims && !v->transition) { rk__bitmap_free(v->layer); v->layer = NULL; }
@@ -305,18 +314,47 @@ rk_bitmap *rk__snapshot(rk_view *v, bool with_fill) {
   return b;
 }
 
+static rk_irect irect_join(rk_irect a, rk_irect b) {
+  if (rk__irect_empty(a)) return b;
+  if (rk__irect_empty(b)) return a;
+  return (rk_irect){ RK_MIN(a.x0, b.x0), RK_MIN(a.y0, b.y0), RK_MAX(a.x1, b.x1), RK_MAX(a.y1, b.y1) };
+}
+
+static int env_on(const char *name) { const char *v = getenv(name); return v && *v && *v != '0'; }
+
+/* RK_HUD=1: what the loop does, in the window's bottom left corner, redrawn with every frame */
+static rk_rect hud_rect(rk_window *w) { return (rk_rect){ 8, w->size.h - 8 - 66, 260, 66 }; }
+
+static void draw_hud(rk_canvas *c, rk_window *w) {
+  rk_rect r = hud_rect(w);
+  char line[3][128];
+  const rk_meter *m = &rk__meter;
+  snprintf(line[0], sizeof line[0], "%s %.2gx  %.0f x %.0f", rk__platform()->name, w->scale, w->size.w, w->size.h);
+  snprintf(line[1], sizeof line[1], "draw %.1f ms  max %.1f  slow %u / %u", m->last_ms, m->max_ms, m->slow, m->frames);
+  snprintf(line[2], sizeof line[2], "input %.0f ms  max %.0f  anim %u  glyphs %u", m->latency_ms, m->max_latency_ms, rk__anim_count(), m->glyphs);
+  c->ox = c->oy = 0; c->alpha = 1;
+  rk_canvas_fill_rect(c, r, 0x000000d0);
+  for (int i = 0; i < 3; i++) rk_canvas_text(c, line[i], (rk_point){ r.x + 8, r.y + 6 + i * 19.0f }, RK_TEXT_META, 0xffffffff);
+}
+
+
 void rk__window_frame(rk_window *w, double now) {
-  (void)now;
+  static int hud = -1, trace = -1;
+  if (hud < 0) { hud = env_on("RK_HUD"); trace = env_on("RK_TRACE"); }
   if (w->closed) return;
   if (w->needs_layout) { layout_window(w); w->damage_all = true; }
   if (!w->needs_draw) return;
   w->needs_draw = false;
-  clock_t t0 = clock();
+  double t0 = rk__wall_ms();
   int fw = (int)ceilf(w->size.w * w->scale), fh = (int)ceilf(w->size.h * w->scale);
   if (!w->fb || w->fb->w != fw || w->fb->h != fh) { rk__bitmap_fit(&w->fb, fw, fh); w->damage_all = true; }
   rk_irect all = { 0, 0, fw, fh }, clip = w->damage_all ? all : rk__irect_meet(w->damage, all);
   w->damage = (rk_irect){ 0, 0, 0, 0 }; w->damage_all = false;
   if (rk__irect_empty(clip)) return;
+  if (hud) {
+    rk_rect h = hud_rect(w);
+    clip = rk__irect_meet(irect_join(clip, (rk_irect){ (int)floorf(h.x * w->scale), (int)floorf(h.y * w->scale), (int)ceilf((h.x + h.w) * w->scale), (int)ceilf((h.y + h.h) * w->scale) }), all);
+  }
   /* only what changed: the ground under it, then whatever reaches into it */
   rk__fill_rect(w->fb, clip, (float)clip.x0, (float)clip.y0, (float)clip.x1, (float)clip.y1, rk__pm(rk_color_of(RK_ROLE_BG), 1));
   rk_canvas c;
@@ -329,14 +367,27 @@ void rk__window_frame(rk_window *w, double now) {
     c.ox = c.oy = 0; c.alpha = 1;
     rk__draw_focus(&c, w->focus, r);
   }
+  if (hud) draw_hud(&c, w);
   rk__path_free(&c.path);
   rk__platform()->present(w->native, w->fb, clip);
-  rk__prof_ms += (double)(clock() - t0) * 1000.0 / CLOCKS_PER_SEC;
-  rk__prof_frames++;
-  rk__prof_pixels += (long)(clip.x1 - clip.x0) * (clip.y1 - clip.y0);
+  rk_meter *m = &rk__meter;
+  double ms = rk__wall_ms() - t0;
+  m->frames++; m->draw_ms += ms; m->last_ms = ms; m->max_ms = RK_MAX(m->max_ms, ms);
+  if (ms > 8) m->slow++;
+  m->pixels += (double)(clip.x1 - clip.x0) * (clip.y1 - clip.y0);
+  if (m->input_at > 0) {
+    m->latency_ms = RK_MAX(0.0, rk_app_now() - m->input_at);
+    m->max_latency_ms = RK_MAX(m->max_latency_ms, m->latency_ms);
+    m->input_at = 0;
+  }
+  if (trace)
+    fprintf(stderr, "rk frame t=%.1f draw=%.2fms px=%dx%d anim=%u glyphs=%u input=%.1fms\n", now, ms, clip.x1 - clip.x0, clip.y1 - clip.y0,
+            rk__anim_count(), m->glyphs, m->latency_ms);
 }
 
 /* Input ----------------------------------------------------------------------------------------------------------- */
+
+static void event(rk_window *w, const rk_event *e);
 
 static rk_view *hit(rk_view *v, float x, float y) {
   if (v->hidden || v->leaving || v->popacity <= 0.01f) return NULL;
@@ -463,6 +514,27 @@ static void focus_step(rk_window *w, int dir) {
 
 void rk__window_event(rk_window *w, const rk_event *e) {
   if (w->closed) return;
+  if (w->needs_layout) layout_window(w);                         /* a press lands on what the next frame will show */
+  double was = rk__meter.input_at;
+  if (!was) rk__meter.input_at = rk_app_now();
+  event(w, e);
+  if (!w->needs_draw && !rk__anim_running()) rk__meter.input_at = was;   /* nothing to show for it */
+}
+
+/* A press the system took over (moving or resizing the window) ends without activating anything. */
+void rk__window_pointer_cancel(rk_window *w) {
+  if (w->pressed) press_end(w, w->pressed);
+  w->capture = NULL;
+}
+
+rk_view *rk_window_view_at(rk_window *w, rk_point p) {
+  if (w->closed) return NULL;
+  rk__layout_pending();
+  rk_view *h = hit_window(w, p.x, p.y);
+  return h == w->root || h == w->sheets ? NULL : h;
+}
+
+static void event(rk_window *w, const rk_event *e) {
   switch (e->type) {
     case RK_EVENT_POINTER_MOVE: {
       w->pointer = e->position;
