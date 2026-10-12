@@ -177,9 +177,15 @@ ok((await p.evaluate(() => document.querySelector('#comp-body tr').dataset.name)
 await p.click('#comp-status'); await p.waitForTimeout(200); await p.click('#comp-status-menu [data-v=warning]'); await p.waitForTimeout(200);
 ok((await text(p, '#comp-status')) === 'status: waiting' && (await p.evaluate(() => [...document.querySelectorAll('#comp-body tr')].filter((r) => !r.hidden).length)) === 3, 'a filter keeps the waiting components', await text(p, '#comp-status'));
 await p.keyboard.press('Escape'); await p.click('#comp-clear'); await p.waitForTimeout(200);
-await p.click('#comp-more'); await p.waitForTimeout(200); await p.click('#comp-menu [data-act=refresh]'); await p.waitForTimeout(100);
+await p.click('#comp-more'); await p.waitForTimeout(200);
 const line = () => p.evaluate(() => getComputedStyle(document.querySelector('#comp-region'), '::before').visibility);
-ok((await p.getAttribute('#comp-region', 'aria-busy')) === 'true' && (await line()) === 'hidden', 'loading: no line before the delay');
+// the choice and the look in one step: a slow runner's round trips must not eat the busy delay
+const busyAtOnce = await p.evaluate(() => {
+  document.querySelector('#comp-menu [data-act=refresh]').click();
+  const r = document.querySelector('#comp-region');
+  return r.getAttribute('aria-busy') === 'true' && getComputedStyle(r, '::before').visibility === 'hidden';
+});
+ok(busyAtOnce, 'loading: no line before the delay');
 await p.waitForTimeout(400);
 ok((await line()) === 'visible', 'loading: the line after the delay');
 await p.waitForTimeout(1300);
@@ -552,9 +558,14 @@ await m.close();
 const q = await open();
 const anims = (sel) => q.evaluate((s) => [...document.querySelectorAll(s)].reduce((n, el) => n + el.getAnimations().length, 0), sel);
 const setSize = (pg, v) => pg.evaluate((x) => { const r = document.querySelector(`input[name=b-size][value="${x}"]`); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }, v);
-await setSize(q, 'h2'); await q.waitForTimeout(60);
-ok(await anims('#built') > 0 && await anims('#built ~ .rk-tile') > 0, 'a resized tile scales to its size and its neighbours glide');
-ok(await q.evaluate(() => !!document.querySelector('#builder .rk-segments-slide')), 'the segments accent slides to the new choice');
+// the change and the look in one step, so a slow runner cannot miss the 250ms slide
+const resized = await q.evaluate(() => {
+  const r = document.querySelector('input[name=b-size][value="h2"]'); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true }));
+  const n = (s) => [...document.querySelectorAll(s)].reduce((k, el) => k + el.getAnimations().length, 0);
+  return { tile: n('#built'), next: n('#built ~ .rk-tile'), slide: !!document.querySelector('#builder .rk-segments-slide') };
+});
+ok(resized.tile > 0 && resized.next > 0, 'a resized tile scales to its size and its neighbours glide', JSON.stringify(resized));
+ok(resized.slide, 'the segments accent slides to the new choice');
 await q.waitForTimeout(500);
 ok(await anims('#built, #built ~ .rk-tile') === 0 && await q.evaluate(() => document.querySelector('#built').classList.contains('rk-h2') && !document.querySelector('.rk-segments-slide')), 'the re-flow settles');
 await q.evaluate(() => { const v = document.querySelector('#b-value'); v.value = '13'; v.dispatchEvent(new Event('input', { bubbles: true })); });
