@@ -313,7 +313,7 @@ void rk__window_frame(rk_window *w, double now) {
   w->needs_draw = false;
   clock_t t0 = clock();
   int fw = (int)ceilf(w->size.w * w->scale), fh = (int)ceilf(w->size.h * w->scale);
-  if (!w->fb || w->fb->w != fw || w->fb->h != fh) { rk__bitmap_free(w->fb); w->fb = rk__bitmap_create(fw, fh); w->damage_all = true; }
+  if (!w->fb || w->fb->w != fw || w->fb->h != fh) { rk__bitmap_fit(&w->fb, fw, fh); w->damage_all = true; }
   rk_irect all = { 0, 0, fw, fh }, clip = w->damage_all ? all : rk__irect_meet(w->damage, all);
   w->damage = (rk_irect){ 0, 0, 0, 0 }; w->damage_all = false;
   if (rk__irect_empty(clip)) return;

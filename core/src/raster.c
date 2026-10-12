@@ -8,8 +8,21 @@
 rk_bitmap *rk__bitmap_create(int w, int h) {
   rk_bitmap *b = rk__alloc(sizeof *b);
   b->w = RK_MAX(w, 1); b->h = RK_MAX(h, 1); b->stride = b->w;
-  b->px = rk__alloc((size_t)b->stride * b->h * 4);
+  b->cap = (size_t)b->stride * b->h;
+  b->px = rk__alloc(b->cap * 4);
   return b;
+}
+
+/* A window being resized changes size every frame: it keeps its memory, with a quarter to spare when it grows. */
+void rk__bitmap_fit(rk_bitmap **slot, int w, int h) {
+  rk_bitmap *b = *slot;
+  w = RK_MAX(w, 1); h = RK_MAX(h, 1);
+  if (b && b->w == w && b->h == h) return;
+  size_t need = (size_t)w * h;
+  if (b && need <= b->cap) { b->w = w; b->h = h; b->stride = w; return; }
+  rk__bitmap_free(b);
+  *slot = b = rk__bitmap_create(w, h);
+  if (need > 4096) { free(b->px); b->cap = need + need / 4; b->px = rk__alloc(b->cap * 4); }
 }
 
 void rk__bitmap_free(rk_bitmap *b) { if (b) { free(b->px); free(b); } }
@@ -336,9 +349,9 @@ void rk__composite(rk_bitmap *dst, rk_irect clip, const rk_bitmap *src, const fl
   for (int i = 1; i < 4; i++) { minx = RK_MIN(minx, q[i * 2]); maxx = RK_MAX(maxx, q[i * 2]); miny = RK_MIN(miny, q[i * 2 + 1]); maxy = RK_MAX(maxy, q[i * 2 + 1]); }
   rk_irect r = rk__irect_meet(rk__irect_meet(clip, (rk_irect){ 0, 0, dst->w, dst->h }), (rk_irect){ (int)floorf(minx), (int)floorf(miny), (int)ceilf(maxx), (int)ceilf(maxy) });
   if (rk__irect_empty(r)) return;
-  static rk_bitmap cover = { 0, 0, 0, NULL };
+  static rk_bitmap cover = { 0, 0, 0, NULL, 0 };
   int w = r.x1 - r.x0, h = r.y1 - r.y0;
-  if (w * h > cover.w * cover.h) { free(cover.px); cover.px = rk__alloc((size_t)w * h * 4); }
+  if ((size_t)w * h > cover.cap) { free(cover.px); cover.cap = (size_t)w * h; cover.px = rk__alloc(cover.cap * 4); }
   cover.w = w; cover.h = h; cover.stride = w;
   memset(cover.px, 0, (size_t)w * h * 4);
   rk__path_reset(&quad_path);

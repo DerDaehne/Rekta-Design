@@ -41,7 +41,8 @@ hands the core input and a pixel buffer, and puts the pixels on screen:
 |---|---|---|---|
 | Windows | Win32, `WM_IME_*` | `StretchDIBits` | registry (dark mode), `SPI_GETCLIENTAREAANIMATION` |
 | macOS | Cocoa (`NSWindow`, `NSTextInputClient`) | `CALayer` contents | `effectiveAppearance`, `accessibilityDisplayShouldReduceMotion` |
-| Linux | Xlib, XIM (Wayland through XWayland for now) | `XPutImage` / MIT-SHM | XSETTINGS |
+| Linux | Wayland: xdg-shell, xdg-decoration, fractional-scale, cursor-shape, xkbcommon | `wl_shm` buffers, damage, frame callbacks; resizes acknowledged and drawn in one commit | GNOME and KDE settings |
+| Linux (fallback) | Xlib, XIM | MIT-SHM (`XPutImage` without it) | XSETTINGS |
 | headless | none | memory, PNG | fixed |
 
 The headless platform runs on a virtual clock: frames advance at 60 per second
@@ -141,7 +142,7 @@ changelog says so.
 ## Status
 
 Stage 1 is done: the renderer, views, controllers, motion, input, the
-headless platform and X11 are tested here (73 checks, 14 reference images,
+headless platform, Wayland and X11 are tested here (73 checks, 14 reference images,
 AddressSanitizer and UBSan clean); Win32 and Cocoa are built and tested in CI.
 
 ## Stages
@@ -152,7 +153,7 @@ AddressSanitizer and UBSan clean); Win32 and Cocoa are built and tested in CI.
 2. **Tools.** Text fields (selection, clipboard, IME), menus, tables with
    selection, long lists, focus everywhere, live tiles, undo, Win32 and Cocoa
    complete.
-3. **Everyone.** Accessibility bridges, Wayland, several windows, the
+3. **Everyone.** Accessibility bridges, several windows, the
    reference gallery against the web in CI.
 
 ## Building
@@ -164,4 +165,5 @@ make -C core test       # headless tests against the reference images
 
 On Windows, `core\build.bat` does the same with MSVC. The library links only
 against the system: `user32 gdi32 imm32 dwmapi` on Windows, `Cocoa QuartzCore`
-on macOS, `X11 Xext` and `libm` on Linux.
+on macOS, `wayland-client wayland-cursor xkbcommon X11 Xext` and `libm` on Linux
+(`make WAYLAND=0` for X11 alone).

@@ -5,7 +5,8 @@ Rekta Design as native views in C, for Windows, macOS and Linux. The web keeps
 design and the ABI rules are in [docs/core.md](../docs/core.md); the whole API
 is [include/rekta.h](include/rekta.h).
 
-- No dependency beyond the system: Win32, Cocoa or Xlib. Glyphs come from
+- No dependency beyond the system: Win32, Cocoa, or Wayland (libwayland,
+  libxkbcommon) with Xlib as the fallback. Glyphs come from
   `third_party/stb_truetype.h` (public domain); Barlow is built in.
 - One header, one translation unit (`src/rekta.c`), plus `src/platform_cocoa.m`
   on macOS.
@@ -18,7 +19,7 @@ The flake at the root brings everything the demo needs, on Linux and macOS:
 
 ```sh
 nix run github:DerDaehne/Rekta-Design    # build and start the demo
-nix develop                              # in a clone: the compiler, make, X11 and node; then make -C core
+nix develop                              # in a clone: the compiler, make, Wayland, X11 and node; then make -C core
 nix flake check                          # builds and runs the tests and the reference images
 ```
 
@@ -45,7 +46,7 @@ and link:
 
 | OS | link with |
 |---|---|
-| Linux | `-lX11 -lXext -lm -lpthread` |
+| Linux | `-lwayland-client -lwayland-cursor -lxkbcommon -lrt -lX11 -lXext -lm -lpthread` (or `-DRK_NO_WAYLAND` and only the X11 half) |
 | macOS | `-framework Cocoa -framework QuartzCore` |
 | Windows | `user32 gdi32 advapi32` |
 
@@ -114,7 +115,9 @@ rk_animate_commit();
 
 Stage 1 of [docs/core.md](../docs/core.md#stages): tokens, renderer, views,
 controllers (places with the turn, panorama, pivot, sheets), motion, the press,
-focus and the keyboard, toasts, the title bar; headless and X11 tested here,
+focus and the keyboard, toasts, the title bar; headless, Wayland and X11 tested
+here (Wayland is the default where a compositor answers; `RK_PLATFORM=x11`
+picks X11),
 Win32 and Cocoa built and tested in CI.
 
 Not there yet: text fields, menus, tables, long lists (stage 2); screen readers

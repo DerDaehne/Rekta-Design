@@ -10,7 +10,8 @@ it; each entry says how.
 ### Added
 
 - **rekta-core** (`core/`): Rekta Design as native views in C for
-  Windows (Win32), macOS (Cocoa) and Linux (Xlib), with no dependency
+  Windows (Win32), macOS (Cocoa) and Linux (Wayland first, Xlib as the
+  fallback), with no dependency
   beyond the system and a vendored `stb_truetype.h`. One header
   (`core/include/rekta.h`) with a clean ABI: opaque reference-counted
   objects, size-prefixed descriptors, 32-bit enums, callbacks with a user
@@ -24,6 +25,13 @@ it; each entry says how.
   platform with a virtual clock runs the tests (73 checks, 14 reference
   images) and the demo's tour. Stage 1 of docs/core.md: text fields,
   menus and tables come next, screen-reader bridges after them.
+- rekta-core on Linux speaks Wayland natively: shared-memory buffers with
+  damage and frame callbacks, resizes acknowledged and drawn in the same
+  commit (the content keeps up with the edge, clicks land where they
+  should), its own title bar and resize edges, fractional scales,
+  cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
+  fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
+  its shared memory while the window changes size.
 - `core/demo/demo.c` shows every feature of the core in six sections;
   `flake.nix` builds it on Linux and macOS (`nix run`, `nix develop`,
   `nix flake check` with the tests).

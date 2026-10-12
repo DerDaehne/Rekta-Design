@@ -1,6 +1,7 @@
-/* platform_x11.c: Linux and BSD through Xlib (Wayland desktops run it through XWayland). Pixels go up with
-   XPutImage; text input comes through XIM; the theme and the animation setting come from XSETTINGS, which GNOME,
-   KDE and Xfce all publish; Xft.dpi gives the scale. Another thread wakes the loop through a pipe. */
+/* platform_x11.c: Linux and BSD through Xlib, where no Wayland compositor answers (or with RK_PLATFORM=x11). Pixels go
+   up through MIT-SHM (XPutImage where it is missing); text input comes through XIM; the theme and the animation setting
+   come from XSETTINGS, which GNOME, KDE and Xfce all publish; Xft.dpi gives the scale. Another thread wakes the loop
+   through a pipe. */
 #include "rk_internal.h"
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
@@ -144,8 +145,10 @@ static int shm_error(Display *d, XErrorEvent *e) { (void)d; (void)e; shm_failed 
 
 /* A shared image the size of the window; a remote display refuses the attach, and then XPutImage it is. */
 static bool shm_ensure(xwin *x, int w, int h) {
-  if (x->shm_img && x->shm_img->width == w && x->shm_img->height == h) return true;
+  /* a resize step that fits uses the image it has (frames go up as sub-rectangles); growing leaves a quarter spare */
+  if (x->shm_img && x->shm_img->width >= w && x->shm_img->height >= h) return true;
   shm_free(x);
+  w += w / 4; h += h / 4;
   XImage *img = XShmCreateImage(dpy, DefaultVisual(dpy, screen), (unsigned)DefaultDepth(dpy, screen), ZPixmap, NULL, &x->shm, (unsigned)w, (unsigned)h);
   if (!img) { use_shm = false; return false; }
   x->shm.shmid = shmget(IPC_PRIVATE, (size_t)img->bytes_per_line * h, IPC_CREAT | 0600);
@@ -277,7 +280,10 @@ static void handle(XEvent *ev) {
       if (ev->xconfigure.width != x->pw || ev->xconfigure.height != x->ph) {
         x->pw = ev->xconfigure.width; x->ph = ev->xconfigure.height;
         rk__window_resized(w, x->pw / dpi_scale, x->ph / dpi_scale, dpi_scale);
-        rk__window_frame(w, rk_app_now());                       /* the new size, drawn at once */
+        /* the new size, drawn at once, unless the window manager has already sent the next one: then that one */
+        XEvent next;
+        if (XCheckTypedWindowEvent(dpy, x->win, ConfigureNotify, &next)) XPutBackEvent(dpy, &next);
+        else rk__window_frame(w, rk_app_now());
       }
       break;
     case Expose: {

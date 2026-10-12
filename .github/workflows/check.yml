@@ -37,18 +37,26 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - name: Install X11 headers and a virtual display
-        run: sudo apt-get update -q && sudo apt-get install -y -q libx11-dev libxext-dev xvfb
+      - name: Install Wayland and X11 headers, a headless compositor and a virtual display
+        run: sudo apt-get update -q && sudo apt-get install -y -q pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxext-dev weston xvfb
       - name: The generated C sources are up to date
         run: node scripts/build.mjs --check
-      - name: Build the library and the demo (X11)
+      - name: Build for X11 alone
+        run: make -C core WAYLAND=0 && make -C core clean
+      - name: Build the library and the demo (Wayland, X11 as the fallback)
         run: make -C core
       - name: Tests and reference images
         run: make -C core test
       - name: Tests and the demo script under AddressSanitizer and UBSan
         run: make -C core sanitize
-      - name: The demo opens a window and runs
+      - name: The demo opens a window and runs (X11)
         run: xvfb-run -a timeout 3 ./core/build/demo || test $? -eq 124
+      - name: The demo opens a window and runs (Wayland, under a headless Weston)
+        run: |
+          export XDG_RUNTIME_DIR=$(mktemp -d) && chmod 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=wl-ci --idle-time=0 &
+          for i in $(seq 50); do test -S "$XDG_RUNTIME_DIR/wl-ci" && break; sleep 0.1; done
+          env -u DISPLAY WAYLAND_DISPLAY=wl-ci timeout 3 ./core/build/demo || test $? -eq 124
 
   core-macos:
     runs-on: macos-latest

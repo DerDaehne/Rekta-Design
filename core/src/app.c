@@ -176,12 +176,20 @@ int rk_app_main(const rk_app_desc *desc) {
   memset(&app, 0, sizeof app);
   if (desc) memcpy(&app, desc, RK_MIN((size_t)desc->size, sizeof app));
   const char *env = getenv("RK_HEADLESS");
-  plat = app.headless || (env && *env && *env != '0') ? &rk__platform_headless : &rk__platform_native;
   LOCK_INIT();
-  if (!plat->init(&app)) {
-    if (plat == &rk__platform_headless) return 1;
-    fprintf(stderr, "rekta: no display (%s); set RK_HEADLESS=1 to run without one\n", plat->name);
-    return 1;
+  if (app.headless || (env && *env && *env != '0')) {
+    plat = &rk__platform_headless;
+    if (!plat->init(&app)) return 1;
+  } else {
+    /* Wayland first where it is built in and a compositor answers; RK_PLATFORM=x11 picks X11 instead */
+    const char *want = getenv("RK_PLATFORM");
+    plat = NULL;
+#if defined(RK_WAYLAND)
+    if (!(want && !strcmp(want, "x11")) && rk__platform_wayland.init(&app)) plat = &rk__platform_wayland;
+#endif
+    (void)want;
+    if (!plat && rk__platform_native.init(&app)) plat = &rk__platform_native;
+    if (!plat) { fprintf(stderr, "rekta: no display (%s); set RK_HEADLESS=1 to run without one\n", rk__platform_native.name); return 1; }
   }
   plat->settings(&rk__prefs.system_dark, &rk__prefs.system_reduced, &rk__prefs.system_compact);
   running = true; exit_code = 0;

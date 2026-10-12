@@ -1,4 +1,5 @@
-# rekta-core. Needs a C99 compiler and the system's windowing library (X11 on Linux, Cocoa on macOS); nothing else.
+# rekta-core. Needs a C99 compiler and the system's windowing libraries (on Linux libwayland-client, libwayland-cursor,
+# libxkbcommon and Xlib; Cocoa on macOS); nothing else. On Linux, WAYLAND=0 builds for X11 alone.
 #   make            build/librekta.a and build/demo
 #   make test       headless tests and the reference images (needs node for the image comparison)
 #   make shots      the demo's script without a screen, as PNGs in build/shots
@@ -12,7 +13,8 @@ WARN := -std=c99 -Wall -Wextra -Wpedantic
 CFLAGS += $(OPT) $(WARN) -ffp-contract=off
 BUILD := build
 UNAME := $(shell uname -s 2>/dev/null)
-SOURCES := $(wildcard src/*.c src/*.h) include/rekta.h third_party/stb_truetype.h
+SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h third_party/stb_truetype.h
+WAYLAND ?= 1
 
 ifeq ($(UNAME),Darwin)
   PLATFORM_OBJ := $(BUILD)/platform_cocoa.o
@@ -22,6 +24,13 @@ else ifneq (,$(findstring MINGW,$(UNAME))$(findstring MSYS,$(UNAME))$(OS))
   EXE := .exe
 else
   LIBS := -lX11 -lXext -lm -lpthread
+  ifeq ($(WAYLAND),1)
+    WAYLAND_PC := wayland-client wayland-cursor xkbcommon
+    CFLAGS += $(shell pkg-config --cflags $(WAYLAND_PC) 2>/dev/null)
+    LIBS := $(or $(shell pkg-config --libs $(WAYLAND_PC) 2>/dev/null),-lwayland-client -lwayland-cursor -lxkbcommon) -lrt $(LIBS)
+  else
+    CFLAGS += -DRK_NO_WAYLAND
+  endif
 endif
 HEADLESS_LIBS := -lm $(if $(EXE),,-lpthread)
 

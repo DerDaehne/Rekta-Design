@@ -48,10 +48,11 @@ rk_color rk__mix(rk_color a, rk_color b, float t);
 
 /* Raster (raster.c): premultiplied 32-bit pixels, 0xAARRGGBB in memory order B, G, R, A ------------------------------ */
 
-typedef struct rk_bitmap { int w, h, stride; uint32_t *px; } rk_bitmap;   /* stride in pixels */
+typedef struct rk_bitmap { int w, h, stride; uint32_t *px; size_t cap; } rk_bitmap;   /* stride and cap in pixels */
 typedef struct rk_irect { int x0, y0, x1, y1; } rk_irect;
 
 rk_bitmap *rk__bitmap_create(int w, int h);
+void rk__bitmap_fit(rk_bitmap **slot, int w, int h);       /* reshapes in place while it fits; contents undefined */
 void rk__bitmap_free(rk_bitmap *b);
 void rk__bitmap_clear(rk_bitmap *b, uint32_t pm);
 uint32_t rk__pm(rk_color c, float alpha);                  /* straight RGBA plus an extra alpha → premultiplied */
@@ -258,6 +259,9 @@ typedef struct rk_platform {
 
 extern const rk_platform rk__platform_headless;
 extern const rk_platform rk__platform_native;              /* the OS this was built for */
+#if defined(RK_WAYLAND)
+extern const rk_platform rk__platform_wayland;             /* Linux: tried before X11 */
+#endif
 const rk_platform *rk__platform(void);
 bool rk__headless(void);
 void rk__app_settings_changed(void);                       /* the platform saw a system setting change */
