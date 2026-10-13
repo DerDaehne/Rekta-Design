@@ -105,8 +105,8 @@ void rk__text_forget(void);
 /* fontfind.c: the system's fonts for a character Barlow lacks, and font files mapped into memory */
 typedef struct rk_font_ref { char path[512]; int index; char psname[128]; } rk_font_ref;   /* psname picks a face in a collection */
 int rk__font_candidates(int cp, int weight, rk_font_ref *out, int max);
-const unsigned char *rk__font_map(const char *path, size_t *size);
-void rk__font_unmap(const unsigned char *data, size_t size);
+const unsigned char *rk__file_map(const char *path, size_t *size);
+void rk__file_unmap(const unsigned char *data, size_t size);
 int rk__utf8_put(unsigned char *out, int cp);
 int rk__text_next_break(const char *s, int from, int end);   /* where a line may end next after from (at most end) */
 
@@ -248,6 +248,7 @@ void rk__window_event(rk_window *w, const rk_event *e);
 void rk__window_close_request(rk_window *w);
 void rk__window_pointer_cancel(rk_window *w);
 void rk__menus_close(rk_window *w);
+void rk__background(void (*fn)(void *user), void *user);   /* pool.c: a slow job away from the UI thread */
 void rk__undo_clear(void);
 void rk__window_frame(rk_window *w, double now);           /* layout, draw and present if needed */
 void rk__window_invalidate(rk_window *w);                 /* everything */

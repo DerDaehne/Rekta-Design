@@ -29,7 +29,7 @@ int rk__utf8_put(unsigned char *out, int c) {
 
 /* Mapping ---------------------------------------------------------------------------------------------------------- */
 
-const unsigned char *rk__font_map(const char *path, size_t *size) {
+const unsigned char *rk__file_map(const char *path, size_t *size) {
   *size = 0;
 #if defined(_WIN32)
   wchar_t wpath[512];
@@ -55,7 +55,7 @@ const unsigned char *rk__font_map(const char *path, size_t *size) {
 #endif
 }
 
-void rk__font_unmap(const unsigned char *p, size_t size) {
+void rk__file_unmap(const unsigned char *p, size_t size) {
   if (!p) return;
 #if defined(_WIN32)
   (void)size;

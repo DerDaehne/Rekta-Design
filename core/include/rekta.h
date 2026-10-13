@@ -369,6 +369,15 @@ RK_API rk_view *rk_menu_opener(rk_view *menu);                    /* what opened
 RK_API rk_view *rk_scroll(rk_view *content);
 RK_API void rk_view_reveal(rk_view *view);                 /* every scroll it is in brings it in sight */
 
+/* A picture from a PNG or JPEG file, or from those bytes in memory (copied). Its size is known at once; it is decoded
+   away from the UI thread and fades in where a placeholder stood. It shows whole (contain) or fills its view (cover),
+   its shape kept; its natural size is its pixels, smaller where it has less room. */
+typedef enum rk_fit { RK_FIT_CONTAIN, RK_FIT_COVER, RK_FIT_FORCE32 = 0x7fffffff } rk_fit;
+RK_API rk_view *rk_image(const char *path);
+RK_API rk_view *rk_image_from_memory(const void *data, size_t size);
+RK_API void rk_image_set_fit(rk_view *image, rk_fit fit);
+RK_API bool rk_image_size(rk_view *image, int *width, int *height);   /* its pixels; false when it cannot be read */
+
 /* Controls that hold a value, as the web's. Each holds a number - 0 or 1, the chosen index - that the app reads and
    sets; the change handler hears what the user changes, not what the app sets. */
 RK_API rk_view *rk_check(const char *label, bool on);       /* a checkbox: Space toggles */

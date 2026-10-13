@@ -33,6 +33,7 @@
 #include "window.c"
 #include "widgets.c"
 #include "controls.c"
+#include "image.c"
 #include "list.c"
 #include "field.c"
 #include "menu.c"

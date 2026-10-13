@@ -73,7 +73,7 @@ static font *face_open(const char *path, int index, const char *psname, int weig
   memset(f, 0, sizeof *f);
   snprintf(f->path, sizeof f->path, "%s", path);
   f->index = index; f->weight = weight;
-  f->map = rk__font_map(path, &f->map_size);
+  f->map = rk__file_map(path, &f->map_size);
   nfonts++;                                                /* tried, drawable or not: never opened twice */
   if (!f->map) return NULL;
   if (psname && *psname) {
@@ -85,7 +85,7 @@ static font *face_open(const char *path, int index, const char *psname, int weig
       if (name && len == (int)strlen(psname) && !memcmp(name, psname, (size_t)len)) { index = f->index = k; break; }
     }
   }
-  if (!face_init(f, f->map, stbtt_GetFontOffsetForIndex(f->map, index))) { rk__font_unmap(f->map, f->map_size); f->map = NULL; return NULL; }
+  if (!face_init(f, f->map, stbtt_GetFontOffsetForIndex(f->map, index))) { rk__file_unmap(f->map, f->map_size); f->map = NULL; return NULL; }
   return f;
 }
 
@@ -289,7 +289,7 @@ void rk__text_forget(void) { cache_clear(); memset(cp_cache, 0, sizeof cp_cache)
 
 void rk__text_shutdown(void) {
   rk__text_forget();
-  for (int i = RK_FONT_FILE_COUNT; i < nfonts; i++) rk__font_unmap(fonts[i].map, fonts[i].map_size);
+  for (int i = RK_FONT_FILE_COUNT; i < nfonts; i++) rk__file_unmap(fonts[i].map, fonts[i].map_size);
   if (fonts_ready) nfonts = RK_FONT_FILE_COUNT;
 }
 

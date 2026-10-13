@@ -32,6 +32,16 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core shows pictures: `rk_image(path)` and
+  `rk_image_from_memory` read PNG and JPEG through a vendored
+  `stb_image.h` (v2.30; GIF, HDR and files bigger than 16384 px left
+  out). The size comes from the header at once; a background worker
+  decodes - and, for a picture over a million pixels, scales - away from
+  the UI thread, so a frame never waits for it (a 2400 x 1600 JPEG: the
+  slowest frame 3.7 ms). Scaled with a tent filter that averages every
+  pixel it shrinks, kept per size; contain or cover; it fades in where a
+  placeholder stood. A headless run does the worker's jobs at once, so
+  tests draw the same every time.
 - rekta-core has a scroll view: `rk_scroll(content)` clips its content
   and scrolls it on the panorama's spring - the wheel until an end, then
   what holds it; the keys a focused view leaves; focus landing inside
@@ -309,6 +319,10 @@ it; each entry says how.
   sections drop the kickers that repeated the strip's titles.
 
 ### Fixed
+
+- rekta-core: a timer overdue when the loop went to sleep (a frame that took
+  longer than the timer's gap) put the loop to sleep until the next event;
+  it now runs at once.
 
 - rekta-core: a field given its text before it was laid out showed only the
   end of it; it now starts at the start once it has a width.

@@ -121,6 +121,62 @@ void rk__parallel_rows(rk_rows_fn fn, void *ctx, int y0, int y1, long pixels) {
   P_UNLOCK(&P.lock);
 }
 
+/* One worker for slow jobs that need no frame (decoding an image): jobs run in order, away from the UI thread; a job
+   posts what it made back with rk_app_post. With RK_THREADS=1, and in a headless run (whose clock is its own, so a
+   thread would finish at a different moment each time), a job runs at once, on the calling thread. */
+typedef struct bg_job { void (*fn)(void *); void *user; struct bg_job *next; } bg_job;
+static struct { bool started, inline_only; pool_lock lock; pool_cond more; bg_job *head, *tail; } B;
+
+#if defined(_WIN32)
+static DWORD WINAPI bg_worker(LPVOID arg) {
+#else
+static void *bg_worker(void *arg) {
+#endif
+  (void)arg;
+  for (;;) {
+    P_LOCK(&B.lock);
+    while (!B.head) P_WAIT(&B.more, &B.lock);
+    bg_job *j = B.head;
+    B.head = j->next;
+    if (!B.head) B.tail = NULL;
+    P_UNLOCK(&B.lock);
+    j->fn(j->user);
+    free(j);
+  }
+#if defined(_WIN32)
+  return 0;
+#else
+  return NULL;
+#endif
+}
+
+void rk__background(void (*fn)(void *), void *user) {
+  if (!B.started) {
+    B.started = true;
+    const char *t = getenv("RK_THREADS");
+    B.inline_only = t && atoi(t) == 1;
+#if defined(_WIN32)
+    InitializeCriticalSection(&B.lock);
+    InitializeConditionVariable(&B.more);
+    HANDLE h = B.inline_only ? NULL : CreateThread(NULL, 0, bg_worker, NULL, 0, NULL);
+    if (h) CloseHandle(h); else B.inline_only = true;
+#else
+    pthread_mutex_init(&B.lock, NULL);
+    pthread_cond_init(&B.more, NULL);
+    pthread_t th;
+    if (B.inline_only || pthread_create(&th, NULL, bg_worker, NULL)) B.inline_only = true; else pthread_detach(th);
+#endif
+  }
+  if (B.inline_only || rk__headless()) { fn(user); return; }   /* headless keeps time of its own: the same run everywhere */
+  bg_job *j = rk__alloc(sizeof *j);
+  j->fn = fn; j->user = user;
+  P_LOCK(&B.lock);
+  if (B.tail) B.tail->next = j; else B.head = j;
+  B.tail = j;
+  P_WAKE_ALL(&B.more);
+  P_UNLOCK(&B.lock);
+}
+
 /* Wall time in ms, for measuring frames (CPU time would count every thread) */
 double rk__wall_ms(void) {
 #if defined(_WIN32)

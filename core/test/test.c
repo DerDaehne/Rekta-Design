@@ -766,6 +766,71 @@ static void test_controls(void) {
   done(w);
 }
 
+/* Pictures: PNG and JPEG, decoded away from the UI thread, fitted, faded in; what cannot be read says so. */
+static const unsigned char test_jpeg[] = { 255,216,255,224,0,16,74,70,73,70,0,1,1,0,0,1,0,1,0,0,255,219,0,67,0,2,1,1,1,1,1,2,1,1,1,2,2,2,2,2,4,3,2,2,2,2,5,4,4,3,4,6,5,6,6,6,5,6,6,6,7,9,8,6,7,9,7,6,6,8,11,8,9,10,10,10,10,10,6,8,11,12,11,10,12,9,10,10,10,255,219,0,67,1,2,2,2,2,2,2,5,3,3,5,10,7,6,7,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,255,192,0,17,8,0,8,0,16,3,1,17,0,2,17,1,3,17,1,255,196,0,31,0,0,1,5,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,10,11,255,196,0,181,16,0,2,1,3,3,2,4,3,5,5,4,4,0,0,1,125,1,2,3,0,4,17,5,18,33,49,65,6,19,81,97,7,34,113,20,50,129,145,161,8,35,66,177,193,21,82,209,240,36,51,98,114,130,9,10,22,23,24,25,26,37,38,39,40,41,42,52,53,54,55,56,57,58,67,68,69,70,71,72,73,74,83,84,85,86,87,88,89,90,99,100,101,102,103,104,105,106,115,116,117,118,119,120,121,122,131,132,133,134,135,136,137,138,146,147,148,149,150,151,152,153,154,162,163,164,165,166,167,168,169,170,178,179,180,181,182,183,184,185,186,194,195,196,197,198,199,200,201,202,210,211,212,213,214,215,216,217,218,225,226,227,228,229,230,231,232,233,234,241,242,243,244,245,246,247,248,249,250,255,196,0,31,1,0,3,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,10,11,255,196,0,181,17,0,2,1,2,4,4,3,4,7,5,4,4,0,1,2,119,0,1,2,3,17,4,5,33,49,6,18,65,81,7,97,113,19,34,50,129,8,20,66,145,161,177,193,9,35,51,82,240,21,98,114,209,10,22,36,52,225,37,241,23,24,25,26,38,39,40,41,42,53,54,55,56,57,58,67,68,69,70,71,72,73,74,83,84,85,86,87,88,89,90,99,100,101,102,103,104,105,106,115,116,117,118,119,120,121,122,130,131,132,133,134,135,136,137,138,146,147,148,149,150,151,152,153,154,162,163,164,165,166,167,168,169,170,178,179,180,181,182,183,184,185,186,194,195,196,197,198,199,200,201,202,210,211,212,213,214,215,216,217,218,226,227,228,229,230,231,232,233,234,242,243,244,245,246,247,248,249,250,255,218,0,12,3,1,0,2,17,3,17,0,63,0,249,110,191,159,207,245,240,249,206,191,223,195,252,71,63,255,217 };   /* 16 x 8: red left, blue right */
+
+static uint32_t fb_at(rk_window *w, float x, float y) { return w->fb->px[(int)(y * w->scale) * w->fb->stride + (int)(x * w->scale)]; }
+static bool near_rgb(uint32_t p, uint32_t rgb, int tol) {   /* upscaling smooths a little, as browsers do */
+  for (int sh = 0; sh <= 16; sh += 8) if (abs((int)((p >> sh) & 255) - (int)((rgb >> sh) & 255)) > tol) return false;
+  return true;
+}
+
+static void test_image(void) {
+  /* a 4 x 2 PNG: red, green, blue, white over black, a hole, half red, yellow */
+  uint32_t px[8] = { 0xffff0000u, 0xff00ff00u, 0xff0000ffu, 0xffffffffu, 0xff000000u, 0x00000000u, 0x80800000u, 0xffffff00u };
+  rk_bitmap bm = { 4, 2, 4, px, 8, NULL };
+  char path[600];
+  snprintf(path, sizeof path, "%s/../four-by-two.png", out);   /* beside the shots, not among them */
+  CHECK(rk__png_write(&bm, path), "a PNG to read (%s)", path);
+  rk_window *w = window(420, 360);
+  rk_view *page = col(8, 16);
+  rk_view *png = rk_add(page, rk_image(path));
+  rk_view *cover = rk_add(page, rk_image(path));
+  rk_view *jpg = rk_add(page, rk_image_from_memory(test_jpeg, sizeof test_jpeg));
+  rk_view *bad = rk_add(page, rk_image_from_memory("not a picture", 13));
+  rk_view *none = rk_add(page, rk_image("/no/such/picture.png"));
+  rk_view_set_size(png, 80, 40);
+  rk_view_set_size(cover, 40, 40); rk_image_set_fit(cover, RK_FIT_COVER);
+  rk_view_set_size(jpg, 64, 32);
+  int iw, ih;
+  CHECK(rk_image_size(png, &iw, &ih) && iw == 4 && ih == 2, "its size is known at once (%d x %d)", iw, ih);
+  CHECK(!rk_image_size(bad, &iw, &ih) && !rk_image_size(none, NULL, NULL), "bytes that are no picture, and a missing file, say so");
+  show(w, page, "image");
+  rk_app_run_for(600);
+  CHECK(((image *)png->state)->ready && ((image *)jpg->state)->ready && png->pvalue == 1, "decoded and faded in");
+  rk_rect r = rk__window_rect(png);
+  uint32_t red = fb_at(w, r.x + 10, r.y + 10), half = fb_at(w, r.x + 50, r.y + 30), hole = fb_at(w, r.x + 30, r.y + 30), yellow = fb_at(w, r.x + 70, r.y + 30);
+  CHECK(near_rgb(red, 0xff0000, 16) && near_rgb(yellow, 0xffff00, 16), "each pixel where it belongs, scaled up (%06x %06x)", red & 0xffffff, yellow & 0xffffff);
+  CHECK(near_rgb(hole, rk_color_of(RK_ROLE_BG) >> 8, 16), "a hole shows what is under it (%06x)", hole & 0xffffff);
+  CHECK(((half >> 16) & 255) > 0xf0 && ((half >> 8) & 255) > 0x70 && ((half >> 8) & 255) < 0x90, "half red over white is pink (%06x)", half & 0xffffff);
+  rk_rect cr = rk__window_rect(cover);
+  CHECK((fb_at(w, cr.x + 1, cr.y + 1) & 0xffffff) != (rk_color_of(RK_ROLE_BG) >> 8) && (fb_at(w, cr.x + 1, cr.y + 38) & 0xffffff) != (rk_color_of(RK_ROLE_BG) >> 8), "cover fills its box, corner to corner");
+  rk_rect jr = rk__window_rect(jpg);
+  uint32_t left = fb_at(w, jr.x + 10, jr.y + 16), right = fb_at(w, jr.x + 54, jr.y + 16);
+  CHECK(((left >> 16) & 255) > 180 && (left & 255) < 80 && (right & 255) > 180 && ((right >> 16) & 255) < 80, "a JPEG, red and blue (%06x %06x)", left & 0xffffff, right & 0xffffff);
+  /* shrinking averages: a 4 x 2 picture in 2 x 1 */
+  uint32_t small[2];
+  resample(px, 4, 2, small, 2, 1);
+  CHECK(((small[0] >> 24) & 255) > 0xb0 && ((small[0] >> 24) & 255) < 0xd0, "shrunk, a hole and its neighbours average out (alpha %02x)", (small[0] >> 24) & 255);
+  shot(w, "image");
+  /* a big picture is scaled by the worker; a new size gets a new copy, the old one standing in meanwhile */
+  rk_bitmap big = { 1200, 1000, 1200, rk__alloc(1200 * 1000 * sizeof(uint32_t)), 1200 * 1000, NULL };
+  for (int i = 0; i < 1200 * 1000; i++) big.px[i] = 0xff000000u | (uint32_t)((i % 1200) * 255 / 1199) << 16;
+  char bigpath[600];
+  snprintf(bigpath, sizeof bigpath, "%s/../big.png", out);
+  CHECK(rk__png_write(&big, bigpath), "a big PNG to read");
+  free(big.px);
+  rk_view *large = rk_add(page, rk_image(bigpath));
+  rk_view_set_size(large, 120, 100);
+  rk_app_run_for(300);
+  image *li = large->state;
+  CHECK(li->shown && li->fitted.w == (int)(120 * w->scale) && !li->fitting, "a big picture: its copy came from the worker (%d)", li->fitted.w);
+  rk_view_set_size(large, 60, 50);
+  rk_app_run_for(300);
+  CHECK(li->fitted.w == (int)(60 * w->scale) && li->fitted.h == (int)(50 * w->scale), "a new size, a new copy (%d x %d)", li->fitted.w, li->fitted.h);
+  done(w);
+}
+
 /* A scroll view: the wheel, the keys focus leaves, focus coming into sight, the bar. */
 static int scroll_taps;
 static void scroll_tap(rk_view *v, void *u) { (void)v; scroll_taps = (int)(intptr_t)u; }
@@ -1363,6 +1428,7 @@ static void launch(void *user) {
   test_table();
   test_cell_edit();
   test_controls();
+  test_image();
   test_scroll();
   test_select();
   test_date();

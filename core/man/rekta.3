@@ -229,6 +229,22 @@ Keys: Up and Down, Home and End, a letter, Enter or Space, Escape; Tab or
 a press outside closes it.
 .Fn rk_menu_opener
 tells a handler which view the menu was for.
+.It Fn rk_image "const char *path" , Fn rk_image_from_memory "const void *data" "size_t size"
+A PNG or JPEG picture, from a file or from bytes (copied).
+Its size is known at once, from the header
+.Pq Fn rk_image_size ;
+it is decoded away from the UI thread and fades in where a quiet
+placeholder stood.
+It shows whole
+.Pq Dv RK_FIT_CONTAIN
+or fills its view
+.Pq Dv RK_FIT_COVER ,
+its shape kept
+.Pq Fn rk_image_set_fit ;
+drawn at a size, it is scaled once with a filter that averages every
+pixel it shrinks, and a big picture is scaled away from the UI thread
+too.
+Its natural size is its pixels, smaller where it has less room.
 .It Fn rk_scroll "rk_view *content"
 Clips
 .Fa content

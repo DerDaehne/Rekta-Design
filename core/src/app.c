@@ -179,7 +179,8 @@ static void step(double max_wait) {
   } else if (rk__anim_running() || frame_wanted) wait = RK_MIN(RK_MAX(0.0, next_frame - t), next_due() - t);
   else wait = next_due() - t;
   frame_wanted = false;
-  if (!isfinite(wait)) wait = -1;
+  if (!isfinite(wait)) wait = -1;                          /* nothing due: until an event */
+  else if (wait < 0) wait = 0;                             /* overdue (a frame took longer than the timer's gap): at once, never forever */
   if (wait < 0 && rk__headless()) wait = 1000.0 / 60.0;    /* headless never sleeps forever */
   if (max_wait >= 0 && (wait < 0 || wait > max_wait)) wait = max_wait;
   rk__platform()->wait(RK_MAX(wait, wait < 0 ? -1.0 : 0.0));

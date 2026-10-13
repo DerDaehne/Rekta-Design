@@ -7,7 +7,8 @@ is [include/rekta.h](include/rekta.h).
 
 - No dependency beyond the system: Win32, Cocoa, or Wayland (libwayland,
   libxkbcommon) with Xlib as the fallback. Glyphs come from
-  `third_party/stb_truetype.h` (public domain); Barlow is built in.
+  `third_party/stb_truetype.h` and pictures from `third_party/stb_image.h`
+  (both public domain); Barlow is built in.
 - One header, one translation unit (`src/rekta.c`), plus `src/platform_cocoa.m`
   on macOS.
 - A software renderer: every platform draws the same pixels, and the tests
@@ -129,7 +130,7 @@ Stages 1 and 2 of [docs/core.md](../docs/core.md#stages): tokens, renderer,
 views, controllers (places with the turn, panorama, pivot, sheets), motion, the
 press, focus everywhere and the keyboard, toasts, undo, the title bar, text
 fields and areas with the clipboard and input methods, every script through the
-system's fonts, checkboxes, options, toggles, segments, sliders, steppers, selects, comboboxes and dates, scroll views, menus, long lists, tables
+system's fonts, checkboxes, options, toggles, segments, sliders, steppers, selects, comboboxes and dates, scroll views, pictures, menus, long lists, tables
 that sort, resize and edit; headless, Wayland and X11 tested here (Wayland is
 the default where a compositor answers; `RK_PLATFORM=x11` picks X11), Win32 and
 Cocoa built and tested in CI.

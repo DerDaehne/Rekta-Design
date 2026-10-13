@@ -15,7 +15,7 @@ WARN := -std=c99 -Wall -Wextra -Wpedantic
 CFLAGS += $(OPT) $(WARN) -ffp-contract=off
 BUILD := build
 UNAME := $(shell uname -s 2>/dev/null)
-SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h third_party/stb_truetype.h
+SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h third_party/stb_truetype.h third_party/stb_image.h
 WAYLAND ?= 1
 
 ifeq ($(UNAME),Darwin)
