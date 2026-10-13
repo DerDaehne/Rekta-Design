@@ -480,15 +480,64 @@ static void builds_picked(rk_view *list, void *user) {
   rk_label_set_text(picked, text);
 }
 
+/* A table of builds the app sorts: an order over the rows, sorted when a head is clicked. */
+#define NBUILDS 500
+static int order[NBUILDS], sort_column = -1, sort_dir = 1;
+
+static int build_minutes(int i) { return 3 + (i * 37) % 41; }
+static const char *build_status(int i) { return i % 11 == 4 ? "failed" : i % 5 == 1 ? "waiting" : "done"; }
+
+static const char *build_cell(int row, int column, void *user) {
+  static char text[32];
+  int i = order[row];
+  (void)user;
+  if (column == 0) { snprintf(text, sizeof text, "Build #%d", 5000 - i); return text; }
+  if (column == 1) return build_status(i);
+  snprintf(text, sizeof text, "%d min", build_minutes(i));
+  return text;
+}
+
+static int by_column(const void *a, const void *b) {
+  int x = *(const int *)a, y = *(const int *)b, d;
+  if (sort_column == 0) d = y - x;                                /* build numbers count down with i */
+  else if (sort_column == 1) d = strcmp(build_status(x), build_status(y));
+  else d = build_minutes(x) - build_minutes(y);
+  return (d ? d : x - y) * sort_dir;
+}
+
+static void table_show(rk_view *table, int row, void *user) {
+  char text[64];
+  (void)user;
+  snprintf(text, sizeof text, "Build #%d opens.", 5000 - order[row]);
+  rk_window_toast(rk_view_window(table), text, NULL, NULL, NULL);
+}
+
+static void sort_builds(rk_view *table, int column, int dir, void *user) {
+  (void)user;
+  sort_column = column; sort_dir = dir;
+  qsort(order, NBUILDS, sizeof *order, by_column);
+  rk_view_redraw(table);
+}
+
 static rk_view *lists_section(void) {
   rk_view *s = rk_column();
   rk_add(s, rk_label("A million rows, a screenful of work.", RK_TEXT_GROUP));
   rk_add(s, rk_label("Only the rows in sight are drawn; nothing is kept for the others. A click opens one; Ctrl+click, Shift+click and Ctrl+A select.", RK_TEXT_BODY));
   rk_view *list = rk_add(s, rk_list(1000000, build_item, NULL));
-  rk_view_set_size(list, 0, 420);
+  rk_view_set_size(list, 0, 300);
   rk_list_on_show(list, build_show, NULL);
   rk_list_on_change(list, builds_picked, NULL);
   picked = rk_add(s, rk_label("Ctrl+click selects several.", RK_TEXT_SMALL));
+
+  rk_add(s, rk_label("a table: click a head to sort", RK_TEXT_KICKER));
+  for (int i = 0; i < NBUILDS; i++) order[i] = i;
+  rk_view *table = rk_add(s, rk_table(NBUILDS, build_cell, NULL));
+  rk_table_add_column(table, "build", 0, RK_COLUMN_SORTABLE);
+  rk_table_add_column(table, "status", 110, RK_COLUMN_SORTABLE);
+  rk_table_add_column(table, "time", 90, RK_COLUMN_NUMERIC | RK_COLUMN_SORTABLE);
+  rk_table_on_sort(table, sort_builds, NULL);
+  rk_list_on_show(table, table_show, NULL);
+  rk_view_set_size(table, 0, 320);
   return s;
 }
 

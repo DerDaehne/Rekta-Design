@@ -32,6 +32,12 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has tables, as the web's `.rk-table`: `rk_table(count, cell,
+  user)` is a long list with columns (every `rk_list_` call works on it),
+  drawing only the rows in sight; `rk_table_add_column` with a width and
+  `RK_COLUMN_NUMERIC` / `RK_COLUMN_SORTABLE`; a head that stays put, a
+  click on it sorts ascending then descending through `rk_table_on_sort`
+  (the app sorts its rows). The demo has a sortable table of builds.
 - rekta-core has menus, as states.md's floating surfaces: `rk_menu`,
   `rk_menu_add` (a verb, a key hint, a handler), separators, group labels,
   items with a square that toggles and keeps the menu open, disabled

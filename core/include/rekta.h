@@ -184,7 +184,7 @@ typedef enum rk_align { RK_ALIGN_STRETCH, RK_ALIGN_START, RK_ALIGN_CENTER, RK_AL
 typedef enum rk_access_role {
   RK_ACCESS_NONE, RK_ACCESS_GROUP, RK_ACCESS_TEXT, RK_ACCESS_HEADING, RK_ACCESS_BUTTON, RK_ACCESS_LINK,
   RK_ACCESS_LIST, RK_ACCESS_LIST_ITEM, RK_ACCESS_TAB_LIST, RK_ACCESS_TAB, RK_ACCESS_TAB_PANEL, RK_ACCESS_DIALOG,
-  RK_ACCESS_IMAGE, RK_ACCESS_PROGRESS, RK_ACCESS_STATUS, RK_ACCESS_TEXT_FIELD, RK_ACCESS_MENU,
+  RK_ACCESS_IMAGE, RK_ACCESS_PROGRESS, RK_ACCESS_STATUS, RK_ACCESS_TEXT_FIELD, RK_ACCESS_MENU, RK_ACCESS_TABLE,
   RK_ACCESS_FORCE32 = 0x7fffffff
 } rk_access_role;
 
@@ -373,6 +373,14 @@ RK_API void rk_list_on_change(rk_view *list, void (*fn)(rk_view *list, void *use
 RK_API bool rk_list_selected(rk_view *list, int index);
 RK_API int rk_list_selection_count(rk_view *list);
 RK_API void rk_list_scroll_to(rk_view *list, int index);   /* glides it into sight and makes it the active row */
+
+/* A table is a list with columns - every rk_list_ call works on it. The head stays put; a click on a sortable head
+   sorts by it, ascending then descending: the app sorts its rows in on_sort and the table draws them again. */
+enum { RK_COLUMN_NUMERIC = 1, RK_COLUMN_SORTABLE = 2 };   /* numbers sit to the right */
+RK_API rk_view *rk_table(int count, const char *(*cell)(int row, int column, void *user), void *user);
+RK_API int rk_table_add_column(rk_view *table, const char *title, float width, unsigned flags);   /* width 0: shares the rest */
+RK_API void rk_table_on_sort(rk_view *table, void (*fn)(rk_view *table, int column, int dir, void *user), void *user);   /* dir 1 or -1 */
+RK_API void rk_table_set_sort(rk_view *table, int column, int dir);   /* shows the sort the rows have (-1, 0, 1) */
 
 RK_API rk_view *rk_icon(const char *name, rk_role color);   /* 20 × 20 from the icon set */
 RK_API rk_view *rk_progress(float progress);                /* < 0: indeterminate */

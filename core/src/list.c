@@ -3,7 +3,12 @@
    Selection is the Metro way, as the web's virtual(): a click selects one item and shows it; Ctrl (Cmd) and a click
    toggles and starts the selection mode, in which every click toggles; Shift and a click takes a range. Keys: Up and
    Down, Home and End, Page Up and Page Down move the active row; Space or Enter is a click; Ctrl+A selects all;
-   Escape ends the mode. Included after widgets.c, whose status helpers it shares. */
+   Escape ends the mode. Included after widgets.c, whose status helpers it shares.
+
+   A table is a list with columns, as the web's .rk-table: a head that stays put (size-xs, semibold, text-high, a
+   hairline below; a sorted column's head in the text colour with its triangle), cells from a callback in tabular
+   figures, numbers to the right. A click on a sortable head sorts by it, ascending and then descending; the app sorts
+   (it owns the rows) and the table draws again. */
 #include "rk_internal.h"
 
 typedef struct list {
@@ -13,6 +18,11 @@ typedef struct list {
   void (*item)(int index, rk_list_item *out, void *user); void *user;
   void (*show)(rk_view *list, int index, void *user); void *show_user;
   void (*change)(rk_view *list, void *user); void *change_user;
+  /* a table */
+  struct column { char *title; float width, x, w; unsigned flags; } *cols; int ncols, ccap;
+  const char *(*cell)(int row, int column, void *user);
+  int sort_col, sort_dir;
+  void (*sort)(rk_view *table, int column, int dir, void *user); void *sort_user;
 } list;
 
 static float row_height(void) { return rk_metric_of(RK_ROW_HEIGHT); }
@@ -26,7 +36,23 @@ static void set_selected(list *l, int i, bool on) {
 
 static void clear_selection(list *l) { memset(l->sel, 0, l->selcap); l->nsel = 0; }
 
-static float max_scroll(rk_view *v, const list *l) { return RK_MAX(0.0f, l->count * row_height() - v->frame.h); }
+static float head_height(const list *l) {
+  if (!l->ncols) return 0;
+  rk_textfmt f = rk__textfmt(RK_TEXT_LABEL, 0);
+  return ceilf(f.size * f.line + 2 * rk_metric_of(RK_SPACE_S));
+}
+static float body_height(rk_view *v, const list *l) { return RK_MAX(0.0f, v->frame.h - head_height(l)); }
+static float max_scroll(rk_view *v, const list *l) { return RK_MAX(0.0f, l->count * row_height() - body_height(v, l)); }
+
+/* Columns: the fixed widths first, the rest shared by those without one; a check's room on the left. */
+static float check_room(void) { return 14 + 2 * rk_metric_of(RK_SPACE_S); }
+static void place_columns(list *l, float W) {
+  float fixed = 0, x = check_room();
+  int flex = 0;
+  for (int i = 0; i < l->ncols; i++) { if (l->cols[i].width > 0) fixed += l->cols[i].width; else flex++; }
+  float share = flex ? RK_MAX(0.0f, W - check_room() - fixed) / flex : 0;
+  for (int i = 0; i < l->ncols; i++) { l->cols[i].x = x; l->cols[i].w = l->cols[i].width > 0 ? l->cols[i].width : share; x += l->cols[i].w; }
+}
 
 static void list_changed(rk_view *v, list *l) {
   rk__view_dirty(v);
@@ -35,9 +61,9 @@ static void list_changed(rk_view *v, list *l) {
 
 /* Scrolls so the row is in sight, gliding there. */
 static void reveal_row(rk_view *v, list *l, int i) {
-  float H = row_height(), top = i * H, to = v->value;
+  float H = row_height(), top = i * H, to = v->value, body = body_height(v, l);
   if (top < to) to = top;
-  else if (top + H > to + v->frame.h) to = top + H - v->frame.h;
+  else if (top + H > to + body) to = top + H - body;
   to = RK_CLAMP(to, 0.0f, max_scroll(v, l));
   if (to != v->value) { v->value = to; rk__animate_spring(v, RK_PROP_VALUE, to, 260); }
 }
@@ -89,6 +115,21 @@ static void draw_row(rk_view *v, rk_canvas *c, list *l, int i, float y, bool rin
     rk_point check[3] = { { 6, y + H / 2 - 1 }, { 9, y + H / 2 + 2 }, { 15, y + H / 2 - 4 } };
     rk_canvas_polyline(c, check, 3, 2, ink);
   }
+  if (l->ncols) {                                            /* a table's row: its cells */
+    rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
+    f.tabular = true;
+    for (int k = 0; k < l->ncols; k++) {
+      const struct column *col = &l->cols[k];
+      const char *s = l->cell(i, k, l->user);
+      if (!s || !*s) continue;
+      float cx = col->x + pad, cw = RK_MAX(0.0f, col->w - 2 * pad), tw = rk__text_width(s, -1, &f);
+      rk_canvas_push_clip(c, (rk_rect){ cx, y, cw, H });
+      rk__text_draw(c, s, -1, col->flags & RK_COLUMN_NUMERIC ? cx + cw - tw : cx, y + (H - f.size * f.line) / 2, &f, ink);
+      rk_canvas_pop_clip(c);
+    }
+    if (ring) rk_canvas_stroke_rect(c, (rk_rect){ 0, y, W, H }, 2, rk_color_of(RK_ROLE_FOCUS));
+    return;
+  }
   /* the meta or status on the right, then the title in what is left */
   float right = W - pad;
   if (it.status != RK_STATUS_NONE) {
@@ -114,23 +155,49 @@ static void draw_row(rk_view *v, rk_canvas *c, list *l, int i, float y, bool rin
 }
 
 /* Only the rows the frame draws: those between the top and the bottom of the canvas's clip. */
+/* A table's head: each column's title; a sorted one in the text colour with its triangle. */
+static void draw_head(rk_view *v, rk_canvas *c, list *l) {
+  float W = v->pframe.w, hh = head_height(l), pad = rk_metric_of(RK_SPACE_S);
+  rk_textfmt f = rk__textfmt(RK_TEXT_LABEL, 0);
+  rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, hh }, rk_color_of(RK_ROLE_BG));
+  rk_canvas_fill_rect(c, (rk_rect){ 0, hh - 1, W, 1 }, rk_color_of(RK_ROLE_TEXT_LOW));
+  for (int k = 0; k < l->ncols; k++) {
+    const struct column *col = &l->cols[k];
+    if (!col->title) continue;
+    bool sorted = k == l->sort_col && l->sort_dir;
+    rk_color ink = rk_color_of(sorted ? RK_ROLE_TEXT : RK_ROLE_TEXT_HIGH);
+    float tw = rk__text_width(col->title, -1, &f), cw = col->w - 2 * pad, arrow = sorted ? 6 + 8 : 0;
+    float x = col->flags & RK_COLUMN_NUMERIC ? col->x + pad + cw - tw - arrow : col->x + pad, ty = (hh - f.size * f.line) / 2;
+    rk__text_draw(c, col->title, -1, x, ty, &f, ink);
+    if (sorted) {
+      float ax = x + tw + 6, ay = hh / 2;
+      rk_point up[3] = { { ax, ay + 2 }, { ax + 8, ay + 2 }, { ax + 4, ay - 2 } }, down[3] = { { ax, ay - 2 }, { ax + 8, ay - 2 }, { ax + 4, ay + 2 } };
+      rk_canvas_fill_polygon(c, l->sort_dir > 0 ? up : down, 3, ink);
+    }
+  }
+}
+
 static void list_draw(rk_view *v, rk_canvas *c, void *st) {
   list *l = st;
-  float H = row_height(), scroll = v->pvalue;
+  float H = row_height(), scroll = v->pvalue, hh = head_height(l);
+  if (l->ncols) place_columns(l, v->pframe.w);
   rk_irect clip = rk__canvas_clip(c);
-  float top = (clip.y0 - c->oy) / c->scale + scroll, bottom = (clip.y1 - c->oy) / c->scale + scroll;
+  float top = (clip.y0 - c->oy) / c->scale - hh + scroll, bottom = (clip.y1 - c->oy) / c->scale - hh + scroll;
   int first = RK_MAX(0, (int)floorf(top / H)), last = RK_MIN(l->count - 1, (int)floorf(bottom / H));
   rk_window *w = rk__view_window(v);
   bool focused = w && w->focus == v && w->focus_visible;
-  rk_canvas_fill_rect(c, (rk_rect){ 0, 0, v->pframe.w, 1 }, rk_color_of(RK_ROLE_TEXT_LOW));
-  for (int i = first; i <= last; i++) draw_row(v, c, l, i, i * H - scroll, focused && i == l->active);
+  if (!l->ncols) rk_canvas_fill_rect(c, (rk_rect){ 0, 0, v->pframe.w, 1 }, rk_color_of(RK_ROLE_TEXT_LOW));
+  rk_canvas_push_clip(c, (rk_rect){ 0, hh, v->pframe.w, RK_MAX(0.0f, v->pframe.h - hh) });
+  for (int i = first; i <= last; i++) draw_row(v, c, l, i, hh + i * H - scroll, focused && i == l->active);
+  rk_canvas_pop_clip(c);
+  if (l->ncols) draw_head(v, c, l);
 }
 
 /* Its natural height is all its rows; give it a size or let it grow to keep it shorter. */
 static rk_size list_measure(rk_view *v, rk_size avail, void *st) {
   (void)v;
   list *l = st;
-  return (rk_size){ isfinite(avail.w) ? avail.w : 320, l->count * row_height() };
+  return (rk_size){ isfinite(avail.w) ? avail.w : 320, head_height(l) + l->count * row_height() };
 }
 
 static void list_layout(rk_view *v, void *st) {
@@ -140,7 +207,8 @@ static void list_layout(rk_view *v, void *st) {
 }
 
 static int row_at(rk_view *v, const list *l, float y) {
-  int i = (int)floorf((y + v->pvalue) / row_height());
+  if (y < head_height(l)) return -1;
+  int i = (int)floorf((y - head_height(l) + v->pvalue) / row_height());
   return i >= 0 && i < l->count ? i : -1;
 }
 
@@ -149,6 +217,18 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
   switch (e->type) {
     case RK_EVENT_POINTER_DOWN:
       if (e->button) return false;
+      if (l->ncols && e->position.y < head_height(l)) {        /* a sortable head: ascending, then descending */
+        place_columns(l, v->frame.w);
+        for (int k = 0; k < l->ncols; k++) {
+          const struct column *col = &l->cols[k];
+          if (e->position.x < col->x || e->position.x >= col->x + col->w || !(col->flags & RK_COLUMN_SORTABLE)) continue;
+          l->sort_dir = k == l->sort_col && l->sort_dir > 0 ? -1 : 1;
+          l->sort_col = k;
+          if (l->sort) l->sort(v, k, l->sort_dir, l->sort_user);
+          rk__view_dirty(v);
+        }
+        return true;
+      }
       l->pressed = row_at(v, l, e->position.y);
       rk__view_dirty(v);
       return true;
@@ -167,7 +247,7 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
       return true;
     }
     case RK_EVENT_KEY_DOWN: {
-      int page = RK_MAX(1, (int)(v->frame.h / row_height()) - 1);
+      int page = RK_MAX(1, (int)(body_height(v, l) / row_height()) - 1);
       bool ctrl = (e->mods & (RK_MOD_CTRL | RK_MOD_SUPER)) != 0;
       switch (e->key) {
         case RK_KEY_UP: set_active(v, l, l->active - 1); return true;
@@ -197,7 +277,11 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
   }
 }
 
-static void list_destroy(void *st) { list *l = st; free(l->sel); free(l); }
+static void list_destroy(void *st) {
+  list *l = st;
+  for (int i = 0; i < l->ncols; i++) free(l->cols[i].title);
+  free(l->cols); free(l->sel); free(l);
+}
 
 static const rk_class list_class = { { sizeof(rk_view_class), "rk_list", list_draw, list_measure, list_layout, list_event, list_destroy }, NULL, NULL };
 
@@ -236,3 +320,29 @@ void rk_list_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { 
 bool rk_list_selected(rk_view *v, int index) { list *l = list_of(v); return l && is_selected(l, index); }
 int rk_list_selection_count(rk_view *v) { list *l = list_of(v); return l ? l->nsel : 0; }
 void rk_list_scroll_to(rk_view *v, int index) { list *l = list_of(v); if (l && l->count) { l->active = RK_CLAMP(index, 0, l->count - 1); reveal_row(v, l, l->active); rk__view_dirty(v); } }
+
+/* A table: a list whose rows are cells. */
+static void table_item(int index, rk_list_item *out, void *user) { (void)index; (void)out; (void)user; }
+
+rk_view *rk_table(int count, const char *(*cell)(int row, int column, void *user), void *user) {
+  rk_view *v = rk_list(count, table_item, user);
+  list *l = list_of(v);
+  l->cell = cell;
+  l->sort_col = -1;
+  v->access = RK_ACCESS_TABLE;
+  return v;
+}
+
+int rk_table_add_column(rk_view *v, const char *title, float width, unsigned flags) {
+  list *l = list_of(v);
+  if (!l || !l->cell) return -1;
+  l->cols = rk__grow(l->cols, &l->ccap, l->ncols + 1, sizeof *l->cols);
+  struct column *c = &l->cols[l->ncols++];
+  memset(c, 0, sizeof *c);
+  c->title = rk__strdup(title); c->width = RK_MAX(0.0f, width); c->flags = flags;
+  rk__view_relayout_up(v); rk__view_dirty(v);
+  return l->ncols - 1;
+}
+
+void rk_table_on_sort(rk_view *v, void (*fn)(rk_view *, int, int, void *), void *user) { list *l = list_of(v); if (l) { l->sort = fn; l->sort_user = user; } }
+void rk_table_set_sort(rk_view *v, int column, int dir) { list *l = list_of(v); if (l) { l->sort_col = column; l->sort_dir = dir > 0 ? 1 : dir < 0 ? -1 : 0; rk__view_dirty(v); } }

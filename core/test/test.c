@@ -513,6 +513,51 @@ static void test_menu(void) {
   done(w);
 }
 
+/* A table is a list with columns: the head stays, a click on a sortable head sorts. */
+static int sorted_col = -2, sorted_dir;
+static const char *table_cell(int row, int col, void *u) {
+  static char buf[32];
+  (void)u;
+  if (col == 0) { snprintf(buf, sizeof buf, "Build #%d", 4000 + row); return buf; }
+  if (col == 1) return row % 3 ? "done" : "failed";
+  snprintf(buf, sizeof buf, "%d min", 3 + (row * 7) % 40);
+  return buf;
+}
+static void table_sort(rk_view *t, int col, int dir, void *u) { (void)t; (void)u; sorted_col = col; sorted_dir = dir; }
+
+static void test_table(void) {
+  rk_window *w = window(560, 360);
+  rk_view *page = col(8, 16);
+  rk_view *t = rk_add(page, rk_table(1000, table_cell, NULL));
+  rk_table_add_column(t, "build", 0, RK_COLUMN_SORTABLE);
+  rk_table_add_column(t, "status", 120, 0);
+  rk_table_add_column(t, "time", 100, RK_COLUMN_NUMERIC | RK_COLUMN_SORTABLE);
+  rk_table_on_sort(t, table_sort, NULL);
+  rk_list_on_show(t, list_show, NULL);
+  rk_view_set_size(t, 0, 280);
+  show(w, page, "table");
+  rk_rect r = rk__window_rect(t);
+  click(w, (rk_point){ r.x + 60, r.y + 10 }, 10);
+  CHECK(sorted_col == 0 && sorted_dir == 1, "a click on a sortable head sorts it ascending");
+  click(w, (rk_point){ r.x + 60, r.y + 10 }, 10);
+  CHECK(sorted_col == 0 && sorted_dir == -1, "again: descending");
+  click(w, (rk_point){ r.x + r.w - 160, r.y + 10 }, 10);
+  CHECK(sorted_col == 0, "a head that does not sort does nothing");
+  click(w, (rk_point){ r.x + r.w - 40, r.y + 10 }, 10);
+  CHECK(sorted_col == 2 && sorted_dir == 1, "the time column sorts");
+  float H = rk_metric_of(RK_ROW_HEIGHT), hh = ((list *)t->state)->ncols ? head_height(t->state) : 0;
+  shown = -1;
+  click(w, (rk_point){ r.x + 60, r.y + hh + 2.5f * H }, 10);
+  CHECK(shown == 2 && rk_list_selected(t, 2), "a click on a row selects it and shows it (%d)", shown);
+  rk_list_scroll_to(t, 500);
+  rk_app_run_for(900);
+  CHECK(t->pvalue > 400 * H && rk_window_view_at(w, (rk_point){ r.x + 60, r.y + 10 }) == t, "scrolled far; the head stays on top");
+  rk_list_scroll_to(t, 0);
+  rk_app_run_for(900);
+  shot(w, "table");
+  done(w);
+}
+
 static void test_navigation(void) {
   rk_window *w = window(900, 600);
   rk_controller *home = rk_panorama();
@@ -672,6 +717,7 @@ static void launch(void *user) {
   test_list();
   test_field();
   test_menu();
+  test_table();
   test_navigation();
   test_spring();
   scene_tiles("tiles", 1);
