@@ -302,6 +302,36 @@ static void w_settings(bool *dark, bool *reduced, bool *compact) {
   *compact = true;                                             /* a fine pointer: compact, as the web's media query */
 }
 
+/* The clipboard: UTF-16 text, as Windows keeps it. */
+static void w_clip_set(const char *utf8) {
+  wchar_t *s = wide(utf8);
+  size_t bytes = (wcslen(s) + 1) * sizeof(wchar_t);
+  HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, bytes);
+  if (h && OpenClipboard(NULL)) {
+    memcpy(GlobalLock(h), s, bytes);
+    GlobalUnlock(h);
+    EmptyClipboard();
+    if (SetClipboardData(CF_UNICODETEXT, h)) h = NULL;           /* the system owns it now */
+    CloseClipboard();
+  }
+  if (h) GlobalFree(h);
+  free(s);
+}
+
+static char *w_clip_get(void) {
+  if (!OpenClipboard(NULL)) return NULL;
+  char *out = NULL;
+  HANDLE h = GetClipboardData(CF_UNICODETEXT);
+  const wchar_t *s = h ? GlobalLock(h) : NULL;
+  if (s) {
+    int n = WideCharToMultiByte(CP_UTF8, 0, s, -1, NULL, 0, NULL, NULL);
+    if (n > 0) { out = rk__alloc((size_t)n); WideCharToMultiByte(CP_UTF8, 0, s, -1, out, n, NULL, NULL); }
+    GlobalUnlock(h);
+  }
+  CloseClipboard();
+  return out;
+}
+
 static double w_refresh(void) {
   DEVMODEW dm;
   memset(&dm, 0, sizeof dm);
@@ -319,5 +349,5 @@ static void w_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "win32", w_init, w_shutdown, w_open, w_close, w_show, w_title, w_present, w_move, w_minimize, w_zoom,
-  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL
+  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get
 };

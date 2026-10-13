@@ -564,6 +564,103 @@ static void k_mods(void *d, struct wl_keyboard *k, uint32_t s, uint32_t dep, uin
 static void k_repeat(void *d, struct wl_keyboard *k, int32_t rate, int32_t delay) { (void)d; (void)k; repeat_rate = rate; repeat_delay = delay; }
 static const struct wl_keyboard_listener keyboard_listener = { k_keymap, k_enter, k_leave, k_key, k_mods, k_repeat };
 
+/* The clipboard ------------------------------------------------------------------------------------------------- */
+/* Copying offers our text as the selection; pasting reads the selection's text through a pipe. While the selection is
+   ours, pasting takes our own text (asking the compositor would wait on ourselves). */
+
+static struct wl_data_device_manager *data_mgr;
+static struct wl_data_device *data_dev;
+static struct wl_data_source *own_source;
+static char *own_text;
+typedef struct offer { struct wl_data_offer *o; const char *mime; } offer;
+static offer *selection;                                       /* the selection on offer, if it has text */
+
+static void offer_mime(void *data, struct wl_data_offer *o, const char *mime) {
+  (void)o;
+  offer *f = data;
+  if (!strcmp(mime, "text/plain;charset=utf-8")) f->mime = "text/plain;charset=utf-8";
+  else if (!f->mime && (!strcmp(mime, "UTF8_STRING") || !strcmp(mime, "text/plain"))) f->mime = !strcmp(mime, "UTF8_STRING") ? "UTF8_STRING" : "text/plain";
+}
+static void offer_actions(void *d, struct wl_data_offer *o, uint32_t a) { (void)d; (void)o; (void)a; }
+static void offer_action(void *d, struct wl_data_offer *o, uint32_t a) { (void)d; (void)o; (void)a; }
+static const struct wl_data_offer_listener offer_listener = { offer_mime, offer_actions, offer_action };
+
+static void offer_free(offer *f) { if (f) { wl_data_offer_destroy(f->o); free(f); } }
+
+static void dd_offer(void *d, struct wl_data_device *dev, struct wl_data_offer *o) {
+  (void)d; (void)dev;
+  offer *f = rk__alloc(sizeof *f);
+  f->o = o;
+  wl_data_offer_add_listener(o, &offer_listener, f);
+}
+static void dd_enter(void *d, struct wl_data_device *dev, uint32_t s, struct wl_surface *surf, wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *o) {
+  (void)d; (void)dev; (void)s; (void)surf; (void)x; (void)y;
+  if (o) offer_free(wl_data_offer_get_user_data(o));                /* a drag: not taken yet */
+}
+static void dd_leave(void *d, struct wl_data_device *dev) { (void)d; (void)dev; }
+static void dd_motion(void *d, struct wl_data_device *dev, uint32_t t, wl_fixed_t x, wl_fixed_t y) { (void)d; (void)dev; (void)t; (void)x; (void)y; }
+static void dd_drop(void *d, struct wl_data_device *dev) { (void)d; (void)dev; }
+static void dd_selection(void *d, struct wl_data_device *dev, struct wl_data_offer *o) {
+  (void)d; (void)dev;
+  offer_free(selection);
+  selection = o ? wl_data_offer_get_user_data(o) : NULL;
+}
+static const struct wl_data_device_listener dd_listener = { dd_offer, dd_enter, dd_leave, dd_motion, dd_drop, dd_selection };
+
+static void src_target(void *d, struct wl_data_source *s, const char *m) { (void)d; (void)s; (void)m; }
+static void src_send(void *d, struct wl_data_source *s, const char *mime, int32_t fd) {
+  (void)d; (void)s; (void)mime;
+  size_t n = own_text ? strlen(own_text) : 0, at = 0;
+  while (at < n) { ssize_t k = write(fd, own_text + at, n - at); if (k <= 0) break; at += (size_t)k; }
+  close(fd);
+}
+static void src_cancelled(void *d, struct wl_data_source *s) {
+  (void)d;
+  wl_data_source_destroy(s);
+  if (s == own_source) { own_source = NULL; free(own_text); own_text = NULL; }
+}
+static void src_dnd(void *d, struct wl_data_source *s) { (void)d; (void)s; }
+static void src_action(void *d, struct wl_data_source *s, uint32_t a) { (void)d; (void)s; (void)a; }
+static const struct wl_data_source_listener src_listener = { src_target, src_send, src_cancelled, src_dnd, src_dnd, src_action };
+
+static void wl_clip_set(const char *utf8) {
+  if (!data_dev) return;
+  if (own_source) wl_data_source_destroy(own_source);
+  free(own_text);
+  own_text = rk__strdup(utf8);
+  own_source = wl_data_device_manager_create_data_source(data_mgr);
+  wl_data_source_add_listener(own_source, &src_listener, NULL);
+  wl_data_source_offer(own_source, "text/plain;charset=utf-8");
+  wl_data_source_offer(own_source, "UTF8_STRING");
+  wl_data_source_offer(own_source, "text/plain");
+  wl_data_device_set_selection(data_dev, own_source, serial);
+  wl_display_flush(wdpy);
+}
+
+static char *wl_clip_get(void) {
+  if (own_source) return rk__strdup(own_text);
+  if (!selection || !selection->mime) return NULL;
+  int fds[2];
+  if (pipe(fds)) return NULL;
+  wl_data_offer_receive(selection->o, selection->mime, fds[1]);
+  close(fds[1]);
+  wl_display_flush(wdpy);
+  char *out = NULL; size_t n = 0, cap = 0;
+  double until = wl_now() + 250;                                   /* a quarter of a second for the other app */
+  for (;;) {
+    struct pollfd p = { fds[0], POLLIN, 0 };
+    int left = (int)(until - wl_now());
+    if (left <= 0 || poll(&p, 1, left) <= 0) break;
+    if (n + 4096 + 1 > cap) { cap = (n + 4096 + 1) * 2; out = realloc(out, cap); }
+    ssize_t k = read(fds[0], out + n, 4096);
+    if (k <= 0) break;
+    n += (size_t)k;
+  }
+  close(fds[0]);
+  if (out) out[n] = 0;
+  return out;
+}
+
 static void seat_caps(void *d, struct wl_seat *s, uint32_t caps) {
   (void)d;
   if ((caps & WL_SEAT_CAPABILITY_POINTER) && !pointer) {
@@ -588,6 +685,7 @@ static void global(void *d, struct wl_registry *r, uint32_t name, const char *if
   (void)d;
   if (!strcmp(iface, wl_compositor_interface.name)) { compositor_v = RK_MIN(v, 6u); compositor = wl_registry_bind(r, name, &wl_compositor_interface, compositor_v); }
   else if (!strcmp(iface, wl_shm_interface.name)) shm = wl_registry_bind(r, name, &wl_shm_interface, 1);
+  else if (!strcmp(iface, wl_data_device_manager_interface.name)) data_mgr = wl_registry_bind(r, name, &wl_data_device_manager_interface, RK_MIN(v, 3u));
   else if (!strcmp(iface, wl_seat_interface.name) && !seat) { seat = wl_registry_bind(r, name, &wl_seat_interface, RK_MIN(v, 7u)); wl_seat_add_listener(seat, &seat_listener, NULL); }
   else if (!strcmp(iface, xdg_wm_base_interface.name)) { wm_base = wl_registry_bind(r, name, &xdg_wm_base_interface, RK_MIN(v, 5u)); xdg_wm_base_add_listener(wm_base, &wm_listener, NULL); }
   else if (!strcmp(iface, zxdg_decoration_manager_v1_interface.name)) deco_mgr = wl_registry_bind(r, name, &zxdg_decoration_manager_v1_interface, 1);
@@ -608,6 +706,7 @@ static bool wl_init(const rk_app_desc *d) {
   if (!compositor || !shm || !wm_base) { wl_display_disconnect(wdpy); wdpy = NULL; return false; }
   xkb = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
   wl_display_roundtrip(wdpy);                                    /* the seat's capabilities, the keymap */
+  if (data_mgr && seat) { data_dev = wl_data_device_manager_get_data_device(data_mgr, seat); wl_data_device_add_listener(data_dev, &dd_listener, NULL); }
   if (pipe(wpipe) == 0) { fcntl(wpipe[0], F_SETFL, O_NONBLOCK); fcntl(wpipe[1], F_SETFL, O_NONBLOCK); }
   return true;
 }
@@ -624,6 +723,11 @@ static void wl_shutdown(void) {
   if (keyboard) wl_keyboard_destroy(keyboard);
   if (seat) wl_seat_destroy(seat);
   if (shape_mgr) wp_cursor_shape_manager_v1_destroy(shape_mgr);
+  offer_free(selection); selection = NULL;
+  if (own_source) { wl_data_source_destroy(own_source); own_source = NULL; }
+  free(own_text); own_text = NULL;
+  if (data_dev) wl_data_device_destroy(data_dev);
+  if (data_mgr) wl_data_device_manager_destroy(data_mgr);
   if (viewporter) wp_viewporter_destroy(viewporter);
   if (frac_mgr) wp_fractional_scale_manager_v1_destroy(frac_mgr);
   if (deco_mgr) zxdg_decoration_manager_v1_destroy(deco_mgr);
@@ -696,5 +800,5 @@ static void wl_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_wayland = {
   "wayland", wl_init, wl_shutdown, wl_open, wl_close, wl_show, wl_title, wl_present_fb, wl_move, wl_minimize, wl_zoom,
-  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target
+  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get
 };

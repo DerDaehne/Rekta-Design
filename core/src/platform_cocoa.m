@@ -246,6 +246,21 @@ static void c_settings(bool *dark, bool *reduced, bool *compact) {
   *compact = true;                                             /* a fine pointer: compact density, as the web's media query */
 }
 
+static void c_clip_set(const char *utf8) {
+  @autoreleasepool {
+    NSPasteboard *pb = NSPasteboard.generalPasteboard;
+    [pb clearContents];
+    [pb setString:[NSString stringWithUTF8String:utf8] forType:NSPasteboardTypeString];
+  }
+}
+
+static char *c_clip_get(void) {
+  @autoreleasepool {
+    NSString *s = [NSPasteboard.generalPasteboard stringForType:NSPasteboardTypeString];
+    return s ? rk__strdup(s.UTF8String) : NULL;
+  }
+}
+
 static double c_refresh(void) {
   if (@available(macOS 12.0, *)) { NSInteger n = NSScreen.mainScreen.maximumFramesPerSecond; if (n > 1) return (double)n; }
   return 60;
@@ -255,5 +270,5 @@ static void c_resize(void *n, float w, float h) { cwin *x = n; if (x && !x->win.
 
 const rk_platform rk__platform_native = {
   "cocoa", c_init, c_shutdown, c_open, c_close, c_show, c_title, c_present, c_move, c_minimize, c_zoom,
-  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL
+  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get
 };

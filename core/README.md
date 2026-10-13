@@ -133,7 +133,7 @@ here (Wayland is the default where a compositor answers; `RK_PLATFORM=x11`
 picks X11),
 Win32 and Cocoa built and tested in CI.
 
-Not there yet: the system clipboard and input methods in text fields, multi-line text,
+Not there yet: input methods (composing) in text fields, multi-line text,
 menus, tables (stage 2); screen readers
 (the accessibility tree is built, the bridges to UI Automation, NSAccessibility
 and AT-SPI are stage 3), several windows' focus between them.

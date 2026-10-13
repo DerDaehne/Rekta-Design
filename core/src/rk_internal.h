@@ -288,6 +288,8 @@ typedef struct rk_platform {
   bool (*ready)(void *native);                             /* NULL, or whether the compositor takes a frame now */
   double (*refresh_hz)(void);                              /* NULL, or the display's rate */
   rk_bitmap *(*target)(void *native, int w, int h, bool *fresh);   /* NULL, or the buffer to draw the next frame into */
+  void (*clip_set)(const char *utf8);                      /* NULL, or the system clipboard takes the text */
+  char *(*clip_get)(void);                                 /* NULL, or the system clipboard's text (malloc'd), or NULL */
 } rk_platform;
 
 extern const rk_platform rk__platform_headless;

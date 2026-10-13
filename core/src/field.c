@@ -23,7 +23,15 @@ typedef struct field {
   void (*submit)(rk_view *, void *); void *submit_user;
 } field;
 
-static char *clipboard;                                    /* the app's own, until the platform's is asked */
+static char *clipboard;                                    /* the app's own, where the platform has none */
+
+static void clip_set(const char *s) {
+  if (rk__platform()->clip_set) { rk__platform()->clip_set(s); return; }
+  free(clipboard);
+  clipboard = rk__strdup(s);
+}
+
+static char *clip_get(void) { return rk__platform()->clip_get ? rk__platform()->clip_get() : rk__strdup(clipboard); }
 
 static rk_textfmt input_fmt(void) { rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0); f.line = 1; return f; }
 static rk_textfmt label_fmt(void) { return rk__textfmt(RK_TEXT_LABEL, 0); }
@@ -93,11 +101,10 @@ static void field_changed(rk_view *v, field *f) {
 /* Replaces the selection with s (n bytes): typing, pasting, deleting. */
 static void replace(rk_view *v, field *f, const char *s, int n) {
   int lo = sel_lo(f), hi = sel_hi(f);
-  for (int i = 0; i < n; i++) if ((unsigned char)s[i] < 0x20 || s[i] == 0x7f) { n = i; break; }   /* one line */
   if (!n && lo == hi) return;
   f->text = rk__grow(f->text, &f->cap, f->len - (hi - lo) + n + 1, 1);
   memmove(f->text + lo + n, f->text + hi, (size_t)(f->len - hi));
-  memcpy(f->text + lo, s, (size_t)n);
+  for (int i = 0; i < n; i++) f->text[lo + i] = (unsigned char)s[i] < 0x20 || s[i] == 0x7f ? ' ' : s[i];   /* one line: breaks become spaces */
   f->len += n - (hi - lo);
   f->text[f->len] = 0;
   f->caret = f->anchor = lo + n;
@@ -114,9 +121,10 @@ static void move_to(rk_view *v, field *f, int i, bool extend) {
 static void copy_selection(const field *f) {
   int lo = sel_lo(f), hi = sel_hi(f);
   if (lo == hi) return;
-  free(clipboard);
-  clipboard = rk__alloc((size_t)(hi - lo) + 1);
-  memcpy(clipboard, f->text + lo, (size_t)(hi - lo));
+  char *s = rk__alloc((size_t)(hi - lo) + 1);
+  memcpy(s, f->text + lo, (size_t)(hi - lo));
+  clip_set(s);
+  free(s);
 }
 
 static bool field_key(rk_view *v, field *f, const rk_event *e) {
@@ -147,7 +155,12 @@ static bool field_key(rk_view *v, field *f, const rk_event *e) {
     case 'A': if (!cmd) return false; f->anchor = 0; f->caret = f->len; touched(v, f); return true;
     case 'C': if (!cmd) return false; copy_selection(f); return true;
     case 'X': if (!cmd) return false; copy_selection(f); replace(v, f, "", 0); return true;
-    case 'V': if (!cmd) return false; if (clipboard) replace(v, f, clipboard, (int)strlen(clipboard)); return true;
+    case 'V': {
+      if (!cmd) return false;
+      char *s = clip_get();
+      if (s) { replace(v, f, s, (int)strlen(s)); free(s); }
+      return true;
+    }
     default: return false;
   }
 }

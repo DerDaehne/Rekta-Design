@@ -27,6 +27,9 @@ static XIM im;
 static int wake_pipe[2] = { -1, -1 };
 static float dpi_scale = 1;
 static bool use_shm, shm_failed;
+static Atom A_CLIPBOARD, A_TARGETS, A_RK_PASTE;
+static Window clip_win;                                       /* owns the CLIPBOARD selection while we hold it */
+static char *clip_text;
 static Atom A_DELETE, A_PROTOCOLS, A_NET_NAME, A_UTF8, A_MOTIF, A_MOVERESIZE, A_STATE, A_MAX_V, A_MAX_H, A_XS_SEL, A_XS_SETTINGS;
 static xwin *wins[64];
 static int nwins;
@@ -74,6 +77,10 @@ static bool x_init(const rk_app_desc *d) {
   snprintf(sel, sizeof sel, "_XSETTINGS_S%d", screen);
   A_XS_SEL = XInternAtom(dpy, sel, False);
   A_XS_SETTINGS = XInternAtom(dpy, "_XSETTINGS_SETTINGS", False);
+  A_CLIPBOARD = XInternAtom(dpy, "CLIPBOARD", False);
+  A_TARGETS = XInternAtom(dpy, "TARGETS", False);
+  A_RK_PASTE = XInternAtom(dpy, "_REKTA_PASTE", False);
+  clip_win = XCreateSimpleWindow(dpy, RootWindow(dpy, screen), 0, 0, 1, 1, 0, 0, 0);
   XSetLocaleModifiers("");
   im = XOpenIM(dpy, NULL, NULL, NULL);
   const char *noshm = getenv("RK_NO_SHM");
@@ -86,6 +93,8 @@ static bool x_init(const rk_app_desc *d) {
 }
 
 static void x_shutdown(void) {
+  free(clip_text); clip_text = NULL;
+  if (clip_win) { XDestroyWindow(dpy, clip_win); clip_win = 0; }
   if (im) XCloseIM(im);
   if (dpy) XCloseDisplay(dpy);
   dpy = NULL; im = NULL;
@@ -264,8 +273,58 @@ static uint32_t mods_of(unsigned s) {
   return ((s & ShiftMask) ? RK_MOD_SHIFT : 0) | ((s & ControlMask) ? RK_MOD_CTRL : 0) | ((s & Mod1Mask) ? RK_MOD_ALT : 0) | ((s & Mod4Mask) ? RK_MOD_SUPER : 0);
 }
 
+/* The clipboard: we own CLIPBOARD while we hold copied text, and hand it to whoever asks, as UTF-8. */
+static void clip_request(const XSelectionRequestEvent *r) {
+  XSelectionEvent reply = { SelectionNotify, 0, True, r->display, r->requestor, r->selection, r->target, None, r->time };
+  Atom prop = r->property ? r->property : r->target;
+  if (r->target == A_TARGETS) {
+    Atom targets[] = { A_TARGETS, A_UTF8, XA_STRING };
+    XChangeProperty(dpy, r->requestor, prop, XA_ATOM, 32, PropModeReplace, (unsigned char *)targets, 3);
+    reply.property = prop;
+  } else if ((r->target == A_UTF8 || r->target == XA_STRING) && clip_text) {
+    XChangeProperty(dpy, r->requestor, prop, r->target, 8, PropModeReplace, (unsigned char *)clip_text, (int)strlen(clip_text));
+    reply.property = prop;
+  }
+  XSendEvent(dpy, r->requestor, False, 0, (XEvent *)&reply);
+  XFlush(dpy);
+}
+
+static void x_clip_set(const char *utf8) {
+  free(clip_text);
+  clip_text = rk__strdup(utf8);
+  XSetSelectionOwner(dpy, A_CLIPBOARD, clip_win, CurrentTime);
+  XFlush(dpy);
+}
+
+static Bool is_paste_reply(Display *d, XEvent *e, XPointer arg) { (void)d; (void)arg; return e->type == SelectionNotify && e->xselection.requestor == clip_win; }
+
+/* Asks the owner for UTF-8 and waits for it, a quarter of a second at most; our own text needs no asking. */
+static char *x_clip_get(void) {
+  Window owner = XGetSelectionOwner(dpy, A_CLIPBOARD);
+  if (owner == clip_win) return rk__strdup(clip_text);
+  if (owner == None) return NULL;
+  XConvertSelection(dpy, A_CLIPBOARD, A_UTF8, A_RK_PASTE, clip_win, CurrentTime);
+  XFlush(dpy);
+  XEvent ev;
+  double until = x_now() + 250;
+  while (!XCheckIfEvent(dpy, &ev, is_paste_reply, NULL)) {
+    if (x_now() > until) return NULL;
+    struct pollfd p = { ConnectionNumber(dpy), POLLIN, 0 };
+    poll(&p, 1, 10);
+  }
+  if (ev.xselection.property == None) return NULL;
+  Atom type; int format; unsigned long n, after; unsigned char *data = NULL;
+  char *out = NULL;
+  if (XGetWindowProperty(dpy, clip_win, A_RK_PASTE, 0, 1 << 20, True, AnyPropertyType, &type, &format, &n, &after, &data) == Success && data && format == 8)
+    { out = rk__alloc(n + 1); memcpy(out, data, n); }
+  if (data) XFree(data);
+  return out;
+}
+
 static void handle(XEvent *ev) {
   if (ev->type == PropertyNotify && ev->xproperty.atom == A_XS_SETTINGS) { rk__app_settings_changed(); return; }
+  if (ev->type == SelectionRequest) { clip_request(&ev->xselectionrequest); return; }
+  if (ev->type == SelectionClear && ev->xselectionclear.window == clip_win) { free(clip_text); clip_text = NULL; return; }
   if (XFilterEvent(ev, None)) return;
   xwin *x = find(ev->xany.window);
   if (!x) return;
@@ -413,5 +472,5 @@ static void x_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "x11", x_init, x_shutdown, x_open, x_close, x_show, x_title, x_present, x_move, x_minimize, x_zoom,
-  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL
+  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get
 };
