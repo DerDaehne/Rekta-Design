@@ -177,6 +177,24 @@ change what it shows.
 A tile with an activate handler presses and opens something.
 .It Fn rk_rows , Fn rk_rows_add
 Hairline rows: a title on the left, a meta or a status on the right.
+.It Fn rk_list "int count" "void (*item)(int index, rk_list_item *out, void *user)" "void *user"
+A long list.
+Only the rows in sight are drawn and nothing is kept for each item:
+.Fa item
+fills a row's title, meta and status while it is drawn.
+.Fn rk_list_set_count
+says the items changed.
+A click selects one and calls the
+.Fn rk_list_on_show
+handler; Ctrl and a click toggles and starts selecting several, Shift and
+a click takes a range, Escape ends it;
+.Fn rk_list_on_change ,
+.Fn rk_list_selected
+and
+.Fn rk_list_selection_count
+follow the selection.
+.Fn rk_list_scroll_to
+glides a row into sight.
 .It Fn rk_icon , Fn rk_progress
 An icon from the set; a progress bar (indeterminate below zero).
 .It Fn rk_view_on_activate "rk_view *view" "void (*fn)(rk_view *, void *)" "void *user"

@@ -336,6 +336,18 @@ RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1;
 RK_API rk_view *rk_rows(void);
 RK_API rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_status status);   /* the row, borrowed */
 
+/* A long list: only the rows in sight are drawn and nothing is kept for each item - item() fills a row while it is
+   drawn, so the strings it gives need to last only for the call. Hairline rows, selected the Metro way: a click
+   selects one and shows it (on_show); Ctrl+click toggles and starts selecting several; Shift+click takes a range. */
+typedef struct rk_list_item { const char *title, *meta; rk_status status; } rk_list_item;
+RK_API rk_view *rk_list(int count, void (*item)(int index, rk_list_item *out, void *user), void *user);
+RK_API void rk_list_set_count(rk_view *list, int count);   /* the items changed: drawn again */
+RK_API void rk_list_on_show(rk_view *list, void (*fn)(rk_view *list, int index, void *user), void *user);
+RK_API void rk_list_on_change(rk_view *list, void (*fn)(rk_view *list, void *user), void *user);   /* the selection */
+RK_API bool rk_list_selected(rk_view *list, int index);
+RK_API int rk_list_selection_count(rk_view *list);
+RK_API void rk_list_scroll_to(rk_view *list, int index);   /* glides it into sight and makes it the active row */
+
 RK_API rk_view *rk_icon(const char *name, rk_role color);   /* 20 × 20 from the icon set */
 RK_API rk_view *rk_progress(float progress);                /* < 0: indeterminate */
 RK_API void rk_progress_set(rk_view *view, float progress);

@@ -31,6 +31,7 @@
 #include "anim.c"
 #include "window.c"
 #include "widgets.c"
+#include "list.c"
 #include "controller.c"
 #include "app.c"
 #include "platform_headless.c"

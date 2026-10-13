@@ -32,6 +32,11 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has long lists: `rk_list(count, item, user)` draws only the
+  rows in sight and keeps nothing for each item (the callback fills a row
+  while it is drawn), scrolls on the glide, and selects the Metro way
+  (click shows, Ctrl+click and Shift+click select several, Escape ends it,
+  keys as the web's `virtual()`). The demo lists a million builds.
 - rekta-core draws a frame's changes as up to eight separate parts and
   presents them together (several damage rectangles in one Wayland
   commit); an app with nothing moving uses no CPU and never wakes. On

@@ -5,6 +5,7 @@
  *   live      a live tile with a sparkline, a status that flips, events that arrive and leave
  *   motion    a sheet from the top edge, toasts (one with undo), a cross-fade
  *   controls  every kind of button, progress, hairline rows, and a custom view drawn with the canvas
+ *   lists     a million rows, drawn only where they are in sight, selected the Metro way
  *   type      the text styles and all 51 icons
  *   settings  theme, density, motion and accent, as the system or as chosen
  *
@@ -391,6 +392,48 @@ static rk_view *controls_section(void) {
   return s;
 }
 
+/* lists: a million rows, only those in sight drawn ---------------------------------------------------------------- */
+
+static rk_view *picked;
+
+static void build_item(int i, rk_list_item *out, void *user) {
+  static char title[48], meta[24];
+  (void)user;
+  snprintf(title, sizeof title, "Build #%d", 1000000 - i);
+  out->title = title;
+  if (i % 11 == 4) { out->status = RK_STATUS_ERROR; return; }
+  if (i % 5 == 1) { out->status = RK_STATUS_WARNING; return; }
+  snprintf(meta, sizeof meta, "%d min", 3 + (i * 7) % 19);
+  out->meta = meta;
+}
+
+static void build_show(rk_view *list, int i, void *user) {
+  char text[64];
+  (void)user;
+  snprintf(text, sizeof text, "Build #%d opens.", 1000000 - i);
+  rk_window_toast(rk_view_window(list), text, NULL, NULL, NULL);
+}
+
+static void builds_picked(rk_view *list, void *user) {
+  char text[64];
+  (void)user;
+  int n = rk_list_selection_count(list);
+  snprintf(text, sizeof text, n ? "%d selected. Escape ends it." : "Ctrl+click selects several.", n);
+  rk_label_set_text(picked, text);
+}
+
+static rk_view *lists_section(void) {
+  rk_view *s = rk_column();
+  rk_add(s, rk_label("A million rows, a screenful of work.", RK_TEXT_GROUP));
+  rk_add(s, rk_label("Only the rows in sight are drawn; nothing is kept for the others. A click opens one; Ctrl+click, Shift+click and Ctrl+A select.", RK_TEXT_BODY));
+  rk_view *list = rk_add(s, rk_list(1000000, build_item, NULL));
+  rk_view_set_size(list, 0, 420);
+  rk_list_on_show(list, build_show, NULL);
+  rk_list_on_change(list, builds_picked, NULL);
+  picked = rk_add(s, rk_label("Ctrl+click selects several.", RK_TEXT_SMALL));
+  return s;
+}
+
 /* type: text styles and icons ------------------------------------------------------------------------------------ */
 
 static const char *const ICONS[] = {
@@ -520,11 +563,12 @@ static void tour(void) {
   press("open a sheet"); rk_app_run_for(500); shot("12-sheet");
   key(RK_KEY_ESCAPE); rk_app_run_for(600);
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("13-controls");
-  key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("14-type");
+  key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("14-lists");
+  key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("15-type");
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700);
-  press("dark"); rk_app_run_for(700); shot("15-dark");
-  press("plum"); rk_app_run_for(700); shot("16-accent");
-  key(RK_KEY_HOME); rk_app_run_for(900); shot("17-rekta-dark");
+  press("dark"); rk_app_run_for(700); shot("16-dark");
+  press("plum"); rk_app_run_for(700); shot("17-accent");
+  key(RK_KEY_HOME); rk_app_run_for(900); shot("18-rekta-dark");
   rk_app_quit(0);
 }
 
@@ -631,6 +675,7 @@ static void launch(void *user) {
   rk_panorama_add(D.home, "live", live_section(), 0);
   rk_panorama_add(D.home, "motion", motion_section(), 0);
   rk_panorama_add(D.home, "controls", controls_section(), 0);
+  rk_panorama_add(D.home, "lists", lists_section(), 0);
   rk_panorama_add(D.home, "type", type_section(), 0);
   rk_panorama_add(D.home, "settings", settings_section(), 0);
   D.places = rk_places(D.home);                                /* places keep home, the window keeps places */

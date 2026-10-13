@@ -304,6 +304,72 @@ static void test_api(void) {
   CHECK(rk__live_views == before, "nothing left over (%d views, %d before)", rk__live_views, before);
 }
 
+/* A long list draws only the rows in sight; its selection is the Metro way. */
+static int item_calls, shown = -1, selection_changes;
+static void list_item(int i, rk_list_item *out, void *u) {
+  static char title[32];
+  (void)u;
+  item_calls++;
+  snprintf(title, sizeof title, "Build #%d", 4000 + i);
+  out->title = title;
+  out->status = i % 7 == 3 ? RK_STATUS_ERROR : RK_STATUS_NONE;
+  out->meta = i % 7 == 3 ? NULL : "4 kB";
+}
+static void list_show(rk_view *l, int i, void *u) { (void)l; (void)u; shown = i; }
+static void list_change(rk_view *l, void *u) { (void)l; (void)u; selection_changes++; }
+
+static void tap_row(rk_window *w, rk_view *list, int row, uint32_t mods) {
+  rk_rect r = rk__window_rect(list);
+  rk_point p = { r.x + 40, r.y + (row + 0.5f) * rk_metric_of(RK_ROW_HEIGHT) - list->pvalue };
+  rk_event e = { sizeof e, RK_EVENT_POINTER_DOWN, 0, p, 0, 0, 0, 0, mods, NULL };
+  rk_window_inject(w, &e);
+  e.type = RK_EVENT_POINTER_UP;
+  rk_window_inject(w, &e);
+}
+
+static void test_list(void) {
+  rk_window *w = window(480, 400);
+  rk_view *page = col(8, 16);
+  rk_view *list = rk_add(page, rk_list(100000, list_item, NULL));
+  rk_view_set_size(list, 0, 300);
+  rk_list_on_show(list, list_show, NULL);
+  rk_list_on_change(list, list_change, NULL);
+  show(w, page, "list");
+  float H = rk_metric_of(RK_ROW_HEIGHT);
+  int in_sight = (int)ceilf(300 / H) + 1;
+  item_calls = 0;
+  rk_window_snapshot(w, "/dev/null");
+  CHECK(item_calls > 0 && item_calls <= in_sight, "a frame asks only for the rows in sight (%d of 100000, %d fit)", item_calls, in_sight);
+  tap_row(w, list, 2, 0);
+  CHECK(shown == 2 && rk_list_selection_count(list) == 1 && rk_list_selected(list, 2), "a click selects one and shows it (%d)", shown);
+  tap_row(w, list, 5, RK_MOD_CTRL);
+  CHECK(rk_list_selection_count(list) == 2 && shown == 2, "Ctrl+click toggles, starts selecting several, shows nothing");
+  tap_row(w, list, 7, 0);
+  CHECK(rk_list_selection_count(list) == 3, "while selecting, a click toggles");
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(rk_list_selection_count(list) == 0, "Escape ends it");
+  tap_row(w, list, 3, 0);
+  tap_row(w, list, 6, RK_MOD_SHIFT);
+  CHECK(rk_list_selection_count(list) == 4 && rk_list_selected(list, 4), "Shift+click takes a range (%d)", rk_list_selection_count(list));
+  CHECK(selection_changes >= 6, "every change is told (%d)", selection_changes);
+  rk_window_focus(w, list);
+  w->focus_visible = true;
+  key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_DOWN, 0);
+  rk_app_run_for(400);
+  shot(w, "list");
+  key(w, RK_KEY_END, 0);
+  rk_app_run_for(1200);
+  CHECK(CLOSE_TO(list->pvalue, 100000 * H - 300, 0.5), "End glides to the last row (%g)", list->pvalue);
+  rk_event wheel = { sizeof wheel, RK_EVENT_WHEEL, 0, { 200, 200 }, 0, 0, -480, 0, 0, NULL };
+  rk_window_inject(w, &wheel);
+  rk_app_run_for(600);
+  CHECK(CLOSE_TO(list->pvalue, 100000 * H - 300 - 480, 0.5), "the wheel scrolls it (%g)", list->pvalue);
+  rk_list_set_count(list, 5);
+  rk_app_run_for(100);
+  CHECK(rk_list_selection_count(list) == 2 && list->value == 0, "fewer items: what is gone is no longer selected (%d)", rk_list_selection_count(list));
+  done(w);
+}
+
 static void test_navigation(void) {
   rk_window *w = window(900, 600);
   rk_controller *home = rk_panorama();
@@ -460,6 +526,7 @@ static void launch(void *user) {
   test_layout();
   test_input();
   test_api();
+  test_list();
   test_navigation();
   test_spring();
   scene_tiles("tiles", 1);
