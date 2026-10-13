@@ -32,6 +32,12 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has text fields: `rk_field(label, placeholder)` as the web's
+  `.rk-field` (label above, 1px border, a hint or a marked error below),
+  one line, edited with the desktop's keys and the pointer, Enter
+  submits. The caret blinks for ten seconds after an edit and then stays
+  lit, so a field left alone wakes nothing. The clipboard is the app's
+  own for now.
 - rekta-core has long lists: `rk_list(count, item, user)` draws only the
   rows in sight and keeps nothing for each item (the callback fills a row
   while it is drawn), scrolls on the glide, and selects the Metro way

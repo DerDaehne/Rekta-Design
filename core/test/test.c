@@ -370,6 +370,67 @@ static void test_list(void) {
   done(w);
 }
 
+/* A text field: the desktop's keys and the pointer; the caret blinks a while after an edit, then wakes nothing. */
+static int field_changes, field_submits;
+static void on_field_change(rk_view *f, void *u) { (void)f; (void)u; field_changes++; }
+static void on_field_submit(rk_view *f, void *u) { (void)f; (void)u; field_submits++; }
+
+static void type_text(rk_window *w, const char *t) {
+  rk_event e = { sizeof e, RK_EVENT_TEXT, 0, { 0, 0 }, 0, 0, 0, 0, 0, t };
+  rk_window_inject(w, &e);
+}
+
+static void test_field(void) {
+  rk_window *w = window(480, 320);
+  rk_view *page = col(16, 24);
+  rk_view *name = rk_add(page, rk_field("Name", "As it appears on the badge"));
+  rk_view *mail = rk_add(page, rk_field("Mail", NULL));
+  rk_field_on_change(name, on_field_change, NULL);
+  rk_field_on_submit(name, on_field_submit, NULL);
+  show(w, page, "field");
+  rk_window_focus(w, name);
+  type_text(w, "Hallo Welt");
+  CHECK(!strcmp(rk_field_text(name), "Hallo Welt") && field_changes == 1, "typing (%s)", rk_field_text(name));
+  for (int i = 0; i < 4; i++) key(w, RK_KEY_LEFT, RK_MOD_SHIFT);
+  type_text(w, "Rekta");
+  CHECK(!strcmp(rk_field_text(name), "Hallo Rekta"), "Shift+Left selects, typing replaces (%s)", rk_field_text(name));
+  key(w, RK_KEY_BACKSPACE, RK_MOD_CTRL);
+  CHECK(!strcmp(rk_field_text(name), "Hallo "), "Ctrl+Backspace deletes a word (%s)", rk_field_text(name));
+  key(w, RK_KEY_HOME, 0); key(w, RK_KEY_END, RK_MOD_SHIFT); key(w, 'C', RK_MOD_CTRL); key(w, RK_KEY_END, 0); key(w, 'V', RK_MOD_CTRL);
+  CHECK(!strcmp(rk_field_text(name), "Hallo Hallo "), "copy and paste (%s)", rk_field_text(name));
+  key(w, 'A', RK_MOD_CTRL); key(w, 'X', RK_MOD_CTRL);
+  CHECK(!strcmp(rk_field_text(name), ""), "Ctrl+A, Ctrl+X");
+  type_text(w, "Grüße €");
+  key(w, RK_KEY_BACKSPACE, 0);
+  CHECK(!strcmp(rk_field_text(name), "Grüße "), "Backspace takes a whole character (%s)", rk_field_text(name));
+  key(w, RK_KEY_LEFT, 0); key(w, RK_KEY_LEFT, 0); key(w, RK_KEY_LEFT, 0); key(w, RK_KEY_DELETE, 0);   /* before ß, two bytes */
+  CHECK(!strcmp(rk_field_text(name), "Grüe "), "Left over a two-byte character, Delete (%s)", rk_field_text(name));
+  key(w, RK_KEY_ENTER, 0);
+  CHECK(field_submits == 1, "Enter submits");
+  /* the pointer: a click at the start, a double click on the word */
+  rk_field_set_text(name, "badge name");
+  rk_rect r = rk__window_rect(name);
+  float y = r.y + r.h / 2 + 8;
+  click(w, (rk_point){ r.x + 13, y }, 10);
+  type_text(w, "<");
+  CHECK(!strcmp(rk_field_text(name), "<badge name"), "a click places the caret (%s)", rk_field_text(name));
+  rk_event d = { sizeof d, RK_EVENT_POINTER_DOWN, rk_app_now(), { r.x + 12 + rk_text_measure("<badge na", RK_TEXT_BODY, 0).w, y }, 0, 0, 0, 0, 0, NULL };
+  rk_window_inject(w, &d); d.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &d);
+  d.type = RK_EVENT_POINTER_DOWN; d.time += 100; rk_window_inject(w, &d); d.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &d);
+  type_text(w, "tag");
+  CHECK(!strcmp(rk_field_text(name), "<badge tag"), "a double click takes the word (%s)", rk_field_text(name));
+  /* a field that wants something else says why, and how */
+  rk_field_set_text(mail, "ada@");
+  rk_field_set_hint(mail, "Add the part after @, such as example.com.", true);
+  key(w, RK_KEY_HOME, RK_MOD_SHIFT);
+  rk_app_run_for(200);
+  shot(w, "field");
+  CHECK(ntimers > 0, "the caret blinks after an edit");
+  rk_app_run_for(11000);
+  CHECK(ntimers == 0 && ((field *)name->state)->lit, "ten seconds on, it stays lit and no timer runs (%d)", ntimers);
+  done(w);
+}
+
 static void test_navigation(void) {
   rk_window *w = window(900, 600);
   rk_controller *home = rk_panorama();
@@ -527,6 +588,7 @@ static void launch(void *user) {
   test_input();
   test_api();
   test_list();
+  test_field();
   test_navigation();
   test_spring();
   scene_tiles("tiles", 1);

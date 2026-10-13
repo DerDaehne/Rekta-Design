@@ -410,7 +410,7 @@ void rk__window_frame(rk_window *w, double now) {
     rk__fill_rect(w->fb, clip, (float)clip.x0, (float)clip.y0, (float)clip.x1, (float)clip.y1, rk__pm(rk_color_of(RK_ROLE_BG), 1));
     c.nclip = 1; c.clips[0] = clip; c.ox = c.oy = 0; c.alpha = 1;
     rk__render_view(&c, w->root, 0, 0);
-    if (w->focus && w->focus_visible && rk__view_visible(w->focus)) {
+    if (w->focus && w->focus_visible && !w->focus->draws_focus && rk__view_visible(w->focus)) {
       rk_rect r = rk__window_rect(w->focus);
       c.ox = c.oy = 0; c.alpha = 1;
       rk__draw_focus(&c, w->focus, r);

@@ -143,6 +143,7 @@ struct rk_view {
   bool rule_top, rule_bottom, hidden, clip, focusable, leaving, entering, placed, fill_anim;
   bool passthrough;                                        /* a layer: only its children take the pointer */
   bool hug;                                                /* keeps its own width across a stack, as a button */
+  bool draws_focus;                                        /* draws its own focus ring (a field: around its input) */
   /* layout */
   rk_layout layout; rk_insets padding; float gap; rk_align main, cross;
   float grow, fixed_w, fixed_h, min_w, min_h; int span_c, span_r;

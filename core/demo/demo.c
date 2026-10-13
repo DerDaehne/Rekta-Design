@@ -4,7 +4,7 @@
  *             flips when it is done, tiles that come and go and a tile that grows (reflow)
  *   live      a live tile with a sparkline, a status that flips, events that arrive and leave
  *   motion    a sheet from the top edge, toasts (one with undo), a cross-fade
- *   controls  every kind of button, progress, hairline rows, and a custom view drawn with the canvas
+ *   controls  every kind of button, a field, progress, hairline rows, and a custom view drawn with the canvas
  *   lists     a million rows, drawn only where they are in sight, selected the Metro way
  *   type      the text styles and all 51 icons
  *   settings  theme, density, motion and accent, as the system or as chosen
@@ -353,6 +353,17 @@ static void advance(rk_view *v, void *u) {
   rk_progress_set(D.bar, p);                                   /* the value glides */
 }
 
+/* A field says what is wrong and how to put it right, on Enter; typing again lifts the error. */
+static void check_mail(rk_view *field, void *user) {
+  (void)user;
+  const char *at = strchr(rk_field_text(field), '@');
+  if (!at || !strchr(at, '.')) { rk_field_set_hint(field, "Add the part after @, such as example.com.", true); return; }
+  rk_field_set_hint(field, "We write once a week.", false);
+  rk_window_toast(rk_view_window(field), "Saved. The next letter goes out on Monday.", NULL, NULL, NULL);
+}
+
+static void mail_typed(rk_view *field, void *user) { (void)user; rk_field_set_hint(field, "Enter saves it.", false); }
+
 static rk_view *controls_section(void) {
   rk_view *s = rk_column();
   rk_add(s, rk_label("Native where it can be, Rekta where it shows.", RK_TEXT_GROUP));
@@ -371,6 +382,12 @@ static rk_view *controls_section(void) {
     rk_button_set_kind(b, RK_BUTTON_BAR);
     rk_button_set_icon(b, bar[i][1]);
   }
+
+  rk_add(s, rk_label("a field", RK_TEXT_KICKER));
+  rk_view *mail = rk_add(s, rk_field("Mail", "name@example.com"));
+  rk_field_set_hint(mail, "Enter saves it.", false);
+  rk_field_on_submit(mail, check_mail, NULL);
+  rk_field_on_change(mail, mail_typed, NULL);
 
   rk_add(s, rk_label("progress", RK_TEXT_KICKER));
   D.bar = rk_add(s, rk_progress(0.25f));

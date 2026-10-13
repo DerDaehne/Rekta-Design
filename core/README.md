@@ -127,12 +127,13 @@ rk_animate_commit();
 
 Stage 1 of [docs/core.md](../docs/core.md#stages): tokens, renderer, views,
 controllers (places with the turn, panorama, pivot, sheets), motion, the press,
-focus and the keyboard, toasts, the title bar; headless, Wayland and X11 tested
+focus and the keyboard, toasts, the title bar, text fields, long lists; headless,
+Wayland and X11 tested
 here (Wayland is the default where a compositor answers; `RK_PLATFORM=x11`
 picks X11),
 Win32 and Cocoa built and tested in CI.
 
-Not there yet: text fields, menus, tables (stage 2); screen readers
+Not there yet: the system clipboard and input methods in text fields, multi-line text,
+menus, tables (stage 2); screen readers
 (the accessibility tree is built, the bridges to UI Automation, NSAccessibility
-and AT-SPI are stage 3), Wayland without XWayland, several windows' focus
-between them.
+and AT-SPI are stage 3), several windows' focus between them.
