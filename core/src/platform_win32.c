@@ -13,6 +13,8 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <imm.h>
+#include <ole2.h>
+#include <shellapi.h>
 
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED 0x02E0
@@ -25,6 +27,7 @@ typedef struct wwin {
   rk_window *w; HWND hwnd; bool own_frame; const rk_bitmap *last; float scale; int minw, minh;
   RECT caret; bool caret_known;                                /* a field's caret, device pixels: the input method's place */
   int cursor;                                                  /* the pointer's shape over the content */
+  struct drop_target *drop;                                    /* files dragged in (OLE), when ole32 is there */
 } wwin;
 
 static HINSTANCE inst;
@@ -349,6 +352,133 @@ static void dark_frame(wwin *x) {
   if (pDwmSetWindowAttribute) pDwmSetWindowAttribute(x->hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof dark);
 }
 
+/* Files dragged in: an IDropTarget for each window, written out in C, through ole32 and shell32 looked up at run
+   time. Each enter and move asks the window whether a view under the pointer takes the files (a copy) or not; the
+   drop hands it their paths. */
+typedef HRESULT(WINAPI *OleInitialize_t)(LPVOID);
+typedef HRESULT(WINAPI *RegisterDragDrop_t)(HWND, LPDROPTARGET);
+typedef HRESULT(WINAPI *RevokeDragDrop_t)(HWND);
+typedef void(WINAPI *ReleaseStgMedium_t)(LPSTGMEDIUM);
+typedef UINT(WINAPI *DragQueryFileW_t)(HDROP, UINT, LPWSTR, UINT);
+static RegisterDragDrop_t pRegisterDragDrop;
+static RevokeDragDrop_t pRevokeDragDrop;
+static ReleaseStgMedium_t pReleaseStgMedium;
+static DragQueryFileW_t pDragQueryFileW;
+static bool ole_tried;
+static const GUID iid_unknown = { 0x00000000, 0x0000, 0x0000, { 0xC0, 0, 0, 0, 0, 0, 0, 0x46 } };
+static const GUID iid_drop_target = { 0x00000122, 0x0000, 0x0000, { 0xC0, 0, 0, 0, 0, 0, 0, 0x46 } };
+
+typedef struct drop_target { IDropTarget iface; LONG refs; wwin *x; bool files, taken; } drop_target;
+
+static bool has_files(IDataObject *data) {
+  FORMATETC f = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+  return data && data->lpVtbl->QueryGetData(data, &f) == S_OK;
+}
+
+static bool dt_ask(drop_target *t, rk_event_type type, POINTL pt, const char *const *files, int n) {
+  POINT p = { pt.x, pt.y };
+  ScreenToClient(t->x->hwnd, &p);
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.type = type; e.time = rk_app_now();
+  e.position = (rk_point){ p.x / t->x->scale, p.y / t->x->scale };
+  e.files = files; e.nfiles = n;
+  bool r = rk__window_drag(t->x->w, &e);
+  rk__app_request_frame();
+  return r;
+}
+
+static HRESULT STDMETHODCALLTYPE dt_query(IDropTarget *self, REFIID riid, void **out) {
+  if (!memcmp(riid, &iid_unknown, sizeof(GUID)) || !memcmp(riid, &iid_drop_target, sizeof(GUID))) { *out = self; self->lpVtbl->AddRef(self); return S_OK; }
+  *out = NULL;
+  return E_NOINTERFACE;
+}
+static ULONG STDMETHODCALLTYPE dt_addref(IDropTarget *self) { return (ULONG)InterlockedIncrement(&((drop_target *)self)->refs); }
+static ULONG STDMETHODCALLTYPE dt_release(IDropTarget *self) {
+  drop_target *t = (drop_target *)self;
+  LONG n = InterlockedDecrement(&t->refs);
+  if (!n) free(t);
+  return (ULONG)n;
+}
+static HRESULT STDMETHODCALLTYPE dt_enter(IDropTarget *self, IDataObject *data, DWORD keys, POINTL pt, DWORD *effect) {
+  (void)keys;
+  drop_target *t = (drop_target *)self;
+  t->files = has_files(data);
+  t->taken = t->files && t->x && dt_ask(t, RK_EVENT_DRAG_ENTER, pt, NULL, 0);
+  *effect = t->taken ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+  return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE dt_over(IDropTarget *self, DWORD keys, POINTL pt, DWORD *effect) {
+  (void)keys;
+  drop_target *t = (drop_target *)self;
+  t->taken = t->files && t->x && dt_ask(t, RK_EVENT_DRAG_MOVE, pt, NULL, 0);
+  *effect = t->taken ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+  return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE dt_leave(IDropTarget *self) {
+  drop_target *t = (drop_target *)self;
+  POINTL pt = { 0, 0 };
+  if (t->x) dt_ask(t, RK_EVENT_DRAG_LEAVE, pt, NULL, 0);
+  t->taken = false;
+  return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE dt_drop(IDropTarget *self, IDataObject *data, DWORD keys, POINTL pt, DWORD *effect) {
+  (void)keys;
+  drop_target *t = (drop_target *)self;
+  *effect = DROPEFFECT_NONE;
+  if (!t->x || !t->files || !t->taken || !pDragQueryFileW || !pReleaseStgMedium) { if (t->x) dt_ask(t, RK_EVENT_DRAG_LEAVE, pt, NULL, 0); return S_OK; }
+  FORMATETC f = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+  STGMEDIUM m;
+  if (data->lpVtbl->GetData(data, &f, &m) != S_OK) { dt_ask(t, RK_EVENT_DRAG_LEAVE, pt, NULL, 0); return S_OK; }
+  HDROP h = (HDROP)GlobalLock(m.hGlobal);
+  UINT n = h ? pDragQueryFileW(h, 0xFFFFFFFF, NULL, 0) : 0;
+  char **paths = n ? rk__alloc(n * sizeof *paths) : NULL;
+  for (UINT i = 0; i < n; i++) {
+    UINT len = pDragQueryFileW(h, i, NULL, 0);
+    wchar_t *ws = rk__alloc((len + 1) * sizeof *ws);
+    pDragQueryFileW(h, i, ws, len + 1);
+    int k = WideCharToMultiByte(CP_UTF8, 0, ws, -1, NULL, 0, NULL, NULL);
+    paths[i] = rk__alloc(k > 0 ? (size_t)k : 1);
+    if (k > 0) WideCharToMultiByte(CP_UTF8, 0, ws, -1, paths[i], k, NULL, NULL);
+    free(ws);
+  }
+  if (h) GlobalUnlock(m.hGlobal);
+  pReleaseStgMedium(&m);
+  bool took = n && dt_ask(t, RK_EVENT_DROP, pt, (const char *const *)paths, (int)n);
+  if (!n) dt_ask(t, RK_EVENT_DRAG_LEAVE, pt, NULL, 0);
+  rk__free_paths(paths, (int)n);
+  *effect = took ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+  t->taken = false;
+  return S_OK;
+}
+static IDropTargetVtbl dt_vtbl = { dt_query, dt_addref, dt_release, dt_enter, dt_over, dt_leave, dt_drop };
+
+static void drop_attach(wwin *x) {
+  if (!ole_tried) {
+    ole_tried = true;
+    HMODULE ole = LoadLibraryW(L"ole32.dll"), shell = LoadLibraryW(L"shell32.dll");
+    OleInitialize_t init = ole ? (OleInitialize_t)(void (*)(void))GetProcAddress(ole, "OleInitialize") : NULL;
+    if (init && SUCCEEDED(init(NULL))) {
+      pRegisterDragDrop = (RegisterDragDrop_t)(void (*)(void))GetProcAddress(ole, "RegisterDragDrop");
+      pRevokeDragDrop = (RevokeDragDrop_t)(void (*)(void))GetProcAddress(ole, "RevokeDragDrop");
+      pReleaseStgMedium = (ReleaseStgMedium_t)(void (*)(void))GetProcAddress(ole, "ReleaseStgMedium");
+    }
+    pDragQueryFileW = shell ? (DragQueryFileW_t)(void (*)(void))GetProcAddress(shell, "DragQueryFileW") : NULL;
+  }
+  if (!pRegisterDragDrop || !pRevokeDragDrop) return;
+  drop_target *t = rk__alloc(sizeof *t);
+  t->iface.lpVtbl = &dt_vtbl; t->refs = 1; t->x = x;
+  if (pRegisterDragDrop(x->hwnd, &t->iface) == S_OK) x->drop = t; else free(t);
+}
+
+static void drop_detach(wwin *x) {
+  if (!x->drop) return;
+  pRevokeDragDrop(x->hwnd);
+  x->drop->x = NULL;                                           /* OLE may still hold it a moment */
+  x->drop->iface.lpVtbl->Release(&x->drop->iface);
+  x->drop = NULL;
+}
+
 static void *w_open(rk_window *w, const rk_window_desc *d) {
   wwin *x = rk__alloc(sizeof *x);
   x->w = w; x->own_frame = !d->system_frame;
@@ -367,10 +497,11 @@ static void *w_open(rk_window *w, const rk_window_desc *d) {
   dark_frame(x);
   SetWindowPos(h, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
   sync_size(x);
+  drop_attach(x);
   return x;
 }
 
-static void w_close(void *n) { wwin *x = n; if (x) { SetWindowLongPtrW(x->hwnd, GWLP_USERDATA, 0); DestroyWindow(x->hwnd); free(x); } }
+static void w_close(void *n) { wwin *x = n; if (x) { drop_detach(x); SetWindowLongPtrW(x->hwnd, GWLP_USERDATA, 0); DestroyWindow(x->hwnd); free(x); } }
 static void w_show(void *n) { wwin *x = n; if (x) { ShowWindow(x->hwnd, SW_SHOW); UpdateWindow(x->hwnd); } }
 static void w_title(void *n, const char *t) { wwin *x = n; if (x) { wchar_t *s = wide(t); SetWindowTextW(x->hwnd, s); free(s); } }
 static void w_present(void *n, const rk_bitmap *fb, const rk_irect *changed, int nchanged) {

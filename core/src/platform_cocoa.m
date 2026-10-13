@@ -65,6 +65,49 @@ static NSString *plain(id s) { return [s isKindOfClass:[NSAttributedString class
   ev.position = (rk_point){ (float)p.x, (float)p.y };
   rk__window_event(self.owner->w, &ev);
 }
+/* Files dragged in (NSDraggingDestination): each enter and update asks the window whether a view under the pointer
+   takes them (a copy) or not; the drop hands it their paths. */
+static NSDictionary *files_only(void) { return @{ NSPasteboardURLReadingFileURLsOnlyKey: @YES }; }
+- (NSDragOperation)drag:(id<NSDraggingInfo>)info type:(rk_event_type)type {
+  if (!self.owner) return NSDragOperationNone;
+  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+  BOOL files = [info.draggingPasteboard canReadObjectForClasses:@[ [NSURL class] ] options:files_only()];
+  rk_event ev;
+  memset(&ev, 0, sizeof ev);
+  ev.size = sizeof ev; ev.type = type; ev.time = rk_app_now(); ev.position = (rk_point){ (float)p.x, (float)p.y };
+  BOOL taken = files && rk__window_drag(self.owner->w, &ev);
+  rk__app_request_frame();
+  return taken ? NSDragOperationCopy : NSDragOperationNone;
+}
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info { return [self drag:info type:RK_EVENT_DRAG_ENTER]; }
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)info { return [self drag:info type:RK_EVENT_DRAG_MOVE]; }
+- (void)draggingExited:(id<NSDraggingInfo>)info {
+  (void)info;
+  if (!self.owner) return;
+  rk_event ev;
+  memset(&ev, 0, sizeof ev);
+  ev.size = sizeof ev; ev.type = RK_EVENT_DRAG_LEAVE; ev.time = rk_app_now();
+  rk__window_drag(self.owner->w, &ev);
+  rk__app_request_frame();
+}
+- (BOOL)prepareForDragOperation:(id<NSDraggingInfo>)info { (void)info; return YES; }
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)info {
+  if (!self.owner) return NO;
+  NSArray *urls = [info.draggingPasteboard readObjectsForClasses:@[ [NSURL class] ] options:files_only()];
+  int n = (int)urls.count;
+  char **paths = n ? rk__alloc((size_t)n * sizeof *paths) : NULL;
+  for (int i = 0; i < n; i++) paths[i] = rk__strdup(((NSURL *)urls[(NSUInteger)i]).fileSystemRepresentation);
+  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+  rk_event ev;
+  memset(&ev, 0, sizeof ev);
+  ev.size = sizeof ev; ev.type = n ? RK_EVENT_DROP : RK_EVENT_DRAG_LEAVE; ev.time = rk_app_now();
+  ev.position = (rk_point){ (float)p.x, (float)p.y };
+  ev.files = (const char *const *)paths; ev.nfiles = n;
+  BOOL took = rk__window_drag(self.owner->w, &ev) && n;
+  rk__free_paths(paths, n);
+  rk__app_request_frame();
+  return took;
+}
 - (void)mouseDown:(NSEvent *)e { [self pointer:e type:RK_EVENT_POINTER_DOWN button:0]; }
 - (void)mouseUp:(NSEvent *)e { [self pointer:e type:RK_EVENT_POINTER_UP button:0]; }
 - (void)mouseDragged:(NSEvent *)e { [self pointer:e type:RK_EVENT_POINTER_MOVE button:0]; }
@@ -219,6 +262,7 @@ static void *c_open(rk_window *w, const rk_window_desc *d) {
     view.wantsLayer = YES;
     view.layer.contentsGravity = kCAGravityTopLeft;
     view.owner = x;
+    [view registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
     win.contentView = view;
     RKDelegate *del = [RKDelegate new];
     del.owner = x;

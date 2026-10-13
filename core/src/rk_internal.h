@@ -252,7 +252,9 @@ struct rk_window {
 
 void rk__window_resized(rk_window *w, float width, float height, float scale);   /* from the platform */
 void rk__window_event(rk_window *w, const rk_event *e);
-bool rk__window_drag(rk_window *w, const rk_event *e);       /* from the platform: whether a view takes the files */
+bool rk__window_drag(rk_window *w, const rk_event *e);
+int rk__uri_list_paths(const char *text, size_t n, char ***out);   /* text/uri-list: the local files' paths */
+void rk__free_paths(char **paths, int n);       /* from the platform: whether a view takes the files */
 bool rk__accepts(const char *accept, const char *path);    /* a file chooser's or a drop's filter: ".png,.jpg", "image/" with a star */
 void rk__window_close_request(rk_window *w);
 void rk__window_pointer_cancel(rk_window *w);

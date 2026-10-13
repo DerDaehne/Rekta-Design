@@ -749,6 +749,39 @@ static rk_view *drag_taker(rk_window *w, const rk_event *e) {
   return NULL;
 }
 
+/* A text/uri-list, as X11 and Wayland hand dropped files over: one URI a line, comments after #; the local file:
+   URIs as paths, percent-decoded. Returns how many; *out and its strings are malloc'd (rk__free_paths). */
+static int hexval(int c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; }
+int rk__uri_list_paths(const char *text, size_t n, char ***out) {
+  int count = 0, cap = 0;
+  char **paths = NULL;
+  for (size_t i = 0; i < n;) {
+    size_t e = i;
+    while (e < n && text[e] != '\n' && text[e] != '\r') e++;
+    const char *line = text + i;
+    size_t len = e - i;
+    i = e;
+    while (i < n && (text[i] == '\n' || text[i] == '\r')) i++;
+    if (!len || line[0] == '#' || len < 7 || strncmp(line, "file://", 7)) continue;
+    const char *p = line + 7, *end = line + len;
+    if (p < end && *p != '/') {                              /* a host: only localhost is this machine for sure */
+      if (end - p < 10 || strncmp(p, "localhost/", 10)) continue;
+      p += 9;
+    }
+    char *path = rk__alloc((size_t)(end - p) + 1), *q = path;
+    for (; p < end; p++) {
+      if (*p == '%' && end - p >= 3 && hexval(p[1]) >= 0 && hexval(p[2]) >= 0) { *q++ = (char)(hexval(p[1]) * 16 + hexval(p[2])); p += 2; }
+      else *q++ = *p;
+    }
+    *q = 0;
+    paths = rk__grow(paths, &cap, count + 1, sizeof *paths);
+    paths[count++] = path;
+  }
+  *out = paths;
+  return count;
+}
+void rk__free_paths(char **paths, int n) { for (int i = 0; i < n; i++) free(paths[i]); free(paths); }
+
 /* The system's file chooser, for this window. */
 typedef struct choosing { rk_window *w; void (*chosen)(rk_window *, const char *const *, int, void *); void *user; } choosing;
 static void chooser_done(void *ctx, const char *const *files, int n) {
