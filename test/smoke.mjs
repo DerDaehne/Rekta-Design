@@ -36,6 +36,7 @@ function ok(cond, what, detail = '') { if (cond) passed += 1; else failures.push
 async function open(opts = {}, path = '') {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference', ...opts });
   const p = await ctx.newPage();
+  if (process.env.SMOKE_CPU) await (await ctx.newCDPSession(p)).send('Emulation.setCPUThrottlingRate', { rate: +process.env.SMOKE_CPU });   /* a busy runner, here */
   const tag = `${opts.viewport ? opts.viewport.width : 1440}${opts.reducedMotion === 'reduce' ? '/reduced' : ''}`;
   p.on('pageerror', (e) => errors.push(`${tag}: ${e.message}`));
   p.on('console', (m) => { if (m.type() === 'error') errors.push(`${tag} console: ${m.text()}`); });
