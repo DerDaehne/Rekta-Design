@@ -828,6 +828,62 @@ static void test_select(void) {
   done(w);
 }
 
+/* A date: year, month and day from the keys, or a day from the month below it. */
+static void test_date(void) {
+  rk_window *w = window(420, 480);
+  rk_view *page = col(8, 16);
+  rk_view *due = rk_add(page, rk_date(2024, 2, 28));
+  rk_view *none = rk_add(page, rk_date(0, 0, 0));
+  rk_control_on_change(due, control_changed, NULL);
+  show(w, page, "date");
+  CHECK(rk_control_value(due) == 20240228 && rk_control_value(none) == 0, "its value is the number; none is 0");
+  rk_window_focus(w, due);
+  key(w, RK_KEY_RIGHT, 0); key(w, RK_KEY_UP, 0);
+  CHECK(rk_control_value(due) == 20240328, "Right to the month, Up: March (%g)", rk_control_value(due));
+  key(w, RK_KEY_RIGHT, 0); key(w, RK_KEY_UP, 0);
+  CHECK(rk_control_value(due) == 20240329, "the day goes up (%g)", rk_control_value(due));
+  rk_control_set_value(due, 20240229);
+  key(w, RK_KEY_LEFT, 0); key(w, RK_KEY_LEFT, 0); key(w, RK_KEY_UP, 0);
+  CHECK(rk_control_value(due) == 20250228, "a year on from the 29th of February: the 28th (%g)", rk_control_value(due));
+  rk_control_set_value(due, 20240230);
+  CHECK(rk_control_value(due) == 20250228, "a day that does not exist is refused");
+  rk_window_focus(w, none);
+  type_text(w, "2023"); type_text(w, "2"); type_text(w, "14");
+  CHECK(rk_control_value(none) == 20230214, "typed: 2023, 2, 14 (%g)", rk_control_value(none));
+  key(w, RK_KEY_LEFT, 0); type_text(w, "13");
+  CHECK(rk_control_value(none) == 20230214, "month 13 is not taken");
+  /* the month below it */
+  key(w, RK_KEY_ENTER, 0);
+  rk_app_run_for(200);
+  rk_view *sheet = w->floats->nkids ? w->floats->kids[0] : NULL;
+  CHECK(sheet && rk_window_focused(w) == sheet, "Enter opens the month, the keys in it");
+  w->focus_visible = true;
+  rk_app_run_for(100);
+  shot(w, "date");
+  key(w, RK_KEY_RIGHT, 0); key(w, RK_KEY_DOWN, 0);
+  CHECK(sheet && ((date_sheet *)sheet->state)->cur == 20230222, "Right a day, Down a week (%d)", sheet ? ((date_sheet *)sheet->state)->cur : 0);
+  key(w, RK_KEY_PAGE_DOWN, 0); key(w, RK_KEY_PAGE_DOWN, RK_MOD_SHIFT);
+  CHECK(sheet && ((date_sheet *)sheet->state)->cur == 20240322, "Page Down a month, with Shift a year (%d)", sheet ? ((date_sheet *)sheet->state)->cur : 0);
+  key(w, RK_KEY_PAGE_UP, 0); key(w, RK_KEY_END, 0);
+  CHECK(sheet && ((date_sheet *)sheet->state)->cur == 20240229, "End: the month's last day (%d)", sheet ? ((date_sheet *)sheet->state)->cur : 0);
+  key(w, RK_KEY_ENTER, 0);
+  CHECK(rk_control_value(none) == 20240229 && !w->floats->nkids && rk_window_focused(w) == none, "Enter takes it; focus is back (%g)", rk_control_value(none));
+  rk_rect r = rk__window_rect(none);
+  click(w, (rk_point){ r.x + r.w - 20, r.y + r.h / 2 }, 10);
+  rk_app_run_for(200);
+  CHECK(w->floats->nkids == 1, "the calendar opens it too");
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(!w->floats->nkids && rk_control_value(none) == 20240229 && rk_window_focused(w) == none, "Escape closes it as it was");
+  key(w, RK_KEY_ENTER, 0);
+  rk_app_run_for(200);
+  sheet = w->floats->kids[0];
+  rk_rect sr = rk__window_rect(sheet), cell = day_cell(20240229, 10);
+  click(w, (rk_point){ sr.x + cell.x + cell.w / 2, sr.y + cell.y + cell.h / 2 }, 10);
+  CHECK(rk_control_value(none) == 20240210, "a click takes a day (%g)", rk_control_value(none));
+  CHECK(weekday(2026, 10, 13) == 1 && weekday(2000, 1, 1) == 5 && add_days(20231231, 1) == 20240101 && add_months(20240131, 1) == 20240229, "the calendar's arithmetic");
+  done(w);
+}
+
 /* Editing a cell: a double click or F2 opens it; Enter or Tab keeps the value, Escape puts the old one back; the app
    may refuse, and the cell says why and stays open. */
 static char comp_name[8][32] = { "Tile", "Rows", "Tag", "Sheet", "Toast", "Menu", "Field", "Table" };
@@ -972,7 +1028,7 @@ static bool takes_input(const rk_view *v) {
   if (v->press != RK_PRESS_NONE || v->on_activate || v->menu) return true;
   const char *n = v->cls ? v->cls->pub.name : "";
   return !strcmp(n, "rk_field") || !strcmp(n, "rk_list") || !strcmp(n, "rk_strip") || !strcmp(n, "rk_check") || !strcmp(n, "rk_choices") ||
-         !strcmp(n, "rk_toggle") || !strcmp(n, "rk_segments") || !strcmp(n, "rk_slider") || !strcmp(n, "rk_stepper") || !strcmp(n, "rk_select");
+         !strcmp(n, "rk_toggle") || !strcmp(n, "rk_segments") || !strcmp(n, "rk_slider") || !strcmp(n, "rk_stepper") || !strcmp(n, "rk_select") || !strcmp(n, "rk_date");
 }
 static int unreachable(const rk_view *v, const rk_view *skip) {
   if (v == skip || v->hidden) return 0;
@@ -1248,6 +1304,7 @@ static void launch(void *user) {
   test_cell_edit();
   test_controls();
   test_select();
+  test_date();
   test_textarea();
   test_undo();
   test_focus();

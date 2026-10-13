@@ -373,6 +373,7 @@ RK_API rk_view *rk_segments(const char *const *options, int count, int chosen); 
 RK_API rk_view *rk_slider(double min, double max, double step, double value);   /* step 0: continuous */
 RK_API rk_view *rk_stepper(double min, double max, double step, double value);  /* minus, the number, plus */
 RK_API rk_view *rk_select(const char *const *options, int count, int chosen);    /* one of a list, from a menu below */
+RK_API rk_view *rk_date(int year, int month, int day);    /* its value: 20261013; 0, 0, 0: none yet */
 RK_API double rk_control_value(rk_view *control);
 RK_API void rk_control_set_value(rk_view *control, double value);   /* a number snaps to the range and step; an index it lacks is ignored */
 RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, void *user), void *user);

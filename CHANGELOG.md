@@ -32,6 +32,11 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has a date field: `rk_date(year, month, day)` shows
+  2026-10-13 and holds 20261013. Year, month and day from the keys (Up
+  and Down keep the day in its month, digits type it), or a day from
+  the month that opens below it, Monday first, today ringed and the
+  chosen day in the accent, with the keys of the web's date pickers.
 - rekta-core has a select and a combobox: `rk_select(options, count,
   chosen)` opens a menu of its options below it, the chosen one marked
   (Up and Down change it in place, a letter jumps); `rk_field_set_options`

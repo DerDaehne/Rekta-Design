@@ -17,7 +17,13 @@
 
    Select: a box like a field's input with the chosen option and a chevron; a press, Enter, Space or Alt+Down opens a
    menu of the options below it, the chosen one marked; Up and Down change it in place, a letter jumps to the next
-   option starting with it. Included after widgets.c. */
+   option starting with it.
+
+   Date: a box with the date as 2026-10-13 in tabular figures and a calendar; its value is the number 20261013 (0: no
+   date yet). Left and Right go between year, month and day, Up and Down change the one in focus (the day stays in
+   its month), digits type it. The calendar, Alt+Down or Enter opens a month below it, Monday first: today ringed, the
+   chosen day in the accent; the arrows go by day and week, Page Up and Page Down by month (with Shift, by year),
+   Home and End to the month's ends, Enter or a click takes a day, Escape closes. Included after widgets.c. */
 #include "rk_internal.h"
 
 typedef struct control {
@@ -699,12 +705,334 @@ rk_view *rk_select(const char *const *options, int count, int chosen) {
   return v;
 }
 
+/* Date ---------------------------------------------------------------------------------------------------------- */
+
+static int days_in(int y, int m) {
+  static const int n[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+  return m == 2 && ((y % 4 == 0 && y % 100 != 0) || y % 400 == 0) ? 29 : n[RK_CLAMP(m, 1, 12) - 1];
+}
+static int weekday(int y, int m, int d) {                  /* Monday 0 */
+  static const int t[12] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
+  if (m < 3) y--;
+  return ((y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7 + 6) % 7;
+}
+static int today(void) {
+  time_t now = time(NULL);
+  struct tm *t = localtime(&now);
+  return t ? (t->tm_year + 1900) * 10000 + (t->tm_mon + 1) * 100 + t->tm_mday : 20000101;
+}
+static int ymd(int y, int m, int d) { y = RK_CLAMP(y, 1, 9999); m = RK_CLAMP(m, 1, 12); return y * 10000 + m * 100 + RK_CLAMP(d, 1, days_in(y, m)); }
+static int add_days(int value, int n) {                    /* a day at a time: a month's worth at most */
+  int y = value / 10000, m = value / 100 % 100, d = value % 100 + n;
+  while (d < 1) { if (--m < 1) { m = 12; y--; } d += days_in(y, m); }
+  while (d > days_in(y, m)) { d -= days_in(y, m); if (++m > 12) { m = 1; y++; } }
+  return ymd(y, m, d);
+}
+static int add_months(int value, int n) {
+  int y = value / 10000, m = value / 100 % 100 - 1 + n;
+  y += m >= 0 ? m / 12 : -((11 - m) / 12);
+  m = ((m % 12) + 12) % 12 + 1;
+  return ymd(y, m, value % 100);
+}
+
+typedef struct date_box { control c; int seg; char typed[5]; int ntyped; bool down; rk_view *view, *sheet; } date_box;
+typedef struct date_sheet { date_box *box; int cur; } date_sheet;   /* cur: the day the keys are on */
+
+#define DATE_ICON 40.0f
+#define CELL 36.0f
+
+static rk_textfmt date_fmt(void) { rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0); f.tabular = true; f.line = 1; return f; }
+
+/* Where each of year, month and day starts and ends in the box. */
+static void date_segments(float *x0, float *x1) {
+  rk_textfmt f = date_fmt();
+  float x = SELECT_PAD, dash = rk__text_width("-", -1, &f), w4 = rk__text_width("0000", -1, &f), w2 = rk__text_width("00", -1, &f);
+  x0[0] = x; x1[0] = x + w4; x += w4 + dash;
+  x0[1] = x; x1[1] = x + w2; x += w2 + dash;
+  x0[2] = x; x1[2] = x + w2;
+}
+
+static rk_size date_measure(rk_view *v, rk_size avail, void *st) {
+  (void)v; (void)avail; (void)st;
+  float x0[3], x1[3];
+  date_segments(x0, x1);
+  return (rk_size){ ceilf(x1[2] + SELECT_PAD + DATE_ICON), rk_metric_of(RK_CONTROL_HEIGHT) };
+}
+
+static void date_draw(rk_view *v, rk_canvas *c, void *st) {
+  date_box *b = st;
+  rk_window *w = rk__view_window(v);
+  bool focused = w && w->focus == v, off = b->c.disabled, open = b->sheet && b->sheet->parent;
+  float W = v->pframe.w, h = v->pframe.h, r = rk_metric_of(RK_RADIUS_S);
+  rk_canvas_fill_round_rect(c, (rk_rect){ 0, 0, W, h }, r, rk_color_of(off ? RK_ROLE_DISABLED : focused || open ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM));
+  rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, h - 2 }, r - 1, rk_color_of(RK_ROLE_BG));
+  int value = (int)b->c.value, part[3] = { value / 10000, value / 100 % 100, value % 100 };
+  static const char *const empty[3] = { "yyyy", "mm", "dd" };
+  float x0[3], x1[3];
+  date_segments(x0, x1);
+  rk_textfmt f = date_fmt();
+  float ty = (h - f.size) / 2;
+  for (int i = 0; i < 3; i++) {
+    char text[8];
+    bool here = focused && i == b->seg && !off;
+    if (here && b->ntyped) snprintf(text, sizeof text, "%s", b->typed);
+    else if (value) snprintf(text, sizeof text, i ? "%02d" : "%04d", part[i]);
+    else snprintf(text, sizeof text, "%s", empty[i]);
+    float tw = rk__text_width(text, -1, &f), x = x0[i] + (x1[i] - x0[i] - tw) / 2;
+    rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : value || (here && b->ntyped) ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
+    if (here) { rk_canvas_fill_rect(c, (rk_rect){ x0[i] - 2, ty - 3, x1[i] - x0[i] + 4, f.size + 6 }, rk_color_of(RK_ROLE_ACCENT)); ink = rk_color_of(RK_ROLE_ON_ACCENT); }
+    rk__text_draw(c, text, -1, x, ty, &f, ink);
+    if (i < 2) rk__text_draw(c, "-", -1, x1[i], ty, &f, rk_color_of(off ? RK_ROLE_DISABLED : value ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM));
+  }
+  rk_canvas_icon(c, "calendar", (rk_rect){ W - DATE_ICON + 10, (h - 20) / 2, 20, 20 }, rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT));
+  if (shows_focus(v)) focus_ring(c, (rk_rect){ 0, 0, W, h });
+}
+
+/* What is typed into the segment in focus, taken. */
+static void date_take_typed(date_box *b) {
+  if (!b->ntyped) return;
+  int n = atoi(b->typed), value = b->c.value ? (int)b->c.value : today();
+  int y = value / 10000, m = value / 100 % 100, d = value % 100;
+  if (b->seg == 0) y = b->ntyped < 4 ? 2000 + n % 100 : n;   /* two digits: this century */
+  else if (b->seg == 1) m = n;
+  else d = n;
+  b->ntyped = 0; b->typed[0] = 0;
+  if ((b->seg == 1 && (m < 1 || m > 12)) || (b->seg == 2 && d < 1) || (b->seg == 0 && y < 1)) { rk__view_dirty(b->view); return; }
+  user_set(b->view, &b->c, ymd(y, m, RK_MIN(d, days_in(y, m))));
+  rk__view_dirty(b->view);
+}
+
+static void date_close(date_box *b, bool give_back) {
+  if (!b->sheet || !b->sheet->parent) return;
+  rk_window *w = rk__view_window(b->sheet);
+  bool had = w && w->focus == b->sheet;
+  rk__view_detach(b->sheet);
+  if (give_back && had && rk__view_window(b->view) == w) rk_window_focus(w, b->view);
+  rk__view_dirty(b->view);
+}
+
+static void date_open(date_box *b);
+
+static bool date_event(rk_view *v, const rk_event *e, void *st) {
+  date_box *b = st;
+  switch (e->type) {
+    case RK_EVENT_POINTER_DOWN: {
+      if (e->button || b->c.disabled) return false;
+      date_take_typed(b);
+      if (e->position.x >= v->pframe.w - DATE_ICON) { b->down = true; return true; }
+      float x0[3], x1[3];
+      date_segments(x0, x1);
+      for (int i = 0; i < 3; i++) if (e->position.x < x1[i] + 4 || i == 2) { b->seg = i; break; }
+      rk__view_dirty(v);
+      return true;
+    }
+    case RK_EVENT_POINTER_UP:
+      if (b->down && e->position.x >= v->pframe.w - DATE_ICON) date_open(b);
+      b->down = false;
+      return true;
+    case RK_EVENT_TEXT: {
+      if (!e->text || b->c.disabled) return false;
+      for (const char *p = e->text; *p; p++) {
+        if (*p == '-' || *p == '/' || *p == '.') { date_take_typed(b); b->seg = RK_MIN(b->seg + 1, 2); continue; }
+        if (*p < '0' || *p > '9') continue;
+        int max = b->seg ? 2 : 4;
+        if (b->ntyped < max) { b->typed[b->ntyped++] = *p; b->typed[b->ntyped] = 0; }
+        int first = b->typed[0] - '0';
+        bool full = b->ntyped == max || (b->seg == 1 && b->ntyped == 1 && first > 1) || (b->seg == 2 && b->ntyped == 1 && first > 3);
+        if (full) { int seg = b->seg; date_take_typed(b); b->seg = RK_MIN(seg + 1, 2); }
+      }
+      rk__view_dirty(v);
+      return true;
+    }
+    case RK_EVENT_KEY_DOWN: {
+      if (b->c.disabled) return false;
+      if (b->ntyped) {
+        if (e->key == RK_KEY_BACKSPACE) { b->typed[--b->ntyped] = 0; rk__view_dirty(v); return true; }
+        if (e->key == RK_KEY_ESCAPE) { b->ntyped = 0; b->typed[0] = 0; rk__view_dirty(v); return true; }
+        date_take_typed(b);
+      }
+      if ((e->key == RK_KEY_DOWN && (e->mods & RK_MOD_ALT)) || e->key == RK_KEY_ENTER || e->key == RK_KEY_F1 + 3) { date_open(b); return true; }
+      if (e->key == RK_KEY_LEFT && b->seg > 0) { b->seg--; rk__view_dirty(v); return true; }
+      if (e->key == RK_KEY_RIGHT && b->seg < 2) { b->seg++; rk__view_dirty(v); return true; }
+      if (e->key == RK_KEY_UP || e->key == RK_KEY_DOWN) {
+        int dir = e->key == RK_KEY_UP ? 1 : -1, value = b->c.value ? (int)b->c.value : today();
+        if (!b->c.value) dir = 0;                          /* the first press: today */
+        int y = value / 10000, m = value / 100 % 100, d = value % 100;
+        if (b->seg == 0) value = ymd(y + dir, m, RK_MIN(d, days_in(y + dir, m)));
+        else if (b->seg == 1) { m = (m - 1 + dir + 12) % 12 + 1; value = ymd(y, m, RK_MIN(d, days_in(y, m))); }
+        else { int n = days_in(y, m); value = ymd(y, m, (d - 1 + dir + n) % n + 1); }
+        user_set(v, &b->c, value);
+        return true;
+      }
+      return false;
+    }
+    case RK_EVENT_BLUR: date_take_typed(b); rk__view_dirty(v); return false;
+    case RK_EVENT_FOCUS: rk__view_dirty(v); return false;
+    default: return false;
+  }
+}
+
+/* The month ------------------------------------------------------------------------------------------------------ */
+
+static float sheet_pad(void) { return rk_metric_of(RK_SPACE_S); }
+static float sheet_head(void) { return rk_metric_of(RK_CONTROL_HEIGHT); }
+static float sheet_days_y(void) { rk_textfmt l = rk__textfmt(RK_TEXT_LABEL, 0); return sheet_pad() + sheet_head() + l.size * l.line + rk_metric_of(RK_SPACE_XS); }
+static rk_size sheet_size(void) { return (rk_size){ 7 * CELL + 2 * sheet_pad(), sheet_days_y() + 6 * CELL + sheet_pad() }; }
+
+static rk_rect day_cell(int cur, int day) {
+  int y = cur / 10000, m = cur / 100 % 100, at = weekday(y, m, 1) + day - 1;
+  return (rk_rect){ sheet_pad() + (at % 7) * CELL, sheet_days_y() + (at / 7) * CELL, CELL, CELL };
+}
+
+static void sheet_draw(rk_view *v, rk_canvas *c, void *st) {
+  date_sheet *s = st;
+  static const char *const months[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+  static const char *const days[7] = { "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su" };
+  float W = v->pframe.w, H = v->pframe.h, r = rk_metric_of(RK_RADIUS_S), pad = sheet_pad(), head = sheet_head();
+  rk_canvas_fill_round_rect(c, (rk_rect){ 0, 0, W, H }, r, rk_color_of(RK_ROLE_TEXT_MEDIUM));
+  rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, H - 2 }, r - 1, rk_color_of(RK_ROLE_BG));
+  int y = s->cur / 10000, m = s->cur / 100 % 100;
+  rk_color ink = rk_color_of(RK_ROLE_TEXT);
+  char title[32];
+  snprintf(title, sizeof title, "%s %d", months[m - 1], y);
+  rk_textfmt t = strong_fmt();
+  rk__text_draw(c, title, -1, (W - rk__text_width(title, -1, &t)) / 2, pad + (head - t.size) / 2, &t, ink);
+  for (int k = 0; k < 2; k++) {                            /* the month before and after */
+    float cx = k ? W - pad - CELL / 2 : pad + CELL / 2, cy = pad + head / 2, d = k ? 3 : -3;
+    rk_point chev[3] = { { cx - d, cy - 6 }, { cx + d, cy }, { cx - d, cy + 6 } };
+    rk_canvas_polyline(c, chev, 3, 2, ink);
+  }
+  rk_textfmt l = rk__textfmt(RK_TEXT_LABEL, 0);
+  for (int i = 0; i < 7; i++) rk__text_draw(c, days[i], -1, pad + i * CELL + (CELL - rk__text_width(days[i], -1, &l)) / 2, pad + head, &l, rk_color_of(RK_ROLE_TEXT_HIGH));
+  rk_textfmt f = date_fmt();
+  int chosen = (int)s->box->c.value, now = today();
+  rk_window *w = rk__view_window(v);
+  bool keys = w && w->focus == v && w->focus_visible;
+  for (int d = 1; d <= days_in(y, m); d++) {
+    rk_rect cell = day_cell(s->cur, d);
+    int value = y * 10000 + m * 100 + d;
+    rk_rect in = { cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4 };
+    rk_color k = ink;
+    if (value == chosen) { rk_canvas_fill_rect(c, in, rk_color_of(RK_ROLE_ACCENT)); k = rk_color_of(RK_ROLE_ON_ACCENT); }
+    else if (value == now) rk_canvas_stroke_rect(c, in, 1, ink);
+    if (value == s->cur && keys) rk_canvas_stroke_rect(c, (rk_rect){ cell.x, cell.y, cell.w, cell.h }, 2, rk_color_of(RK_ROLE_FOCUS));
+    char text[12];
+    snprintf(text, sizeof text, "%d", d);
+    rk__text_draw(c, text, -1, cell.x + (cell.w - rk__text_width(text, -1, &f)) / 2, cell.y + (cell.h - f.size) / 2, &f, k);
+  }
+}
+
+static void sheet_set(rk_view *v, date_sheet *s, int value) { s->cur = value; rk__view_dirty(v); }
+
+static void sheet_take(date_sheet *s, int value) {
+  date_box *b = s->box;
+  rk_retain(b->view);
+  date_close(b, true);
+  user_set(b->view, &b->c, value);
+  rk_release(b->view);
+}
+
+static bool sheet_event(rk_view *v, const rk_event *e, void *st) {
+  date_sheet *s = st;
+  switch (e->type) {
+    case RK_EVENT_POINTER_DOWN: return true;
+    case RK_EVENT_POINTER_UP: {
+      float pad = sheet_pad(), head = sheet_head(), x = e->position.x, y = e->position.y;
+      if (y >= pad && y < pad + head) {
+        if (x < pad + CELL) sheet_set(v, s, add_months(s->cur, -1));
+        else if (x >= v->pframe.w - pad - CELL) sheet_set(v, s, add_months(s->cur, 1));
+        return true;
+      }
+      int yy = s->cur / 10000, m = s->cur / 100 % 100;
+      for (int d = 1; d <= days_in(yy, m); d++) {
+        rk_rect c = day_cell(s->cur, d);
+        if (x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h) { sheet_take(s, yy * 10000 + m * 100 + d); break; }
+      }
+      return true;
+    }
+    case RK_EVENT_KEY_DOWN: {
+      bool shift = (e->mods & RK_MOD_SHIFT) != 0;
+      int y = s->cur / 10000, m = s->cur / 100 % 100;
+      switch (e->key) {
+        case RK_KEY_LEFT: sheet_set(v, s, add_days(s->cur, -1)); return true;
+        case RK_KEY_RIGHT: sheet_set(v, s, add_days(s->cur, 1)); return true;
+        case RK_KEY_UP: sheet_set(v, s, add_days(s->cur, -7)); return true;
+        case RK_KEY_DOWN: sheet_set(v, s, add_days(s->cur, 7)); return true;
+        case RK_KEY_PAGE_UP: sheet_set(v, s, add_months(s->cur, shift ? -12 : -1)); return true;
+        case RK_KEY_PAGE_DOWN: sheet_set(v, s, add_months(s->cur, shift ? 12 : 1)); return true;
+        case RK_KEY_HOME: sheet_set(v, s, ymd(y, m, 1)); return true;
+        case RK_KEY_END: sheet_set(v, s, ymd(y, m, days_in(y, m))); return true;
+        case RK_KEY_ENTER: case RK_KEY_SPACE: sheet_take(s, s->cur); return true;
+        case RK_KEY_ESCAPE: case RK_KEY_TAB: date_close(s->box, true); return true;
+        default: return false;
+      }
+    }
+    case RK_EVENT_BLUR: date_close(s->box, false); return false;
+    default: return false;
+  }
+}
+
+static const rk_class sheet_class = { { sizeof(rk_view_class), "rk_date_month", sheet_draw, NULL, NULL, sheet_event, free }, NULL, NULL };
+
+/* It opens below the box (above where there is no room), in the window's top layer, with the keys on the chosen day. */
+static void date_open(date_box *b) {
+  rk_window *w = rk__view_window(b->view);
+  if (!w || b->c.disabled) return;
+  if (!b->sheet) {
+    date_sheet *s = rk__alloc(sizeof *s);
+    s->box = b;
+    b->sheet = rk__view_create(&sheet_class, s);
+    b->sheet->focusable = true; b->sheet->draws_focus = true;
+    b->sheet->access = RK_ACCESS_DIALOG;
+  }
+  if (b->sheet->parent) return;
+  rk__menus_close(w);
+  ((date_sheet *)b->sheet->state)->cur = b->c.value ? (int)b->c.value : today();
+  rk_rect at = rk__window_rect(b->view);
+  rk_size sz = sheet_size();
+  float gap = rk_metric_of(RK_SPACE_XS), edge = rk_metric_of(RK_SPACE_M);
+  float x = RK_CLAMP(at.x, edge, RK_MAX(edge, w->size.w - edge - sz.w)), y = at.y + at.h + gap;
+  if (y + sz.h > w->size.h - edge && at.y - gap - sz.h >= edge) y = at.y - gap - sz.h;
+  y = RK_CLAMP(y, edge, RK_MAX(edge, w->size.h - edge - sz.h));
+  rk__view_add(w->floats, b->sheet);
+  rk_view_set_frame(b->sheet, (rk_rect){ x, y, sz.w, sz.h });
+  rk__layout_pending();
+  rk_window_focus(w, b->sheet);
+  float o0 = 0, o1 = 1;
+  rk__animate(b->sheet, RK_PROP_OPACITY, &o0, &o1, 1, rk__reduced() ? 0 : rk_duration_of(RK_DURATION_FLOAT), 0, rk__ease_in);
+  rk__view_dirty(b->view);
+}
+
+static bool date_valid(rk_view *v, double value) {
+  (void)v;
+  int n = (int)value, y = n / 10000, m = n / 100 % 100, d = n % 100;
+  return value == floor(value) && (n == 0 || (y >= 1 && y <= 9999 && m >= 1 && m <= 12 && d >= 1 && d <= days_in(y, m)));
+}
+static void date_destroy(void *st) {
+  date_box *b = st;
+  if (b->sheet) { if (b->sheet->parent) rk__view_detach(b->sheet); ((date_sheet *)b->sheet->state)->box = NULL; rk_release(b->sheet); }
+  free(b);
+}
+static const rk_class date_class = { { sizeof(rk_view_class), "rk_date", date_draw, date_measure, NULL, date_event, date_destroy }, NULL, NULL };
+
+rk_view *rk_date(int year, int month, int day) {
+  date_box *b = rk__alloc(sizeof *b);
+  b->c.valid = date_valid;
+  int value = year * 10000 + month * 100 + day;
+  b->c.value = year && date_valid(NULL, value) ? value : 0;
+  rk_view *v = rk__view_create(&date_class, b);
+  b->view = v;
+  v->focusable = true; v->draws_focus = true; v->hug = true;
+  v->access = RK_ACCESS_COMBO_BOX;
+  return v;
+}
+
 /* The value, for every control ------------------------------------------------------------------------------------ */
 
 static control *control_of(rk_view *v) {
   if (!v) return NULL;
   if (v->cls == &check_class || v->cls == &choices_class || v->cls == &toggle_class || v->cls == &segments_class || v->cls == &slider_class ||
-      v->cls == &stepper_class || v->cls == &select_class) return v->state;
+      v->cls == &stepper_class || v->cls == &select_class || v->cls == &date_class) return v->state;
   return NULL;
 }
 

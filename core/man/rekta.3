@@ -250,8 +250,19 @@ A box with the chosen option and a chevron: a press, Enter, Space or
 Alt+Down opens a menu of the options below it, the chosen one marked;
 Up and Down change it in place, a letter jumps to the next option
 starting with it.
+.It Fn rk_date "int year" "int month" "int day"
+A date, shown as 2026-10-13; its value is the number 20261013 (0 for none
+yet, from
+.Fn rk_date 0 0 0 ) .
+Left and Right go between year, month and day, Up and Down change the
+one in focus, digits type it.
+The calendar, Alt+Down or Enter opens the month below it, Monday first:
+the arrows go by day and week, Page Up and Page Down by month (with
+Shift, by year), Home and End to the month's ends, Enter takes a day,
+Escape closes.
 .It Fn rk_control_value , Fn rk_control_set_value , Fn rk_control_on_change , Fn rk_control_set_disabled
-Every control holds a number: 0 or 1, the chosen index, or the number.
+Every control holds a number: 0 or 1, the chosen index, the number, or
+the date as yyyymmdd.
 A number snaps to the range and step; an index the control lacks is
 ignored; the change handler hears
 what the user changes, not what the app sets.

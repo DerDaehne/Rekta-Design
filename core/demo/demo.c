@@ -468,7 +468,9 @@ static rk_view *controls_section(void) {
   static const char *const sizes[] = { "small", "medium", "large", "a whole wall" };
   static const char *const cities[] = { "Amsterdam", "Berlin", "Bern", "Bonn", "Copenhagen", "Hamburg", "Lisbon", "Munich", "Vienna" };
   rk_add(s, rk_label("a select, and a field that suggests", RK_TEXT_KICKER));
-  rk_add(rk_add(s, rk_row()), rk_select(sizes, 4, 1));
+  rk_view *pick = rk_add(s, rk_row());
+  rk_add(pick, rk_select(sizes, 4, 1));
+  rk_add(pick, rk_date(2026, 10, 13));
   rk_view *city = rk_add(s, rk_field("City", "Type, or Down for the list"));
   rk_field_set_options(city, cities, 9);
   rk_add(s, rk_label("a slider sets the bar; a stepper counts", RK_TEXT_KICKER));
