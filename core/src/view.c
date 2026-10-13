@@ -147,6 +147,7 @@ static void left_done(rk_view *v, void *user) { (void)user; if (v->leaving) rk__
 void rk_view_remove(rk_view *child) {
   if (!child->parent) return;
   if (rk__animating_block() && rk__current_motion() == RK_MOTION_LEAVE && rk__view_visible(child) && !rk__reduced()) {
+    if (child->leaving) return;                            /* already on its way out */
     /* it leaves first; the layout already lets the others close the gap after it */
     child->leaving = true;
     double d = rk__motion_duration(RK_MOTION_LEAVE, rk__is_tile(child));

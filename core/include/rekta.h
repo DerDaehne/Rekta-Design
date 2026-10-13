@@ -165,6 +165,13 @@ RK_API float rk_window_scale(rk_window *window);   /* device pixels per logical 
 RK_API void rk_window_on_close(rk_window *window, bool (*should_close)(rk_window *window, void *user), void *user);
 RK_API bool rk_window_focus(rk_window *window, rk_view *view);  /* false if the view cannot take focus */
 RK_API rk_view *rk_window_focused(rk_window *window);
+/* The app's history, as the web's undoStack(): rk_window_do runs an action and remembers it (up to 50) - its toast in
+   the window offers undo. Ctrl (Cmd) and Z undoes, with Shift or Ctrl+Y redoes, outside text fields. free_user, if
+   given, lets user go when the action leaves the history. */
+RK_API void rk_window_do(rk_window *window, const char *label, void (*run)(void *user), void (*undo)(void *user), void *user, void (*free_user)(void *user));
+RK_API bool rk_window_undo(rk_window *window);     /* false: nothing to undo */
+RK_API bool rk_window_redo(rk_window *window);
+
 /* A toast: a short message from the top edge, with an optional action (undo, retry) that keeps it for the toast
    timing and shows the time running out. */
 RK_API void rk_window_toast(rk_window *window, const char *message, const char *action, void (*on_action)(void *user), void *user);

@@ -427,6 +427,17 @@ static void test_field(void) {
   d.type = RK_EVENT_POINTER_DOWN; d.time += 100; rk_window_inject(w, &d); d.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &d);
   type_text(w, "tag");
   CHECK(!strcmp(rk_field_text(name), "<badge tag"), "a double click takes the word (%s)", rk_field_text(name));
+  /* the field's own history: typing runs together a word at a time */
+  rk_field_set_text(name, "");
+  const char *keys[] = { "a", "b", " ", "c", "d" };
+  for (int i = 0; i < 5; i++) type_text(w, keys[i]);
+  key(w, 'Z', RK_MOD_CTRL);
+  CHECK(!strcmp(rk_field_text(name), "ab"), "Ctrl+Z takes back the last word (%s)", rk_field_text(name));
+  key(w, 'Z', RK_MOD_CTRL);
+  CHECK(!strcmp(rk_field_text(name), ""), "and the one before (%s)", rk_field_text(name));
+  key(w, 'Z', RK_MOD_CTRL | RK_MOD_SHIFT); key(w, 'Y', RK_MOD_CTRL);
+  CHECK(!strcmp(rk_field_text(name), "ab cd"), "Ctrl+Shift+Z and Ctrl+Y redo (%s)", rk_field_text(name));
+  rk_field_set_text(name, "<badge tag");
   /* a field that wants something else says why, and how */
   rk_field_set_text(mail, "ada@");
   rk_field_set_hint(mail, "Add the part after @, such as example.com.", true);
@@ -555,6 +566,30 @@ static void test_table(void) {
   rk_list_scroll_to(t, 0);
   rk_app_run_for(900);
   shot(w, "table");
+  done(w);
+}
+
+/* The app's history: an action runs and is remembered; its toast offers undo; Ctrl+Z outside fields. */
+static int counter;
+static void count_up(void *u) { (void)u; counter++; }
+static void count_down(void *u) { (void)u; counter--; }
+
+static void test_undo(void) {
+  rk_window *w = window(480, 300);
+  show(w, col(8, 16), "undo");
+  rk_window_do(w, "Archived one.", count_up, count_down, NULL, NULL);
+  rk_window_do(w, "Archived another.", count_up, count_down, NULL, NULL);
+  rk_app_run_for(300);
+  CHECK(counter == 2 && w->toasts->nkids >= 1, "actions run, a toast offers undo");
+  key(w, 'Z', RK_MOD_CTRL);
+  CHECK(counter == 1, "Ctrl+Z undoes the last (%d)", counter);
+  key(w, 'Z', RK_MOD_CTRL); key(w, 'Z', RK_MOD_CTRL);
+  CHECK(counter == 0 && !rk_window_undo(w), "back to the start, and no further (%d)", counter);
+  key(w, 'Z', RK_MOD_CTRL | RK_MOD_SHIFT);
+  CHECK(counter == 1, "Ctrl+Shift+Z redoes (%d)", counter);
+  rk_window_do(w, "Something new.", count_up, count_down, NULL, NULL);
+  CHECK(counter == 2 && !rk_window_redo(w), "a new action: what was undone cannot come back");
+  rk_app_run_for(6000);
   done(w);
 }
 
@@ -718,6 +753,7 @@ static void launch(void *user) {
   test_field();
   test_menu();
   test_table();
+  test_undo();
   test_navigation();
   test_spring();
   scene_tiles("tiles", 1);

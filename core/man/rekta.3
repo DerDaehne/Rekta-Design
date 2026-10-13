@@ -129,6 +129,20 @@ The app ends when its last window closes.
 A short message from the top edge; with an
 .Fa action
 (undo, retry) it stays a little longer.
+.It Fn rk_window_do "rk_window *window" "const char *label" "void (*run)(void *)" "void (*undo)(void *)" "void *user" "void (*free_user)(void *)"
+Runs
+.Fa run
+and keeps it in the app's history (the last 50), with a toast that says
+.Fa label
+and offers undo.
+.Fa free_user
+is called once the history lets the action go.
+A new action drops what was undone.
+.It Fn rk_window_undo , Fn rk_window_redo
+Steps back or forward through the history, with a toast; false when
+there is nothing to step to.
+Ctrl (Cmd on macOS) and Z undoes, with Shift (or Ctrl+Y) redoes, except in
+a text field, which keeps a history of its own, a word at a time.
 .It Fn rk_window_set_title , Fn rk_window_set_size , Fn rk_window_size , Fn rk_window_scale , Fn rk_window_focus
 As named.
 Sizes are logical pixels; the scale is device pixels per logical pixel.

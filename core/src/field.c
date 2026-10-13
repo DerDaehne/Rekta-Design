@@ -17,6 +17,8 @@ typedef struct field {
   float scroll;                                            /* how far the text has moved left to keep the caret in sight */
   char *label, *placeholder, *hint; bool error;
   char *preedit;                                           /* what an input method is composing, shown at the caret */
+  struct snap { char *text; int caret, anchor; } *undo, *redo; int nundo, ucap, nredo, rcap;   /* the field's own history */
+  double typed_at; bool typing;                            /* typing runs together into one step, word by word */
   bool lit, dragging;                                      /* the caret shows; a drag selects */
   uint32_t blink; double edited, last_click;
   rk_view *view;
@@ -110,10 +112,41 @@ static void field_changed(rk_view *v, field *f) {
   if (f->change) f->change(v, f->change_user);
 }
 
+static struct snap snap_now(const field *f) { struct snap s = { rk__strdup(f->text), f->caret, f->anchor }; return s; }
+static void snaps_drop(struct snap *s, int *n) { while (*n) free(s[--*n].text); }
+
+/* Remembers the text before an edit - unless it continues the typing before it: one step a word, as a desktop does. */
+static void remember(field *f, bool typing, const char *s, int n) {
+  double now = rk_app_now();
+  bool joins = typing && f->typing && now - f->typed_at < 1000 && f->caret == f->anchor && !(n == 1 && s[0] == ' ');
+  f->typing = typing; f->typed_at = now;
+  if (joins) return;
+  if (f->nundo == 100) { free(f->undo[0].text); memmove(f->undo, f->undo + 1, 99 * sizeof *f->undo); f->nundo--; }
+  f->undo = rk__grow(f->undo, &f->ucap, f->nundo + 1, sizeof *f->undo);
+  f->undo[f->nundo++] = snap_now(f);
+  snaps_drop(f->redo, &f->nredo);
+}
+
+static void restore(rk_view *v, field *f, struct snap *from, int *nfrom, struct snap **to, int *nto, int *tocap) {
+  if (!*nfrom) return;
+  *to = rk__grow(*to, tocap, *nto + 1, sizeof **to);
+  (*to)[(*nto)++] = snap_now(f);
+  struct snap s = from[--*nfrom];
+  free(f->text);
+  f->text = s.text; f->len = (int)strlen(s.text); f->cap = f->len + 1;
+  f->caret = RK_MIN(s.caret, f->len); f->anchor = RK_MIN(s.anchor, f->len);
+  f->typing = false;
+  rk__setstr(&v->access_value, f->text);
+  field_changed(v, f);
+}
+
 /* Replaces the selection with s (n bytes): typing, pasting, deleting. */
-static void replace(rk_view *v, field *f, const char *s, int n) {
+static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing);
+static void replace(rk_view *v, field *f, const char *s, int n) { replace_as(v, f, s, n, false); }
+static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing) {
   int lo = sel_lo(f), hi = sel_hi(f);
   if (!n && lo == hi) return;
+  remember(f, typing, s, n);
   f->text = rk__grow(f->text, &f->cap, f->len - (hi - lo) + n + 1, 1);
   memmove(f->text + lo + n, f->text + hi, (size_t)(f->len - hi));
   for (int i = 0; i < n; i++) f->text[lo + i] = (unsigned char)s[i] < 0x20 || s[i] == 0x7f ? ' ' : s[i];   /* one line: breaks become spaces */
@@ -167,6 +200,12 @@ static bool field_key(rk_view *v, field *f, const rk_event *e) {
     case 'A': if (!cmd) return false; f->anchor = 0; f->caret = f->len; touched(v, f); return true;
     case 'C': if (!cmd) return false; copy_selection(f); return true;
     case 'X': if (!cmd) return false; copy_selection(f); replace(v, f, "", 0); return true;
+    case 'Z':
+      if (!cmd) return false;
+      if (shift) restore(v, f, f->redo, &f->nredo, &f->undo, &f->nundo, &f->ucap);
+      else restore(v, f, f->undo, &f->nundo, &f->redo, &f->nredo, &f->rcap);
+      return true;
+    case 'Y': if (!cmd) return false; restore(v, f, f->redo, &f->nredo, &f->undo, &f->nundo, &f->ucap); return true;
     case 'V': {
       if (!cmd) return false;
       char *s = clip_get();
@@ -184,7 +223,7 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
   switch (e->type) {
     case RK_EVENT_TEXT:
       if (!e->text) return false;
-      replace(v, f, e->text, (int)strlen(e->text));
+      replace_as(v, f, e->text, (int)strlen(e->text), true);
       return true;
     case RK_EVENT_COMPOSE:
       rk__setstr(&f->preedit, e->text && *e->text ? e->text : NULL);
@@ -280,6 +319,7 @@ static rk_size field_measure(rk_view *v, rk_size avail, void *st) {
 static void field_destroy(void *st) {
   field *f = st;
   if (f->blink) rk_app_cancel(f->blink);
+  snaps_drop(f->undo, &f->nundo); snaps_drop(f->redo, &f->nredo); free(f->undo); free(f->redo);
   free(f->text); free(f->label); free(f->placeholder); free(f->hint); free(f->preedit); free(f);
 }
 
@@ -306,6 +346,7 @@ void rk_field_set_text(rk_view *v, const char *text) {
   if (!f) return;
   f->anchor = 0; f->caret = f->len;
   replace(v, f, text ? text : "", text ? (int)strlen(text) : 0);
+  snaps_drop(f->undo, &f->nundo); snaps_drop(f->redo, &f->nredo);   /* text from the app starts a new history */
 }
 
 void rk_field_set_hint(rk_view *v, const char *hint, bool error) {

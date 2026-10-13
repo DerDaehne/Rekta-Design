@@ -24,10 +24,10 @@ typedef struct demo {
   rk_controller *places, *home, *sheet;                    /* borrowed: the window owns them */
   rk_view *board, *task, *presses, *grow_tile;             /* rekta */
   rk_view *live, *status, *events;                         /* live */
-  rk_view *fade;                                           /* motion */
+  rk_view *fade, *inbox_label;                             /* motion */
   rk_view *bar, *chart;                                    /* controls */
   rk_view *now;                                            /* settings: what is in effect */
-  int npresses, pinned, queue, status_i, ticks, events_n, fades;
+  int npresses, pinned, queue, status_i, ticks, events_n, fades, inbox;
   float task_done, series[24]; int nseries;
   bool feed, big;
   const char *shots;
@@ -290,8 +290,19 @@ static void open_sheet(rk_view *v, void *u) {
   rk_controller_present(D.home, D.sheet);
 }
 
-static void undone(void *u) { (void)u; rk_window_toast(D.window, "It is back.", NULL, NULL, NULL); }
-static void toast_undo(rk_view *v, void *u) { (void)v; (void)u; rk_window_toast(D.window, "One thing archived.", "undo", undone, NULL); }
+/* Archiving is an action in the window's history: its toast, Ctrl+Z and the undo button all take it back. */
+static void show_inbox(void) {
+  char text[64];
+  snprintf(text, sizeof text, "Inbox: %d letters.", D.inbox);
+  rk_label_set_text(D.inbox_label, text);
+}
+static void archive_one(void *u) { (void)u; D.inbox--; show_inbox(); }
+static void unarchive_one(void *u) { (void)u; D.inbox++; show_inbox(); }
+static void toast_undo(rk_view *v, void *u) {
+  (void)v; (void)u;
+  if (!D.inbox) { rk_window_toast(D.window, "The inbox is empty.", NULL, NULL, NULL); return; }
+  rk_window_do(D.window, "One letter archived.", archive_one, unarchive_one, NULL, NULL);
+}
 static void toast_plain(rk_view *v, void *u) { (void)v; (void)u; rk_window_toast(D.window, "Something happened. A toast says so, once.", NULL, NULL, NULL); }
 
 static void fade(rk_view *v, void *u) {
@@ -304,12 +315,15 @@ static void fade(rk_view *v, void *u) {
 static rk_view *motion_section(void) {
   rk_view *s = rk_column();
   rk_add(s, rk_label("Every transition means one thing.", RK_TEXT_GROUP));
-  rk_add(s, rk_label("A sheet is a short question from the top edge; a toast says something happened; an undo toast keeps its window open for five seconds.", RK_TEXT_BODY));
+  rk_add(s, rk_label("A sheet is a short question from the top edge; a toast says something happened; archiving goes into the window's history: its toast, Ctrl+Z and Ctrl+Y take it back and forth.", RK_TEXT_BODY));
 
   rk_view *buttons = rk_add(s, rk_row());
   rk_button_set_kind(rk_add(buttons, rk_button("open a sheet", open_sheet, NULL)), RK_BUTTON_PRIMARY);
   rk_button_set_icon(rk_add(buttons, rk_button("archive", toast_undo, NULL)), "archive");
   rk_add(buttons, rk_button("a toast", toast_plain, NULL));
+  D.inbox = 12;
+  D.inbox_label = rk_add(s, rk_label("", RK_TEXT_SMALL));
+  show_inbox();
 
   rk_add(s, rk_label("cross-fade", RK_TEXT_KICKER));
   D.fade = rk_add(s, rk_label("Same place, new words: the old ones fade out over the new.", RK_TEXT_BODY));

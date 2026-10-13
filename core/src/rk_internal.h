@@ -237,6 +237,7 @@ void rk__window_event(rk_window *w, const rk_event *e);
 void rk__window_close_request(rk_window *w);
 void rk__window_pointer_cancel(rk_window *w);
 void rk__menus_close(rk_window *w);
+void rk__undo_clear(void);
 void rk__window_frame(rk_window *w, double now);           /* layout, draw and present if needed */
 void rk__window_invalidate(rk_window *w);                 /* everything */
 void rk__window_damage(rk_window *w, rk_rect r);          /* a part, in logical window coordinates */

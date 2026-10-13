@@ -816,6 +816,10 @@ static rk_controller *find_places(rk_controller *c) {
 
 bool rk__window_key(rk_window *w, const rk_event *e) {
   if (e->type != RK_EVENT_KEY_DOWN) return false;
+  if (e->mods & (RK_MOD_CTRL | RK_MOD_SUPER)) {                 /* the app's history, outside text fields */
+    if (e->key == 'Z') return e->mods & RK_MOD_SHIFT ? rk_window_redo(w) : rk_window_undo(w);
+    if (e->key == 'Y') return rk_window_redo(w);
+  }
   bool back = e->key == RK_KEY_BACK || (e->key == RK_KEY_LEFT && (e->mods & RK_MOD_ALT));
   if (e->key == RK_KEY_ESCAPE) {
     for (int i = w->sheets->nkids - 1; i >= 0; i--) {

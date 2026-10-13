@@ -32,6 +32,12 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has undo, as the web's `undoStack()`: `rk_window_do(window,
+  label, run, undo, user, free_user)` runs an action and keeps it (the
+  last 50); its toast offers undo, an undo's toast offers redo; Ctrl
+  (Cmd) and Z undoes, with Shift or Ctrl+Y redoes; a new action drops
+  what was undone. Text fields keep a history of their own, a word at a
+  time. The demo's archive button goes through it.
 - rekta-core has tables, as the web's `.rk-table`: `rk_table(count, cell,
   user)` is a long list with columns (every `rk_list_` call works on it),
   drawing only the rows in sight; `rk_table_add_column` with a width and
@@ -223,6 +229,9 @@ it; each entry says how.
   sections drop the kickers that repeated the strip's titles.
 
 ### Fixed
+
+- rekta-core: removing a view that is already leaving (two toasts in one
+  frame) freed it under its own animation; it now keeps leaving.
 
 - The classic script carries `async` functions; `--check` now fails
   when `rekta.global.js` does not parse.

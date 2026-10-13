@@ -250,6 +250,7 @@ int rk_app_main(const rk_app_desc *desc) {
     fprintf(stderr, "rekta: %u frames, %.2f ms a frame on average, %.2f the slowest, %u over 8 ms, %.1f megapixels a frame, %u glyphs\n",
             m->frames, m->draw_ms / m->frames, m->max_ms, m->slow, m->pixels / 1e6 / m->frames, m->glyphs);
   while (rk__windows()) rk_window_close(rk__windows());
+  rk__undo_clear();
   plat->shutdown();
   rk__text_shutdown();
   free(timers); timers = NULL; ntimers = tcap = 0;

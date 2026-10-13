@@ -127,7 +127,7 @@ rk_animate_commit();
 
 Stage 1 of [docs/core.md](../docs/core.md#stages): tokens, renderer, views,
 controllers (places with the turn, panorama, pivot, sheets), motion, the press,
-focus and the keyboard, toasts, the title bar, text fields, long lists; headless,
+focus and the keyboard, toasts, undo, the title bar, text fields, menus, tables, long lists; headless,
 Wayland and X11 tested
 here (Wayland is the default where a compositor answers; `RK_PLATFORM=x11`
 picks X11),
