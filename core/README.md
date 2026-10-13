@@ -24,10 +24,12 @@ nix develop                              # in a clone: the compiler, make, Wayla
 nix flake check                          # builds and runs the tests and the reference images
 ```
 
-The demo is a panorama of six sections, one for each part of the core: tiles
+The demo is a panorama of sections, one for each part of the core: tiles
 (the press, the turn to a place, peek, flip, tiles that come and go, reflow),
 live data, motion (sheet, toasts, cross-fade), controls (every button, progress,
-rows, a custom view drawn with the canvas), type and icons, and the settings.
+rows, a custom view drawn with the canvas), long lists and tables, a desk (a
+tree beside its detail in a split, rows to put in order, a place to drop
+pictures), type and icons, and the settings.
 Tab moves focus, Enter presses, Page Up and Page Down go by section, Escape goes
 back. `demo --shots DIR` takes the same tour without a screen.
 
@@ -131,7 +133,9 @@ views, controllers (places with the turn, panorama, pivot, sheets), motion, the
 press, focus everywhere and the keyboard, toasts, undo, the title bar, text
 fields and areas with the clipboard and input methods, every script through the
 system's fonts, checkboxes, options, toggles, segments, sliders, steppers, selects, comboboxes and dates, scroll views, pictures, menus, long lists, tables
-that sort, resize and edit; headless, Wayland and X11 tested here (Wayland is
+that sort, resize and edit, trees, splits, rows the user puts in order, files
+dragged in from the system and a place to drop them, pivots along the top or
+down the side; headless, Wayland and X11 tested here (Wayland is
 the default where a compositor answers; `RK_PLATFORM=x11` picks X11), Win32 and
 Cocoa built and tested in CI.
 

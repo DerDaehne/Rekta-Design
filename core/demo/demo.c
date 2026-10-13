@@ -609,6 +609,55 @@ static rk_view *lists_section(void) {
   return s;
 }
 
+/* desk: a tree beside its detail in a split, rows to put in order, a place to drop pictures ----------------------- */
+
+static rk_view *desk_split, *desk_title, *desk_steps;
+static void desk_show(rk_view *tree, int item, void *user) {
+  (void)user;
+  rk_label_set_text(desk_title, rk_tree_title(tree, item));
+  rk_split_show(desk_split, true);
+}
+static void steps_moved(rk_view *rows, int from, int to, void *user) {
+  (void)user;
+  char msg[64];
+  snprintf(msg, sizeof msg, "Step %d is now step %d.", from + 1, to + 1);
+  rk_window_toast(rk_view_window(rows), msg, NULL, NULL, NULL);
+}
+static void pictures_dropped(rk_view *drop, const char *const *taken, int nt, const char *const *refused, int nr, void *user) {
+  (void)taken; (void)refused; (void)user;
+  char msg[96];
+  snprintf(msg, sizeof msg, nr ? "%d pictures taken, %d other files left." : "%d pictures taken.", nt, nr);
+  rk_window_toast(rk_view_window(drop), msg, NULL, NULL, NULL);
+}
+
+static rk_view *desk_section(void) {
+  rk_view *s = rk_column();
+  rk_add(s, rk_label("A desk: things beside their detail.", RK_TEXT_GROUP));
+  rk_view *tree = rk_tree();
+  int src = rk_tree_add(tree, -1, "src"), ui = rk_tree_add(tree, src, "ui");
+  rk_tree_add(tree, ui, "button.c"); rk_tree_add(tree, ui, "field.c");
+  int split_c = rk_tree_add(tree, ui, "split.c");
+  rk_tree_add(tree, src, "tree.c");
+  rk_tree_set_meta(tree, rk_tree_add(tree, src, "core.c"), "failed", RK_STATUS_ERROR);
+  int docs = rk_tree_add(tree, -1, "docs");
+  rk_tree_add(tree, docs, "motion.md"); rk_tree_add(tree, docs, "navigation.md");
+  rk_tree_set_meta(tree, rk_tree_add(tree, -1, "README.md"), "2 kB", RK_STATUS_NONE);
+  rk_tree_open(tree, src, true); rk_tree_open(tree, ui, true);
+  rk_tree_select(tree, split_c);
+  rk_tree_on_show(tree, desk_show, NULL);
+  rk_view *detail = rk_column();
+  desk_title = rk_add(detail, rk_label("split.c", RK_TEXT_GROUP));
+  rk_add(detail, rk_label("steps: drag a grip, or Space then Up and Down", RK_TEXT_KICKER));
+  desk_steps = rk_add(detail, rk_rows());
+  static const char *const steps[] = { "Check out", "Build", "Test", "Package" };
+  for (int i = 0; i < 4; i++) rk_rows_add(desk_steps, steps[i], NULL, RK_STATUS_NONE);
+  rk_rows_set_sortable(desk_steps, steps_moved, NULL);
+  rk_add(detail, rk_drop("Drop pictures here", "or choose them · nothing leaves your device", "image/*", pictures_dropped, NULL));
+  desk_split = rk_add(s, rk_split(tree, detail, "files"));
+  rk_view_set_size(desk_split, 0, 460);
+  return s;
+}
+
 /* type: text styles and icons ------------------------------------------------------------------------------------ */
 
 static const char *const ICONS[] = {
@@ -768,6 +817,7 @@ static void tour(void) {
   press("more"); rk_app_run_for(300); shot("13-menu");
   key(RK_KEY_ESCAPE); rk_app_run_for(200);
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("14-lists");
+  key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("14-desk");
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("15-type");
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700);
   choose("theme", RK_KEY_END); rk_app_run_for(700); shot("16-dark");
@@ -880,6 +930,7 @@ static void launch(void *user) {
   rk_panorama_add(D.home, "motion", motion_section(), 0);
   rk_panorama_add(D.home, "controls", controls_section(), 0);
   rk_panorama_add(D.home, "lists", lists_section(), 0);
+  rk_panorama_add(D.home, "desk", desk_section(), 1000);   /* wide enough for the split to stand sideways */
   rk_panorama_add(D.home, "type", type_section(), 0);
   rk_panorama_add(D.home, "settings", settings_section(), 0);
   D.places = rk_places(D.home);                                /* places keep home, the window keeps places */
