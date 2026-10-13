@@ -32,6 +32,15 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core: table cells edit in place. `RK_COLUMN_EDITABLE` and
+  `rk_table_on_edit(table, commit, user)`: a double click or F2 opens a
+  field as tall as the row over the cell, its old value selected; Enter
+  or Tab keeps the value (Tab goes on to the next editable cell, Shift+Tab
+  back), Escape puts the old one back, a click elsewhere keeps it.
+  commit() returns NULL or why not; the reason shows below the cell,
+  which stays open. A view in the focus chain may now take Tab before
+  focus moves. The demo's builds table has a note column whose edits go
+  through the undo history.
 - rekta-core: table columns change width. A column's edge in the head
   drags it (48px at least), a double click gives it its own width back,
   `rk_table_set_column_width` / `rk_table_column_width` let the app set

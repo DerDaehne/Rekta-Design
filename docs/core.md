@@ -147,8 +147,10 @@ changelog says so.
 
 ## Status
 
-Stage 1 is done: the renderer, views, controllers, motion, input, the
-headless platform, Wayland and X11 are tested here (73 checks, 14 reference images,
+Stages 1 and 2 are done: the renderer, views, controllers, motion, input, text
+fields and areas (clipboard, input methods on every platform), menus, long lists,
+tables that sort, resize and edit, undo and focus everywhere; the headless
+platform, Wayland and X11 are tested here (193 checks, 21 reference images,
 AddressSanitizer and UBSan clean); Win32 and Cocoa are built and tested in CI.
 
 ## Stages

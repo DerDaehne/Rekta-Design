@@ -385,13 +385,18 @@ RK_API void rk_list_scroll_to(rk_view *list, int index);   /* glides it into sig
 
 /* A table is a list with columns - every rk_list_ call works on it. The head stays put; a click on a sortable head
    sorts by it, ascending then descending: the app sorts its rows in on_sort and the table draws them again. */
-enum { RK_COLUMN_NUMERIC = 1, RK_COLUMN_SORTABLE = 2 };   /* numbers sit to the right */
+enum { RK_COLUMN_NUMERIC = 1, RK_COLUMN_SORTABLE = 2, RK_COLUMN_EDITABLE = 4 };   /* numbers sit to the right */
 RK_API rk_view *rk_table(int count, const char *(*cell)(int row, int column, void *user), void *user);
 RK_API int rk_table_add_column(rk_view *table, const char *title, float width, unsigned flags);   /* width 0: shares the rest */
 RK_API void rk_table_on_sort(rk_view *table, void (*fn)(rk_view *table, int column, int dir, void *user), void *user);   /* dir 1 or -1 */
 RK_API void rk_table_set_sort(rk_view *table, int column, int dir);   /* shows the sort the rows have (-1, 0, 1) */
 RK_API void rk_table_set_column_width(rk_view *table, int column, float width);   /* as a drag leaves it; 0: its own */
 RK_API float rk_table_column_width(rk_view *table, int column);   /* as laid out now */
+/* Editing a cell: a double click or F2 opens it, Enter or Tab keeps the value (Tab goes on to the next editable cell),
+   Escape puts the old one back. commit() returns NULL to take the value, or why not - shown below the cell, which
+   stays open. */
+RK_API void rk_table_on_edit(rk_view *table, const char *(*commit)(rk_view *table, int row, int column, const char *value, void *user), void *user);
+RK_API void rk_table_edit(rk_view *table, int row, int column);   /* opens the cell for editing */
 
 RK_API rk_view *rk_icon(const char *name, rk_role color);   /* 20 × 20 from the icon set */
 RK_API rk_view *rk_progress(float progress);                /* < 0: indeterminate */

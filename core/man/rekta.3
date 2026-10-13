@@ -289,6 +289,20 @@ click on it gives the column its own width back.
 does the same from the app (0: its own), and
 .Fn rk_table_column_width
 says what it is now, to remember it.
+.It Fn rk_table_on_edit "rk_view *table" "const char *(*commit)(rk_view *table, int row, int column, const char *value, void *user)" "void *user"
+Cells in a column with
+.Dv RK_COLUMN_EDITABLE
+open on a double click or F2 (the active row's first such cell), or
+.Fn rk_table_edit :
+a field over the cell, with the old value selected.
+Enter or Tab keeps the value (Tab goes on to the next editable cell,
+Shift+Tab back), Escape puts the old one back, focus going elsewhere
+keeps it.
+.Fa commit
+returns
+.Dv NULL
+to take the value, or why not: the reason shows below the cell, which
+stays open.
 .It Fn rk_icon , Fn rk_progress
 An icon from the set; a progress bar (indeterminate below zero).
 .It Fn rk_view_on_activate "rk_view *view" "void (*fn)(rk_view *, void *)" "void *user"
@@ -379,6 +393,8 @@ In a strip of titles, the next, the first or the last.
 A panorama's sections.
 .It Up , Down
 The section in sight scrolls, when nothing focused takes the key.
+.It F2
+In a table, the active row's first editable cell.
 .It Up No on a table's first row
 Into its head: Left and Right go between columns, Enter or Space sorts,
 Ctrl+Left and Ctrl+Right change the width (with Shift, four times as much),

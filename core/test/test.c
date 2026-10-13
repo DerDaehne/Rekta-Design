@@ -609,6 +609,64 @@ static void test_table(void) {
   done(w);
 }
 
+/* Editing a cell: a double click or F2 opens it; Enter or Tab keeps the value, Escape puts the old one back; the app
+   may refuse, and the cell says why and stays open. */
+static char comp_name[8][32] = { "Tile", "Rows", "Tag", "Sheet", "Toast", "Menu", "Field", "Table" };
+static char comp_group[8][32] = { "surfaces", "lists", "status", "surfaces", "motion", "surfaces", "inputs", "lists" };
+static int commits;
+static const char *comp_cell(int row, int col, void *u) { (void)u; return col == 0 ? comp_name[row] : col == 1 ? comp_group[row] : "4 kB"; }
+static const char *comp_commit(rk_view *t, int row, int col, const char *value, void *u) {
+  (void)t; (void)u;
+  if (col == 1 && !*value) return "A component needs a group.";
+  snprintf(col == 0 ? comp_name[row] : comp_group[row], 32, "%s", value);
+  commits++;
+  return NULL;
+}
+
+static void test_cell_edit(void) {
+  rk_window *w = window(560, 360);
+  rk_view *page = col(8, 16);
+  rk_view *t = rk_add(page, rk_table(8, comp_cell, NULL));
+  rk_table_add_column(t, "component", 0, RK_COLUMN_EDITABLE);
+  rk_table_add_column(t, "group", 180, RK_COLUMN_EDITABLE);
+  rk_table_add_column(t, "size", 90, RK_COLUMN_NUMERIC);
+  rk_table_on_edit(t, comp_commit, NULL);
+  rk_view_set_size(t, 0, 260);
+  rk_view *save = rk_add(page, rk_button("save", NULL, NULL));
+  show(w, page, "cells");
+  list *L = t->state;
+  rk_rect r = rk__window_rect(t);
+  float H = rk_metric_of(RK_ROW_HEIGHT), hh = head_height(L), gx = r.x + L->cols[1].x + 20, ry = r.y + hh + 2.5f * H;
+  click(w, (rk_point){ gx, ry }, 10); click(w, (rk_point){ gx, ry }, 10);
+  CHECK(L->editor && L->edit_row == 2 && L->edit_col == 1 && rk__view_within(rk_window_focused(w), L->editor), "a double click opens the cell");
+  CHECK(!strcmp(rk_field_text(L->editor), "status"), "with its value in it (%s)", L->editor ? rk_field_text(L->editor) : "-");
+  type_text(w, "states");
+  key(w, RK_KEY_ENTER, 0);
+  CHECK(!L->editor && !strcmp(comp_group[2], "states") && rk_window_focused(w) == t, "typing replaces it, Enter keeps it (%s)", comp_group[2]);
+  key(w, RK_KEY_F1 + 1, 0);
+  CHECK(L->editor && L->edit_col == 0 && L->edit_row == 2, "F2 opens the row's first editable cell");
+  type_text(w, "Label");
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(!L->editor && !strcmp(comp_name[2], "Tag") && rk_window_focused(w) == t, "Escape puts the old value back (%s)", comp_name[2]);
+  key(w, RK_KEY_F1 + 1, 0);
+  int before = commits;
+  key(w, RK_KEY_TAB, 0);
+  CHECK(L->editor && L->edit_col == 1 && commits == before, "Tab goes on to the next editable cell; nothing changed, nothing committed");
+  key(w, RK_KEY_BACKSPACE, 0); key(w, RK_KEY_ENTER, 0);
+  CHECK(L->editor && !strcmp(comp_group[2], "states"), "a refusal: the cell stays open");
+  rk_app_run_for(100);
+  shot(w, "table-edit");
+  type_text(w, "inputs"); key(w, RK_KEY_ENTER, 0);
+  CHECK(!L->editor && !strcmp(comp_group[2], "inputs"), "then a value it takes (%s)", comp_group[2]);
+  key(w, RK_KEY_TAB, RK_MOD_SHIFT);
+  CHECK(rk_window_focused(w) == save, "outside the editor, Tab moves focus as ever");
+  rk_window_focus(w, t);
+  key(w, RK_KEY_F1 + 1, 0); type_text(w, "Badge");
+  click(w, (rk_point){ r.x + 60, r.y + hh + 5.5f * H }, 10);
+  CHECK(!L->editor && !strcmp(comp_name[2], "Badge") && rk_window_focused(w) == t, "a click elsewhere keeps the value (%s)", comp_name[2]);
+  done(w);
+}
+
 /* A text area: the same field with more lines - wrapped at its width, Enter breaks a line, Ctrl+Enter submits. */
 static void test_textarea(void) {
   rk_window *w = window(420, 360);
@@ -963,6 +1021,7 @@ static void launch(void *user) {
   test_field();
   test_menu();
   test_table();
+  test_cell_edit();
   test_textarea();
   test_undo();
   test_focus();

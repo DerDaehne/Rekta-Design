@@ -672,7 +672,17 @@ static void event(rk_window *w, const rk_event *e) {
       break;
     }
     case RK_EVENT_KEY_DOWN: {
-      if (e->key == RK_KEY_TAB && !(e->mods & (RK_MOD_CTRL | RK_MOD_ALT | RK_MOD_SUPER))) { focus_step(w, e->mods & RK_MOD_SHIFT ? -1 : 1); break; }
+      if (e->key == RK_KEY_TAB && !(e->mods & (RK_MOD_CTRL | RK_MOD_ALT | RK_MOD_SUPER))) {   /* a view may take Tab (a cell editor goes on to the next cell); else focus moves */
+        bool taken = false;
+        for (rk_view *v = w->focus; v && !taken; v = v->parent) if (v->cls && v->cls->pub.event) {
+          rk_rect r = rk__window_rect(v);
+          rk_event local = *e;
+          local.position = (rk_point){ e->position.x - r.x, e->position.y - r.y };
+          taken = v->cls->pub.event(v, &local, v->state);
+        }
+        if (!taken) focus_step(w, e->mods & RK_MOD_SHIFT ? -1 : 1);
+        break;
+      }
       rk_view *f = w->focus;
       if (e->key == RK_KEY_F10 && (e->mods & RK_MOD_SHIFT)) {        /* Shift+F10: the focused view's context menu, below it */
         rk_view *t = f;

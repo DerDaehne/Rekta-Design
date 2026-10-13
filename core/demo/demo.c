@@ -505,6 +505,8 @@ static void builds_picked(rk_view *list, void *user) {
 /* A table of builds the app sorts: an order over the rows, sorted when a head is clicked. */
 #define NBUILDS 500
 static int order[NBUILDS], sort_column = -1, sort_dir = 1;
+static char notes[NBUILDS][32];                                  /* a note on a build: the column one can edit */
+static rk_view *builds_table;
 
 static int build_minutes(int i) { return 3 + (i * 37) % 41; }
 static const char *build_status(int i) { return i % 11 == 4 ? "failed" : i % 5 == 1 ? "waiting" : "done"; }
@@ -515,8 +517,26 @@ static const char *build_cell(int row, int column, void *user) {
   (void)user;
   if (column == 0) { snprintf(text, sizeof text, "Build #%d", 5000 - i); return text; }
   if (column == 1) return build_status(i);
+  if (column == 3) return notes[i];
   snprintf(text, sizeof text, "%d min", build_minutes(i));
   return text;
+}
+
+/* Editing a note is an action in the window's history: Ctrl+Z (or the toast) takes it back. */
+typedef struct note_edit { int build; char before[32], after[32]; } note_edit;
+static void note_run(void *u) { note_edit *n = u; memcpy(notes[n->build], n->after, sizeof n->after); rk_view_redraw(builds_table); }
+static void note_undo(void *u) { note_edit *n = u; memcpy(notes[n->build], n->before, sizeof n->before); rk_view_redraw(builds_table); }
+
+static const char *note_commit(rk_view *table, int row, int column, const char *value, void *user) {
+  (void)column; (void)user;
+  if (strlen(value) >= sizeof notes[0]) return "A note fits in 31 characters; this one is longer.";
+  note_edit *n = malloc(sizeof *n);
+  if (!n) return "There was no memory for the note.";
+  n->build = order[row];
+  memcpy(n->before, notes[n->build], sizeof n->before);
+  snprintf(n->after, sizeof n->after, "%s", value);
+  rk_window_do(rk_view_window(table), "Note saved.", note_run, note_undo, n, free);
+  return NULL;
 }
 
 static int by_column(const void *a, const void *b) {
@@ -551,13 +571,16 @@ static rk_view *lists_section(void) {
   rk_list_on_change(list, builds_picked, NULL);
   picked = rk_add(s, rk_label("Ctrl+click selects several.", RK_TEXT_SMALL));
 
-  rk_add(s, rk_label("a table: click a head to sort", RK_TEXT_KICKER));
+  rk_add(s, rk_label("a table: click a head to sort, drag its edge to widen; double click a note to edit it", RK_TEXT_KICKER));
   for (int i = 0; i < NBUILDS; i++) order[i] = i;
-  rk_view *table = rk_add(s, rk_table(NBUILDS, build_cell, NULL));
-  rk_table_add_column(table, "build", 0, RK_COLUMN_SORTABLE);
-  rk_table_add_column(table, "status", 110, RK_COLUMN_SORTABLE);
-  rk_table_add_column(table, "time", 90, RK_COLUMN_NUMERIC | RK_COLUMN_SORTABLE);
+  rk_view *table = builds_table = rk_add(s, rk_table(NBUILDS, build_cell, NULL));
+  rk_table_add_column(table, "build", 140, RK_COLUMN_SORTABLE);
+  rk_table_add_column(table, "status", 100, RK_COLUMN_SORTABLE);
+  rk_table_add_column(table, "time", 80, RK_COLUMN_NUMERIC | RK_COLUMN_SORTABLE);
+  rk_table_add_column(table, "note", 0, RK_COLUMN_EDITABLE);
+  snprintf(notes[1], sizeof notes[1], "flaky test, rerun");
   rk_table_on_sort(table, sort_builds, NULL);
+  rk_table_on_edit(table, note_commit, NULL);
   rk_list_on_show(table, table_show, NULL);
   rk_view_set_size(table, 0, 320);
   return s;

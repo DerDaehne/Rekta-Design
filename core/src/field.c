@@ -21,6 +21,7 @@ typedef struct field {
   int caret, anchor;                                       /* byte offsets; the selection is between them */
   float scroll, scroll_y;                                  /* how far the text has moved left (one line) or up (several) */
   int rows;                                                /* the lines the input shows; 1 is a one-line field */
+  float box_h;                                             /* the input's height for one line; 0: control-height */
   int *starts, nlines, lcap;                               /* where each line begins, as laid out for wrap_w */
   float wrap_w, goal;                                      /* the width laid out for; Up and Down keep to the goal's x */
   bool stale;                                              /* the text changed since the lines were laid out */
@@ -51,10 +52,11 @@ static rk_textfmt label_fmt(void) { return rk__textfmt(RK_TEXT_LABEL, 0); }
 static rk_textfmt hint_fmt(void) { return rk__textfmt(RK_TEXT_SMALL, 0); }
 
 static float line_h(const field *f) { rk_textfmt t = input_fmt(f); return t.size * t.line; }
-static float input_pad_y(const field *f) { return (rk_metric_of(RK_CONTROL_HEIGHT) - line_h(f)) / 2; }   /* one line sits as in a field */
+static float control_h(const field *f) { return f->box_h > 0 ? f->box_h : rk_metric_of(RK_CONTROL_HEIGHT); }
+static float input_pad_y(const field *f) { return (control_h(f) - line_h(f)) / 2; }   /* one line sits as in a field */
 static float label_h(const field *f) { if (!f->label) return 0; rk_textfmt l = label_fmt(); return l.size * l.line + rk_metric_of(RK_SPACE_XS); }
 static rk_rect input_rect(rk_view *v, const field *f) {
-  return (rk_rect){ 0, label_h(f), v->pframe.w, rk_metric_of(RK_CONTROL_HEIGHT) + (f->rows - 1) * line_h(f) };
+  return (rk_rect){ 0, label_h(f), v->pframe.w, control_h(f) + (f->rows - 1) * line_h(f) };
 }
 
 static int sel_lo(const field *f) { return RK_MIN(f->caret, f->anchor); }
@@ -432,7 +434,7 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
 static rk_size field_measure(rk_view *v, rk_size avail, void *st) {
   (void)v;
   field *f = st;
-  float h = label_h(f) + rk_metric_of(RK_CONTROL_HEIGHT) + (f->rows - 1) * line_h(f);
+  float h = label_h(f) + control_h(f) + (f->rows - 1) * line_h(f);
   if (f->hint) { rk_textfmt t = hint_fmt(); h += rk_metric_of(RK_SPACE_XS) + t.size * t.line; }
   return (rk_size){ isfinite(avail.w) ? avail.w : 320, h };
 }
@@ -492,4 +494,12 @@ void rk_field_set_lines(rk_view *v, int lines) {
   f->stale = true; f->scroll = f->scroll_y = 0;
   rk__view_relayout_up(v);
   rk__view_dirty(v);
+}
+
+/* A table's cell editor: the input as tall as a row. */
+void rk__field_set_box_height(rk_view *v, float h) {
+  field *f = field_of(v);
+  if (!f) return;
+  f->box_h = h;
+  rk__view_relayout_up(v);
 }

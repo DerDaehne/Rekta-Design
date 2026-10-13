@@ -11,7 +11,12 @@
    (it owns the rows) and the table draws again. A column's trailing edge in the head drags its width (48px at
    least); a double click on it gives the column back its own. From the keyboard, Up from the first row goes into the
    head: Left and Right move between its columns, Enter or Space sorts, Ctrl with Left or Right changes the width by
-   space-m (with Shift, four times that), Down or Escape goes back to the rows. */
+   space-m (with Shift, four times that), Down or Escape goes back to the rows.
+
+   An editable column's cell opens on a double click or F2 (the active row's first editable cell): a field as tall as
+   the row lies over it, with all a field's keys. Enter or Tab keeps the value - Tab goes on to the next editable cell,
+   Shift+Tab back - and Escape puts the old one back; focus going elsewhere keeps it. The app's commit() takes the
+   value or says why not, below the cell, which then stays open. */
 #include "rk_internal.h"
 
 typedef struct list {
@@ -25,6 +30,9 @@ typedef struct list {
   struct column { char *title; float width, x, w, set; unsigned flags; } *cols; int ncols, ccap;   /* set: a width given since */
   int head;                                                /* -1, or the column the keyboard is on in the head */
   int resizing, edge_col; float drag_x, drag_w; double edge_at;   /* a column edge being dragged; the last press on one */
+  rk_view *editor; int edit_row, edit_col; char *edit_old;   /* a cell being edited */
+  const char *(*commit)(rk_view *table, int row, int column, const char *value, void *user); void *commit_user;
+  int down_row; double down_at;                            /* the last press on a row: a second soon after edits */
   const char *(*cell)(int row, int column, void *user);
   int sort_col, sort_dir;
   void (*sort)(rk_view *table, int column, int dir, void *user); void *sort_user;
@@ -70,6 +78,72 @@ static int edge_under(const list *l, float x) {
 static void set_width(rk_view *v, list *l, int k, float w) {
   l->cols[k].set = w > 0 ? RK_MAX(MIN_COLUMN, w) : 0;
   place_columns(l, v->frame.w);
+  rk__view_dirty(v);
+}
+
+static void reveal_row(rk_view *v, list *l, int i);
+
+static void place_editor(rk_view *v, list *l) {
+  if (!l->editor) return;
+  place_columns(l, v->frame.w);
+  const struct column *c = &l->cols[l->edit_col];
+  rk_size sz = rk__measure(l->editor, (rk_size){ c->w, INFINITY });
+  rk__set_frame(l->editor, (rk_rect){ c->x, head_height(l) + l->edit_row * row_height() - v->value, c->w, sz.h });
+}
+
+static void edit_finish(rk_view *v, list *l, bool focus_back) {
+  rk_view *ed = l->editor;
+  if (!ed) return;
+  l->editor = NULL;
+  free(l->edit_old); l->edit_old = NULL;
+  rk_window *w = rk__view_window(v);
+  bool had = w && rk__view_within(w->focus, ed);
+  rk_view_remove(ed);
+  if (had && focus_back) rk_window_focus(w, v);
+  rk__view_dirty(v);
+}
+
+/* Takes the value, or says why not and stays open. True when the cell has closed. */
+static bool edit_commit(rk_view *v, list *l, bool focus_back) {
+  if (!l->editor) return true;
+  const char *value = rk_field_text(l->editor);
+  if (!strcmp(value, l->edit_old)) { edit_finish(v, l, focus_back); return true; }
+  const char *why = l->commit ? l->commit(v, l->edit_row, l->edit_col, value, l->commit_user) : NULL;
+  if (!l->editor) return true;                             /* the app closed it itself */
+  if (why) { rk_field_set_hint(l->editor, why, true); place_editor(v, l); return false; }
+  edit_finish(v, l, focus_back);
+  return true;
+}
+
+static void editor_submit(rk_view *field, void *user) { (void)field; rk_view *v = user; edit_commit(v, v->state, true); }
+
+static int editable_from(const list *l, int k, int dir) {
+  for (; k >= 0 && k < l->ncols; k += dir) if (l->cols[k].flags & RK_COLUMN_EDITABLE) return k;
+  return -1;
+}
+
+static void edit_start(rk_view *v, list *l, int row, int col) {
+  if (!l->cell || row < 0 || row >= l->count || col < 0 || col >= l->ncols || !(l->cols[col].flags & RK_COLUMN_EDITABLE)) return;
+  if (l->editor && !edit_commit(v, l, false)) return;
+  l->active = row; l->head = -1;
+  reveal_row(v, l, row);
+  rk__anim_cancel(v, RK_PROP_VALUE);                       /* there at once: the editor lies on the row */
+  v->pvalue = v->value;
+  const char *s = l->cell(row, col, l->user);
+  l->edit_old = rk__strdup(s ? s : "");
+  l->edit_row = row; l->edit_col = col;
+  rk_view *ed = rk_field(NULL, NULL);
+  rk__field_set_box_height(ed, row_height());
+  ed->fill_role = RK_ROLE_BG; ed->pfill = rk_color_of(RK_ROLE_BG);   /* a reason below the cell hides the row under it */
+  rk_field_set_text(ed, l->edit_old);
+  rk_field_on_submit(ed, editor_submit, v);
+  l->editor = ed;
+  rk__view_add(v, ed); rk_release(ed);
+  place_editor(v, l);
+  rk_event all = { sizeof all, RK_EVENT_KEY_DOWN, rk_app_now(), { 0, 0 }, 0, 0, 0, 'A', RK_MOD_CTRL, NULL };
+  ed->cls->pub.event(ed, &all, ed->state);                  /* the old value, selected: typing replaces it */
+  rk_window *w = rk__view_window(v);
+  if (w) rk_window_focus(w, ed);
   rk__view_dirty(v);
 }
 
@@ -233,6 +307,7 @@ static void list_layout(rk_view *v, void *st) {
   list *l = st;
   float max = max_scroll(v, l);
   if (v->value > max) { v->value = v->pvalue = max; }
+  place_editor(v, l);
 }
 
 static int row_at(rk_view *v, const list *l, float y) {
@@ -260,6 +335,14 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
         return true;
       }
       l->pressed = row_at(v, l, e->position.y);
+      if (l->ncols && l->pressed >= 0 && l->pressed == l->down_row && e->time - l->down_at < 400) {   /* a double click on a cell */
+        l->down_at = 0;
+        for (int k = 0; k < l->ncols; k++)
+          if (e->position.x >= l->cols[k].x && e->position.x < l->cols[k].x + l->cols[k].w) { edit_start(v, l, l->pressed, k); break; }
+        l->pressed = -1;
+        return true;
+      }
+      l->down_row = l->pressed; l->down_at = e->time;
       rk__view_dirty(v);
       return true;
     case RK_EVENT_POINTER_MOVE:
@@ -280,6 +363,7 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
       return true;
     }
     case RK_EVENT_WHEEL: {
+      if (l->editor) return true;                             /* the editor lies on its row: no scrolling under it */
       float max = max_scroll(v, l), to = RK_CLAMP(v->value + e->wheel_y, 0.0f, max);
       if (to == v->value) return false;                       /* at its end: the wheel moves what holds it */
       v->value = to;
@@ -289,6 +373,17 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
     case RK_EVENT_KEY_DOWN: {
       int page = RK_MAX(1, (int)(body_height(v, l) / row_height()) - 1);
       bool ctrl = (e->mods & (RK_MOD_CTRL | RK_MOD_SUPER)) != 0;
+      rk_window *w = rk__view_window(v);
+      if (l->editor && w && rk__view_within(w->focus, l->editor)) {   /* what the editor left: Escape, Tab */
+        if (e->key == RK_KEY_ESCAPE) { edit_finish(v, l, true); return true; }
+        if (e->key == RK_KEY_TAB) {
+          int dir = e->mods & RK_MOD_SHIFT ? -1 : 1, row = l->edit_row, next = editable_from(l, l->edit_col + dir, dir);
+          if (edit_commit(v, l, true) && next >= 0) edit_start(v, l, row, next);
+          return true;
+        }
+        return false;
+      }
+      if (e->key == RK_KEY_F1 + 1 && l->ncols) { edit_start(v, l, l->active, editable_from(l, 0, 1)); return true; }   /* F2 */
       if (l->head >= 0) {                                       /* in the head: columns, their order and widths */
         float step = rk_metric_of(RK_SPACE_M) * (e->mods & RK_MOD_SHIFT ? 4 : 1);
         switch (e->key) {
@@ -331,7 +426,13 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
       }
     }
     case RK_EVENT_FOCUS: rk__view_dirty(v); return false;
-    case RK_EVENT_BLUR: l->head = -1; rk__view_dirty(v); return false;
+    case RK_EVENT_BLUR: {
+      rk_window *w = rk__view_window(v);
+      if (l->editor && w && rk__view_within(w->focus, l->editor)) { edit_commit(v, l, false); return false; }   /* the editor lets go: kept */
+      l->head = -1;
+      rk__view_dirty(v);
+      return false;
+    }
     default: return false;
   }
 }
@@ -339,7 +440,7 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
 static void list_destroy(void *st) {
   list *l = st;
   for (int i = 0; i < l->ncols; i++) free(l->cols[i].title);
-  free(l->cols); free(l->sel); free(l);
+  free(l->edit_old); free(l->cols); free(l->sel); free(l);
 }
 
 static const rk_class list_class = { { sizeof(rk_view_class), "rk_list", list_draw, list_measure, list_layout, list_event, list_destroy }, NULL, NULL };
@@ -353,6 +454,7 @@ void rk_list_set_count(rk_view *v, int count) {
   size_t need = ((size_t)count + 7) / 8;
   if (need > l->selcap) { l->sel = realloc(l->sel, need); memset(l->sel + l->selcap, 0, need - l->selcap); l->selcap = need; }
   for (int i = count; i < l->count; i++) set_selected(l, i, false);   /* what is gone is no longer selected */
+  if (l->editor && l->edit_row >= count) edit_finish(v, l, true);     /* its row is gone */
   l->count = count;
   l->active = RK_CLAMP(l->active, 0, RK_MAX(0, count - 1));
   l->anchor = RK_CLAMP(l->anchor, 0, RK_MAX(0, count - 1));
@@ -366,7 +468,7 @@ void rk_list_set_count(rk_view *v, int count) {
 
 rk_view *rk_list(int count, void (*item)(int index, rk_list_item *out, void *user), void *user) {
   list *l = rk__alloc(sizeof *l);
-  l->item = item; l->user = user; l->pressed = -1; l->head = l->resizing = l->edge_col = -1;
+  l->item = item; l->user = user; l->pressed = -1; l->head = l->resizing = l->edge_col = l->down_row = -1;
   rk_view *v = rk__view_create(&list_class, l);
   v->clip = true; v->focusable = true; v->draws_focus = true;   /* the active row (or head column) shows focus */
   v->access = RK_ACCESS_LIST;
@@ -417,3 +519,6 @@ float rk_table_column_width(rk_view *v, int column) {
   place_columns(l, v->frame.w);
   return l->cols[column].w;
 }
+
+void rk_table_on_edit(rk_view *v, const char *(*fn)(rk_view *, int, int, const char *, void *), void *user) { list *l = list_of(v); if (l) { l->commit = fn; l->commit_user = user; } }
+void rk_table_edit(rk_view *v, int row, int column) { list *l = list_of(v); if (l) edit_start(v, l, row, column); }
