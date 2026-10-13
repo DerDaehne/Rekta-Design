@@ -186,10 +186,11 @@ const busyAtOnce = await p.evaluate(() => {
   return r.getAttribute('aria-busy') === 'true' && getComputedStyle(r, '::before').visibility === 'hidden';
 });
 ok(busyAtOnce, 'loading: no line before the delay');
-await p.waitForTimeout(400);
-ok((await line()) === 'visible', 'loading: the line after the delay');
-await p.waitForTimeout(1300);
-ok((await toast(p)) === 'Components refreshed.', 'refresh ends with a toast');
+// the line comes once the delay is over, while the 1.2s load still runs: wait for it rather than guess when a busy runner gets there
+const lineCame = await p.waitForFunction(() => getComputedStyle(document.querySelector('#comp-region'), '::before').visibility === 'visible', null, { timeout: 1100, polling: 50 }).then(() => true, () => false);
+ok(lineCame, 'loading: the line after the delay', await line());
+const toastCame = await p.waitForFunction(() => document.querySelector('.rk-toast:not([data-rk-phase]) .rk-toast-msg')?.textContent.trim() === 'Components refreshed.', null, { timeout: 3000, polling: 50 }).then(() => true, () => false);
+ok(toastCame, 'refresh ends with a toast', await toast(p));
 await p.click('#comp-more'); await p.waitForTimeout(200); await p.click('#comp-menu [data-act=fail]'); await p.waitForTimeout(1900);
 ok((await p.getAttribute('#comp-error', 'data-status')) === 'error', 'a failed refresh says so in the region');
 await p.click('#comp-retry'); await p.waitForTimeout(1600);
