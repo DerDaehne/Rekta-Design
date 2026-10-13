@@ -18,7 +18,7 @@ if /i "%1"=="test" (
 if /i "%1"=="shared" (
   if not exist build\shared mkdir build\shared
   cl %CFLAGS% /DRK_SHARED /DRK_BUILD /LD src\rekta.c user32.lib gdi32.lib advapi32.lib /Fobuild\shared\rekta.obj /Febuild\shared\rekta.dll || exit /b 1
-  cl %CFLAGS% /DRK_SHARED examples\hello.c build\shared\rekta.lib /Fobuild\shared\hello.obj /Febuild\shared\hello.exe || exit /b 1
+  cl %CFLAGS% /DRK_SHARED /Iinclude examples\hello.c build\shared\rekta.lib /Fobuild\shared\hello.obj /Febuild\shared\hello.exe || exit /b 1
   set RK_HEADLESS=1
   build\shared\hello.exe > nul || exit /b 1
   set RK_HEADLESS=

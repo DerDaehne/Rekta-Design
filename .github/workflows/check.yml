@@ -27,7 +27,7 @@ jobs:
         run: npm install --no-save --no-package-lock playwright@1.56.1 && npx playwright install --with-deps chromium
       - name: Click through the demo
         run: node test/smoke.mjs
-      - name: The reference gallery: rekta-core and rekta.css draw the same specimens alike
+      - name: The reference gallery (rekta-core and rekta.css draw the same specimens alike)
         run: make -C core gallery && node test/gallery.mjs core/build/gallery
 
   core-linux:
