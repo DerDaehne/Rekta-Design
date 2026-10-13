@@ -34,7 +34,10 @@ it; each entry says how.
   its shared memory while the window changes size.
 - rekta-core draws a frame's changes as up to eight separate parts and
   presents them together (several damage rectangles in one Wayland
-  commit); an app with nothing moving uses no CPU and never wakes.
+  commit); an app with nothing moving uses no CPU and never wakes. On
+  Wayland a frame is drawn straight into the buffer the compositor shows
+  (no copy of the frame, no framebuffer of its own): the demo needs 13 MB
+  instead of 18.
 - rekta-core's API is narrower and says who owns what in one rule:
   constructors are named after what they make (`rk_label`, `rk_button`,
   `rk_tile`, `rk_column`, `rk_row`, `rk_tile_grid`, `rk_rows`, `rk_icon`,

@@ -40,7 +40,12 @@
 
 /* A buffer sits in its own shared-memory pool with room to spare, so a window growing by a few pixels per resize step
    gets a new wl_buffer on the same memory instead of new memory. */
-typedef struct wbuf { struct wl_buffer *b; struct wl_shm_pool *pool; uint32_t *px; void *map; size_t cap; int w, h; bool busy; rk_irect stale; struct wwin *owner; } wbuf;
+typedef struct wbuf {
+  struct wl_buffer *b; struct wl_shm_pool *pool; uint32_t *px; void *map; size_t cap; int w, h; bool busy;
+  rk_irect stale;                                               /* what changed since this buffer was last shown */
+  struct wwin *owner;
+  rk_bitmap bm;                                                 /* the buffer as the renderer's target */
+} wbuf;
 
 typedef struct wwin {
   rk_window *w;
@@ -51,6 +56,7 @@ typedef struct wwin {
   struct wp_viewport *viewport;
   struct wp_fractional_scale_v1 *frac;
   wbuf bufs[3];
+  wbuf *front, *drawing;                                        /* the buffer last committed; the one a frame draws into */
   int lw, lh, pw, ph, fw, fh;                                   /* logical, pending, and floating (unmaximized) size */
   int int_scale; float frac_scale;                              /* buffer scale: an integer, or 120ths over a viewport */
   bool configured, maximized, own_frame, frame_pending, deferred, configure_pending;
@@ -157,19 +163,12 @@ static void copy_rect(wbuf *b, const rk_bitmap *fb, rk_irect r) {
   for (int y = r.y0; y < r.y1; y++) memcpy(b->px + (size_t)y * b->w + r.x0, fb->px + (size_t)y * fb->stride + r.x0, (size_t)(r.x1 - r.x0) * 4);
 }
 
-static void commit(wwin *x, const rk_irect *changed, int n) {
-  for (int i = 0; i < 3; i++) x->bufs[i].owner = x;
-  const rk_bitmap *fb = x->fb;
-  if (!fb || !x->configured) return;
-  wbuf *b = NULL;
-  for (int i = 0; i < 3 && !b; i++) if (!x->bufs[i].busy && x->bufs[i].w == fb->w && x->bufs[i].h == fb->h && x->bufs[i].b) b = &x->bufs[i];
-  for (int i = 0; i < 3 && !b; i++) if (!x->bufs[i].busy) { if (!buf_make(&x->bufs[i], fb->w, fb->h)) return; b = &x->bufs[i]; }
-  if (!b) { for (int k = 0; k < n; k++) x->deferred_rect = join(x->deferred_rect, changed[k]); x->deferred = true; return; }   /* all held: next frame */
+/* The buffer goes to the compositor with what changed in it; the other buffers note it as stale. */
+static void submit(wwin *x, wbuf *b, const rk_irect *changed, int n) {
   for (int i = 0; i < 3; i++) if (&x->bufs[i] != b && x->bufs[i].b) for (int k = 0; k < n; k++) x->bufs[i].stale = join(x->bufs[i].stale, changed[k]);
-  copy_rect(b, fb, b->stale);                                  /* what changed since this buffer was last shown */
-  for (int k = 0; k < n; k++) copy_rect(b, fb, changed[k]);
   b->stale = (rk_irect){ 0, 0, 0, 0 };
   b->busy = true;
+  x->front = b;
   wl_surface_attach(x->surface, b->b, 0, 0);
   if (x->frac_scale > 0 && x->viewport) { wl_surface_set_buffer_scale(x->surface, 1); wp_viewport_set_destination(x->viewport, x->lw, x->lh); }
   else wl_surface_set_buffer_scale(x->surface, x->int_scale);
@@ -190,6 +189,44 @@ static void commit(wwin *x, const rk_irect *changed, int n) {
   wl_display_flush(wdpy);
 }
 
+/* A frame drawn elsewhere (no buffer was free to draw into): what changed is copied into a buffer. */
+static void commit(wwin *x, const rk_irect *changed, int n) {
+  for (int i = 0; i < 3; i++) x->bufs[i].owner = x;
+  const rk_bitmap *fb = x->fb;
+  if (!fb || !x->configured) return;
+  wbuf *b = NULL;
+  for (int i = 0; i < 3 && !b; i++) if (!x->bufs[i].busy && x->bufs[i].w == fb->w && x->bufs[i].h == fb->h && x->bufs[i].b) b = &x->bufs[i];
+  for (int i = 0; i < 3 && !b; i++) if (!x->bufs[i].busy) { if (!buf_make(&x->bufs[i], fb->w, fb->h)) return; b = &x->bufs[i]; }
+  if (!b) { for (int k = 0; k < n; k++) x->deferred_rect = join(x->deferred_rect, changed[k]); x->deferred = true; return; }   /* all held: next frame */
+  copy_rect(b, fb, b->stale);                                  /* what changed since this buffer was last shown */
+  for (int k = 0; k < n; k++) copy_rect(b, fb, changed[k]);
+  submit(x, b, changed, n);
+}
+
+/* The renderer draws straight into a free buffer: no copy of the frame. What changed since the buffer was last shown
+   is taken from the buffer shown last; with nothing to take it from, the frame draws everything (fresh). */
+static rk_bitmap *wl_target(void *n, int w, int h, bool *fresh) {
+  wwin *x = n;
+  *fresh = false;
+  if (!x || !x->configured) return NULL;
+  for (int i = 0; i < 3; i++) x->bufs[i].owner = x;
+  wbuf *b = NULL;
+  for (int i = 0; i < 3 && !b; i++) if (!x->bufs[i].busy && x->bufs[i].b && x->bufs[i].w == w && x->bufs[i].h == h) b = &x->bufs[i];
+  for (int i = 0; i < 3 && !b; i++) if (!x->bufs[i].busy) { if (!buf_make(&x->bufs[i], w, h)) return NULL; b = &x->bufs[i]; }
+  if (!b) return NULL;                                           /* all held by the compositor: draw elsewhere, copy */
+  if (!rk__irect_empty(b->stale)) {
+    wbuf *f = x->front;
+    if (f && f != b && f->b && f->w == w && f->h == h) {
+      rk_bitmap src = { f->w, f->h, f->w, f->px, 0, NULL };
+      copy_rect(b, &src, b->stale);
+    } else *fresh = true;
+    b->stale = (rk_irect){ 0, 0, 0, 0 };
+  }
+  b->bm = (rk_bitmap){ w, h, w, b->px, b->cap / 4, NULL };
+  x->drawing = b;
+  return &b->bm;
+}
+
 static void frame_done(void *data, struct wl_callback *cb, uint32_t t) {
   (void)t;
   wwin *x = data;
@@ -202,6 +239,13 @@ static void frame_done(void *data, struct wl_callback *cb, uint32_t t) {
 static void wl_present_fb(void *n, const rk_bitmap *fb, const rk_irect *changed, int nchanged) {
   wwin *x = n;
   if (!x || !nchanged) return;
+  if (x->drawing && fb == &x->drawing->bm) {                     /* drawn in place: it goes as it is */
+    wbuf *b = x->drawing;
+    x->drawing = NULL;
+    x->deferred = false; x->deferred_rect = (rk_irect){ 0, 0, 0, 0 };
+    submit(x, b, changed, nchanged);
+    return;
+  }
   x->fb = fb;
   /* the compositor has not shown the last frame yet: this one waits for its frame callback, merged */
   if (x->frame_pending) { for (int k = 0; k < nchanged; k++) x->deferred_rect = join(x->deferred_rect, changed[k]); x->deferred = true; return; }
@@ -307,6 +351,7 @@ static void wl_close(void *n) {
   if (key_win == x) { key_win = NULL; repeat_key = 0; }
   if (x->frame_cb) wl_callback_destroy(x->frame_cb);
   for (int i = 0; i < 3; i++) buf_free(&x->bufs[i]);
+  x->front = x->drawing = NULL;
   if (x->frac) wp_fractional_scale_v1_destroy(x->frac);
   if (x->viewport) wp_viewport_destroy(x->viewport);
   if (x->deco) zxdg_toplevel_decoration_v1_destroy(x->deco);
@@ -651,5 +696,5 @@ static void wl_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_wayland = {
   "wayland", wl_init, wl_shutdown, wl_open, wl_close, wl_show, wl_title, wl_present_fb, wl_move, wl_minimize, wl_zoom,
-  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL
+  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target
 };

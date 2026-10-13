@@ -35,7 +35,7 @@ static void window_destroy(void *self) {
   rk_window *w = self;
   if (w->controller) { rk__controller_appear(w->controller, false); rk_release(w->controller); }
   if (w->root) { w->root->window = NULL; rk_release(w->root); }
-  rk__bitmap_free(w->fb);
+  rk__bitmap_free(w->own_fb);
   free(w->title);
 }
 static const rk_type window_type = { "rk_window", window_destroy };
@@ -378,7 +378,17 @@ void rk__window_frame(rk_window *w, double now) {
   w->needs_draw = false;
   double t0 = rk__wall_ms();
   int fw = (int)ceilf(w->size.w * w->scale), fh = (int)ceilf(w->size.h * w->scale);
-  if (!w->fb || w->fb->w != fw || w->fb->h != fh) { rk__bitmap_fit(&w->fb, fw, fh); w->damage_all = true; }
+  /* into the platform's buffer where it gives one (Wayland: no copy of the frame), else into our own */
+  bool fresh = false;
+  rk_bitmap *target = rk__platform()->target ? rk__platform()->target(w->native, fw, fh, &fresh) : NULL;
+  if (target) {
+    if (fresh) w->damage_all = true;
+    w->fb = target; w->fb_elsewhere = true;
+  } else {
+    if (!w->own_fb || w->own_fb->w != fw || w->own_fb->h != fh) { rk__bitmap_fit(&w->own_fb, fw, fh); w->damage_all = true; }
+    if (w->fb_elsewhere) w->damage_all = true;                   /* ours missed the frames drawn elsewhere */
+    w->fb = w->own_fb; w->fb_elsewhere = false;
+  }
   rk_irect all = { 0, 0, fw, fh };
   if (w->damage_all) { w->damage[0] = all; w->ndamage = 1; }
   if (hud) {

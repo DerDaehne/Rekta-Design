@@ -216,7 +216,8 @@ struct rk_window {
   rk_view *root;                                           /* title bar, content, sheets, toasts */
   rk_view *titlebar, *content, *sheets, *toasts;
   rk_controller *controller;
-  rk_bitmap *fb;
+  rk_bitmap *fb;                                           /* what the last frame was drawn into */
+  rk_bitmap *own_fb; bool fb_elsewhere;                    /* ours, where the platform gives no buffer */
   float scale; rk_size size;
   bool system_frame, shown, closed, needs_draw, needs_layout;
   rk_irect damage[RK_DAMAGE_MAX]; int ndamage; bool damage_all;   /* what the next frame draws, in device pixels */
@@ -285,6 +286,7 @@ typedef struct rk_platform {
   void (*resize)(void *native, float width, float height);  /* logical px */
   bool (*ready)(void *native);                             /* NULL, or whether the compositor takes a frame now */
   double (*refresh_hz)(void);                              /* NULL, or the display's rate */
+  rk_bitmap *(*target)(void *native, int w, int h, bool *fresh);   /* NULL, or the buffer to draw the next frame into */
 } rk_platform;
 
 extern const rk_platform rk__platform_headless;
