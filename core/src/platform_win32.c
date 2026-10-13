@@ -270,8 +270,8 @@ static void *w_open(rk_window *w, const rk_window_desc *d) {
 static void w_close(void *n) { wwin *x = n; if (x) { SetWindowLongPtrW(x->hwnd, GWLP_USERDATA, 0); DestroyWindow(x->hwnd); free(x); } }
 static void w_show(void *n) { wwin *x = n; if (x) { ShowWindow(x->hwnd, SW_SHOW); UpdateWindow(x->hwnd); } }
 static void w_title(void *n, const char *t) { wwin *x = n; if (x) { wchar_t *s = wide(t); SetWindowTextW(x->hwnd, s); free(s); } }
-static void w_present(void *n, const rk_bitmap *fb, rk_irect changed) {
-  (void)changed;                                               /* a local blit: the whole frame is cheap */
+static void w_present(void *n, const rk_bitmap *fb, const rk_irect *changed, int nchanged) {
+  (void)changed; (void)nchanged;                                               /* a local blit: the whole frame is cheap */
   wwin *x = n;
   if (!x) return;
   x->last = fb;

@@ -190,26 +190,26 @@ static void x_title(void *n, const char *t) {
 /* Only the changed part goes up. The frame buffer is 0xAARRGGBB in memory order B, G, R, A: a 24-bit TrueColor
    visual's layout. With MIT-SHM the server reads the pixels from shared memory; we wait for it (XSync) before the
    next frame writes there. */
-static void x_present(void *n, const rk_bitmap *fb, rk_irect r) {
+/* Each changed part goes up on its own; one round trip for all of them. */
+static void x_present(void *n, const rk_bitmap *fb, const rk_irect *rects, int nrects) {
   xwin *x = n;
   if (!x || !fb) return;
-  r = rk__irect_meet(r, (rk_irect){ 0, 0, fb->w, fb->h });
-  if (rk__irect_empty(r)) return;
-  int w = r.x1 - r.x0, h = r.y1 - r.y0;
-  if (use_shm && shm_ensure(x, fb->w, fb->h)) {
-    for (int y = r.y0; y < r.y1; y++)
-      memcpy(x->shm_img->data + (size_t)y * x->shm_img->bytes_per_line + (size_t)r.x0 * 4, fb->px + (size_t)y * fb->stride + r.x0, (size_t)w * 4);
-    XShmPutImage(dpy, x->win, x->gc, x->shm_img, r.x0, r.y0, r.x0, r.y0, (unsigned)w, (unsigned)h, False);
-    XSync(dpy, False);
-    return;
+  bool shm = use_shm && shm_ensure(x, fb->w, fb->h);
+  XImage *img = shm ? NULL : XCreateImage(dpy, DefaultVisual(dpy, screen), (unsigned)DefaultDepth(dpy, screen), ZPixmap, 0, (char *)fb->px,
+                                          (unsigned)fb->w, (unsigned)fb->h, 32, fb->stride * 4);
+  if (!shm && !img) return;
+  for (int i = 0; i < nrects; i++) {
+    rk_irect r = rk__irect_meet(rects[i], (rk_irect){ 0, 0, fb->w, fb->h });
+    if (rk__irect_empty(r)) continue;
+    int w = r.x1 - r.x0, h = r.y1 - r.y0;
+    if (shm) {
+      for (int y = r.y0; y < r.y1; y++)
+        memcpy(x->shm_img->data + (size_t)y * x->shm_img->bytes_per_line + (size_t)r.x0 * 4, fb->px + (size_t)y * fb->stride + r.x0, (size_t)w * 4);
+      XShmPutImage(dpy, x->win, x->gc, x->shm_img, r.x0, r.y0, r.x0, r.y0, (unsigned)w, (unsigned)h, False);
+    } else XPutImage(dpy, x->win, x->gc, img, r.x0, r.y0, r.x0, r.y0, (unsigned)w, (unsigned)h);
   }
-  XImage *img = XCreateImage(dpy, DefaultVisual(dpy, screen), (unsigned)DefaultDepth(dpy, screen), ZPixmap, 0, (char *)fb->px,
-                             (unsigned)fb->w, (unsigned)fb->h, 32, fb->stride * 4);
-  if (!img) return;
-  XPutImage(dpy, x->win, x->gc, img, r.x0, r.y0, r.x0, r.y0, (unsigned)w, (unsigned)h);
-  img->data = NULL;
-  XDestroyImage(img);
-  XFlush(dpy);
+  if (img) { img->data = NULL; XDestroyImage(img); XFlush(dpy); }
+  else XSync(dpy, False);                                        /* the shared image may be written again */
 }
 
 static void net_state(xwin *x, bool on) {

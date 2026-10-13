@@ -54,6 +54,7 @@ typedef struct rk_bitmap {
 } rk_bitmap;
 void rk__bitmap_changed(rk_bitmap *b);                     /* drawn into: the block map is out of date */
 typedef struct rk_irect { int x0, y0, x1, y1; } rk_irect;
+#define RK_DAMAGE_MAX 8                                    /* separate parts a frame draws and presents */
 
 rk_bitmap *rk__bitmap_create(int w, int h);
 void rk__view_moved(rk_view *v);                           /* only its place, size or opacity changed: its own layer holds */
@@ -218,7 +219,7 @@ struct rk_window {
   rk_bitmap *fb;
   float scale; rk_size size;
   bool system_frame, shown, closed, needs_draw, needs_layout;
-  rk_irect damage; bool damage_all;                        /* what the next frame draws, in device pixels */
+  rk_irect damage[RK_DAMAGE_MAX]; int ndamage; bool damage_all;   /* what the next frame draws, in device pixels */
   char *title;
   rk_view *focus, *hover, *pressed, *capture;
   rk_view *activated;                                      /* the view whose activate handler is running */
@@ -273,7 +274,7 @@ typedef struct rk_platform {
   void (*close)(void *native);
   void (*show)(void *native);
   void (*set_title)(void *native, const char *title);
-  void (*present)(void *native, const rk_bitmap *fb, rk_irect changed);   /* only changed is new */
+  void (*present)(void *native, const rk_bitmap *fb, const rk_irect *changed, int n);   /* only those parts are new */
   void (*move)(void *native);                              /* start dragging the window (title bar) */
   void (*minimize)(void *native);
   void (*zoom)(void *native);

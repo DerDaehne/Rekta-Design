@@ -16,7 +16,7 @@ static void *hl_open(rk_window *w, const rk_window_desc *d) {
 static void hl_close(void *n) { (void)n; }
 static void hl_show(void *n) { (void)n; }
 static void hl_title(void *n, const char *t) { (void)n; (void)t; }
-static void hl_present(void *n, const rk_bitmap *fb, rk_irect r) { (void)n; (void)fb; (void)r; }
+static void hl_present(void *n, const rk_bitmap *fb, const rk_irect *r, int k) { (void)n; (void)fb; (void)r; (void)k; }
 static void hl_nop(void *n) { (void)n; }
 static bool hl_wait(double ms) { vclock += ms < 0 ? 1000.0 / 60.0 : ms; return true; }
 static void hl_wake(void) {}

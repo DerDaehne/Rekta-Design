@@ -134,11 +134,40 @@ void rk__window_invalidate(rk_window *w) {
   if (!w->needs_draw) { w->needs_draw = true; rk__app_request_frame(); }
 }
 
+static long irect_area(rk_irect r) { return rk__irect_empty(r) ? 0 : (long)(r.x1 - r.x0) * (r.y1 - r.y0); }
+static rk_irect irect_join(rk_irect a, rk_irect b);
+
+/* Damage is a few separate parts: a change far from another is drawn on its own instead of the box around both. A
+   part joins another when the box around them wastes little, and parts that can no longer be kept apart are joined
+   where that wastes least. */
+static void damage_add(rk_window *w, rk_irect d) {
+  for (bool merged = true; merged;) {
+    merged = false;
+    for (int i = 0; i < w->ndamage; i++) {
+      rk_irect u = irect_join(w->damage[i], d);
+      long sum = irect_area(w->damage[i]) + irect_area(d);
+      if (irect_area(u) <= sum + sum / 4 + 64 * 64) {
+        d = u;
+        w->damage[i] = w->damage[--w->ndamage];
+        merged = true;
+        break;
+      }
+    }
+  }
+  if (w->ndamage < RK_DAMAGE_MAX) { w->damage[w->ndamage++] = d; return; }
+  int best = 0;
+  long cost = -1;
+  for (int i = 0; i < w->ndamage; i++) {
+    long c = irect_area(irect_join(w->damage[i], d)) - irect_area(w->damage[i]);
+    if (cost < 0 || c < cost) { cost = c; best = i; }
+  }
+  w->damage[best] = irect_join(w->damage[best], d);
+}
+
 void rk__window_damage(rk_window *w, rk_rect r) {
   float k = w->scale;
   rk_irect d = { (int)floorf(r.x * k) - 2, (int)floorf(r.y * k) - 2, (int)ceilf((r.x + r.w) * k) + 2, (int)ceilf((r.y + r.h) * k) + 2 };
-  if (rk__irect_empty(w->damage)) w->damage = d;
-  else w->damage = (rk_irect){ RK_MIN(w->damage.x0, d.x0), RK_MIN(w->damage.y0, d.y0), RK_MAX(w->damage.x1, d.x1), RK_MAX(w->damage.y1, d.y1) };
+  if (!rk__irect_empty(d)) damage_add(w, d);
   if (!w->needs_draw) { w->needs_draw = true; rk__app_request_frame(); }
 }
 
@@ -350,40 +379,49 @@ void rk__window_frame(rk_window *w, double now) {
   double t0 = rk__wall_ms();
   int fw = (int)ceilf(w->size.w * w->scale), fh = (int)ceilf(w->size.h * w->scale);
   if (!w->fb || w->fb->w != fw || w->fb->h != fh) { rk__bitmap_fit(&w->fb, fw, fh); w->damage_all = true; }
-  rk_irect all = { 0, 0, fw, fh }, clip = w->damage_all ? all : rk__irect_meet(w->damage, all);
-  w->damage = (rk_irect){ 0, 0, 0, 0 }; w->damage_all = false;
-  if (rk__irect_empty(clip)) return;
+  rk_irect all = { 0, 0, fw, fh };
+  if (w->damage_all) { w->damage[0] = all; w->ndamage = 1; }
   if (hud) {
     rk_rect h = hud_rect(w);
-    clip = rk__irect_meet(irect_join(clip, (rk_irect){ (int)floorf(h.x * w->scale), (int)floorf(h.y * w->scale), (int)ceilf((h.x + h.w) * w->scale), (int)ceilf((h.y + h.h) * w->scale) }), all);
+    damage_add(w, (rk_irect){ (int)floorf(h.x * w->scale), (int)floorf(h.y * w->scale), (int)ceilf((h.x + h.w) * w->scale), (int)ceilf((h.y + h.h) * w->scale) });
   }
-  /* only what changed: the ground under it, then whatever reaches into it */
-  rk__fill_rect(w->fb, clip, (float)clip.x0, (float)clip.y0, (float)clip.x1, (float)clip.y1, rk__pm(rk_color_of(RK_ROLE_BG), 1));
+  rk_irect parts[RK_DAMAGE_MAX];
+  int n = 0;
+  for (int i = 0; i < w->ndamage; i++) { rk_irect r = rk__irect_meet(w->damage[i], all); if (!rk__irect_empty(r)) parts[n++] = r; }
+  w->ndamage = 0; w->damage_all = false;
+  if (!n) return;
+  /* each part on its own: the ground under it, then whatever reaches into it */
   rk_canvas c;
   memset(&c, 0, sizeof c);
   rk__canvas_init(&c, w->fb, w->scale);
-  c.clips[0] = clip;
-  rk__render_view(&c, w->root, 0, 0);
-  if (w->focus && w->focus_visible && rk__view_visible(w->focus)) {
-    rk_rect r = rk__window_rect(w->focus);
-    c.ox = c.oy = 0; c.alpha = 1;
-    rk__draw_focus(&c, w->focus, r);
+  double pixels = 0;
+  for (int i = 0; i < n; i++) {
+    rk_irect clip = parts[i];
+    rk__fill_rect(w->fb, clip, (float)clip.x0, (float)clip.y0, (float)clip.x1, (float)clip.y1, rk__pm(rk_color_of(RK_ROLE_BG), 1));
+    c.nclip = 1; c.clips[0] = clip; c.ox = c.oy = 0; c.alpha = 1;
+    rk__render_view(&c, w->root, 0, 0);
+    if (w->focus && w->focus_visible && rk__view_visible(w->focus)) {
+      rk_rect r = rk__window_rect(w->focus);
+      c.ox = c.oy = 0; c.alpha = 1;
+      rk__draw_focus(&c, w->focus, r);
+    }
+    if (hud) draw_hud(&c, w);
+    pixels += (double)irect_area(clip);
   }
-  if (hud) draw_hud(&c, w);
   rk__path_free(&c.path);
-  rk__platform()->present(w->native, w->fb, clip);
+  rk__platform()->present(w->native, w->fb, parts, n);
   rk_meter *m = &rk__meter;
   double ms = rk__wall_ms() - t0;
   m->frames++; m->draw_ms += ms; m->last_ms = ms; m->max_ms = RK_MAX(m->max_ms, ms);
   if (ms > 8) m->slow++;
-  m->pixels += (double)(clip.x1 - clip.x0) * (clip.y1 - clip.y0);
+  m->pixels += pixels;
   if (m->input_at > 0) {
     m->latency_ms = RK_MAX(0.0, rk_app_now() - m->input_at);
     m->max_latency_ms = RK_MAX(m->max_latency_ms, m->latency_ms);
     m->input_at = 0;
   }
   if (trace)
-    fprintf(stderr, "rk frame t=%.1f draw=%.2fms px=%dx%d anim=%u glyphs=%u input=%.1fms\n", now, ms, clip.x1 - clip.x0, clip.y1 - clip.y0,
+    fprintf(stderr, "rk frame t=%.1f draw=%.2fms parts=%d px=%.0f anim=%u glyphs=%u input=%.1fms\n", now, ms, n, pixels,
             rk__anim_count(), m->glyphs, m->latency_ms);
 }
 

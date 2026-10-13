@@ -88,14 +88,14 @@ static float scale_of(wwin *x) { return x->frac_scale > 0 ? x->frac_scale : (flo
 
 /* Buffers ------------------------------------------------------------------------------------------------------- */
 
-static void commit(struct wwin *x, rk_irect changed);
+static void commit(struct wwin *x, const rk_irect *changed, int n);
 /* A buffer back from the compositor: a frame that waited for one goes now. */
 static void buf_release(void *data, struct wl_buffer *b) {
   (void)b;
   wbuf *wb = data;
   wb->busy = false;
   struct wwin *x = wb->owner;
-  if (x && x->deferred && !x->frame_pending) { x->deferred = false; rk_irect r = x->deferred_rect; x->deferred_rect = (rk_irect){ 0, 0, 0, 0 }; commit(x, r); }
+  if (x && x->deferred && !x->frame_pending) { x->deferred = false; rk_irect r = x->deferred_rect; x->deferred_rect = (rk_irect){ 0, 0, 0, 0 }; commit(x, &r, 1); }
 }
 static const struct wl_buffer_listener buf_listener = { buf_release };
 
@@ -152,24 +152,32 @@ static void frame_done(void *data, struct wl_callback *cb, uint32_t t);
 static const struct wl_callback_listener frame_listener = { frame_done };
 
 /* Into a free buffer goes what changed since that buffer was last shown; the compositor is told only about now. */
-static void commit(wwin *x, rk_irect changed) {
+static void copy_rect(wbuf *b, const rk_bitmap *fb, rk_irect r) {
+  r = rk__irect_meet(r, (rk_irect){ 0, 0, fb->w, fb->h });
+  for (int y = r.y0; y < r.y1; y++) memcpy(b->px + (size_t)y * b->w + r.x0, fb->px + (size_t)y * fb->stride + r.x0, (size_t)(r.x1 - r.x0) * 4);
+}
+
+static void commit(wwin *x, const rk_irect *changed, int n) {
   for (int i = 0; i < 3; i++) x->bufs[i].owner = x;
   const rk_bitmap *fb = x->fb;
   if (!fb || !x->configured) return;
   wbuf *b = NULL;
   for (int i = 0; i < 3 && !b; i++) if (!x->bufs[i].busy && x->bufs[i].w == fb->w && x->bufs[i].h == fb->h && x->bufs[i].b) b = &x->bufs[i];
   for (int i = 0; i < 3 && !b; i++) if (!x->bufs[i].busy) { if (!buf_make(&x->bufs[i], fb->w, fb->h)) return; b = &x->bufs[i]; }
-  if (!b) { x->deferred = true; x->deferred_rect = join(x->deferred_rect, changed); return; }   /* all held: next frame */
-  for (int i = 0; i < 3; i++) if (&x->bufs[i] != b && x->bufs[i].b) x->bufs[i].stale = join(x->bufs[i].stale, changed);
-  rk_irect copy = rk__irect_meet(join(b->stale, changed), (rk_irect){ 0, 0, fb->w, fb->h });
-  for (int y = copy.y0; y < copy.y1; y++) memcpy(b->px + (size_t)y * b->w + copy.x0, fb->px + (size_t)y * fb->stride + copy.x0, (size_t)(copy.x1 - copy.x0) * 4);
+  if (!b) { for (int k = 0; k < n; k++) x->deferred_rect = join(x->deferred_rect, changed[k]); x->deferred = true; return; }   /* all held: next frame */
+  for (int i = 0; i < 3; i++) if (&x->bufs[i] != b && x->bufs[i].b) for (int k = 0; k < n; k++) x->bufs[i].stale = join(x->bufs[i].stale, changed[k]);
+  copy_rect(b, fb, b->stale);                                  /* what changed since this buffer was last shown */
+  for (int k = 0; k < n; k++) copy_rect(b, fb, changed[k]);
   b->stale = (rk_irect){ 0, 0, 0, 0 };
   b->busy = true;
   wl_surface_attach(x->surface, b->b, 0, 0);
   if (x->frac_scale > 0 && x->viewport) { wl_surface_set_buffer_scale(x->surface, 1); wp_viewport_set_destination(x->viewport, x->lw, x->lh); }
   else wl_surface_set_buffer_scale(x->surface, x->int_scale);
-  if (compositor_v >= 4) wl_surface_damage_buffer(x->surface, changed.x0, changed.y0, changed.x1 - changed.x0, changed.y1 - changed.y0);
-  else wl_surface_damage(x->surface, 0, 0, x->lw, x->lh);
+  for (int k = 0; k < n; k++) {
+    rk_irect r = changed[k];
+    if (compositor_v >= 4) wl_surface_damage_buffer(x->surface, r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+    else { wl_surface_damage(x->surface, 0, 0, x->lw, x->lh); break; }
+  }
   struct wl_region *opaque = wl_compositor_create_region(compositor);
   wl_region_add(opaque, 0, 0, x->lw, x->lh);
   wl_surface_set_opaque_region(x->surface, opaque);
@@ -188,18 +196,16 @@ static void frame_done(void *data, struct wl_callback *cb, uint32_t t) {
   wl_callback_destroy(cb);
   x->frame_cb = NULL;
   x->frame_pending = false;
-  if (x->deferred) { x->deferred = false; rk_irect r = x->deferred_rect; x->deferred_rect = (rk_irect){ 0, 0, 0, 0 }; commit(x, r); }
+  if (x->deferred) { x->deferred = false; rk_irect r = x->deferred_rect; x->deferred_rect = (rk_irect){ 0, 0, 0, 0 }; commit(x, &r, 1); }
 }
 
-static void wl_present_fb(void *n, const rk_bitmap *fb, rk_irect changed) {
+static void wl_present_fb(void *n, const rk_bitmap *fb, const rk_irect *changed, int nchanged) {
   wwin *x = n;
-  if (!x) return;
+  if (!x || !nchanged) return;
   x->fb = fb;
-  changed = rk__irect_meet(changed, (rk_irect){ 0, 0, fb->w, fb->h });
-  if (rk__irect_empty(changed)) return;
   /* the compositor has not shown the last frame yet: this one waits for its frame callback, merged */
-  if (x->frame_pending) { x->deferred = true; x->deferred_rect = join(x->deferred_rect, changed); return; }
-  commit(x, changed);
+  if (x->frame_pending) { for (int k = 0; k < nchanged; k++) x->deferred_rect = join(x->deferred_rect, changed[k]); x->deferred = true; return; }
+  commit(x, changed, nchanged);
 }
 
 /* Window -------------------------------------------------------------------------------------------------------- */

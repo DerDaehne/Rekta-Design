@@ -189,8 +189,8 @@ static void c_close(void *n) {
 static void c_show(void *n) { cwin *x = n; if (x) [x->win makeKeyAndOrderFront:nil]; }
 static void c_title(void *n, const char *t) { cwin *x = n; if (x) x->win.title = [NSString stringWithUTF8String:t]; }
 
-static void c_present(void *n, const rk_bitmap *fb, rk_irect changed) {
-  (void)changed;
+static void c_present(void *n, const rk_bitmap *fb, const rk_irect *changed, int nchanged) {
+  (void)changed; (void)nchanged;
   cwin *x = n;
   if (!x || !fb) return;
   @autoreleasepool {
