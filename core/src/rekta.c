@@ -40,6 +40,7 @@
 #include "menu.c"
 #include "undo.c"
 #include "controller.c"
+#include "split.c"
 #include "app.c"
 #include "platform_headless.c"
 #if !defined(RK_HEADLESS_ONLY)

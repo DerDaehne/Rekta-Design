@@ -1333,6 +1333,84 @@ static void test_tree(void) {
   done(w);
 }
 
+/* A split: side by side with a handle that drags the list's width; compact, one pane at a time that turns. */
+static float split_told = -1;
+static void split_resized(rk_view *sp, float width, void *u) { (void)sp; (void)u; split_told = width; }
+static void split_item(int index, rk_list_item *out, void *user) {
+  static char t[32];
+  (void)user;
+  snprintf(t, sizeof t, "Run %d", 4182 - index);
+  out->title = t; out->meta = index % 3 ? "done" : NULL; out->status = index % 3 ? RK_STATUS_NONE : RK_STATUS_ERROR;
+}
+static void pointer(rk_window *w, int type, rk_point p) {
+  rk_event e = { sizeof e, type, rk_app_now(), p, 0, 0, 0, 0, 0, NULL };
+  rk_window_inject(w, &e);
+}
+
+static void test_split(void) {
+  rk_window *w = window(1100, 560);
+  rk_view *detail = col(16, 0);
+  rk_add(detail, rk_label("Run 4182", RK_TEXT_GROUP));
+  rk_add(detail, rk_label("Nightly import, failed after 3 min.", RK_TEXT_BODY));
+  rk_view *sp = rk_split(rk_list(40, split_item, NULL), detail, "runs");
+  rk_split_on_resize(sp, split_resized, NULL);
+  rk_window_show(w, rk_controller_create_with_view(sp, "runs"));
+  rk_app_run_for(100);
+  float own = 4 * rk_metric_of(RK_TILE_UNIT) + 3 * rk_metric_of(RK_SPACE_S), min = rk_metric_of(RK_PANE_MIN);
+  CHECK(rk_split_sideways(sp) && CLOSE_TO(rk_split_width(sp), own, 0.5f), "sideways, the list four tiles wide: %g", rk_split_width(sp));
+  rk_view *handle = rk_view_child(sp, 3);
+  rk_rect hr = rk__window_rect(handle);
+  CHECK(CLOSE_TO(hr.w, 9, 0.1f) && CLOSE_TO(hr.x + hr.w / 2 - rk__window_rect(sp).x, own + 0.5f, 0.6f), "the handle lies over the hairline");
+  CHECK(CLOSE_TO(rk__window_rect(detail).x - rk__window_rect(sp).x, own + 1 + rk_metric_of(RK_SPACE_L), 0.5f), "the detail starts space-l after it");
+  /* the keyboard */
+  rk_window_focus(w, handle);
+  key(w, RK_KEY_RIGHT, 0);
+  CHECK(CLOSE_TO(rk_split_width(sp), own + 16, 0.5f) && CLOSE_TO(split_told, own + 16, 0.5f), "Right widens by space-m and tells");
+  key(w, RK_KEY_LEFT, RK_MOD_SHIFT);
+  CHECK(CLOSE_TO(rk_split_width(sp), own + 16 - 64, 0.5f), "Shift+Left by four times that");
+  key(w, RK_KEY_HOME, 0);
+  CHECK(CLOSE_TO(rk_split_width(sp), min, 0.5f), "Home: the narrowest, pane-min");
+  key(w, RK_KEY_END, 0);
+  CHECK(CLOSE_TO(rk_split_width(sp), rk__window_rect(sp).w - min - 1, 0.5f), "End: the widest, the detail at pane-min");
+  /* the pointer: a drag, then a double click gives the own width back */
+  rk_split_set_width(sp, 500);
+  rk_app_run_for(50);
+  hr = rk__window_rect(handle);
+  rk_point at = { hr.x + 4, hr.y + 100 };
+  pointer(w, RK_EVENT_POINTER_DOWN, at);
+  pointer(w, RK_EVENT_POINTER_MOVE, (rk_point){ at.x + 30, at.y });
+  pointer(w, RK_EVENT_POINTER_MOVE, (rk_point){ at.x + 60, at.y });
+  pointer(w, RK_EVENT_POINTER_UP, (rk_point){ at.x + 60, at.y });
+  CHECK(CLOSE_TO(rk_split_width(sp), 560, 0.5f) && CLOSE_TO(split_told, 560, 0.5f), "a drag moves the edge with the pointer: %g", rk_split_width(sp));
+  rk_app_run_for(500);
+  hr = rk__window_rect(handle);
+  click(w, (rk_point){ hr.x + 4, hr.y + 100 }, 20);
+  rk_app_run_for(60);
+  click(w, (rk_point){ hr.x + 4, hr.y + 100 }, 20);
+  CHECK(CLOSE_TO(rk_split_width(sp), own, 0.5f) && split_told == 0, "a double click: its own width again");
+  rk_split_show(sp, true);
+  rk_window_focus(w, NULL);                                    /* the handle lets go of the focus: a hairline again */
+  rk_app_run_for(600);
+  shot(w, "split");
+  /* compact: one pane, a turn each way, the crumb and Escape go back */
+  rk__window_resized(w, 560, 560, 1);
+  rk_app_run_for(100);
+  CHECK(!rk_split_sideways(sp) && rk_split_detail_shown(sp) && rk_view_child(sp, 0)->hidden, "compact: the detail shown before stays");
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_app_run_for(1200);
+  CHECK(!rk_split_detail_shown(sp) && rk_view_child(sp, 1)->hidden, "nothing focused, Escape still turns back to the list");
+  rk_split_show(sp, true);
+  rk_app_run_for(120);
+  CHECK(!rk_split_detail_shown(sp) && !rk_view_child(sp, 0)->hidden, "the list turns away first");
+  rk_app_run_for(1200);
+  CHECK(rk_split_detail_shown(sp) && rk_window_focused(w) == rk_view_child(sp, 2), "then the detail, the crumb focused");
+  shot(w, "split-compact");
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_app_run_for(1200);
+  CHECK(!rk_split_detail_shown(sp), "Escape turns back to the list");
+  done(w);
+}
+
 /* A pivot down the side: its titles in a list, Up and Down pick, the one in sight steps in; a top pivot turns the place. */
 static void test_side_pivot(void) {
   rk_window *w = window(900, 500);
@@ -1555,6 +1633,7 @@ static void launch(void *user) {
   test_navigation();
   test_side_pivot();
   test_tree();
+  test_split();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

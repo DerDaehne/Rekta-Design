@@ -11,30 +11,18 @@
    widgets.c, whose status helpers it shares. */
 #include "rk_internal.h"
 
-typedef struct tween { float from, to; double t0, dur; const float *ease; } tween;
-
-static float tween_at(const tween *t, double now) {
-  if (t->dur <= 0 || now >= t->t0 + t->dur) return t->to;
-  float k = (float)((now - t->t0) / t->dur);
-  return t->from + (t->to - t->from) * rk__ease(t->ease, RK_CLAMP(k, 0.0f, 1.0f));
-}
-static bool tween_moving(const tween *t, double now) { return t->dur > 0 && now < t->t0 + t->dur; }
-static void tween_to(tween *t, double now, float to, double dur, const float *ease) {
-  t->from = tween_at(t, now); t->to = to; t->t0 = now; t->dur = dur; t->ease = ease;
-}
-
 typedef struct node {
   char *title, *meta; rk_status status;
   int parent, first, last, next;                           /* the item's place: -1 where there is none */
   bool open;
-  tween grow, turn;                                        /* the branch's height, 0 to 1; the chevron, 0 right to 1 down */
+  rk_tween grow, turn;                                        /* the branch's height, 0 to 1; the chevron, 0 right to 1 down */
 } node;
 
 typedef struct trow { int item, level; float y, bottom, alpha; } trow;   /* a row as drawn: clipped at bottom, faded */
 
 typedef struct tree {
   node *nodes; int n, cap, first, last;
-  int active, selected, hover, pressed, press_twisty;
+  int active, selected, pressed, press_twisty;
   double down_at; int down_item;                           /* the last press: a second soon after opens or closes */
   trow *rows; int nrows, rcap;
   void (*show)(rk_view *tree, int item, void *user); void *show_user;
@@ -51,7 +39,7 @@ static float subtree_h(tree *t, int first, double now) {
   float h = 0;
   for (int i = first; i >= 0; i = t->nodes[i].next) {
     h += tree_row_h();
-    float g = tween_at(&t->nodes[i].grow, now);
+    float g = rk__tween_at(&t->nodes[i].grow, now);
     if (t->nodes[i].first >= 0 && g > 0) h += g * subtree_h(t, t->nodes[i].first, now);
   }
   return h;
@@ -63,7 +51,7 @@ static float walk(tree *t, int first, int level, float y, float bottom, float al
     t->rows = rk__grow(t->rows, &t->rcap, t->nrows + 1, sizeof *t->rows);
     t->rows[t->nrows++] = (trow){ i, level, y, bottom, alpha };
     y += H;
-    float g = tween_at(&t->nodes[i].grow, now);
+    float g = rk__tween_at(&t->nodes[i].grow, now);
     if (t->nodes[i].first < 0 || g <= 0) continue;
     float shown = g * subtree_h(t, t->nodes[i].first, now);
     walk(t, t->nodes[i].first, level + 1, y, RK_MIN(bottom, y + shown), alpha * g, now);
@@ -78,7 +66,7 @@ static float build_rows(tree *t, double now) {
 }
 
 static bool tree_moving(tree *t, double now) {
-  for (int i = 0; i < t->n; i++) if (tween_moving(&t->nodes[i].grow, now) || tween_moving(&t->nodes[i].turn, now)) return true;
+  for (int i = 0; i < t->n; i++) if (rk__tween_moving(&t->nodes[i].grow, now) || rk__tween_moving(&t->nodes[i].turn, now)) return true;
   return false;
 }
 
@@ -129,8 +117,8 @@ static void tree_open(rk_view *v, tree *t, int i, bool open) {
   if (n->first < 0 || n->open == open) return;
   double now = rk_app_now(), d = rk_duration_of(RK_DURATION_SHORT);
   n->open = open;
-  tween_to(&n->grow, now, open ? 1 : 0, open ? d : 0.7 * d, open ? rk__ease_in : rk__ease_out);
-  tween_to(&n->turn, now, open ? 1 : 0, d, rk__ease_base);
+  rk__tween_to(&n->grow, now, open ? 1 : 0, open ? d : 0.7 * d, open ? rk__ease_in : rk__ease_out);
+  rk__tween_to(&n->turn, now, open ? 1 : 0, d, rk__ease_base);
   if (!open && t->active >= 0 && !reachable(t, t->active)) t->active = i;   /* the active row went in: it is the branch */
   if (t->toggle) t->toggle(v, i, open, t->toggle_user);
   rk__view_relayout_up(v);
@@ -173,9 +161,9 @@ static void tree_draw(rk_view *v, rk_canvas *c, void *st) {
     bool on = r->item == t->selected;
     rk_color ink = rk_color_of(on ? RK_ROLE_ON_ACCENT : RK_ROLE_TEXT);
     if (on) rk_canvas_fill_rect(c, (rk_rect){ 0, r->y, W, H }, rk_color_of(RK_ROLE_ACCENT));
-    if (r->item == t->hover || r->item == t->pressed) rk_canvas_fill_rect(c, (rk_rect){ 0, r->y, W, H }, rk_color_of(RK_ROLE_HOVER));
+    if (r->item == t->pressed) rk_canvas_fill_rect(c, (rk_rect){ 0, r->y, W, H }, rk_color_of(RK_ROLE_HOVER));
     float x = indent_of(r->level);
-    if (n->first >= 0) draw_chevron(c, x + 9, r->y + H / 2, tween_at(&n->turn, now), ink);
+    if (n->first >= 0) draw_chevron(c, x + 9, r->y + H / 2, rk__tween_at(&n->turn, now), ink);
     x += TWISTY + gap;
     float right = W - pad;
     if (n->status != RK_STATUS_NONE) {
@@ -230,12 +218,6 @@ static bool tree_event(rk_view *v, const rk_event *e, void *st) {
   tree *t = st;
   double now = rk_app_now();
   switch (e->type) {
-    case RK_EVENT_POINTER_MOVE: {
-      int k = row_under(t, e->position.y, now), item = k >= 0 ? t->rows[k].item : -1;
-      if (item != t->hover) { t->hover = item; rk__view_dirty(v); }
-      return false;
-    }
-    case RK_EVENT_POINTER_LEAVE: if (t->hover >= 0) { t->hover = -1; rk__view_dirty(v); } return false;
     case RK_EVENT_POINTER_DOWN: {
       if (e->button) return false;
       int k = row_under(t, e->position.y, now);
@@ -312,7 +294,7 @@ static bool tree_has(tree *t, int i) { return t && i >= 0 && i < t->n; }
 
 rk_view *rk_tree(void) {
   tree *t = rk__alloc(sizeof *t);
-  t->first = t->last = t->active = t->selected = t->hover = t->pressed = t->down_item = -1;
+  t->first = t->last = t->active = t->selected = t->pressed = t->down_item = -1;
   rk_view *v = rk__view_create(&tree_class, t);
   v->focusable = true;
   v->access = RK_ACCESS_TREE;

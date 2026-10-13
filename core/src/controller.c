@@ -301,6 +301,13 @@ static void turn_in(rk_view *place, bool back) {
   free(t.units);
 }
 
+/* The turn for what is not a controller: the panes of a split, which turn as places do. */
+struct turn *rk__turn_new(void) { return rk__alloc(sizeof(turn)); }
+void rk__turn_free(struct turn *t) { if (t) { turn_reset(t); free(t->units); free(t); } }
+double rk__turn_away(struct turn *t, rk_view *place, bool back) { return turn_out(t, place, NULL, back); }
+void rk__turn_settle(struct turn *t) { turn_reset(t); }
+void rk__turn_arrive(rk_view *place, bool back) { turn_in(place, back); }
+
 typedef struct swap { rk_controller *places, *to; bool back; } swap;
 
 /* The leaving place is gone: the next one turns in. */
@@ -1056,10 +1063,10 @@ static const rk_class sheets_class = { { sizeof(rk_view_class), "rk_sheets", NUL
 
 static void shade_tap(rk_view *v, void *user) { (void)v; rk_controller_dismiss(user); }
 
-static rk_view *first_focusable(rk_view *v) {
+rk_view *rk__first_focusable(rk_view *v) {
   if (v->hidden) return NULL;
   if (v->focusable) return v;
-  for (int i = 0; i < v->nkids; i++) { rk_view *f = first_focusable(v->kids[i]); if (f) return f; }
+  for (int i = 0; i < v->nkids; i++) { rk_view *f = rk__first_focusable(v->kids[i]); if (f) return f; }
   return NULL;
 }
 
@@ -1097,7 +1104,7 @@ void rk_controller_present(rk_controller *presenter, rk_controller *sheet) {
   t0.translate_y -= 16;
   rk__animate(box, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_in);
   sheet->focus_before = w->focus ? rk_retain(w->focus) : NULL;
-  rk_view *f = first_focusable(box);
+  rk_view *f = rk__first_focusable(box);
   w->focus = NULL;
   if (f) rk_window_focus(w, f);
   rk__controller_appear(sheet, true);

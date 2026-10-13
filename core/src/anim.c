@@ -273,3 +273,14 @@ void rk_view_transition(rk_view *v, rk_transition kind) {
   float a = 0, b = 1;
   rk__animate_cb(v, RK_PROP_TRANSITION, &a, &b, 1, d, 0, NULL, transition_done, NULL);
 }
+
+/* A plain tween: from one value to another over a time, on a curve; it carries on from where it is when retargeted. */
+float rk__tween_at(const rk_tween *t, double now) {
+  if (t->dur <= 0 || now >= t->t0 + t->dur) return t->to;
+  float k = (float)((now - t->t0) / t->dur);
+  return t->from + (t->to - t->from) * rk__ease(t->ease, RK_CLAMP(k, 0.0f, 1.0f));
+}
+bool rk__tween_moving(const rk_tween *t, double now) { return t->dur > 0 && now < t->t0 + t->dur; }
+void rk__tween_to(rk_tween *t, double now, float to, double dur, const float *ease) {
+  t->from = rk__tween_at(t, now); t->to = to; t->t0 = now; t->dur = dur; t->ease = ease;
+}

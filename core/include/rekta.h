@@ -196,7 +196,7 @@ typedef enum rk_access_role {
   RK_ACCESS_LIST, RK_ACCESS_LIST_ITEM, RK_ACCESS_TAB_LIST, RK_ACCESS_TAB, RK_ACCESS_TAB_PANEL, RK_ACCESS_DIALOG,
   RK_ACCESS_IMAGE, RK_ACCESS_PROGRESS, RK_ACCESS_STATUS, RK_ACCESS_TEXT_FIELD, RK_ACCESS_MENU, RK_ACCESS_TABLE,
   RK_ACCESS_CHECKBOX, RK_ACCESS_RADIO_GROUP, RK_ACCESS_SWITCH, RK_ACCESS_SLIDER, RK_ACCESS_SPIN_BUTTON, RK_ACCESS_COMBO_BOX,
-  RK_ACCESS_TREE,
+  RK_ACCESS_TREE, RK_ACCESS_SEPARATOR,
   RK_ACCESS_FORCE32 = 0x7fffffff
 } rk_access_role;
 
@@ -433,6 +433,18 @@ RK_API int rk_tree_parent(rk_view *tree, int item);   /* -1 at the top */
 RK_API const char *rk_tree_title(rk_view *tree, int item);
 RK_API void rk_tree_on_show(rk_view *tree, void (*fn)(rk_view *tree, int item, void *user), void *user);
 RK_API void rk_tree_on_toggle(rk_view *tree, void (*fn)(rk_view *tree, int item, bool open, void *user), void *user);
+
+/* A split: a list beside its detail. Sideways (the split 760 px wide or more, the window 481 px tall or more) the two
+   stand side by side and the handle between them drags the list's width: no pane narrower than pane-min, four tiles
+   wide at first, a double click gives that back. Compact one pane shows at a time: rk_split_show turns to the detail,
+   whose crumb (the title) and Escape turn back. Each pane scrolls itself: give it an rk_scroll where it may be long. */
+RK_API rk_view *rk_split(rk_view *list, rk_view *detail, const char *title);   /* takes both; title: the list's, for the crumb */
+RK_API void rk_split_show(rk_view *split, bool detail);   /* sideways: a new item's detail slides in; compact: turns */
+RK_API bool rk_split_sideways(rk_view *split);
+RK_API bool rk_split_detail_shown(rk_view *split);        /* compact: which pane shows */
+RK_API void rk_split_set_width(rk_view *split, float width);   /* the list's, as remembered; 0: its own */
+RK_API float rk_split_width(rk_view *split);              /* as laid out now */
+RK_API void rk_split_on_resize(rk_view *split, void (*fn)(rk_view *split, float width, void *user), void *user);   /* to remember it */
 
 /* A table is a list with columns - every rk_list_ call works on it. The head stays put; a click on a sortable head
    sorts by it, ascending then descending: the app sorts its rows in on_sort and the table draws them again. */

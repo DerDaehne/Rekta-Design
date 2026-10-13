@@ -214,6 +214,10 @@ typedef struct rk_glide { float p0, p1, v0, a0; double t0, dur; } rk_glide;
 float rk__glide_at(const rk_glide *g, double now, float *vel, float *acc);   /* vel, acc may be NULL; per second */
 void rk__glide_to(rk_glide *g, double now, float target, double dur_ms);
 void rk__glide_set(rk_glide *g, float value);                                /* there at once */
+typedef struct rk_tween { float from, to; double t0, dur; const float *ease; } rk_tween;   /* zeroed: at 0, still */
+float rk__tween_at(const rk_tween *t, double now);
+bool rk__tween_moving(const rk_tween *t, double now);
+void rk__tween_to(rk_tween *t, double now, float to, double dur_ms, const float *ease);
 bool rk__glide_moving(const rk_glide *g, double now);
 bool rk__anim_tick(double now);                            /* true while any animation runs */
 bool rk__anim_running(void);
@@ -275,6 +279,13 @@ bool rk__window_key(rk_window *w, const rk_event *e);     /* window-level keys: 
 rk_view *rk__controller_key_view(rk_controller *c);       /* where keys go when nothing has focus */
 void rk__reveal(rk_view *v);                               /* scroll it into view (keyboard focus) */
 void rk__reveal_rect(rk_view *v, rk_rect r);               /* a part of it, in its own coordinates */
+rk_view *rk__first_focusable(rk_view *v);                  /* itself or the first view in it that takes focus */
+struct turn;                                               /* a place change, for views that turn as places do */
+struct turn *rk__turn_new(void);
+void rk__turn_free(struct turn *t);
+double rk__turn_away(struct turn *t, rk_view *place, bool back);   /* its parts turn away; when the next may come */
+void rk__turn_settle(struct turn *t);                      /* the parts that went stand as they were, for next time */
+void rk__turn_arrive(rk_view *place, bool back);           /* its parts turn in */
 
 /* Built-in views (widgets.c) -------------------------------------------------------------------------------------- */
 

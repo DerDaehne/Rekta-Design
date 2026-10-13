@@ -9,6 +9,13 @@ it; each entry says how.
 
 ### Added
 
+- **rekta-core: a split** (`rk_split`), as the web's `.rk-split`: sideways
+  (760 px wide in a window 481 px tall or more) a list beside its detail with a
+  hairline and a 9 px handle that drags the list's width (pane-min each at
+  least, four tiles at first, Left/Right by `space-m`, Home/End, a double click
+  resets; the app remembers the width through `rk_split_on_resize`); a new
+  item's detail slides in. Compact one pane at a time, turning as a place does,
+  the detail with a crumb back; Escape goes back too.
 - **rekta-core: a tree** (`rk_tree`), as the web's `.rk-tree`: rows at the
   density's height, a level indented by `space-m`, a chevron that turns as a
   branch opens over its height (`duration-short`, closing in 0.7 of it), the

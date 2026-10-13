@@ -376,6 +376,30 @@ every sibling, a letter goes to the next item starting with it.
 and
 .Fn rk_tree_title
 read and set the rest.
+.It Fn rk_split "rk_view *list" "rk_view *detail" "const char *title"
+A list beside its detail; takes both.
+Sideways (the split 760 logical pixels wide or more, the window 481 tall or
+more) the two stand side by side with a hairline between them, and its handle
+drags the list's width: no pane narrower than pane-min, four tiles wide at
+first; Left and Right change it by space-m, with Shift four times that, Home
+and End go to the narrowest and widest, a double click gives back the list's
+own width.
+.Fn rk_split_on_resize
+hears a change, to remember;
+.Fn rk_split_set_width
+gives it back.
+Compact one pane shows at a time:
+.Fn rk_split_show
+turns to the detail, whose crumb
+.Pq Fa title
+and Escape turn back; sideways it slides a new item's detail in.
+.Fn rk_split_sideways ,
+.Fn rk_split_detail_shown
+and
+.Fn rk_split_width
+read the state.
+Each pane scrolls itself: give one that may be long an
+.Fn rk_scroll .
 .It Fn rk_table "int count" "const char *(*cell)(int row, int column, void *user)" "void *user"
 A table: a list with columns, and every
 .Fn rk_list_*
