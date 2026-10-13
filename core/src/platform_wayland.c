@@ -17,6 +17,7 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <xkbcommon/xkbcommon.h>
+#include <xkbcommon/xkbcommon-compose.h>
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -80,6 +81,7 @@ static struct wl_pointer *pointer; static struct wp_cursor_shape_device_v1 *shap
 static struct wl_keyboard *keyboard;
 static struct wl_cursor_theme *cursor_theme; static struct wl_surface *cursor_surface;
 static struct xkb_context *xkb; static struct xkb_keymap *keymap; static struct xkb_state *kstate;
+static struct xkb_compose_table *ctable; static struct xkb_compose_state *cstate;   /* dead keys and Compose */
 static wwin *wwins[64]; static int nwwins;
 static wwin *pointer_win, *key_win;
 static float px, py; static uint32_t serial, pointer_serial; static int cursor_shape = -1;
@@ -515,6 +517,19 @@ static uint32_t wkey_of(xkb_keysym_t s) {
   return RK_KEY_NONE;
 }
 
+/* Dead keys and the Compose key, as the locale's compose table says: the keys of a sequence type nothing until it is
+   complete (´ then e: é), and a sequence that goes nowhere types nothing. */
+static bool composed(xkb_keysym_t sym, char *text, size_t size) {
+  text[0] = 0;
+  if (!cstate || xkb_compose_state_feed(cstate, sym) != XKB_COMPOSE_FEED_ACCEPTED) return false;
+  switch (xkb_compose_state_get_status(cstate)) {
+    case XKB_COMPOSE_COMPOSING: return true;
+    case XKB_COMPOSE_COMPOSED: xkb_compose_state_get_utf8(cstate, text, size); xkb_compose_state_reset(cstate); return true;
+    case XKB_COMPOSE_CANCELLED: xkb_compose_state_reset(cstate); return true;
+    default: return false;
+  }
+}
+
 static void key_event(uint32_t code, bool down) {
   if (!key_win || !kstate) return;
   xkb_keysym_t sym = xkb_state_key_get_one_sym(kstate, code);
@@ -522,6 +537,11 @@ static void key_event(uint32_t code, bool down) {
   memset(&e, 0, sizeof e);
   e.size = sizeof e; e.type = down ? RK_EVENT_KEY_DOWN : RK_EVENT_KEY_UP; e.time = rk_app_now();
   e.key = wkey_of(sym); e.mods = mods_now();
+  char done[64];
+  if (down && !(e.mods & (RK_MOD_CTRL | RK_MOD_SUPER)) && composed(sym, done, sizeof done)) {
+    if (done[0]) { e.type = RK_EVENT_TEXT; e.key = 0; e.text = done; rk__window_event(key_win->w, &e); }
+    return;
+  }
   if (e.key) rk__window_event(key_win->w, &e);
   if (!down || (e.mods & (RK_MOD_CTRL | RK_MOD_SUPER))) return;
   char text[64];
@@ -705,6 +725,12 @@ static bool wl_init(const rk_app_desc *d) {
   wl_display_roundtrip(wdpy);
   if (!compositor || !shm || !wm_base) { wl_display_disconnect(wdpy); wdpy = NULL; return false; }
   xkb = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+  const char *locale = getenv("LC_ALL");
+  if (!locale || !*locale) locale = getenv("LC_CTYPE");
+  if (!locale || !*locale) locale = getenv("LANG");
+  if (!locale || !*locale) locale = "C";
+  if (xkb) ctable = xkb_compose_table_new_from_locale(xkb, locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
+  if (ctable) cstate = xkb_compose_state_new(ctable, XKB_COMPOSE_STATE_NO_FLAGS);
   wl_display_roundtrip(wdpy);                                    /* the seat's capabilities, the keymap */
   if (data_mgr && seat) { data_dev = wl_data_device_manager_get_data_device(data_mgr, seat); wl_data_device_add_listener(data_dev, &dd_listener, NULL); }
   if (pipe(wpipe) == 0) { fcntl(wpipe[0], F_SETFL, O_NONBLOCK); fcntl(wpipe[1], F_SETFL, O_NONBLOCK); }
@@ -717,6 +743,9 @@ static void wl_shutdown(void) {
   if (cursor_surface) wl_surface_destroy(cursor_surface);
   if (kstate) xkb_state_unref(kstate);
   if (keymap) xkb_keymap_unref(keymap);
+  if (cstate) xkb_compose_state_unref(cstate);
+  if (ctable) xkb_compose_table_unref(ctable);
+  cstate = NULL; ctable = NULL;
   if (xkb) xkb_context_unref(xkb);
   if (shape_dev) wp_cursor_shape_device_v1_destroy(shape_dev);
   if (pointer) wl_pointer_destroy(pointer);
