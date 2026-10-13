@@ -324,7 +324,9 @@ it; each entry says how.
   frame by frame.
 - **Heft sets the order, and nothing settles after the turn.** A part's heft
   (0.8 × (area / tile)^0.35, 0.5 to 1.4) sets when it starts as well as how long
-  it takes: light parts first, heavy ones later. Arriving parts land with a
+  it takes: light parts first, heavy ones later; parts that weigh the same
+  follow one another in reading order, half a `duration-stagger` apart (six
+  steps at most). Arriving parts land with a
   trace of speed left and are let go in the frame they land. A turning part's
   layer starts on a whole pixel, so it rasterises exactly as the part will rest:
   rekta.js moves a part with a fill or line onto its resting pixels and grows a

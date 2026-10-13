@@ -826,7 +826,8 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
    first third. Each part's heft grows with its area: a line of text about 0.6, a tile 0.8, a wide tile 1.0, a table
    up to 1.4. It sets both when the part starts, (heft - 0.5) x 6 x duration-stagger after the turn begins, and how
    long it takes, the token's time (duration-short leaving, duration-moderate arriving) x heft: light parts go first
-   and quickest, heavy ones later and slower, as a light thing starts and stops sooner than a heavy one. An arriving part lands with a trace of speed left and fills backwards
+   and quickest, heavy ones later and slower, as a light thing starts and stops sooner than a heavy one. Parts that
+   weigh the same follow one another in reading order, half a duration-stagger apart, six steps at most. An arriving part lands with a trace of speed left and fills backwards
    only, so its motion, its animation and its layer end in the same frame: nothing settles afterwards. Back runs the
    other way round. rekta.js sets data-rk-turn and the part's --_rk-turn-origin, --_rk-turn-oy, --_rk-turn-delay,
    --_rk-turn-duration and --_rk-turn-perspective. */

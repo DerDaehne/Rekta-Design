@@ -187,10 +187,22 @@ static double heft(rk_rect r) { float k = 0.8f * powf(RK_MAX(1.0f, r.w * r.h) / 
 /* The turn as rekta.css has it: leaving parts swing 60 degrees, gathering speed, whole for 40% of their time;
    arriving parts swing in from 70 degrees, quick at first, and land with a trace of speed left, so the motion ends
    when the animation does. Heft also sets when a part starts: (heft - 0.5) x 6 x duration-stagger after the turn
-   begins, light parts first, heavy ones later; parts of one size go together. */
+   begins, light parts first, heavy ones later. Parts of one size (heft within 0.05) follow one another in reading
+   order, half a duration-stagger apart, six steps at most: the size leads, the order only sorts what weighs the
+   same. */
 #define TURN_OUT_ANGLE 60.0f
 #define TURN_IN_ANGLE 70.0f
-static double turn_start(double h) { return (h - 0.5) * 6 * rk_duration_of(RK_DURATION_STAGGER); }
+#define TURN_CLASSES 32                                    /* heft x 20, up to 1.4 x 20 = 28 */
+static void turn_starts(turn *t, int n, rk_view *pressed, double *hs, double *at) {
+  int seen[TURN_CLASSES] = { 0 };
+  double step = rk_duration_of(RK_DURATION_STAGGER);
+  for (int i = 0; i < n; i++) {
+    hs[i] = heft(rk__window_rect(t->units[i]));
+    if (t->units[i] == pressed) { at[i] = 0; continue; }
+    int key = RK_CLAMP((int)lround(hs[i] * 20), 0, TURN_CLASSES - 1), k = seen[key]++;
+    at[i] = (hs[i] - 0.5) * 6 * step + RK_MIN(k, 6) * step / 2;
+  }
+}
 static const float turn_ease_out[4] = { 0.35f, 0.0f, 0.65f, 0.6f }, turn_ease_in[4] = { 0.22f, 0.9f, 0.6f, 0.98f };
 
 /* The units of a place in turning order, the pressed one last; each one's row, and how far each row reaches from
@@ -232,11 +244,13 @@ static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
   int n = turn_gather(t, place, pressed, slots, reach);
   double out = rk_duration_of(RK_DURATION_SHORT), end = 0;
   float angle = back ? TURN_OUT_ANGLE : -TURN_OUT_ANGLE;
-  double last = 0;                                         /* the pressed tile goes when the heaviest other does */
-  for (int i = 0; i < n; i++) if (t->units[i] != pressed) last = RK_MAX(last, turn_start(heft(rk__window_rect(t->units[i]))));
+  static double hs[1024], starts[1024];
+  double last = 0;                                         /* the pressed tile goes when the last other does */
+  turn_starts(t, n, pressed, hs, starts);
+  for (int i = 0; i < n; i++) if (t->units[i] != pressed) last = RK_MAX(last, starts[i]);
   for (int i = 0; i < n; i++) {
     rk_view *u = t->units[i];
-    double h = heft(rk__window_rect(u)), at = u == pressed ? last : turn_start(h), d = out * h;
+    double h = hs[i], at = u == pressed ? last : starts[i], d = out * h;
     if (u == pressed) at = RK_MAX(at, rk_duration_of(RK_DURATION_PRESS) - (rk_app_now() - u->press_since));
     rk_transform from = u->ptransform, to = u->transform;
     turn_pivot(&to, u, place, slots[i] < 256 ? reach[slots[i]] : rk__window_rect(u).w);
@@ -270,9 +284,11 @@ static void turn_in(rk_view *place, bool back) {
   rk__layout_pending();
   int n = turn_gather(&t, place, NULL, slots, reach);
   double in = rk_duration_of(RK_DURATION_MODERATE);
+  static double hs[1024], starts[1024];
+  turn_starts(&t, n, NULL, hs, starts);
   for (int i = 0; i < n; i++) {
     rk_view *u = t.units[i];
-    double h = heft(rk__window_rect(u)), at = turn_start(h), d = in * h;
+    double h = hs[i], at = starts[i], d = in * h;
     rk_transform from = u->transform, to = u->transform;
     turn_pivot(&from, u, place, slots[i] < 256 ? reach[slots[i]] : rk__window_rect(u).w);
     to.origin_x = from.origin_x; to.origin_y = from.origin_y; to.perspective = from.perspective;

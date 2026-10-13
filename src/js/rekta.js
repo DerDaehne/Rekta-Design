@@ -270,8 +270,18 @@ function turnsWhole(el) {
 // from 0.5 (a line of text, about 0.6) through 0.8 (a tile) and 1.0 (a wide tile) to 1.4 (a table).
 function heft(r) { return Math.min(1.4, Math.max(0.5, 0.8 * Math.pow(Math.max(1, r.width * r.height) / 22500, 0.35))); }
 // Heft sets when a part starts as well as how long it takes: light parts first, heavy ones later, (heft - 0.5) × 6 ×
-// duration-stagger after the turn begins. Parts of one size go together.
-const turnStart = (h) => (h - 0.5) * 6 * ms('--rk-duration-stagger');
+// duration-stagger after the turn begins. Parts of one size (heft within 0.05) follow one another in reading order,
+// half a duration-stagger apart, six steps at most: the size leads, the order only sorts what weighs the same.
+function turnStarts(list, at, held) {
+  const step = ms('--rk-duration-stagger'), seen = new Map();
+  return list.map((el) => {
+    const h = heft(at.get(el));
+    if (el === held) return { h, at: 0 };
+    const key = Math.round(h * 20), n = seen.get(key) || 0;
+    seen.set(key, n + 1);
+    return { h, at: (h - 0.5) * 6 * step + Math.min(n, 6) * step / 2 };
+  });
+}
 function turnUnits(place, last) {
   const list = [], vh = innerHeight, vw = innerWidth;
   const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw; };
@@ -356,12 +366,12 @@ export const turn = {
       const out = ms('--rk-duration-short');
       const u = turnUnits(place, held), kind = back ? 'back-out' : 'out';
       turnRows(u, place, held);
-      // the pressed tile goes when the heaviest of the others does, or later
-      const lastStart = Math.max(0, ...u.list.filter((el) => el !== held).map((el) => turnStart(heft(u.at.get(el)))));
+      // the pressed tile goes when the last of the others does, or later
+      const starts = turnStarts(u.list, u.at, held), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
       let end = 0;
       u.list.forEach((el, i) => {
-        const h = heft(u.at.get(el)), d = out * h;
-        let at = el === held ? lastStart : turnStart(h);
+        const h = starts[i].h, d = out * h;
+        let at = el === held ? lastStart : starts[i].at;
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
         if (el === held) {
           at = Math.max(at, hold);
@@ -397,8 +407,9 @@ export const turn = {
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
       turnRows(u, place, null);
       let end = 0;
+      const starts = turnStarts(u.list, u.at, null);
       u.list.forEach((el, i) => {
-        const h = heft(u.at.get(el)), at = turnStart(h), d = d0 * h;
+        const { h, at } = starts[i], d = d0 * h;
         el.style.setProperty('--_rk-turn-delay', `${at}ms`);
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
         el.setAttribute('data-rk-turn', kind);
