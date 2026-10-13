@@ -569,6 +569,74 @@ static void test_table(void) {
   done(w);
 }
 
+/* A text area: the same field with more lines - wrapped at its width, Enter breaks a line, Ctrl+Enter submits. */
+static void test_textarea(void) {
+  rk_window *w = window(420, 360);
+  rk_view *page = col(16, 24);
+  rk_view *area = rk_add(page, rk_field("Notes", "What happened?"));
+  rk_view *line = rk_add(page, rk_field("One line", NULL));
+  rk_field_set_lines(area, 4);
+  rk_field_on_submit(area, on_field_submit, NULL);
+  show(w, page, "text area");
+  field *f = area->state;
+  CHECK(rk__window_rect(area).h > rk__window_rect(line).h + 3 * 20, "four lines tall (%.0f)", rk__window_rect(area).h);
+  rk_field_set_text(area, "The build on Thursday failed twice before anyone noticed, and the second time it took the docs with it.");
+  rk_app_run_for(50);
+  bool fits = f->nlines > 1;
+  for (int k = 0; k < f->nlines; k++) fits = fits && width(f, f->starts[k], line_stop(f, k)) <= f->wrap_w;
+  CHECK(fits, "the text wraps at the width, every line within it (%d lines)", f->nlines);
+  bool at_spaces = true;
+  for (int k = 1; k < f->nlines; k++) at_spaces = at_spaces && f->text[f->starts[k] - 1] == ' ';
+  CHECK(at_spaces, "and wraps at spaces");
+
+  rk_window_focus(w, area);
+  rk_field_set_text(area, "first");
+  int submits = field_submits;
+  key(w, RK_KEY_ENTER, 0); type_text(w, "second line");
+  CHECK(!strcmp(rk_field_text(area), "first\nsecond line") && field_submits == submits, "Enter breaks a line (%s)", rk_field_text(area));
+  key(w, RK_KEY_UP, 0);
+  CHECK(f->caret == 5, "Up goes to the line above, as near the column as it has (%d)", f->caret);
+  key(w, RK_KEY_DOWN, 0);
+  CHECK(f->caret == 17, "Down comes back to the column it started from (%d)", f->caret);
+  key(w, RK_KEY_HOME, 0);
+  CHECK(f->caret == 6, "Home keeps to the line (%d)", f->caret);
+  key(w, RK_KEY_HOME, RK_MOD_CTRL);
+  CHECK(f->caret == 0, "Ctrl+Home goes to the start (%d)", f->caret);
+  key(w, RK_KEY_ENTER, RK_MOD_CTRL);
+  CHECK(field_submits == submits + 1, "Ctrl+Enter submits");
+  key(w, RK_KEY_END, RK_MOD_CTRL);
+  rk_field_set_text(line, NULL);
+  char *paste = rk__strdup("\r\nthird\r\nfourth\rfifth");
+  rk__setstr(&clipboard, NULL);
+  if (!rk__platform()->clip_set) { clipboard = paste; paste = NULL; } else rk__platform()->clip_set(paste);
+  free(paste);
+  key(w, 'V', RK_MOD_CTRL);
+  CHECK(!strcmp(rk_field_text(area), "first\nsecond line\nthird\nfourth\nfifth"), "pasted breaks are kept, as \\n (%s)", rk_field_text(area));
+  CHECK(f->scroll_y > 0, "five lines in four: it scrolls to keep the caret in sight (%.0f)", f->scroll_y);
+  rk_window_focus(w, line);
+  key(w, 'V', RK_MOD_CTRL);
+  CHECK(!strcmp(rk_field_text(line), " third fourth fifth"), "in one line they are spaces (%s)", rk_field_text(line));
+
+  /* the pointer: a click on a line puts the caret there; the wheel scrolls */
+  rk_window_focus(w, area);
+  rk_rect r = rk__window_rect(area);
+  float lh = line_h(f), top = r.y + input_rect(area, f).y + input_pad_y(f) - f->scroll_y;
+  click(w, (rk_point){ r.x + 12 + width(f, 6, 9), top + 1.5f * lh }, 10);
+  CHECK(f->caret == 6 + 3, "a click on the second line (%d)", f->caret);
+  rk_event wh = { sizeof wh, RK_EVENT_WHEEL, rk_app_now(), { r.x + 40, r.y + r.h - 20 }, 0, 0, 0, 0, 0, NULL };
+  wh.wheel_y = -200;
+  rk_window_inject(w, &wh);
+  CHECK(f->scroll_y == 0, "the wheel scrolls it back to the top (%.0f)", f->scroll_y);
+  /* a selection over a break */
+  rk_field_set_text(area, "Thursday's build failed twice.\nThe docs went with it.\nNobody noticed until Friday, when the release notes had no pages left to point to.");
+  key(w, RK_KEY_HOME, RK_MOD_CTRL); key(w, RK_KEY_DOWN, 0);
+  key(w, RK_KEY_END, RK_MOD_SHIFT); key(w, RK_KEY_RIGHT, RK_MOD_SHIFT); key(w, RK_KEY_RIGHT, RK_MOD_SHIFT | RK_MOD_CTRL);
+  rk_app_run_for(200);
+  shot(w, "textarea");
+  CHECK(!strncmp(rk_field_text(area) + sel_lo(f), "The docs went with it.\nNobody", (size_t)(sel_hi(f) - sel_lo(f))), "Shift extends over the break");
+  done(w);
+}
+
 /* The app's history: an action runs and is remembered; its toast offers undo; Ctrl+Z outside fields. */
 static int counter;
 static void count_up(void *u) { (void)u; counter++; }
@@ -753,6 +821,7 @@ static void launch(void *user) {
   test_field();
   test_menu();
   test_table();
+  test_textarea();
   test_undo();
   test_navigation();
   test_spring();

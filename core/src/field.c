@@ -1,7 +1,12 @@
 /* field.c: a text field, as the web's .rk-field: a label above, the input with a 1px border, a hint or an error
-   below. One line of text, edited with the keys a desktop knows (arrows by character, Ctrl by word, Shift to select,
-   Home, End, Backspace, Delete, Ctrl+A, Ctrl+C, Ctrl+X, Ctrl+V) and the pointer (a click places the caret, a drag
-   selects, a double click takes a word). The text scrolls inside the input to keep the caret in sight.
+   below. Edited with the keys a desktop knows (arrows by character, Ctrl by word, Shift to select, Home, End,
+   Backspace, Delete, Ctrl+A, Ctrl+C, Ctrl+X, Ctrl+V) and the pointer (a click places the caret, a drag selects, a
+   double click takes a word). The text scrolls inside the input to keep the caret in sight.
+
+   One line by default; rk_field_set_lines makes it a text area, as the web's textarea rows: the text wraps at the
+   input's width (at spaces, inside a word only when the word is wider than the line), Enter breaks a line, Ctrl+Enter
+   submits, Up and Down keep to the column they started from, Home and End keep to the line. Both are the same
+   code: a one-line field is a text area with one line that never wraps.
 
    The caret blinks for ten seconds after the last edit and then stays lit, so a field left alone wakes nothing.
    Included after widgets.c. */
@@ -14,7 +19,11 @@
 typedef struct field {
   char *text; int len, cap;                                /* UTF-8 */
   int caret, anchor;                                       /* byte offsets; the selection is between them */
-  float scroll;                                            /* how far the text has moved left to keep the caret in sight */
+  float scroll, scroll_y;                                  /* how far the text has moved left (one line) or up (several) */
+  int rows;                                                /* the lines the input shows; 1 is a one-line field */
+  int *starts, nlines, lcap;                               /* where each line begins, as laid out for wrap_w */
+  float wrap_w, goal;                                      /* the width laid out for; Up and Down keep to the goal's x */
+  bool stale;                                              /* the text changed since the lines were laid out */
   char *label, *placeholder, *hint; bool error;
   char *preedit;                                           /* what an input method is composing, shown at the caret */
   struct snap { char *text; int caret, anchor; } *undo, *redo; int nundo, ucap, nredo, rcap;   /* the field's own history */
@@ -36,12 +45,17 @@ static void clip_set(const char *s) {
 
 static char *clip_get(void) { return rk__platform()->clip_get ? rk__platform()->clip_get() : rk__strdup(clipboard); }
 
-static rk_textfmt input_fmt(void) { rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0); f.line = 1; return f; }
+static bool multi(const field *f) { return f->rows > 1; }
+static rk_textfmt input_fmt(const field *f) { rk_textfmt t = rk__textfmt(RK_TEXT_BODY, 0); if (!multi(f)) t.line = 1; return t; }
 static rk_textfmt label_fmt(void) { return rk__textfmt(RK_TEXT_LABEL, 0); }
 static rk_textfmt hint_fmt(void) { return rk__textfmt(RK_TEXT_SMALL, 0); }
 
+static float line_h(const field *f) { rk_textfmt t = input_fmt(f); return t.size * t.line; }
+static float input_pad_y(const field *f) { return (rk_metric_of(RK_CONTROL_HEIGHT) - line_h(f)) / 2; }   /* one line sits as in a field */
 static float label_h(const field *f) { if (!f->label) return 0; rk_textfmt l = label_fmt(); return l.size * l.line + rk_metric_of(RK_SPACE_XS); }
-static rk_rect input_rect(rk_view *v, const field *f) { return (rk_rect){ 0, label_h(f), v->pframe.w, rk_metric_of(RK_CONTROL_HEIGHT) }; }
+static rk_rect input_rect(rk_view *v, const field *f) {
+  return (rk_rect){ 0, label_h(f), v->pframe.w, rk_metric_of(RK_CONTROL_HEIGHT) + (f->rows - 1) * line_h(f) };
+}
 
 static int sel_lo(const field *f) { return RK_MIN(f->caret, f->anchor); }
 static int sel_hi(const field *f) { return RK_MAX(f->caret, f->anchor); }
@@ -53,21 +67,81 @@ static bool word_char(char c) { return ((unsigned char)c & 0x80) || (c >= '0' &&
 static int next_word(const field *f, int i) { while (i < f->len && !word_char(f->text[i])) i++; while (i < f->len && word_char(f->text[i])) i++; return i; }
 static int prev_word(const field *f, int i) { while (i > 0 && !word_char(f->text[i - 1])) i--; while (i > 0 && word_char(f->text[i - 1])) i--; return i; }
 
-static float x_at(const field *f, int i) { rk_textfmt t = input_fmt(); return rk__text_width(f->text, i, &t); }
+static float width(const field *f, int a, int b) { rk_textfmt t = input_fmt(f); return rk__text_width(f->text + a, b - a, &t); }
 
-/* The byte offset nearest to x in the text. */
-static int offset_at(const field *f, float x) {
-  int best = 0;
+static void add_line(field *f, int start) { f->starts = rk__grow(f->starts, &f->lcap, f->nlines + 1, sizeof *f->starts); f->starts[f->nlines++] = start; }
+
+/* Lays the text out in lines: at each break, and in a text area where the next word would not fit. Spaces after a
+   wrap stay at the end of the line they follow, as a browser hangs them. Again only when the text or width changed. */
+static void wrap(rk_view *v, field *f) {
+  float inner = v->pframe.w - 2 * PAD;
+  if (!f->stale && f->nlines && inner == f->wrap_w) return;
+  f->stale = false; f->wrap_w = inner; f->nlines = 0;
+  for (int start = 0;;) {
+    add_line(f, start);
+    if (!multi(f)) return;
+    const char *nl = memchr(f->text + start, '\n', (size_t)(f->len - start));
+    int hard = nl ? (int)(nl - f->text) : f->len, fit = hard;
+    if (inner > 0 && width(f, start, hard) > inner) {
+      fit = start;
+      for (int j = start; j < hard;) {                       /* whole words while they fit */
+        int k = j;
+        while (k < hard && f->text[k] == ' ') k++;
+        while (k < hard && f->text[k] != ' ') k++;
+        if (width(f, start, k) > inner) break;
+        fit = j = k;
+      }
+      if (fit == start) {                                    /* a word wider than the line breaks where it must */
+        fit = next_char(f, start);
+        while (fit < hard && width(f, start, next_char(f, fit)) <= inner) fit = next_char(f, fit);
+      }
+      while (fit < hard && f->text[fit] == ' ') fit++;
+    }
+    if (fit < hard) { start = fit; continue; }
+    if (hard == f->len) return;
+    start = hard + 1;
+  }
+}
+
+static int line_of(const field *f, int i) {
+  int lo = 0, hi = f->nlines - 1;
+  while (lo < hi) { int m = (lo + hi + 1) / 2; if (f->starts[m] <= i) lo = m; else hi = m - 1; }
+  return lo;
+}
+/* Where line k's text stops (before its break), and the last place the caret can stand on it. */
+static int line_stop(const field *f, int k) { if (k + 1 >= f->nlines) return f->len; int e = f->starts[k + 1]; return f->text[e - 1] == '\n' ? e - 1 : e; }
+static int line_last(const field *f, int k) { int e = line_stop(f, k); return k + 1 < f->nlines && e == f->starts[k + 1] ? prev_char(f, e) : e; }
+
+static float x_at(const field *f, int i) { return width(f, f->starts[line_of(f, i)], i); }
+
+/* The byte offset on line k nearest to x. */
+static int offset_in_line(const field *f, int k, float x) {
+  int a = f->starts[k], z = line_last(f, k), best = a;
   float bd = INFINITY;
-  for (int i = 0;; i = next_char(f, i)) {
-    float d = fabsf(x_at(f, i) - x);
+  for (int i = a;; i = next_char(f, i)) {
+    float d = fabsf(width(f, a, i) - x);
     if (d < bd) { bd = d; best = i; }
-    if (i >= f->len) break;
+    if (i >= z) break;
   }
   return best;
 }
 
+/* The offset under a point in the view. */
+static int offset_at(rk_view *v, const field *f, rk_point p) {
+  rk_rect box = input_rect(v, f);
+  int k = RK_CLAMP((int)floorf((p.y - box.y - input_pad_y(f) + f->scroll_y) / line_h(f)), 0, f->nlines - 1);
+  return offset_in_line(f, k, p.x - box.x - PAD + f->scroll);
+}
+
 static void keep_caret_in_sight(rk_view *v, field *f) {
+  wrap(v, f);
+  if (multi(f)) {
+    float lh = line_h(f), inner = f->rows * lh, y = line_of(f, f->caret) * lh;
+    if (y + lh - f->scroll_y > inner) f->scroll_y = y + lh - inner;
+    if (y < f->scroll_y) f->scroll_y = y;
+    f->scroll_y = RK_CLAMP(f->scroll_y, 0.0f, RK_MAX(0.0f, f->nlines * lh - inner));
+    return;
+  }
   float inner = v->pframe.w - 2 * PAD, cx = x_at(f, f->caret), w = x_at(f, f->len);
   if (cx - f->scroll > inner) f->scroll = cx - inner;
   if (cx - f->scroll < 0) f->scroll = cx;
@@ -81,8 +155,9 @@ static void tell_input_method(rk_view *v, field *f, bool on) {
   rk_window *w = rk__view_window(v);
   if (!w || !rk__platform()->text_input) return;
   rk_rect r = rk__window_rect(v), box = input_rect(v, f);
-  rk_textfmt t = input_fmt();
-  rk_rect caret = { r.x + box.x + PAD - f->scroll + x_at(f, f->caret), r.y + box.y + (box.h - t.size) / 2 - 2, 1, t.size + 4 };
+  rk_textfmt t = input_fmt(f);
+  float lh = line_h(f), top = box.y + input_pad_y(f) + line_of(f, f->caret) * lh - f->scroll_y + (lh - t.size) / 2;
+  rk_rect caret = { r.x + box.x + PAD - f->scroll + x_at(f, f->caret), r.y + top - 2, 1, t.size + 4 };
   rk__platform()->text_input(w->native, on, caret);
 }
 
@@ -118,7 +193,7 @@ static void snaps_drop(struct snap *s, int *n) { while (*n) free(s[--*n].text); 
 /* Remembers the text before an edit - unless it continues the typing before it: one step a word, as a desktop does. */
 static void remember(field *f, bool typing, const char *s, int n) {
   double now = rk_app_now();
-  bool joins = typing && f->typing && now - f->typed_at < 1000 && f->caret == f->anchor && !(n == 1 && s[0] == ' ');
+  bool joins = typing && f->typing && now - f->typed_at < 1000 && f->caret == f->anchor && !(n == 1 && (s[0] == ' ' || s[0] == '\n'));
   f->typing = typing; f->typed_at = now;
   if (joins) return;
   if (f->nundo == 100) { free(f->undo[0].text); memmove(f->undo, f->undo + 1, 99 * sizeof *f->undo); f->nundo--; }
@@ -135,7 +210,7 @@ static void restore(rk_view *v, field *f, struct snap *from, int *nfrom, struct 
   free(f->text);
   f->text = s.text; f->len = (int)strlen(s.text); f->cap = f->len + 1;
   f->caret = RK_MIN(s.caret, f->len); f->anchor = RK_MIN(s.anchor, f->len);
-  f->typing = false;
+  f->typing = false; f->stale = true;
   rk__setstr(&v->access_value, f->text);
   field_changed(v, f);
 }
@@ -146,13 +221,22 @@ static void replace(rk_view *v, field *f, const char *s, int n) { replace_as(v, 
 static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing) {
   int lo = sel_lo(f), hi = sel_hi(f);
   if (!n && lo == hi) return;
-  remember(f, typing, s, n);
-  f->text = rk__grow(f->text, &f->cap, f->len - (hi - lo) + n + 1, 1);
-  memmove(f->text + lo + n, f->text + hi, (size_t)(f->len - hi));
-  for (int i = 0; i < n; i++) f->text[lo + i] = (unsigned char)s[i] < 0x20 || s[i] == 0x7f ? ' ' : s[i];   /* one line: breaks become spaces */
-  f->len += n - (hi - lo);
+  char *in = rk__alloc((size_t)n + 1);                      /* breaks as \n in a text area, spaces in one line; no other controls */
+  int m = 0;
+  for (int i = 0; i < n; i++) {
+    unsigned char ch = (unsigned char)s[i];
+    if (ch == '\r') { if (i + 1 < n && s[i + 1] == '\n') continue; ch = '\n'; }
+    in[m++] = ch == '\n' && multi(f) ? '\n' : ch < 0x20 || ch == 0x7f ? ' ' : (char)ch;
+  }
+  remember(f, typing, in, m);
+  f->text = rk__grow(f->text, &f->cap, f->len - (hi - lo) + m + 1, 1);
+  memmove(f->text + lo + m, f->text + hi, (size_t)(f->len - hi));
+  memcpy(f->text + lo, in, (size_t)m);
+  free(in);
+  f->len += m - (hi - lo);
   f->text[f->len] = 0;
-  f->caret = f->anchor = lo + n;
+  f->caret = f->anchor = lo + m;
+  f->stale = true; f->goal = -1;
   rk__setstr(&v->access_value, f->text);
   field_changed(v, f);
 }
@@ -160,7 +244,17 @@ static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing) 
 static void move_to(rk_view *v, field *f, int i, bool extend) {
   f->caret = RK_CLAMP(i, 0, f->len);
   if (!extend) f->anchor = f->caret;
+  f->goal = -1;
   touched(v, f);
+}
+
+/* Up and Down in a text area: dk lines on, at the x the first of them started from; past the ends, to the ends. */
+static void move_lines(rk_view *v, field *f, int dk, bool extend) {
+  int k = line_of(f, f->caret) + dk;
+  if (k < 0 || k >= f->nlines) { move_to(v, f, k < 0 ? 0 : f->len, extend); return; }
+  float goal = f->goal >= 0 ? f->goal : x_at(f, f->caret);
+  move_to(v, f, offset_in_line(f, k, goal), extend);
+  f->goal = goal;
 }
 
 static void copy_selection(const field *f) {
@@ -184,8 +278,15 @@ static bool field_key(rk_view *v, field *f, const rk_event *e) {
       if (sel && !shift) move_to(v, f, sel_hi(f), false);
       else move_to(v, f, word ? next_word(f, f->caret) : next_char(f, f->caret), shift);
       return true;
-    case RK_KEY_HOME: case RK_KEY_UP: move_to(v, f, 0, shift); return true;
-    case RK_KEY_END: case RK_KEY_DOWN: move_to(v, f, f->len, shift); return true;
+    case RK_KEY_HOME: move_to(v, f, multi(f) && !cmd ? f->starts[line_of(f, f->caret)] : 0, shift); return true;
+    case RK_KEY_END: move_to(v, f, multi(f) && !cmd ? line_last(f, line_of(f, f->caret)) : f->len, shift); return true;
+    case RK_KEY_UP: case RK_KEY_DOWN: case RK_KEY_PAGE_UP: case RK_KEY_PAGE_DOWN: {
+      int dk = e->key == RK_KEY_UP || e->key == RK_KEY_DOWN ? 1 : RK_MAX(1, f->rows - 1);
+      if (e->key == RK_KEY_UP || e->key == RK_KEY_PAGE_UP) dk = -dk;
+      if (multi(f)) move_lines(v, f, dk, shift);
+      else move_to(v, f, dk < 0 ? 0 : f->len, shift);
+      return true;
+    }
     case RK_KEY_BACKSPACE:
       if (!sel) f->anchor = word ? prev_word(f, f->caret) : prev_char(f, f->caret);
       replace(v, f, "", 0);
@@ -195,6 +296,7 @@ static bool field_key(rk_view *v, field *f, const rk_event *e) {
       replace(v, f, "", 0);
       return true;
     case RK_KEY_ENTER:
+      if (multi(f) && !cmd) { replace(v, f, "\n", 1); return true; }
       if (f->submit) { f->submit(v, f->submit_user); return true; }
       return false;
     case 'A': if (!cmd) return false; f->anchor = 0; f->caret = f->len; touched(v, f); return true;
@@ -218,8 +320,8 @@ static bool field_key(rk_view *v, field *f, const rk_event *e) {
 
 static bool field_event(rk_view *v, const rk_event *e, void *st) {
   field *f = st;
+  wrap(v, f);
   rk_rect box = input_rect(v, f);
-  float tx = e->position.x - PAD + f->scroll;
   switch (e->type) {
     case RK_EVENT_TEXT:
       if (!e->text) return false;
@@ -232,7 +334,7 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
     case RK_EVENT_KEY_DOWN: return field_key(v, f, e);
     case RK_EVENT_POINTER_DOWN: {
       if (e->button || e->position.y < box.y || e->position.y > box.y + box.h) return e->button == 0;
-      int i = offset_at(f, tx);
+      int i = offset_at(v, f, e->position);
       if (e->time - f->last_click < 400 && i == f->caret) {    /* a double click: the word */
         f->anchor = prev_word(f, i < f->len && word_char(f->text[i]) ? next_char(f, i) : i);
         f->caret = next_word(f, f->anchor);
@@ -247,9 +349,17 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
     }
     case RK_EVENT_POINTER_MOVE:
       if (!f->dragging) return false;
-      move_to(v, f, offset_at(f, tx), true);
+      move_to(v, f, offset_at(v, f, e->position), true);
       return true;
     case RK_EVENT_POINTER_UP: f->dragging = false; return true;
+    case RK_EVENT_WHEEL: {                                   /* a text area scrolls its lines; at an end, what holds it does */
+      if (!multi(f)) return false;
+      float lh = line_h(f), to = RK_CLAMP(f->scroll_y + e->wheel_y, 0.0f, RK_MAX(0.0f, f->nlines * lh - f->rows * lh));
+      if (to == f->scroll_y) return false;
+      f->scroll_y = to;
+      rk__view_dirty(v);
+      return true;
+    }
     case RK_EVENT_FOCUS: touched(v, f); return false;
     case RK_EVENT_BLUR:
       if (f->blink) { rk_app_cancel(f->blink); f->blink = 0; }
@@ -274,32 +384,42 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_canvas_fill_round_rect(c, box, r, border);
   rk_canvas_fill_round_rect(c, (rk_rect){ box.x + bw, box.y + bw, box.w - 2 * bw, box.h - 2 * bw }, RK_MAX(0.0f, r - bw), rk_color_of(RK_ROLE_BG));
   if (focused) rk_canvas_stroke_rect(c, (rk_rect){ box.x - 4, box.y - 4, box.w + 8, box.h + 8 }, 2, rk_color_of(RK_ROLE_FOCUS));
-  rk_textfmt t = input_fmt();
-  float ty = box.y + (box.h - t.size) / 2, x0 = box.x + PAD - f->scroll;
-  rk_canvas_push_clip(c, (rk_rect){ box.x + bw, box.y, box.w - 2 * bw, box.h });
-  if (!f->len && f->placeholder) rk__text_draw(c, f->placeholder, -1, box.x + PAD, ty, &t, rk_color_of(RK_ROLE_TEXT_MEDIUM));
-  if (focused && f->preedit) {                               /* composing: the text so far, underlined, at the caret */
-    float cx = x0 + x_at(f, f->caret), pw = rk__text_width(f->preedit, -1, &t);
-    rk__text_draw(c, f->text, f->caret, x0, ty, &t, rk_color_of(RK_ROLE_TEXT));
-    rk__text_draw(c, f->preedit, -1, cx, ty, &t, rk_color_of(RK_ROLE_TEXT));
-    rk_canvas_fill_rect(c, (rk_rect){ cx, ty + t.size + 1, pw, 1 }, rk_color_of(RK_ROLE_TEXT));
-    rk__text_draw(c, f->text + f->caret, f->len - f->caret, cx + pw, ty, &t, rk_color_of(RK_ROLE_TEXT));
-    rk_canvas_fill_rect(c, (rk_rect){ cx + pw, ty - 2, 1, t.size + 4 }, rk_color_of(RK_ROLE_TEXT));
-    rk_canvas_pop_clip(c);
-    goto hint;
+  wrap(v, f);
+  rk_textfmt t = input_fmt(f);
+  float lh = line_h(f), x0 = box.x + PAD - f->scroll, y0 = box.y + input_pad_y(f) - f->scroll_y;
+  rk_color ink = rk_color_of(RK_ROLE_TEXT);
+  rk_canvas_push_clip(c, multi(f) ? (rk_rect){ box.x + bw, box.y + bw, box.w - 2 * bw, box.h - 2 * bw } : (rk_rect){ box.x + bw, box.y, box.w - 2 * bw, box.h });
+  if (!f->len && f->placeholder) rk__text_draw(c, f->placeholder, -1, box.x + PAD, y0, &t, rk_color_of(RK_ROLE_TEXT_MEDIUM));
+  int lo = sel_lo(f), hi = sel_hi(f), ck = line_of(f, f->caret);
+  bool composing = focused && f->preedit;
+  int first = RK_MAX(0, (int)floorf(f->scroll_y / lh)), last = RK_MIN(f->nlines - 1, (int)floorf((f->scroll_y + box.h) / lh));
+  for (int k = first; k <= last; k++) {
+    int a = f->starts[k], z = line_stop(f, k);
+    float y = y0 + k * lh;
+    if (composing && k == ck) {                              /* composing: the text so far, underlined, at the caret */
+      float cx = x0 + width(f, a, f->caret), pw = rk__text_width(f->preedit, -1, &t), ty = y + (lh - t.size) / 2;
+      rk__text_draw(c, f->text + a, f->caret - a, x0, y, &t, ink);
+      rk__text_draw(c, f->preedit, -1, cx, y, &t, ink);
+      rk_canvas_fill_rect(c, (rk_rect){ cx, ty + t.size + 1, pw, 1 }, ink);
+      rk__text_draw(c, f->text + f->caret, z - f->caret, cx + pw, y, &t, ink);
+      rk_canvas_fill_rect(c, (rk_rect){ cx + pw, ty - 2, 1, t.size + 4 }, ink);
+      continue;
+    }
+    rk__text_draw(c, f->text + a, z - a, x0, y, &t, ink);
+    int s0 = RK_MAX(lo, a), s1 = RK_MIN(hi, z);
+    bool through = hi > z && z < f->len && f->text[z] == '\n';   /* the selection takes the break: a space's width shows it */
+    if (focused && !composing && lo != hi && lo <= z && hi >= a && (s0 < s1 || through)) {
+      float xa = x0 + width(f, a, s0), xb = x0 + width(f, a, RK_MAX(s0, s1)) + (through ? t.size / 3 : 0);
+      rk_rect band = multi(f) ? (rk_rect){ xa, y, xb - xa, lh } : (rk_rect){ xa, box.y + 4, xb - xa, box.h - 8 };
+      rk_canvas_push_clip(c, band);
+      rk_canvas_fill_rect(c, band, rk_color_of(RK_ROLE_ACCENT));
+      rk__text_draw(c, f->text + a, z - a, x0, y, &t, rk_color_of(RK_ROLE_ON_ACCENT));
+      rk_canvas_pop_clip(c);
+    }
   }
-  rk__text_draw(c, f->text, f->len, x0, ty, &t, rk_color_of(RK_ROLE_TEXT));
-  int lo = sel_lo(f), hi = sel_hi(f);
-  if (focused && lo != hi) {                                 /* the selection: the accent, its text on it */
-    float a = x0 + x_at(f, lo), b = x0 + x_at(f, hi);
-    rk_canvas_push_clip(c, (rk_rect){ a, box.y + 4, b - a, box.h - 8 });
-    rk_canvas_fill_rect(c, (rk_rect){ a, box.y + 4, b - a, box.h - 8 }, rk_color_of(RK_ROLE_ACCENT));
-    rk__text_draw(c, f->text, f->len, x0, ty, &t, rk_color_of(RK_ROLE_ON_ACCENT));
-    rk_canvas_pop_clip(c);
-  }
-  if (focused && lo == hi && f->lit) rk_canvas_fill_rect(c, (rk_rect){ x0 + x_at(f, f->caret), ty - 2, 1, t.size + 4 }, rk_color_of(RK_ROLE_TEXT));
+  if (focused && !composing && lo == hi && f->lit)
+    rk_canvas_fill_rect(c, (rk_rect){ x0 + x_at(f, f->caret), y0 + ck * lh + (lh - t.size) / 2 - 2, 1, t.size + 4 }, ink);
   rk_canvas_pop_clip(c);
-hint:
   if (f->hint) {
     rk_textfmt h = hint_fmt();
     float hy = box.y + box.h + rk_metric_of(RK_SPACE_XS), hx = 0;
@@ -311,7 +431,7 @@ hint:
 static rk_size field_measure(rk_view *v, rk_size avail, void *st) {
   (void)v;
   field *f = st;
-  float h = label_h(f) + rk_metric_of(RK_CONTROL_HEIGHT);
+  float h = label_h(f) + rk_metric_of(RK_CONTROL_HEIGHT) + (f->rows - 1) * line_h(f);
   if (f->hint) { rk_textfmt t = hint_fmt(); h += rk_metric_of(RK_SPACE_XS) + t.size * t.line; }
   return (rk_size){ isfinite(avail.w) ? avail.w : 320, h };
 }
@@ -320,7 +440,7 @@ static void field_destroy(void *st) {
   field *f = st;
   if (f->blink) rk_app_cancel(f->blink);
   snaps_drop(f->undo, &f->nundo); snaps_drop(f->redo, &f->nredo); free(f->undo); free(f->redo);
-  free(f->text); free(f->label); free(f->placeholder); free(f->hint); free(f->preedit); free(f);
+  free(f->starts); free(f->text); free(f->label); free(f->placeholder); free(f->hint); free(f->preedit); free(f);
 }
 
 static const rk_class field_class = { { sizeof(rk_view_class), "rk_field", field_draw, field_measure, NULL, field_event, field_destroy }, NULL, NULL };
@@ -330,6 +450,7 @@ static field *field_of(rk_view *v) { return v && v->cls == &field_class ? v->sta
 rk_view *rk_field(const char *label, const char *placeholder) {
   field *f = rk__alloc(sizeof *f);
   f->text = rk__alloc(1); f->cap = 1;
+  f->rows = 1; f->goal = -1; f->stale = true;
   f->label = rk__strdup(label); f->placeholder = rk__strdup(placeholder);
   rk_view *v = rk__view_create(&field_class, f);
   f->view = v;
@@ -360,3 +481,14 @@ void rk_field_set_hint(rk_view *v, const char *hint, bool error) {
 
 void rk_field_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->change = fn; f->change_user = user; } }
 void rk_field_on_submit(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->submit = fn; f->submit_user = user; } }
+
+void rk_field_set_lines(rk_view *v, int lines) {
+  field *f = field_of(v);
+  if (!f) return;
+  bool was = multi(f);
+  f->rows = RK_MAX(1, lines);
+  if (was && !multi(f)) for (int i = 0; i < f->len; i++) if (f->text[i] == '\n') f->text[i] = ' ';   /* one line again */
+  f->stale = true; f->scroll = f->scroll_y = 0;
+  rk__view_relayout_up(v);
+  rk__view_dirty(v);
+}

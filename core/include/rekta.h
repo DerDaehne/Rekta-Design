@@ -361,13 +361,15 @@ RK_API void rk_menu_close(rk_view *menu);
 RK_API rk_view *rk_menu_opener(rk_view *menu);                    /* what opened it, while open and in a handler */
 
 /* A text field, as the web's: a label above, the input, a hint below - or an error, its cause and remedy, marked.
-   One line, edited with the desktop's keys and the pointer; Enter submits. */
+   One line, edited with the desktop's keys and the pointer; Enter submits. With more lines it is a text area: the
+   text wraps at its width, Enter breaks a line and Ctrl+Enter submits. */
 RK_API rk_view *rk_field(const char *label, const char *placeholder);   /* either may be NULL */
 RK_API const char *rk_field_text(rk_view *field);          /* UTF-8; valid until the text changes */
 RK_API void rk_field_set_text(rk_view *field, const char *text);
 RK_API void rk_field_set_hint(rk_view *field, const char *hint, bool error);   /* NULL removes it */
 RK_API void rk_field_on_change(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);
 RK_API void rk_field_on_submit(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);   /* Enter */
+RK_API void rk_field_set_lines(rk_view *field, int lines);   /* the lines it shows; 1, the default, is one line */
 
 /* A long list: only the rows in sight are drawn and nothing is kept for each item - item() fills a row while it is
    drawn, so the strings it gives need to last only for the call. Hairline rows, selected the Metro way: a click

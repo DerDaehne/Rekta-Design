@@ -127,13 +127,13 @@ rk_animate_commit();
 
 Stage 1 of [docs/core.md](../docs/core.md#stages): tokens, renderer, views,
 controllers (places with the turn, panorama, pivot, sheets), motion, the press,
-focus and the keyboard, toasts, undo, the title bar, text fields, menus, tables, long lists; headless,
+focus and the keyboard, toasts, undo, the title bar, text fields and areas, menus, tables, long lists; headless,
 Wayland and X11 tested
 here (Wayland is the default where a compositor answers; `RK_PLATFORM=x11`
 picks X11),
 Win32 and Cocoa built and tested in CI.
 
-Not there yet: multi-line text, input methods' composing text on X11, Windows and macOS,
+Not there yet: input methods' composing text on X11, Windows and macOS,
 resizing table columns, editing cells (stage 2); screen readers
 (the accessibility tree is built, the bridges to UI Automation, NSAccessibility
 and AT-SPI are stage 3), several windows' focus between them.

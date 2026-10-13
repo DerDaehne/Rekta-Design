@@ -407,6 +407,11 @@ static rk_view *more_menu(void) {
   return m;
 }
 
+static void save_notes(rk_view *notes, void *u) {
+  (void)u;
+  rk_window_toast(rk_view_window(notes), *rk_field_text(notes) ? "Notes saved." : "Nothing to save yet.", NULL, NULL, NULL);
+}
+
 /* A field says what is wrong and how to put it right, on Enter; typing again lifts the error. */
 static void check_mail(rk_view *field, void *user) {
   (void)user;
@@ -443,6 +448,9 @@ static rk_view *controls_section(void) {
   rk_field_set_hint(mail, "Enter saves it.", false);
   rk_field_on_submit(mail, check_mail, NULL);
   rk_field_on_change(mail, mail_typed, NULL);
+  rk_view *notes = rk_add(s, rk_field("Notes", "Several lines: Enter breaks one, Ctrl+Enter saves them."));
+  rk_field_set_lines(notes, 3);
+  rk_field_on_submit(notes, save_notes, NULL);
 
   rk_add(s, rk_label("progress", RK_TEXT_KICKER));
   D.bar = rk_add(s, rk_progress(0.25f));

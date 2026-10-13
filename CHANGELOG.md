@@ -32,6 +32,12 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has text areas: `rk_field_set_lines(field, lines)` makes a
+  field show several lines, as the web's textarea rows. The text wraps
+  at the input's width (at spaces; inside a word only when it is wider
+  than the line), Enter breaks a line, Ctrl+Enter submits, Up and Down
+  keep their column, Home and End their line, the wheel and the caret
+  scroll it. A one-line field is the same code with one line.
 - rekta-core has undo, as the web's `undoStack()`: `rk_window_do(window,
   label, run, undo, user, free_user)` runs an action and keeps it (the
   last 50); its toast offers undo, an undo's toast offers redo; Ctrl

@@ -238,6 +238,17 @@ Enter.
 Text an input method composes shows underlined at the caret
 .Pq Dv RK_EVENT_COMPOSE .
 The caret blinks for ten seconds after an edit, then stays lit.
+Ctrl+Z and Ctrl+Shift+Z step through the field's own history, a word at
+a time.
+.It Fn rk_field_set_lines "rk_view *field" "int lines"
+Shows
+.Fa lines
+lines: a text area.
+The text wraps at the input's width, at spaces; Enter breaks a line and
+Ctrl+Enter submits; Up and Down keep to the column they started from,
+Home and End to the line, Ctrl+Home and Ctrl+End go to either end.
+Pasted line breaks are kept as
+.Ql \en .
 .It Fn rk_list "int count" "void (*item)(int index, rk_list_item *out, void *user)" "void *user"
 A long list.
 Only the rows in sight are drawn and nothing is kept for each item:
