@@ -204,6 +204,18 @@ change what it shows.
 A tile with an activate handler presses and opens something.
 .It Fn rk_rows , Fn rk_rows_add
 Hairline rows: a title on the left, a meta or a status on the right.
+.It Fn rk_rows_set_sortable "rk_view *rows" "void (*moved)(rk_view *rows, int from, int to, void *user)" "void *user"
+Rows the user puts in order: each gets a grip at its leading edge.
+Dragged 4 pixels up or down, a row lifts (the background and a 1 pixel edge)
+and follows the pointer while the others step aside; let go, every row that
+moved glides to its place.
+On the grip, Space or Enter picks the row up, Up and Down move it, Space or
+Enter puts it down and Escape puts it back; Alt with Up or Down moves it at
+once.
+.Fa moved
+hears every move, to keep the app's order and its undo;
+.Fn rk_rows_move
+moves a row from the app.
 .It Fn rk_menu
 A menu.
 .Fn rk_menu_add

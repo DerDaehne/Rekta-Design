@@ -1411,6 +1411,61 @@ static void test_split(void) {
   done(w);
 }
 
+/* Sortable rows: the grip drags a row, the others step aside; the keyboard picks it up, moves it, puts it down. */
+static int sort_from = -1, sort_to = -1, sort_moves;
+static void sort_moved(rk_view *rows, int from, int to, void *u) { (void)rows; (void)u; sort_from = from; sort_to = to; sort_moves++; }
+static const char *row_title(rk_view *rows, int i) { return ((row *)rk_view_child(rows, i)->state)->title; }
+
+static void test_sort(void) {
+  rk_window *w = window(520, 420);
+  rk_view *root = col(16, 24);
+  rk_view *rows = rk_add(root, rk_rows());
+  static const char *const steps[] = { "Check out", "Build", "Test", "Package", "Deploy" };
+  for (int i = 0; i < 5; i++) rk_rows_add(rows, steps[i], i == 4 ? "manual" : NULL, RK_STATUS_NONE);
+  rk_rows_set_sortable(rows, sort_moved, NULL);
+  show(w, root, "sort");
+  rk_view *r0 = rk_view_child(rows, 0), *g0 = ((row *)r0->state)->grip;
+  CHECK(g0 && g0->focusable, "each row has a grip that takes focus");
+  float H = r0->frame.h;
+  rk_rect gr = rk__window_rect(g0);
+  rk_point at = { gr.x + 12, gr.y + gr.h / 2 };
+  /* a press and a release without moving: no move */
+  click(w, at, 30);
+  CHECK(sort_moves == 0, "a click on the grip moves nothing");
+  /* a drag: 3 px is not yet one; then the row lifts and follows, the others step aside */
+  pointer(w, RK_EVENT_POINTER_DOWN, at);
+  pointer(w, RK_EVENT_POINTER_MOVE, (rk_point){ at.x, at.y + 3 });
+  CHECK(!((row *)r0->state)->lifted, "3 px: not lifted yet");
+  pointer(w, RK_EVENT_POINTER_MOVE, (rk_point){ at.x, at.y + 2.2f * H });
+  rk_app_run_for(300);
+  rk_view *r1 = rk_view_child(rows, 0);                          /* the lifted row is drawn last */
+  CHECK(((row *)r0->state)->lifted && rk_view_child(rows, 4) == r0, "lifted and drawn above the others");
+  CHECK(CLOSE_TO(r0->ptransform.translate_y, 2.2f * H, 0.5f) && r1->ptransform.translate_y < -H + 1, "it follows; Build stepped up: %g", r1->ptransform.translate_y);
+  shot(w, "sort");
+  pointer(w, RK_EVENT_POINTER_UP, (rk_point){ at.x, at.y + 2.2f * H });
+  CHECK(sort_moves == 1 && sort_from == 0 && sort_to == 2, "let go: moved from 0 to 2 (%d %d)", sort_from, sort_to);
+  CHECK(!strcmp(row_title(rows, 0), "Build") && !strcmp(row_title(rows, 2), "Check out"), "in its new place");
+  rk_app_run_for(600);
+  CHECK(r0->ptransform.translate_y == 0 && !((row *)r0->state)->lifted, "settled");
+  /* the keyboard: Space picks Deploy up, Up twice, Space puts it down */
+  rk_view *dep = rk_view_child(rows, 4);
+  rk_window_focus(w, ((row *)dep->state)->grip);
+  key(w, RK_KEY_SPACE, 0);
+  CHECK(((row *)dep->state)->lifted, "Space picks it up");
+  key(w, RK_KEY_UP, 0); key(w, RK_KEY_UP, 0);
+  key(w, RK_KEY_SPACE, 0);
+  CHECK(rk_view_child(rows, 2) == dep && !((row *)dep->state)->lifted && sort_to == 2, "Up twice, Space puts it down at 2");
+  /* Escape puts it back where it was picked up */
+  key(w, RK_KEY_ENTER, 0); key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_ESCAPE, 0);
+  CHECK(rk_view_child(rows, 2) == dep && !((row *)dep->state)->lifted, "Escape puts it back");
+  /* Alt+Down moves at once; rk_rows_move from the app */
+  key(w, RK_KEY_DOWN, RK_MOD_ALT);
+  CHECK(rk_view_child(rows, 3) == dep, "Alt+Down moves it at once");
+  CHECK(rk_rows_move(rows, 3, 0) && rk_view_child(rows, 0) == dep && !rk_rows_move(rows, 0, 0), "rk_rows_move");
+  rk_app_run_for(600);
+  done(w);
+}
+
 /* A pivot down the side: its titles in a list, Up and Down pick, the one in sight steps in; a top pivot turns the place. */
 static void test_side_pivot(void) {
   rk_window *w = window(900, 500);
@@ -1634,6 +1689,7 @@ static void launch(void *user) {
   test_side_pivot();
   test_tree();
   test_split();
+  test_sort();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

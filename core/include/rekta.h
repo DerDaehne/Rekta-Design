@@ -349,6 +349,11 @@ RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1;
 /* Hairline rows: a title on the left, a meta or a status tag on the right. */
 RK_API rk_view *rk_rows(void);
 RK_API rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_status status);   /* the row, borrowed */
+/* Rows the user puts in order: each gets a grip that drags it (4 px, then it lifts and the others step aside) or, from
+   the keyboard, Space picks it up, Up and Down move it, Space puts it down and Escape puts it back; Alt with Up or Down
+   moves it at once. moved() hears each move to keep the app's order (and its undo); rk_rows_move moves one, gliding. */
+RK_API void rk_rows_set_sortable(rk_view *rows, void (*moved)(rk_view *rows, int from, int to, void *user), void *user);
+RK_API bool rk_rows_move(rk_view *rows, int from, int to);   /* false when out of range, the same place or not sortable */
 
 /* A menu floats by what opened it: below it, above where there is no room. One item a row - a lowercase verb or
    option, a key hint at the end; an item with a check (rk_menu_set_check) toggles and stays open, any other closes

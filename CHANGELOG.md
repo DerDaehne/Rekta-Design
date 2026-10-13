@@ -9,6 +9,12 @@ it; each entry says how.
 
 ### Added
 
+- **rekta-core: rows the user puts in order** (`rk_rows_set_sortable`), as
+  the web's `sortable()`: a grip on each row; dragged 4 px a row lifts (bg and a
+  1 px text-medium edge, no shadow) and follows, the others step aside over
+  `duration-short`; let go, every moved row glides to its place over
+  `duration-moderate`. Space picks a row up, Up/Down move it, Space puts it
+  down, Escape puts it back, Alt+Up/Down moves it at once; `rk_rows_move`.
 - **rekta-core: a split** (`rk_split`), as the web's `.rk-split`: sideways
   (760 px wide in a window 481 px tall or more) a list beside its detail with a
   hairline and a 9 px handle that drags the list's width (pane-min each at

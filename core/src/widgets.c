@@ -329,7 +329,9 @@ void rk_tile_set_progress(rk_view *v, float progress) {
 
 /* Rows ------------------------------------------------------------------------------------------------------------ */
 
-typedef struct row { char *title, *meta; rk_status status; } row;
+typedef struct row { char *title, *meta; rk_status status; bool lifted; rk_view *grip; } row;   /* grip: sortable (sort.c) */
+static bool rows_last(rk_view *v);
+static void rows_added(rk_view *rows, rk_view *row);
 
 static rk_size row_measure(rk_view *v, rk_size avail, void *st) {
   (void)v; (void)st;
@@ -340,11 +342,17 @@ static void row_draw(rk_view *v, rk_canvas *c, void *st) {
   row *r = st;
   float W = v->pframe.w, H = v->pframe.h;
   rk_color rule = rk_color_of(RK_ROLE_TEXT_LOW);
-  rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, 1 }, rule);
-  if (v->parent && v->parent->kids[v->parent->nkids - 1] == v) rk_canvas_fill_rect(c, (rk_rect){ 0, H - 1, W, 1 }, rule);
+  if (r->lifted) {                                         /* picked up: a floating surface, bg and a 1 px edge, no shadow */
+    rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, H }, rk_color_of(RK_ROLE_BG));
+    rk_canvas_stroke_rect(c, (rk_rect){ 0, 0, W, H }, 1, rk_color_of(RK_ROLE_TEXT_MEDIUM));
+  } else {
+    rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, 1 }, rule);
+    if (rows_last(v)) rk_canvas_fill_rect(c, (rk_rect){ 0, H - 1, W, 1 }, rule);
+  }
   if (v->pressed) rk_canvas_fill_rect(c, (rk_rect){ 0, 1, W, H - 1 }, rk_color_of(RK_ROLE_HOVER));
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
-  rk__text_draw(c, r->title, -1, 0, (H - f.size * f.line) / 2, &f, rk_color_of(RK_ROLE_TEXT));
+  float x = r->grip ? 24 + rk_metric_of(RK_SPACE_S) : 0;   /* after the grip */
+  rk__text_draw(c, r->title, -1, x, (H - f.size * f.line) / 2, &f, rk_color_of(RK_ROLE_TEXT));
   float right = W;
   if (r->status != RK_STATUS_NONE) {
     rk_textfmt tf = rk__textfmt(RK_TEXT_LABEL, 0);
@@ -358,8 +366,9 @@ static void row_draw(rk_view *v, rk_canvas *c, void *st) {
     rk__text_draw(c, r->meta, -1, right - mw, (H - mf.size * mf.line) / 2, &mf, rk_color_of(RK_ROLE_TEXT_HIGH));
   }
 }
+static void row_layout(rk_view *v, void *st) { row *r = st; if (r->grip) rk__set_frame(r->grip, (rk_rect){ 0, 0, 24, v->frame.h }); }
 static void row_destroy(void *st) { row *r = st; free(r->title); free(r->meta); free(r); }
-static const rk_class row_class = { { sizeof(rk_view_class), "rk_rows_row", row_draw, row_measure, NULL, NULL, row_destroy }, NULL, NULL };
+static const rk_class row_class = { { sizeof(rk_view_class), "rk_rows_row", row_draw, row_measure, row_layout, NULL, row_destroy }, NULL, NULL };
 
 rk_view *rk_rows(void) {
   rk_view *v = rk_view_create();
@@ -376,6 +385,7 @@ rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_stat
   rk__setstr(&v->access_label, r->title);
   rk__view_add(rows, v);
   rk_release(v);
+  rows_added(rows, v);
   return v;
 }
 
