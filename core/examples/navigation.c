@@ -5,7 +5,8 @@
      ./navigation <layout> --shot file.png [width height]   draws it once, headless, and writes the picture
      ./navigation <layout> --film DIR [width height]        goes to people, home and builds, headless, a frame every 20 ms
 
-   RK_SIDE_MOTION=step picks the other motion down the side, for the comparison. */
+   The pivot picks the place, so a change turns it: the place in sight turns away and the next one turns in, each
+   part in a time that follows its size. */
 #include "rekta.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -94,7 +95,7 @@ static void take_frame(void *user) {
   (void)user;
   snprintf(path, sizeof path, "%s/%04d.png", film_dir, frame++);
   if (!rk_window_snapshot(window, path)) { fprintf(stderr, "could not write %s\n", path); rk_app_quit(1); }
-  if (frame == 150) rk_app_quit(0);
+  if (frame == 250) rk_app_quit(0);
 }
 static void go(void *user) { rk_pivot_select(nav, (int)(intptr_t)user); }
 
@@ -105,9 +106,9 @@ static void launch(void *user) {
   rk_window_show(window, places(!strcmp(style, "side")));
   if (shot_path) rk_app_after(1500, false, take_shot, NULL);
   if (film_dir) {
-    rk_app_after(500, false, go, (void *)(intptr_t)2);
-    rk_app_after(1500, false, go, (void *)(intptr_t)0);
-    rk_app_after(2300, false, go, (void *)(intptr_t)1);
+    rk_app_after(400, false, go, (void *)(intptr_t)2);
+    rk_app_after(2000, false, go, (void *)(intptr_t)0);
+    rk_app_after(3600, false, go, (void *)(intptr_t)1);
     rk_app_after(20, true, take_frame, NULL);
   }
   rk_release(window);

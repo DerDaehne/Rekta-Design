@@ -427,7 +427,17 @@ One place laid out sideways in sections under a strip of their titles.
 .It Fn rk_pivot , Fn rk_pivot_add , Fn rk_pivot_select
 Facets of one place; the change slides from its side.
 A pivot with no pivot or panorama above it is the window's way between
-places: its titles take the nav level and its pages start at their indent.
+places: its titles take the nav level, its pages start at their indent, and a
+change turns the place as
+.Fn rk_places_go
+does instead of sliding.
+.It Fn rk_pivot_set_layout "rk_controller *pivot" "rk_pivot_layout layout"
+.Dv RK_PIVOT_TOP
+(the default) lays the titles along the top;
+.Dv RK_PIVOT_SIDE
+lays them as a list down the leading side, one size, the one in sight stepped
+in and dark.
+Up and Down then pick the title.
 .It Fn rk_controller_present , Fn rk_controller_dismiss
 A sheet: a short question from the top edge.
 .El

@@ -320,8 +320,21 @@ it; each entry says how.
 - **rekta-core: a pivot at the top is the place's title.** A pivot with no
   pivot or panorama above it takes the nav level, as `rk-pivot--nav` does on
   the web, and its pages start at the strip's indent. `examples/navigation.c`
-  draws one app with its places as a pivot and as two sketches of a list down
-  the left, to compare.
+  draws one app with its places either way, and `--film` writes its motion
+  frame by frame.
+- **rekta-core: a pivot down the side.** `rk_pivot_set_layout(pivot,
+  RK_PIVOT_SIDE)` lays the titles out as a list down the leading side, an equal
+  alternative to the strip along the top, as tabs are in a browser. The title
+  in sight steps in by `space-m` and darkens over `duration-pivot-size`; Up and
+  Down pick a title.
+- **rekta-core: a pivot that picks the place turns it.** Its facet turns away
+  and the next turns in, as a place change does; a pivot inside a place still
+  slides.
+- **rekta-core: the turn has heft.** Each part of a place turns by itself (a
+  plain layout box no longer turns as one block), in a time that follows its
+  size: a line of text in 0.6 of the token's duration, a tile in about the
+  token's, a table in up to 1.4. Arriving, the parts turn in one by one, a row
+  at a time, instead of the place swinging in whole.
 
 ### Fixed
 

@@ -1265,6 +1265,42 @@ static void test_undo(void) {
   done(w);
 }
 
+/* A pivot down the side: its titles in a list, Up and Down pick, the one in sight steps in; a top pivot turns the place. */
+static void test_side_pivot(void) {
+  rk_window *w = window(900, 500);
+  rk_controller *nav = rk_pivot();
+  static const char *const names[] = { "home", "builds", "people" };
+  rk_view *pages[3];
+  for (int i = 0; i < 3; i++) {
+    pages[i] = col(16, 0);
+    rk_add(pages[i], rk_label(names[i], RK_TEXT_GROUP));
+    rk_view *rows = rk_add(pages[i], rk_rows());
+    rk_rows_add(rows, "Nightly import", "failed", RK_STATUS_ERROR);
+    rk_rows_add(rows, "schema.sql", "4 kB", RK_STATUS_NONE);
+    rk_pivot_add(nav, rk_controller_create_with_view(pages[i], names[i]));
+  }
+  rk_pivot_set_layout(nav, RK_PIVOT_SIDE);
+  rk_window_show(w, nav);
+  rk_app_run_for(100);
+  rk_view *strip = rk_view_child(rk_controller_view(nav), 0);
+  rk_rect sr = rk__window_rect(strip), pr = rk__window_rect(pages[0]);
+  CHECK(pr.x >= sr.x + sr.w && fabsf(pr.y - sr.y) < 1, "the titles stand beside the page, level with it");
+  rk_window_focus(w, strip);
+  key(w, RK_KEY_DOWN, 0);
+  CHECK(rk_pivot_selected(nav) == 1, "Down picks the next title");
+  rk_app_run_for(120);
+  CHECK(rk_view_window(pages[0]) == w && rk_view_window(pages[1]) != w, "the place in sight turns away first");
+  rk_app_run_for(1200);
+  CHECK(rk_view_window(pages[1]) == w && rk_view_window(pages[0]) != w, "then the next one is there");
+  rk_view *row = rk_view_child(rk_view_child(pages[1], 1), 1);
+  CHECK(row->popacity == 1 && row->ptransform.rotate_y == 0, "every part has turned in");
+  shot(w, "pivot-side");
+  key(w, RK_KEY_UP, 0);
+  rk_app_run_for(1200);
+  CHECK(rk_pivot_selected(nav) == 0 && rk_view_window(pages[0]) == w, "Up goes back");
+  done(w);
+}
+
 static void test_navigation(void) {
   rk_window *w = window(900, 600);
   rk_controller *home = rk_panorama();
@@ -1436,6 +1472,7 @@ static void launch(void *user) {
   test_undo();
   test_focus();
   test_navigation();
+  test_side_pivot();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

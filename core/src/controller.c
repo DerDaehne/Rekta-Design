@@ -85,11 +85,14 @@ void rk__controller_appear(rk_controller *c, bool appear) {
 
 /* Places ---------------------------------------------------------------------------------------------------------- */
 
+typedef struct turn { rk_view **units; int n, cap; } turn;   /* the units of a place turning */
+static void turn_release(turn *t) { for (int i = 0; i < t->n; i++) rk_release(t->units[i]); t->n = 0; }
+
 typedef struct places {
   rk_controller *self;
   rk_controller **stack; int n, cap;
   rk_view *focus_return[64];
-  rk_view **turning; int nturning, tcap;                   /* the units of the place leaving */
+  turn out;                                                /* the units of the place leaving */
   rk_controller *leaving;                                  /* owned while it turns away after back */
   bool leaving_owned;
   uint32_t timer;
@@ -103,8 +106,8 @@ static void places_free(void *p) {
   if (pl->leaving_owned) rk_release(pl->leaving);
   for (int i = 0; i < 64; i++) rk_release(pl->focus_return[i]);
   for (int i = 0; i < pl->n; i++) rk_release(pl->stack[i]);
-  for (int i = 0; i < pl->nturning; i++) rk_release(pl->turning[i]);
-  free(pl->stack); free(pl->turning); free(pl);
+  turn_release(&pl->out);
+  free(pl->stack); free(pl->out.units); free(pl);
 }
 
 static void fill_layout(rk_view *v, void *st) {
@@ -138,19 +141,24 @@ rk_controller *rk_places(rk_controller *home) {
 
 int rk_places_depth(rk_controller *c) { return c->kind == K_PLACES ? ((places *)c->impl)->n : 0; }
 
-/* The units that turn: each tile, and each block that holds no tile, top to bottom, a row at a time. */
-static void collect_units(rk_view *v, rk_view ***list, int *n, int *cap) {
+/* The turn: a place change (motion.md). Its units are the parts a place shows, top to bottom, a row at a time. Each turns around the leading edge of the box that clips it, in a time that follows its size: a
+   small unit turns quicker than a large one, as something light starts and stops sooner than something heavy. */
+
+/* A view turns as one when it is a tile or shows something of its own (a class that draws, a fill, a rule) or clips
+   what it holds; a plain layout box lets its children turn one by one, so each row, label and button keeps its heft. */
+static bool turns_whole(rk_view *k) {
+  if (rk__is_tile(k) || !k->nkids || k->clip || k->rule_top || k->rule_bottom || k->fill_role || (k->fill[0] & 0xff)) return true;
+  return k->cls && k->cls->pub.draw;
+}
+
+static void collect_units(rk_view *v, turn *t) {
   for (int i = 0; i < v->nkids; i++) {
     rk_view *k = v->kids[i];
     if (k->hidden || !rk__view_visible(k)) continue;
-    bool has_tile = false;
-    rk_view *stack[256]; int sp = 0;
-    stack[sp++] = k;
-    while (sp && !has_tile) { rk_view *x = stack[--sp]; if (rk__is_tile(x)) has_tile = true; for (int j = 0; j < x->nkids && sp < 256; j++) stack[sp++] = x->kids[j]; }
-    if (rk__is_tile(k) || !has_tile || !k->nkids) {
-      *list = rk__grow(*list, cap, *n + 1, sizeof **list);
-      (*list)[(*n)++] = rk_retain(k);
-    } else collect_units(k, list, n, cap);
+    if (turns_whole(k)) {
+      t->units = rk__grow(t->units, &t->cap, t->n + 1, sizeof *t->units);
+      t->units[t->n++] = rk_retain(k);
+    } else collect_units(k, t);
   }
 }
 
@@ -168,98 +176,98 @@ static rk_view *clip_box(rk_view *u, rk_view *place) {
 
 static float turn_perspective(float reach) { return roundf(RK_TOK_TURNSTILE_PERSPECTIVE + 1.2f * RK_MAX(0.0f, reach)); }
 
-/* Leaving: each unit swings toward the viewer around the leading edge of the box that clips it, fading, a row at a
-   time, duration-stagger apart; the pressed tile keeps its press and goes last. */
-static double turn_out(places *pl, rk_view *place, rk_view *pressed, bool back) {
-  for (int i = 0; i < pl->nturning; i++) rk_release(pl->turning[i]);
-  pl->nturning = 0;
-  collect_units(place, &pl->turning, &pl->nturning, &pl->tcap);
-  qsort(pl->turning, (size_t)pl->nturning, sizeof *pl->turning, unit_order);
-  for (int i = 0; i < pl->nturning; i++) if (pl->turning[i] == pressed) {
-    memmove(pl->turning + i, pl->turning + i + 1, (size_t)(pl->nturning - i - 1) * sizeof *pl->turning);
-    pl->turning[pl->nturning - 1] = pressed;
+/* A unit's time against the token's: the root of the side of a square as large as the unit, over a tile's 160 px,
+   from 0.6 (a line of text) to 1.4 (a table). */
+static double heft(rk_rect r) { float k = sqrtf(sqrtf(RK_MAX(1.0f, r.w * r.h)) / 160.0f); return RK_CLAMP(k, 0.6f, 1.4f); }
+
+/* The units of a place in turning order, the pressed one last; each one's row, and how far each row reaches from
+   its clip box's leading edge (the farther, the flatter the perspective). */
+static int turn_gather(turn *t, rk_view *place, rk_view *pressed, int *slots, float *reach) {
+  turn_release(t);
+  collect_units(place, t);
+  qsort(t->units, (size_t)t->n, sizeof *t->units, unit_order);
+  for (int i = 0; i < t->n; i++) if (t->units[i] == pressed) {
+    memmove(t->units + i, t->units + i + 1, (size_t)(t->n - i - 1) * sizeof *t->units);
+    t->units[t->n - 1] = pressed;
     break;
   }
-  double out = rk_duration_of(RK_DURATION_SHORT), step = rk_duration_of(RK_DURATION_STAGGER), end = 0;
-  float angle = back ? RK_TOK_TURNSTILE_ANGLE : -RK_TOK_TURNSTILE_ANGLE;
-  int slot = -1, key = INT32_MIN;
-  float reach[256] = { 0 };
-  int slots[1024];
-  for (int i = 0; i < pl->nturning && i < 1024; i++) {
-    rk_view *u = pl->turning[i];
+  int slot = -1, key = INT32_MIN, n = RK_MIN(t->n, 1024);
+  for (int i = 0; i < n; i++) {
+    rk_view *u = t->units[i];
     rk_rect r = rk__window_rect(u), cr = rk__window_rect(clip_box(u, place));
     int k = u == pressed ? INT32_MAX : (int)lroundf(r.y / 8);
     if (k != key) { slot++; key = k; if (slot < 256) reach[slot] = 0; }
     slots[i] = slot;
     if (slot < 256) reach[slot] = RK_MAX(reach[slot], r.x + r.w - cr.x);
   }
-  for (int i = 0; i < pl->nturning && i < 1024; i++) {
-    rk_view *u = pl->turning[i];
-    rk_rect r = rk__window_rect(u), cr = rk__window_rect(clip_box(u, place));
-    double at = RK_MIN(slots[i], u == pressed ? 10 : 9) * step;
+  return n;
+}
+
+/* where a unit turns from: the leading edge of its clip box, at its own middle, or its top when flush with the box's */
+static void turn_pivot(rk_transform *t, rk_view *u, rk_view *place, float reach) {
+  rk_rect r = rk__window_rect(u), cr = rk__window_rect(clip_box(u, place));
+  t->origin_x = r.w > 0 ? (cr.x - r.x) / r.w : 0;
+  t->origin_y = fabsf(r.y - cr.y) < 2 ? 0 : 0.5f;
+  t->perspective = turn_perspective(reach);
+}
+
+/* Leaving: each unit swings toward the viewer, fading, a row at a time, duration-stagger apart, over duration-short
+   by its heft; the pressed tile keeps its press and goes last. Returns when the place can go: its last unit 80%
+   through, all but faded, so the next follows without a gap. */
+static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
+  static int slots[1024]; static float reach[256];
+  int n = turn_gather(t, place, pressed, slots, reach);
+  double out = rk_duration_of(RK_DURATION_SHORT), step = rk_duration_of(RK_DURATION_STAGGER), end = 0;
+  float angle = back ? RK_TOK_TURNSTILE_ANGLE : -RK_TOK_TURNSTILE_ANGLE;
+  for (int i = 0; i < n; i++) {
+    rk_view *u = t->units[i];
+    double at = RK_MIN(slots[i], u == pressed ? 10 : 9) * step, d = out * heft(rk__window_rect(u));
     if (u == pressed) at = RK_MAX(at, rk_duration_of(RK_DURATION_PRESS) - (rk_app_now() - u->press_since));
     rk_transform from = u->ptransform, to = u->transform;
-    to.origin_x = r.w > 0 ? (cr.x - r.x) / r.w : 0;
-    to.origin_y = fabsf(r.y - cr.y) < 2 ? 0 : 0.5f;
-    to.perspective = turn_perspective(slots[i] < 256 ? reach[slots[i]] : r.w);
+    turn_pivot(&to, u, place, slots[i] < 256 ? reach[slots[i]] : rk__window_rect(u).w);
     to.rotate_y = angle; to.rotate_x = 0; to.scale_x = to.scale_y = 1;
     if (u != pressed) { from = u->transform; from.origin_x = to.origin_x; from.origin_y = to.origin_y; from.perspective = to.perspective; }
     float o0 = u->popacity, o1 = 0;
-    rk__animate(u, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, out, at, rk__ease_out);
-    rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, out, at, rk__ease_out);
+    rk__animate(u, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, d, at, rk__ease_out);
+    rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, d, at, rk__ease_out);
     u->pressed = 0;
-    end = RK_MAX(end, at);
+    end = RK_MAX(end, at + 0.8 * d);
   }
-  /* the place goes when its last unit is 80% through, all but faded, so the next follows without a gap */
-  return pl->nturning ? end + 0.8 * out : 0;
+  return end;
 }
 
-static void reset_units(places *pl) {
-  for (int i = 0; i < pl->nturning; i++) {
-    rk_view *u = pl->turning[i];
+/* The place is gone: its units stand as they were, for when it comes back. */
+static void turn_reset(turn *t) {
+  for (int i = 0; i < t->n; i++) {
+    rk_view *u = t->units[i];
     rk__anim_cancel(u, RK_PROP_TRANSFORM); rk__anim_cancel(u, RK_PROP_OPACITY);
     u->ptransform = u->transform; u->popacity = u->opacity;
-    rk_release(u);
   }
-  pl->nturning = 0;
+  turn_release(t);
 }
 
-/* Arriving: the new place swings in from turnstile-angle around its leading edge at the middle of the window;
-   going forward, its tiles build in. */
-static void turn_in(rk_controller *c, rk_view *v, bool back) {
-  rk_window *w = c->window;
+/* Arriving: each unit swings in from turnstile-angle on the other side, fading in, a row at a time, over
+   duration-moderate by its heft. The place assembles itself; back runs it the other way round. */
+static void turn_in(rk_view *place, bool back) {
+  static int slots[1024]; static float reach[256];
+  turn t = { 0 };
   rk__layout_pending();
-  rk_rect r = rk__window_rect(v);
-  rk_transform from = v->transform, to = v->transform;
-  from.origin_x = to.origin_x = 0;
-  from.origin_y = to.origin_y = r.h > 0 ? ((w ? w->size.h : r.h) / 2 - r.y) / r.h : 0.5f;
-  from.perspective = to.perspective = turn_perspective(r.w);
-  from.rotate_y = back ? -RK_TOK_TURNSTILE_ANGLE : RK_TOK_TURNSTILE_ANGLE;
-  double d = rk_duration_of(RK_DURATION_MODERATE);
-  float o0 = 0, o1 = v->opacity;
-  rk__animate(v, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, d, 0, rk__ease_out);
-  rk__animate(v, RK_PROP_OPACITY, &o0, &o1, 1, d, 0, rk__ease_out);
-  if (back) return;
-  rk_view *stack[1024]; int sp = 0, idx = 0;
-  stack[sp++] = v;
-  rk_view *tiles[512]; int nt = 0;
-  while (sp) {
-    rk_view *x = stack[--sp];
-    if (rk__is_tile(x) && nt < 512) { tiles[nt++] = x; continue; }
-    for (int j = x->nkids - 1; j >= 0 && sp < 1024; j--) stack[sp++] = x->kids[j];
+  int n = turn_gather(&t, place, NULL, slots, reach);
+  double in = rk_duration_of(RK_DURATION_MODERATE), step = rk_duration_of(RK_DURATION_STAGGER);
+  for (int i = 0; i < n; i++) {
+    rk_view *u = t.units[i];
+    double at = RK_MIN(slots[i], 9) * step, d = in * heft(rk__window_rect(u));
+    rk_transform from = u->transform, to = u->transform;
+    turn_pivot(&from, u, place, slots[i] < 256 ? reach[slots[i]] : rk__window_rect(u).w);
+    to.origin_x = from.origin_x; to.origin_y = from.origin_y; to.perspective = from.perspective;
+    from.rotate_y = back ? -RK_TOK_TURNSTILE_ANGLE : RK_TOK_TURNSTILE_ANGLE;
+    float o0 = 0, o1 = u->opacity;
+    rk__animate(u, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, d, at, rk__ease_out);
+    rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, d, at, rk__ease_out);
   }
-  for (int i = 0; i < nt; i++) {
-    rk_view *t = tiles[i];
-    double at = RK_MIN(idx, 10) * rk_duration_of(RK_DURATION_STAGGER);
-    idx++;
-    rk_transform t0 = t->transform, t1 = t->transform;
-    t0.translate_y += 6; t0.scale_x *= 0.96f; t0.scale_y *= 0.96f;
-    float a0 = 0, a1 = t->opacity;
-    rk__animate(t, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, at, rk__ease_in);
-    rk__animate(t, RK_PROP_OPACITY, &a0, &a1, 1, d, at, rk__ease_in);
-  }
+  turn_release(&t);
+  free(t.units);
 }
-
 
 typedef struct swap { rk_controller *places, *to; bool back; } swap;
 
@@ -272,13 +280,13 @@ static void swap_now(void *user) {
   rk_controller *old = pl->leaving;
   bool owned = pl->leaving_owned;
   pl->leaving = NULL; pl->leaving_owned = false;
-  reset_units(pl);
+  turn_reset(&pl->out);
   if (old) { rk__view_detach(rk_controller_view(old)); rk__controller_appear(old, false); }
   rk_view *nv = rk_controller_view(s->to);
   nv->ptransform = nv->transform; nv->popacity = nv->opacity;
   rk__view_add(c->view, nv);
   rk__controller_attach(s->to, c->window);
-  turn_in(c, nv, s->back);
+  turn_in(nv, s->back);
   if (c->appeared) rk__controller_appear(s->to, true);
   rk_window *w = c->window;
   if (w) {
@@ -297,7 +305,7 @@ static void start_turn(rk_controller *c, rk_controller *old, bool owned, rk_cont
   pl->leaving = old; pl->leaving_owned = owned;
   swap *s = rk__alloc(sizeof *s);
   s->places = c; s->to = to; s->back = back;
-  double wait = old && old->view && rk__view_visible(old->view) ? turn_out(pl, old->view, pressed, back) : 0;
+  double wait = old && old->view && rk__view_visible(old->view) ? turn_out(&pl->out, old->view, pressed, back) : 0;
   if (wait <= 0) { swap_now(s); return; }
   pl->pending = s;
   pl->timer = rk_app_after(wait, false, swap_now, s);
@@ -333,8 +341,7 @@ void rk_places_back(rk_controller *c) {
 
 typedef struct strip {
   char **titles; int n, active;
-  bool nav, side, level_set;                                         /* side: a pivot's titles as a list down the leading side */
-  int motion;                                              /* down the side: 0 the sizes change, 1 the place in sight steps in */
+  bool nav, side, level_set;                                /* side: a pivot's titles as a list down the leading side */
   rk_glide *in;                                            /* down the side: each title's step in, 1 for the place in sight */
   rk_controller *pivot;                                    /* a pivot's strip: the nav level when nothing holds the pivot */
   rk_glide *scale;                                         /* each title's size, 1 active, INACTIVE otherwise */
@@ -345,9 +352,9 @@ typedef struct strip {
 #define INACTIVE 0.6f
 
 static rk_textfmt strip_fmt(rk_view *v, strip *s) {
-  return rk__textfmt(s->nav && !(s->side && s->motion == 1) ? RK_TEXT_NAV : RK_TEXT_PIVOT, rk__host_width(v));
+  return rk__textfmt(s->nav && !s->side ? RK_TEXT_NAV : RK_TEXT_PIVOT, rk__host_width(v));
 }
-static float strip_rest(strip *s, int i) { return i == s->active || (s->side && s->motion == 1) ? 1 : INACTIVE; }
+static float strip_rest(strip *s, int i) { return i == s->active || s->side ? 1 : INACTIVE; }
 
 /* Sizes and the slide glide: a change of section while one is under way carries on from its speed. */
 static float strip_scale(strip *s, int i, double now) { return s->scale ? rk__glide_at(&s->scale[i], now, NULL, NULL) : (i == s->active ? 1 : INACTIVE); }
@@ -376,34 +383,31 @@ static float strip_target(rk_view *v, strip *s) {
 
 static void strip_level(strip *s);
 
-/* Down the side: one title a line from the top, flush with the facets; the strip is as wide as its widest title
-   at full size, so a title that grows never pushes the facets aside. */
+/* Down the side: one title a line from the top, flush with the facets, all at one size. The one in sight steps in
+   by space-m and darkens over pivot-size; the one before steps back: the motion says which was picked. */
 static float side_line(rk_textfmt *f, float k) { return f->size * k * f->line + rk_metric_of(RK_SPACE_XS); }
 
 static rk_size side_measure(rk_view *v, strip *s) {
   rk_textfmt f = strip_fmt(v, s);
   float w = 0, h = 0;
-  for (int i = 0; i < s->n; i++) { w = RK_MAX(w, rk__text_width(s->titles[i], -1, &f)); h += side_line(&f, strip_rest(s, i)); }
-  return (rk_size){ strip_pad(s) + w + rk_metric_of(RK_SPACE_XL) + rk_metric_of(RK_SPACE_M), h };
+  for (int i = 0; i < s->n; i++) { w = RK_MAX(w, rk__text_width(s->titles[i], -1, &f)); h += side_line(&f, 1); }
+  return (rk_size){ strip_pad(s) + rk_metric_of(RK_SPACE_M) + w + rk_metric_of(RK_SPACE_XL), h };
 }
 
 static void side_draw(rk_view *v, rk_canvas *c, strip *s, double now) {
   rk_textfmt f = strip_fmt(v, s);
   float y = 0, step = rk_metric_of(RK_SPACE_M);
   for (int i = 0; i < s->n; i++) {
-    float k = strip_scale(s, i, now), in = rk__glide_at(&s->in[i], now, NULL, NULL);
-    rk_textfmt g = f; g.size = f.size * k;
-    rk_color col = s->motion == 1 ? rk__mix(rk_color_of(RK_ROLE_TEXT_MEDIUM), rk_color_of(RK_ROLE_TEXT), in) : rk_color_of(i == s->active ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
-    rk__text_draw(c, s->titles[i], -1, strip_pad(s) + (s->motion == 1 ? in * step : 0), y, &g, col);
-    y += side_line(&f, k);
+    float in = rk__glide_at(&s->in[i], now, NULL, NULL);
+    rk__text_draw(c, s->titles[i], -1, strip_pad(s) + in * step, y, &f, rk__mix(rk_color_of(RK_ROLE_TEXT_MEDIUM), rk_color_of(RK_ROLE_TEXT), in));
+    y += side_line(&f, 1);
   }
 }
 
 static int side_hit(rk_view *v, strip *s, float py) {
   rk_textfmt f = strip_fmt(v, s);
-  double now = rk_app_now();
   float y = 0;
-  for (int i = 0; i < s->n; i++) { float h = side_line(&f, strip_scale(s, i, now)); if (py >= y && py < y + h) return i; y += h; }
+  for (int i = 0; i < s->n; i++) { float h = side_line(&f, 1); if (py >= y && py < y + h) return i; y += h; }
   return -1;
 }
 
@@ -847,10 +851,19 @@ void rk__reveal(rk_view *v) {
 
 /* Pivot ----------------------------------------------------------------------------------------------------------- */
 
-typedef struct pivot { rk_controller *self; rk_controller **facets; int n, cap, sel; rk_view *strip, *body; } pivot;
+typedef struct pivot {
+  rk_controller *self; rk_controller **facets; int n, cap, sel; rk_view *strip, *body;
+  turn out; rk_controller *leaving; uint32_t timer; bool back;   /* a place change: the facet turning away */
+} pivot;
 
 static void pivot_select_cb(void *owner, int i) { rk_pivot_select(((pivot *)owner)->self, i); }
-static void pivot_free(void *st) { pivot *p = st; for (int i = 0; i < p->n; i++) rk_release(p->facets[i]); free(p->facets); free(p); }
+static void pivot_free(void *st) {
+  pivot *p = st;
+  if (p->timer) rk_app_cancel(p->timer);
+  turn_release(&p->out);
+  for (int i = 0; i < p->n; i++) rk_release(p->facets[i]);
+  free(p->out.units); free(p->facets); free(p);
+}
 
 static rk_controller *pivot_visible(rk_controller *c) { pivot *p = c->impl; return p->n ? p->facets[p->sel] : NULL; }
 
@@ -875,8 +888,7 @@ void rk_pivot_set_layout(rk_controller *c, rk_pivot_layout layout) {
   strip *s = p->strip->state;
   bool side = layout == RK_PIVOT_SIDE;
   if (side == s->side) return;
-  const char *m = getenv("RK_SIDE_MOTION");               /* for the comparison in examples/navigation.c, until one is chosen */
-  s->side = side; s->motion = m && !strcmp(m, "step") ? 1 : 0; s->level_set = false;
+  s->side = side; s->level_set = false;
   for (int i = 0; i < s->n; i++) rk__glide_set(&s->scale[i], strip_rest(s, i));
   rk_view_set_layout(c->view, side ? RK_LAYOUT_ROW : RK_LAYOUT_COLUMN);
   rk_view_set_gap(c->view, side ? 0 : rk_metric_of(RK_SPACE_M));
@@ -918,15 +930,40 @@ void rk_pivot_add(rk_controller *c, rk_controller *facet) {
   }
 }
 
+/* A pivot that picks the place turns it: the facet in sight turns away, then the next one turns in. One later in
+   the order turns forward, one earlier the way back. */
+static void pivot_arrive(void *user) {
+  pivot *p = user;
+  rk_controller *c = p->self, *old = p->leaving, *to = p->facets[p->sel];
+  p->timer = 0; p->leaving = NULL;
+  turn_reset(&p->out);
+  rk__view_detach(rk_controller_view(old));
+  rk__controller_appear(old, false);
+  rk_view *nv = rk_controller_view(to);
+  nv->ptransform = nv->transform; nv->popacity = nv->opacity;
+  rk__view_add(p->body, nv);
+  rk__controller_attach(to, c->window);
+  turn_in(nv, p->back);
+  if (c->appeared) rk__controller_appear(to, true);
+  if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar);
+}
+
 /* A facet change slides the new facet in from its side, slide-distance, with a fade, over 0.75 × duration-moderate. */
 void rk_pivot_select(rk_controller *c, int index) {
   if (c->kind != K_PIVOT) return;
   pivot *p = c->impl;
   if (index < 0 || index >= p->n || index == p->sel) return;
+  if (p->timer) { rk_app_cancel(p->timer); pivot_arrive(p); }      /* a turn still running finishes at once */
   rk_controller *old = p->facets[p->sel], *to = p->facets[index];
   int dir = index > p->sel ? 1 : -1;
   p->sel = index;
   strip_activate(p->strip, index);
+  if (((strip *)p->strip->state)->nav) {
+    p->leaving = old; p->back = dir < 0;
+    double wait = rk__view_visible(rk_controller_view(old)) ? turn_out(&p->out, rk_controller_view(old), NULL, p->back) : 0;
+    if (wait > 0) p->timer = rk_app_after(wait, false, pivot_arrive, p); else pivot_arrive(p);
+    return;
+  }
   rk__view_detach(rk_controller_view(old));               /* the controller keeps its view */
   rk__controller_appear(old, false);
   rk_view *nv = rk_controller_view(to);
