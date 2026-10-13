@@ -182,8 +182,17 @@ void rk__window_resized(rk_window *w, float width, float height, float scale) {
   rk__window_invalidate(w);
 }
 
+void rk__toast_leaving(rk_view *t) {
+  rk_window *w = rk__view_window(t);
+  if (!w || !rk__view_within(w->focus, t)) return;
+  rk_view *back = w->focus_back;
+  w->focus_back = NULL;
+  rk_window_focus(w, back && rk__view_window(back) == w && !back->leaving ? back : NULL);
+}
+
 void rk_window_toast(rk_window *w, const char *message, const char *action, void (*on_action)(void *), void *user) {
   for (int i = w->toasts->nkids - 1; i >= 0; i--) {             /* one at a time: the old one leaves */
+    rk__toast_leaving(w->toasts->kids[i]);
     rk_animate_begin(RK_MOTION_LEAVE); rk_view_remove(w->toasts->kids[i]); rk_animate_commit();
   }
   rk_view *t = rk__toast_create(message, action, on_action, user);
@@ -542,6 +551,7 @@ static void collect_focus(rk_view *v, rk_view **list, int *n, int max) {
 bool rk_window_focus(rk_window *w, rk_view *v) {
   if (v && !v->focusable) return false;
   if (w->focus == v) return true;
+  if (v && rk__view_within(v, w->toasts) && !rk__view_within(w->focus, w->toasts)) w->focus_back = w->focus;
   rk_event e = { sizeof e, RK_EVENT_BLUR, rk_app_now(), { 0, 0 }, 0, 0, 0, 0, 0, NULL };
   if (w->focus) dispatch(w, w->focus, &e);
   w->focus = v;
@@ -556,7 +566,8 @@ rk_view *rk_window_focused(rk_window *w) { return w->focus; }
 static void focus_step(rk_window *w, int dir) {
   rk_view *list[1024];
   int n = 0;
-  collect_focus(w->sheets->nkids ? w->sheets : w->root, list, &n, 1024);
+  collect_focus(w->sheets->nkids ? w->sheets : w->root, list, &n, 1024);   /* the root holds the toasts, last */
+  if (w->sheets->nkids) collect_focus(w->toasts, list, &n, 1024);           /* over a sheet, a toast's action still comes last */
   if (!n) return;
   int at = -1;
   for (int i = 0; i < n; i++) if (list[i] == w->focus) at = i;

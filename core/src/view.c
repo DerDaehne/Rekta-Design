@@ -103,6 +103,7 @@ void rk__view_detach(rk_view *v) {
   rk_window *w = rk__view_window(p);
   if (w) {
     for (rk_view *f = w->focus; f; f = f->parent) if (f == v) { w->focus = NULL; break; }
+    for (rk_view *f = w->focus_back; f; f = f->parent) if (f == v) { w->focus_back = NULL; break; }
     if (w->hover == v) w->hover = NULL;
     if (w->pressed == v) w->pressed = NULL;
     if (w->capture == v) w->capture = NULL;
@@ -160,6 +161,11 @@ void rk_view_remove(rk_view *child) {
     return;
   }
   rk__view_detach(child);
+}
+
+bool rk__view_within(const rk_view *v, const rk_view *ancestor) {
+  for (; v; v = v->parent) if (v == ancestor) return true;
+  return false;
 }
 
 rk_view *rk_view_parent(rk_view *v) { return v->parent; }

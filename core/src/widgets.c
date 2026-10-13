@@ -438,22 +438,40 @@ void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r) {
 
 typedef struct toast { void (*fn)(void *); void *user; uint32_t timer; rk_view *view; } toast;
 
+#define TOAST_HOLD_MS 1000
+
+static void go(toast *t) {
+  if (t->timer) { rk_app_cancel(t->timer); t->timer = 0; }
+  if (!t->view->parent || t->view->leaving) return;
+  rk__toast_leaving(t->view);
+  rk_animate_begin(RK_MOTION_LEAVE); rk_view_remove(t->view); rk_animate_commit();
+}
+
+/* Its time is up - unless focus or the pointer is on it: then it holds, and looks again a second later. */
 static void toast_leave(void *st) {
   toast *t = st;
   t->timer = 0;
-  if (t->view->parent) { rk_animate_begin(RK_MOTION_LEAVE); rk_view_remove(t->view); rk_animate_commit(); }
+  rk_window *w = rk__view_window(t->view);
+  if (w && (rk__view_within(w->focus, t->view) || rk__view_within(w->hover, t->view))) { t->timer = rk_app_after(TOAST_HOLD_MS, false, toast_leave, t); return; }
+  go(t);
+}
+
+static bool toast_event(rk_view *v, const rk_event *e, void *st) {
+  (void)v;
+  if (e->type != RK_EVENT_KEY_DOWN || e->key != RK_KEY_ESCAPE) return false;
+  go(st);                                                  /* Escape inside a toast dismisses it */
+  return true;
 }
 static void toast_act(rk_view *b, void *st) {
   (void)b;
   toast *t = st;
   void (*fn)(void *) = t->fn; void *user = t->user;
   t->fn = NULL;
-  if (t->timer) { rk_app_cancel(t->timer); t->timer = 0; }
-  toast_leave(t);
+  go(t);
   if (fn) fn(user);
 }
 static void toast_destroy(void *st) { toast *t = st; if (t->timer) rk_app_cancel(t->timer); free(t); }
-static const rk_class toast_class = { { sizeof(rk_view_class), "rk_toast", NULL, NULL, NULL, NULL, toast_destroy }, NULL, NULL };
+static const rk_class toast_class = { { sizeof(rk_view_class), "rk_toast", NULL, NULL, NULL, toast_event, toast_destroy }, NULL, NULL };
 
 rk_view *rk__toast_create(const char *message, const char *action, void (*on_action)(void *), void *user) {
   toast *t = rk__alloc(sizeof *t);

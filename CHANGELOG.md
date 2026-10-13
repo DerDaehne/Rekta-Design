@@ -32,6 +32,13 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core: focus everywhere. A toast holds while focus or the
+  pointer is on it, Escape dismisses it and focus goes back where it
+  came from (over a sheet too, its action is last in the Tab order); with
+  nothing focused taking them, Up and Down scroll the section in sight;
+  Home and End in a strip of titles. A test walks a window of every
+  control and fails on anything that takes input but not focus.
+  rekta(3) has a Keys section.
 - rekta-core has text areas: `rk_field_set_lines(field, lines)` makes a
   field show several lines, as the web's textarea rows. The text wraps
   at the input's width (at spaces; inside a word only when it is wider

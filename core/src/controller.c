@@ -403,6 +403,10 @@ static bool strip_event(rk_view *v, const rk_event *e, void *st) {
     }
     return true;
   }
+  if (e->type == RK_EVENT_KEY_DOWN && (e->key == RK_KEY_HOME || e->key == RK_KEY_END) && !e->mods && s->n) {
+    if (s->select) s->select(s->owner, e->key == RK_KEY_HOME ? 0 : s->n - 1);
+    return true;
+  }
   if (e->type == RK_EVENT_KEY_DOWN && (e->key == RK_KEY_LEFT || e->key == RK_KEY_RIGHT) && s->n) {
     int i = (s->active + (e->key == RK_KEY_RIGHT ? 1 : -1) + s->n) % s->n;
     if (s->select) s->select(s->owner, i);
@@ -567,6 +571,13 @@ static bool pano_event(rk_view *v, const rk_event *e, void *st) {
     if (e->key == RK_KEY_PAGE_UP) { pano_select(p, RK_MAX(a - 1, 0)); return true; }
     if (e->key == RK_KEY_HOME && !(e->mods & RK_MOD_SHIFT)) { pano_select(p, 0); return true; }
     if (e->key == RK_KEY_END && !(e->mods & RK_MOD_SHIFT)) { pano_select(p, p->n - 1); return true; }
+    if ((e->key == RK_KEY_UP || e->key == RK_KEY_DOWN) && !e->mods && p->n && p->secs[a].max > 0) {   /* the section in sight scrolls, as a page does */
+      section *s = &p->secs[a];
+      float to = RK_CLAMP(s->box->value + (e->key == RK_KEY_DOWN ? 40.0f : -40.0f), 0.0f, s->max);
+      if (to == s->box->value) return false;
+      scroll_value(s->box, to, s->max, SETTLE_WHEEL);
+      return true;
+    }
   }
   return false;
 }

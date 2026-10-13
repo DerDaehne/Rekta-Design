@@ -129,6 +129,8 @@ The app ends when its last window closes.
 A short message from the top edge; with an
 .Fa action
 (undo, retry) it stays a little longer.
+While focus or the pointer is on it, it stays; Escape dismisses it, and
+focus goes back to where it came from.
 .It Fn rk_window_do "rk_window *window" "const char *label" "void (*run)(void *)" "void (*undo)(void *)" "void *user" "void (*free_user)(void *)"
 Runs
 .Fa run
@@ -350,6 +352,28 @@ Called before a change:
 .El
 .Pp
 Under reduced motion every change is instant, never skipped.
+.Ss Keys
+Whatever takes a press or a key takes focus, and Tab reaches it, a
+toast's action last.
+.Bl -tag -width Ds
+.It Tab , Shift+Tab
+Focus in reading order; inside a sheet, its views and the toast.
+.It Enter , Space
+Press the focused button, tile or row: it sinks, then activates.
+.It Escape
+Closes the innermost: a menu, a toast with focus, a sheet, then the place.
+.It Shift+F10
+The focused view's menu.
+.It Ctrl+Z , Ctrl+Shift+Z , Ctrl+Y
+Undo and redo: a text field's own history inside it, the app's elsewhere.
+On macOS, Cmd for Ctrl.
+.It Left , Right , Home , End
+In a strip of titles, the next, the first or the last.
+.It Page Up , Page Down , Home , End
+A panorama's sections.
+.It Up , Down
+The section in sight scrolls, when nothing focused takes the key.
+.El
 .Ss Testing and measuring
 .Bl -tag -width Ds
 .It Fn rk_view_tap , Fn rk_window_key , Fn rk_window_inject

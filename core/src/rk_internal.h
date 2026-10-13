@@ -225,6 +225,7 @@ struct rk_window {
   rk_irect damage[RK_DAMAGE_MAX]; int ndamage; bool damage_all;   /* what the next frame draws, in device pixels */
   char *title;
   rk_view *focus, *hover, *pressed, *capture;
+  rk_view *focus_back;                                     /* where focus was before it went into a toast */
   rk_view *activated;                                      /* the view whose activate handler is running */
   bool focus_visible;                                      /* focus came from the keyboard */
   rk_point pointer;
@@ -266,6 +267,8 @@ void rk__reveal(rk_view *v);                               /* scroll it into vie
 rk_view *rk__titlebar_create(rk_window *w);
 void rk__titlebar_update(rk_view *bar);
 rk_view *rk__toast_create(const char *message, const char *action, void (*on_action)(void *), void *user);
+bool rk__view_within(const rk_view *v, const rk_view *ancestor);
+void rk__toast_leaving(rk_view *toast);                    /* focus inside it goes back to where it came from */
 bool rk__is_tile(rk_view *v);
 void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r);
 

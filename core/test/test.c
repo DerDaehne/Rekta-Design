@@ -637,6 +637,103 @@ static void test_textarea(void) {
   done(w);
 }
 
+/* Focus everywhere: whatever takes a press or a key takes focus, and Tab reaches it - a toast's action too. */
+static int acts;
+static void act(rk_view *v, void *u) { (void)v; (void)u; acts++; }
+static void toast_acted(void *u) { (void)u; acts += 10; }
+static void menu_noop(rk_view *m, int i, void *u) { (void)m; (void)i; (void)u; }
+
+static bool takes_input(const rk_view *v) {
+  if (v->press != RK_PRESS_NONE || v->on_activate || v->menu) return true;
+  const char *n = v->cls ? v->cls->pub.name : "";
+  return !strcmp(n, "rk_field") || !strcmp(n, "rk_list") || !strcmp(n, "rk_strip");
+}
+static int unreachable(const rk_view *v, const rk_view *skip) {
+  if (v == skip || v->hidden) return 0;
+  int n = takes_input(v) && !v->focusable;
+  if (n) fprintf(stderr, "  not focusable: %s\n", v->cls ? v->cls->pub.name : "(plain view)");
+  for (int i = 0; i < v->nkids; i++) n += unreachable(v->kids[i], skip);
+  return n;
+}
+
+static void test_focus(void) {
+  rk_window *w = window(900, 600);
+  rk_controller *home = rk_panorama();
+  rk_view *s1 = col(16, 0);
+  rk_view *save = rk_add(s1, rk_button("save", act, NULL));
+  rk_view *more = rk_add(s1, rk_button("more", NULL, NULL));
+  rk_view *m = rk_menu(); rk_menu_add(m, "export", NULL, menu_noop, NULL); rk_view_set_menu(more, m);
+  rk_view *t = rk_add(rk_add(s1, rk_tile_grid()), rk_tile("3", "builds"));
+  rk_view_on_activate(t, act, NULL);
+  rk_view *rows = rk_add(s1, rk_rows());
+  rk_view_on_activate(rk_rows_add(rows, "Release notes", "today", RK_STATUS_NONE), act, NULL);
+  rk_add(s1, rk_field("Name", NULL));
+  rk_view *l = rk_add(s1, rk_list(50, list_item, NULL)); rk_view_set_size(l, 300, 200);
+  rk_view *tb = rk_add(s1, rk_table(50, table_cell, NULL)); rk_table_add_column(tb, "build", 0, 0); rk_view_set_size(tb, 300, 200);
+  for (int i = 0; i < 30; i++) rk_add(s1, rk_label("A line that makes the section taller than the window.", RK_TEXT_BODY));
+  rk_panorama_add(home, "focus", s1, 0);
+  rk_panorama_add(home, "second", col(16, 0), 0);
+  rk_window_show(w, rk_places(home));
+  rk_app_run_for(100);
+  CHECK(unreachable(w->root, w->titlebar) == 0, "everything that takes a press or a key takes focus");
+  /* Tab goes round all of them and comes back */
+  rk_view *seen[64]; int n = 0;
+  rk_window_focus(w, NULL);
+  for (int i = 0; i < 64; i++) {
+    key(w, RK_KEY_TAB, 0);
+    if (n && rk_window_focused(w) == seen[0]) break;
+    seen[n++] = rk_window_focused(w);
+  }
+  int want = 0;
+  rk_view *expect[] = { save, more, t, l, tb };
+  for (int i = 0; i < 5; i++) for (int j = 0; j < n; j++) if (seen[j] == expect[i]) { want++; break; }
+  CHECK(want == 5 && n >= 8, "Tab reaches each of them and comes round (%d stops)", n);
+  /* with nothing focused, Up and Down scroll the section in sight, as a page does */
+  rk_window_focus(w, NULL);
+  rk_view *box = s1->parent;
+  float y0 = box->value;
+  key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_DOWN, 0);
+  rk_app_run_for(400);
+  CHECK(box->value > y0 + 60, "Down scrolls the section (%.0f)", box->value);
+  key(w, RK_KEY_UP, 0); key(w, RK_KEY_UP, 0); key(w, RK_KEY_UP, 0);
+  rk_app_run_for(400);
+  CHECK(box->value == 0, "Up brings it back (%.0f)", box->value);
+  /* a toast's action: last in the order; focus holds it; Escape dismisses it and focus goes back */
+  rk_window_focus(w, save);
+  rk_window_toast(w, "Archived.", "undo", toast_acted, NULL);
+  rk_app_run_for(300);
+  rk_view *toast = w->toasts->kids[0];
+  key(w, RK_KEY_TAB, RK_MOD_SHIFT);
+  CHECK(rk__view_within(rk_window_focused(w), toast), "Shift+Tab from the first goes round to the toast's action");
+  rk_app_run_for(rk_duration_of(RK_TIMING_TOAST) + 1500);
+  CHECK(toast->parent && !toast->leaving, "focus holds the toast past its time");
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(toast->leaving && rk_window_focused(w) == save && acts == 0, "Escape dismisses it, focus goes back");
+  rk_app_run_for(400);
+  /* Enter on the action runs it; focus goes back too */
+  rk_window_toast(w, "Archived again.", "undo", toast_acted, NULL);
+  rk_app_run_for(300);
+  key(w, RK_KEY_TAB, RK_MOD_SHIFT);
+  key(w, RK_KEY_ENTER, 0);
+  rk_app_run_for(300);
+  CHECK(acts == 10 && rk_window_focused(w) == save, "Enter on the action runs it (%d), focus goes back", acts);
+  /* the pointer on it holds it too; off it, it goes */
+  rk_window_focus(w, NULL);
+  rk_window_toast(w, "Hovered.", NULL, NULL, NULL);
+  rk_app_run_for(300);
+  toast = w->toasts->kids[w->toasts->nkids - 1];
+  rk_rect tr = rk__window_rect(toast);
+  rk_event mv = { sizeof mv, RK_EVENT_POINTER_MOVE, rk_app_now(), { tr.x + 20, tr.y + tr.h / 2 }, 0, 0, 0, 0, 0, NULL };
+  rk_window_inject(w, &mv);
+  rk_app_run_for(rk_duration_of(RK_TIMING_TOAST) + 1500);
+  CHECK(!toast->leaving, "the pointer holds it");
+  mv.position = (rk_point){ 20, 500 }; mv.time = rk_app_now();
+  rk_window_inject(w, &mv);
+  rk_app_run_for(1500);
+  CHECK(w->toasts->nkids == 0, "off it, it goes");
+  done(w);
+}
+
 /* The app's history: an action runs and is remembered; its toast offers undo; Ctrl+Z outside fields. */
 static int counter;
 static void count_up(void *u) { (void)u; counter++; }
@@ -823,6 +920,7 @@ static void launch(void *user) {
   test_table();
   test_textarea();
   test_undo();
+  test_focus();
   test_navigation();
   test_spring();
   scene_tiles("tiles", 1);
