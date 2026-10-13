@@ -9,6 +9,17 @@ it; each entry says how.
 
 ### Added
 
+- **rekta-core: notifications** (`rk_app_notify`): a title and a body from the
+  system. On Linux they go to `org.freedesktop.Notifications` over D-Bus from a
+  thread of their own, with the body escaped for servers that read markup and
+  the app's id as the desktop entry; on Windows a balloon (a toast on 10 and
+  later) from an icon in the notification area; on macOS through
+  `UNUserNotificationCenter`, loaded at run time, for apps in a bundle. Tested
+  end to end on Linux by `core/test/platform/desktop.sh`.
+- **rekta-core: X11 follows the scale while the app runs**: when the desktop
+  changes `Xft.dpi`, each window keeps its logical size in the new number of
+  pixels (`core/test/platform/scale.sh`). X11 has one scale for the screen; no
+  desktop publishes one per monitor, so there is none to follow.
 - **rekta-core: files dragged in, and a place to drop them** (`rk_drop`), as
   the web's `.rk-drop`: a 2 px dashed text-medium edge that turns solid, in the
   text colour over the hover fill, while files are over it; a filter by
@@ -20,9 +31,9 @@ it; each entry says how.
   filtered as the drop place is, and answers later; a click on the drop place
   opens it. On Linux it asks the desktop portal over D-Bus (libdbus looked up
   at run time), else zenity or kdialog (tested end to end by
-  `core/test/dnd/chooser.sh` against a stand-in portal); on Windows the open
+  `core/test/platform/chooser.sh` against a stand-in portal); on Windows the open
   dialog (comdlg32 looked up at run time); on macOS an `NSOpenPanel` as a sheet. Files come in on every platform: XDND 5 on
-  X11 (tested end to end under Xvfb by `core/test/dnd/x11.sh`), the data
+  X11 (tested end to end under Xvfb by `core/test/platform/x11.sh`), the data
   device on Wayland, an OLE `IDropTarget` on Windows (ole32 and shell32 looked
   up at run time) and `NSDraggingDestination` on macOS.
 - **rekta-core: rows the user puts in order** (`rk_rows_set_sortable`), as

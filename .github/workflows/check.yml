@@ -52,9 +52,11 @@ jobs:
       - name: Tests and the demo script under AddressSanitizer and UBSan
         run: make -C core sanitize
       - name: Files dropped from another X client (XDND) arrive, filtered
-        run: cd core && sh test/dnd/x11.sh
-      - name: The file chooser asks the desktop portal, and zenity without one
-        run: cd core && sh test/dnd/chooser.sh
+        run: cd core && sh test/platform/x11.sh
+      - name: The file chooser asks the desktop portal (zenity without one); notifications reach the server
+        run: cd core && sh test/platform/desktop.sh
+      - name: X11 follows Xft.dpi while a window is open
+        run: cd core && sh test/platform/scale.sh
       - name: The demo opens a window and runs (X11)
         run: xvfb-run -a timeout 3 ./core/build/demo || test $? -eq 124
       - name: The demo opens a window and runs (Wayland, under a headless Weston)

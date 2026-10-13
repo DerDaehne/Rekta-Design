@@ -42,14 +42,21 @@ static bool hl_choose(void *native, const char *accept, bool multiple, void (*do
   return true;
 }
 
+char rk__headless_note[512];
+static bool hl_notify(const rk_app_desc *app, const char *title, const char *body) {
+  (void)app;
+  snprintf(rk__headless_note, sizeof rk__headless_note, "%s: %s", title, body);
+  return true;
+}
+
 const rk_platform rk__platform_headless = {
   "headless", hl_init, hl_shutdown, hl_open, hl_close, hl_show, hl_title, hl_present, hl_nop, hl_nop, hl_nop,
-  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose
+  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose, hl_notify
 };
 
 #if defined(RK_HEADLESS_ONLY)
 const rk_platform rk__platform_native = {
   "headless", hl_init, hl_shutdown, hl_open, hl_close, hl_show, hl_title, hl_present, hl_nop, hl_nop, hl_nop,
-  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose
+  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose, hl_notify
 };
 #endif

@@ -1,5 +1,6 @@
-/* fake_portal.c: a stand-in for xdg-desktop-portal's FileChooser on a private session bus, for the chooser test. It
-   prints the options it was given (multiple, the filter patterns) and answers OpenFile with the URIs in argv[1..]. */
+/* fake_desktop.c: a stand-in for xdg-desktop-portal's FileChooser on a private session bus, for the desktop test. It
+   prints the options it was given (multiple, the filter patterns) and answers OpenFile with the URIs in argv[1..].
+   With --notify it stands in for the notification server instead, and prints the one Notify it gets. */
 #define _DEFAULT_SOURCE
 #include <dlfcn.h>
 #include <stdint.h>
@@ -58,12 +59,31 @@ int main(int argc, char **argv) {
   dbus_error_init(&err);
   DBusConnection *c = dbus_bus_get(0, &err);
   if (!c) { fprintf(stderr, "no bus: %s\n", err.message ? err.message : "?"); return 2; }
-  int got = dbus_bus_request_name(c, "org.freedesktop.portal.Desktop", 4, &err);
+  int notify = argc > 1 && !strcmp(argv[1], "--notify");
+  int got = dbus_bus_request_name(c, notify ? "org.freedesktop.Notifications" : "org.freedesktop.portal.Desktop", 4, &err);
   if (got != 1) { fprintf(stderr, "no name (%d): %s\n", got, err.message ? err.message : "?"); return 2; }
   printf("portal ready\n"); fflush(stdout);
   while (dbus_connection_read_write(c, 10000)) {
     DBusMessage *m;
     while ((m = dbus_connection_pop_message(c))) {
+      if (notify && dbus_message_is_method_call(m, "org.freedesktop.Notifications", "Notify")) {
+        DBusMessageIter it;
+        dbus_message_iter_init(m, &it);
+        printf("notify");
+        strings(&it, 0);                                     /* app, icon, summary, body, then the hints' keys and values */
+        printf("\n");
+        DBusMessage *r = dbus_message_new_method_return(m);
+        DBusMessageIter ri;
+        uint32_t id = 7;
+        dbus_message_iter_init_append(r, &ri);
+        dbus_message_iter_append_basic(&ri, 'u', &id);
+        dbus_connection_send(c, r, NULL);
+        dbus_connection_flush(c);
+        dbus_message_unref(r);
+        dbus_message_unref(m);
+        fflush(stdout);
+        return 0;
+      }
       if (!dbus_message_is_method_call(m, "org.freedesktop.portal.FileChooser", "OpenFile")) { dbus_message_unref(m); continue; }
       DBusMessageIter it, dict;
       const char *parent = "", *title = "", *token = "";

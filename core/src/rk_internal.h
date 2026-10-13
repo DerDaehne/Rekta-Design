@@ -343,9 +343,12 @@ typedef struct rk_platform {
   void (*cursor)(void *native, int shape);                 /* NULL, or the pointer takes an RK__CURSOR_ shape */
   /* NULL, or the system's file chooser: false if it cannot open; else done() comes later, n 0 if it was cancelled */
   bool (*choose_files)(void *native, const char *accept, bool multiple, void (*done)(void *ctx, const char *const *files, int n), void *ctx);
+  bool (*notify)(const rk_app_desc *app, const char *title, const char *body);   /* NULL, or a system notification */
 } rk_platform;
 extern const char *const *rk__headless_choice; extern int rk__headless_nchoice;   /* what the headless chooser answers */
+extern char rk__headless_note[512];                         /* the last notification, "title: body" */
 bool rk__desktop_choose_files(void *native, const char *accept, bool multiple, void (*done)(void *, const char *const *, int), void *ctx);   /* Linux */
+bool rk__desktop_notify(const rk_app_desc *app, const char *title, const char *body);   /* Linux */
 
 extern const rk_platform rk__platform_headless;
 extern const rk_platform rk__platform_native;              /* the OS this was built for */

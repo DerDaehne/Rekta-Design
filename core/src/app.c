@@ -45,6 +45,11 @@ uint32_t rk_app_after(double ms, bool repeat, void (*fn)(void *), void *user) {
   return t->id;
 }
 
+bool rk_app_notify(const char *title, const char *body) {
+  const rk_platform *p = rk__platform();
+  return title && *title && p->notify && p->notify(&app, title, body ? body : "");
+}
+
 void rk_app_cancel(uint32_t id) {
   for (int i = 0; i < ntimers; i++) if (timers[i].id == id) { timers[i] = timers[--ntimers]; return; }
 }

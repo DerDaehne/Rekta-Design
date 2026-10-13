@@ -1,11 +1,11 @@
 #!/bin/sh
 # x11.sh: drags files onto a Rekta window under Xvfb, as a file manager would (XDND 5), and checks what it took.
-# Needs Xvfb and the X11 headers. Run from core/: sh test/dnd/x11.sh
+# Needs Xvfb and the X11 headers. Run from core/: sh test/platform/x11.sh
 set -e
 out=${TMPDIR:-/tmp}/rekta-dnd.$$
 mkdir -p "$out"
-cc -std=c99 -O1 -Iinclude test/dnd/drop_target.c src/rekta.c -o "$out/target" -DRK_NO_WAYLAND -lX11 -lXext -lm -lpthread -ldl
-cc -std=c99 -O1 test/dnd/xdnd_send.c -o "$out/send" -lX11
+cc -std=c99 -O1 -Iinclude test/platform/drop_target.c src/rekta.c -o "$out/target" -DRK_NO_WAYLAND -lX11 -lXext -lm -lpthread -ldl
+cc -std=c99 -O1 test/platform/xdnd_send.c -o "$out/send" -lX11
 Xvfb :73 -screen 0 800x600x24 >/dev/null 2>&1 & xvfb=$!
 trap 'kill $xvfb 2>/dev/null; rm -rf "$out"' EXIT
 sleep 1

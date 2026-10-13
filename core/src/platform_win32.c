@@ -346,7 +346,8 @@ static bool w_init(const rk_app_desc *d) {
   return RegisterClassExW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
 }
 
-static void w_shutdown(void) { UnregisterClassW(CLASS, inst); }
+static void note_remove(void);
+static void w_shutdown(void) { note_remove(); UnregisterClassW(CLASS, inst); }
 
 static void dark_frame(wwin *x) {
   BOOL dark = rk__dark();
@@ -478,6 +479,58 @@ static void drop_detach(wwin *x) {
   x->drop->x = NULL;                                           /* OLE may still hold it a moment */
   x->drop->iface.lpVtbl->Release(&x->drop->iface);
   x->drop = NULL;
+}
+
+/* Notifications: an icon in the notification area that shows a balloon, which Windows 10 and later turn into a toast.
+   The icon stays while the app runs, so each balloon has it to come from; it goes at shutdown. Its owner is a
+   message-only window, as a notification needs no window of the app's to be open. shell32 is looked up at run time. */
+#ifndef NIIF_RESPECT_QUIET_TIME
+#define NIIF_RESPECT_QUIET_TIME 0x80
+#endif
+typedef BOOL(WINAPI *Shell_NotifyIconW_t)(DWORD, PNOTIFYICONDATAW);
+static Shell_NotifyIconW_t pShell_NotifyIconW;
+static HWND note_owner;
+static bool note_shown;
+
+static void note_remove(void) {
+  if (!note_shown) return;
+  NOTIFYICONDATAW d;
+  memset(&d, 0, sizeof d);
+  d.cbSize = sizeof d; d.hWnd = note_owner; d.uID = 1;
+  pShell_NotifyIconW(NIM_DELETE, &d);
+  note_shown = false;
+  DestroyWindow(note_owner); note_owner = NULL;
+}
+
+static void wide_into(wchar_t *dst, int cap, const char *utf8) {
+  if (!MultiByteToWideChar(CP_UTF8, 0, utf8, -1, dst, cap)) dst[0] = 0;   /* too long for the field: nothing */
+  dst[cap - 1] = 0;
+}
+
+static bool w_notify(const rk_app_desc *app, const char *title, const char *body) {
+  static bool tried;
+  if (!tried) { tried = true; HMODULE shell = LoadLibraryW(L"shell32.dll"); pShell_NotifyIconW = shell ? (Shell_NotifyIconW_t)(void (*)(void))GetProcAddress(shell, "Shell_NotifyIconW") : NULL; }
+  if (!pShell_NotifyIconW) return false;
+  if (!note_owner) note_owner = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, inst, NULL);   /* not ours: proc wants a window */
+  if (!note_owner) return false;
+  NOTIFYICONDATAW d;
+  memset(&d, 0, sizeof d);
+  d.cbSize = sizeof d; d.hWnd = note_owner; d.uID = 1;
+  d.uFlags = NIF_INFO | NIF_ICON | NIF_TIP;
+  d.hIcon = LoadIcon(inst, MAKEINTRESOURCE(1));
+  if (!d.hIcon) d.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+  wide_into(d.szTip, (int)(sizeof d.szTip / sizeof *d.szTip), app->name ? app->name : "");
+  wide_into(d.szInfoTitle, (int)(sizeof d.szInfoTitle / sizeof *d.szInfoTitle), title);
+  wide_into(d.szInfo, (int)(sizeof d.szInfo / sizeof *d.szInfo), *body ? body : " ");   /* empty text hides a balloon */
+  d.dwInfoFlags = NIIF_INFO | NIIF_RESPECT_QUIET_TIME;
+  if (!note_shown) {
+    if (!pShell_NotifyIconW(NIM_ADD, &d)) return false;
+    note_shown = true;
+    d.uVersion = NOTIFYICON_VERSION_4;
+    pShell_NotifyIconW(NIM_SETVERSION, &d);
+    return true;
+  }
+  return pShell_NotifyIconW(NIM_MODIFY, &d) != FALSE;
 }
 
 /* The file chooser: the system's open dialog (comdlg32, looked up at run time), over the window. It is modal, as it
@@ -649,5 +702,5 @@ static void w_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "win32", w_init, w_shutdown, w_open, w_close, w_show, w_title, w_present, w_move, w_minimize, w_zoom,
-  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input, w_cursor, w_choose
+  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input, w_cursor, w_choose, w_notify
 };

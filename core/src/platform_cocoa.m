@@ -2,9 +2,11 @@
    title bar, so Rekta's title bar sits beside the system's traffic lights; pixels go up as a CALayer's contents; the
    theme follows the effective appearance and the motion setting the accessibility display options. While a field
    has focus, keys go through the text input system (NSTextInputClient): an input method's composing text is shown
-   by the field, underlined, and what it commits is typed; dead keys compose the same way. */
+   by the field, underlined, and what it commits is typed; dead keys compose the same way. Notifications go through
+   UNUserNotificationCenter, loaded at run time, and only from an app bundle, which it needs. */
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <UserNotifications/UserNotifications.h>
 #include "rk_internal.h"
 
 @class RKView;
@@ -414,9 +416,50 @@ static bool c_choose(void *n, const char *accept, bool multiple, void (*done)(vo
   return true;
 }
 
+/* Notifications: shown while the app is in front too, as the app asked for them. */
+@interface RKNotes : NSObject <UNUserNotificationCenterDelegate>
+@end
+@implementation RKNotes
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center willPresentNotification:(UNNotification *)note
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))show {
+  (void)center; (void)note;
+  if (@available(macOS 11.0, *)) show(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList);
+  else show(UNNotificationPresentationOptionAlert);
+}
+@end
+
+static bool c_notify(const rk_app_desc *app, const char *title, const char *body) {
+  (void)app;
+  static RKNotes *notes;
+  static Class center_class, content_class, request_class;
+  if (!notes) {
+    if (!NSBundle.mainBundle.bundleIdentifier) return false;   /* outside a bundle the center throws */
+    [[NSBundle bundleWithPath:@"/System/Library/Frameworks/UserNotifications.framework"] load];
+    center_class = NSClassFromString(@"UNUserNotificationCenter");
+    content_class = NSClassFromString(@"UNMutableNotificationContent");
+    request_class = NSClassFromString(@"UNNotificationRequest");
+    if (!center_class || !content_class || !request_class) return false;
+    notes = [RKNotes new];
+    [center_class currentNotificationCenter].delegate = notes;
+  }
+  UNUserNotificationCenter *center = [center_class currentNotificationCenter];
+  NSString *t = [NSString stringWithUTF8String:title] ?: @"", *b = [NSString stringWithUTF8String:body] ?: @"";
+  Class content = content_class, request = request_class;
+  [center requestAuthorizationWithOptions:UNAuthorizationOptionAlert | UNAuthorizationOptionSound
+                        completionHandler:^(BOOL granted, NSError *error) {
+    (void)error;
+    if (!granted) return;                                    /* the person said no once; the system remembers */
+    UNMutableNotificationContent *c = [content new];
+    c.title = t; c.body = b;
+    [center addNotificationRequest:[request requestWithIdentifier:NSUUID.UUID.UUIDString content:c trigger:nil]
+             withCompletionHandler:nil];
+  }];
+  return true;
+}
+
 static void c_resize(void *n, float w, float h) { cwin *x = n; if (x && !x->win.zoomed) [x->win setContentSize:NSMakeSize(w, h)]; }
 
 const rk_platform rk__platform_native = {
   "cocoa", c_init, c_shutdown, c_open, c_close, c_show, c_title, c_present, c_move, c_minimize, c_zoom,
-  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, c_text_input, c_cursor, c_choose
+  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, c_text_input, c_cursor, c_choose, c_notify
 };

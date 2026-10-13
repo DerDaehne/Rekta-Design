@@ -101,6 +101,15 @@ A timer; returns its id for
 .Fn rk_app_cancel .
 .It Fn rk_app_now
 Milliseconds on a monotonic clock.
+.It Fn rk_app_notify "const char *title" "const char *body"
+A notification from the system, with the app's
+.Fa name ;
+false where there is none, or with no title.
+On Linux it goes to the notification server over D-Bus
+.Pq the app's Fa id No as its desktop entry ;
+on Windows it is a balloon from an icon in the notification area, kept there
+while the app runs; on macOS it comes from the notification centre, which asks
+the person once, and only for an app in a bundle.
 .It Fn rk_app_set_theme , Fn rk_app_set_density , Fn rk_app_set_motion , Fn rk_app_set_accent
 Each follows the system until set.
 A change of theme or accent cross-fades the windows.
@@ -612,7 +621,9 @@ uses X11 even where a Wayland compositor answers.
 .It Ev RK_HEADLESS
 Non-zero: no screen; windows live in memory and the clock is virtual.
 .It Ev RK_SCALE
-Without a screen: device pixels per logical pixel.
+Device pixels per logical pixel without a screen, and on X11 in place of
+.Li Xft.dpi ,
+which is otherwise followed while the app runs.
 .It Ev RK_THREADS
 How many threads draw big layers; 1 draws everything on the main thread.
 .It Ev RK_FPS

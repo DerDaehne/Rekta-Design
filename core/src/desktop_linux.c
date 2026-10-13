@@ -1,7 +1,8 @@
 /* desktop_linux.c: what a Linux desktop offers apps, for X11 and Wayland alike. The file chooser is the desktop
    portal's (org.freedesktop.portal.FileChooser, which sandboxed apps may use too), asked over D-Bus; where no portal
    answers, zenity or kdialog. Each runs on a thread of its own, since a person may take minutes, and the answer comes
-   back through rk_app_post. libdbus is looked up at run time, so the library links against nothing new. */
+   back through rk_app_post. Notifications go to org.freedesktop.Notifications, from a thread too, so a slow bus never
+   holds a frame. libdbus is looked up at run time, so the library links against nothing new. */
 #include "rk_internal.h"
 #include <dlfcn.h>
 #include <pthread.h>
@@ -15,7 +16,7 @@ typedef struct DBusMessage DBusMessage;
 typedef struct { const char *name, *message; unsigned bits; void *pad; char room[32]; } DBusError;
 typedef struct { void *d1, *d2; uint32_t d3; int d4[9]; void *p2, *p3; char room[64]; } DBusMessageIter;
 enum { DBUS_SESSION = 0, T_INVALID = 0, T_STRING = 's', T_BOOL = 'b', T_UINT32 = 'u', T_ARRAY = 'a', T_VARIANT = 'v',
-       T_DICT = 'e', T_STRUCT = 'r', T_PATH = 'o' };
+       T_DICT = 'e', T_STRUCT = 'r', T_PATH = 'o', T_INT32 = 'i' };
 
 static struct {
   bool tried, ok;
@@ -236,6 +237,72 @@ bool rk__desktop_choose_files(void *native, const char *accept, bool multiple, v
   a->accept = accept ? rk__strdup(accept) : NULL; a->multiple = multiple; a->done = done; a->ctx = ctx;
   pthread_t th;
   if (pthread_create(&th, NULL, chooser_thread, a)) { free(a->accept); free(a); return false; }
+  pthread_detach(th);
+  return true;
+}
+
+/* Notifications: one Notify call each, on a short-lived thread with its own connection. */
+typedef struct note { char *app, *entry, *title, *body; } note;
+
+static void *notify_thread(void *user) {
+  note *n = user;
+  DBusError err;
+  D.error_init(&err);
+  DBusConnection *c = D.bus_get_private(DBUS_SESSION, &err);
+  if (c) {
+    DBusMessage *m = D.new_call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify");
+    DBusMessageIter it, actions, hints;
+    uint32_t replaces = 0;
+    int32_t expire = -1;                                    /* the server's own time */
+    const char *icon = "";
+    D.iter_append(m, &it);
+    D.append_basic(&it, T_STRING, &n->app);
+    D.append_basic(&it, T_UINT32, &replaces);
+    D.append_basic(&it, T_STRING, &icon);
+    D.append_basic(&it, T_STRING, &n->title);
+    D.append_basic(&it, T_STRING, &n->body);
+    D.open(&it, T_ARRAY, "s", &actions); D.close(&it, &actions);
+    D.open(&it, T_ARRAY, "{sv}", &hints);
+    if (n->entry) append_string_variant(&hints, "desktop-entry", T_STRING, &n->entry);   /* the server groups by it */
+    D.close(&it, &hints);
+    D.append_basic(&it, T_INT32, &expire);
+    DBusMessage *r = D.send_block(c, m, 5000, &err);
+    if (r) D.msg_unref(r);
+    D.msg_unref(m);
+    D.conn_close(c); D.conn_unref(c);
+  }
+  if (D.error_is_set(&err)) D.error_free(&err);
+  free(n->app); free(n->entry); free(n->title); free(n->body); free(n);
+  return NULL;
+}
+
+/* the body may be read as markup: only &, < and > need escaping */
+static char *escaped(const char *t) {
+  size_t len = 1;
+  for (const char *p = t; *p; p++) len += *p == '&' ? 5 : *p == '<' || *p == '>' ? 4 : 1;
+  char *out = rk__alloc(len), *o = out;
+  for (const char *p = t; *p; p++)
+    if (*p == '&') { memcpy(o, "&amp;", 5); o += 5; }
+    else if (*p == '<') { memcpy(o, "&lt;", 4); o += 4; }
+    else if (*p == '>') { memcpy(o, "&gt;", 4); o += 4; }
+    else *o++ = *p;
+  return out;
+}
+
+bool rk__desktop_notify(const rk_app_desc *app, const char *title, const char *body) {
+  if (!dbus_load()) return false;
+  const char *addr = getenv("DBUS_SESSION_BUS_ADDRESS"), *run = getenv("XDG_RUNTIME_DIR");
+  char bus[512];
+  if (!addr || !*addr) {                                   /* libdbus also finds $XDG_RUNTIME_DIR/bus */
+    if (!run || snprintf(bus, sizeof bus, "%s/bus", run) >= (int)sizeof bus || access(bus, F_OK)) return false;
+  }
+  note *n = rk__alloc(sizeof *n);
+  n->app = rk__strdup(app->name ? app->name : "");
+  n->entry = app->id && *app->id ? rk__strdup(app->id) : NULL;
+  n->title = rk__strdup(title);
+  n->body = escaped(body);
+  pthread_t th;
+  if (pthread_create(&th, NULL, notify_thread, n)) { free(n->app); free(n->entry); free(n->title); free(n->body); free(n); return false; }
   pthread_detach(th);
   return true;
 }

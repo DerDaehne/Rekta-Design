@@ -1515,6 +1515,14 @@ static void test_drop(void) {
   done(w);
 }
 
+/* A notification goes to the system as given; without a title there is nothing to show. */
+static void test_notify(void) {
+  rk__headless_note[0] = 0;
+  CHECK(rk_app_notify("Build 42 passed", "in 3 min") && !strcmp(rk__headless_note, "Build 42 passed: in 3 min"), "a notification: %s", rk__headless_note);
+  CHECK(rk_app_notify("Synced", NULL) && !strcmp(rk__headless_note, "Synced: "), "no body: the title alone");
+  CHECK(!rk_app_notify("", "lost") && !rk_app_notify(NULL, "lost") && !strcmp(rk__headless_note, "Synced: "), "no title: nothing");
+}
+
 /* A pivot down the side: its titles in a list, Up and Down pick, the one in sight steps in; a top pivot turns the place. */
 static void test_side_pivot(void) {
   rk_window *w = window(900, 500);
@@ -1740,6 +1748,7 @@ static void launch(void *user) {
   test_split();
   test_sort();
   test_drop();
+  test_notify();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

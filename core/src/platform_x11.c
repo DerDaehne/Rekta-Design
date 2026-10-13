@@ -1,6 +1,7 @@
 /* platform_x11.c: Linux and BSD through Xlib, where no Wayland compositor answers (or with RK_PLATFORM=x11). Pixels go
    up through MIT-SHM (XPutImage where it is missing); text input comes through XIM; the theme and the animation setting
-   come from XSETTINGS, which GNOME, KDE and Xfce all publish; Xft.dpi gives the scale. Another thread wakes the loop
+   come from XSETTINGS, which GNOME, KDE and Xfce all publish; Xft.dpi gives the scale, followed when the desktop
+   changes it (X11 has one for the whole screen: no desktop publishes one per monitor). Another thread wakes the loop
    through a pipe. */
 #include "rk_internal.h"
 #include <X11/Xatom.h>
@@ -20,6 +21,7 @@
 
 typedef struct xwin {
   rk_window *w; Window win; GC gc; XIC ic; int pw, ph; bool maximized;
+  float min_w, min_h;                                        /* logical: the hints follow the scale */
   char *preedit; int plen, pcap;                             /* what the input method composes, on the spot (UTF-8) */
   XPoint spot; bool spot_due, composing;                     /* the caret for the input method, sent between compositions */
   XImage *shm_img; XShmSegmentInfo shm;                      /* the frame in memory the X server reads directly */
@@ -52,13 +54,18 @@ static double x_now(void) {
   return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
 }
 
+/* The scale from Xft.dpi, read from the root window's resources as they are now (Xlib's copy is from the connect). */
+static bool scale_fixed;                                       /* RK_SCALE set: kept */
 static void read_dpi(void) {
   const char *env = getenv("RK_SCALE");
-  if (env && atof(env) > 0) { dpi_scale = (float)atof(env); return; }
-  char *rms = XResourceManagerString(dpy);
-  if (!rms) return;
+  if (env && atof(env) > 0) { dpi_scale = (float)atof(env); scale_fixed = true; return; }
+  Atom type_got; int format; unsigned long n, after;
+  unsigned char *rms = NULL;
+  if (XGetWindowProperty(dpy, RootWindow(dpy, screen), XA_RESOURCE_MANAGER, 0, 1 << 20, False, XA_STRING, &type_got, &format,
+                         &n, &after, &rms) != Success || !rms) return;
   XrmInitialize();
-  XrmDatabase db = XrmGetStringDatabase(rms);
+  XrmDatabase db = XrmGetStringDatabase((char *)rms);
+  XFree(rms);
   char *type = NULL;
   XrmValue val;
   if (db && XrmGetResource(db, "Xft.dpi", "Xft.Dpi", &type, &val) && val.addr) {
@@ -113,6 +120,7 @@ static bool x_init(const rk_app_desc *d) {
   const char *noshm = getenv("RK_NO_SHM");
   use_shm = XShmQueryExtension(dpy) && !(noshm && *noshm == '1');
   read_dpi();
+  XSelectInput(dpy, RootWindow(dpy, screen), PropertyChangeMask);   /* Xft.dpi changes */
   /* follow XSETTINGS changes: the manager window's property */
   Window mgr = XGetSelectionOwner(dpy, A_XS_SEL);
   if (mgr) XSelectInput(dpy, mgr, PropertyChangeMask);
@@ -148,6 +156,7 @@ static void *x_open(rk_window *w, const rk_window_desc *d) {
   XChangeProperty(dpy, x->win, A_XDND_AWARE, XA_ATOM, 32, PropModeReplace, (unsigned char *)&xdnd_version, 1);
   XSizeHints *hints = XAllocSizeHints();
   hints->flags = PMinSize;
+  x->min_w = d->min_width; x->min_h = d->min_height;
   hints->min_width = (int)(d->min_width * dpi_scale); hints->min_height = (int)(d->min_height * dpi_scale);
   XSetWMNormalHints(dpy, x->win, hints);
   XFree(hints);
@@ -546,8 +555,33 @@ static void xdnd_selection(xwin *x, const XSelectionEvent *s) {
   rk__app_request_frame();
 }
 
+/* The desktop changed the scale: each window keeps its logical size, in the new number of pixels. */
+static void rescale(void) {
+  float was = dpi_scale;
+  if (scale_fixed) return;
+  read_dpi();
+  if (dpi_scale == was) return;
+  for (int i = 0; i < nwins; i++) {
+    xwin *x = wins[i];
+    float lw = x->pw / was, lh = x->ph / was;
+    XSizeHints *hints = XAllocSizeHints();
+    hints->flags = PMinSize;
+    hints->min_width = (int)(x->min_w * dpi_scale); hints->min_height = (int)(x->min_h * dpi_scale);
+    XSetWMNormalHints(dpy, x->win, hints);
+    XFree(hints);
+    if (!x->maximized) {                                       /* maximized, the pixels stay and it holds more */
+      x->pw = (int)lroundf(lw * dpi_scale); x->ph = (int)lroundf(lh * dpi_scale);
+      XResizeWindow(dpy, x->win, (unsigned)x->pw, (unsigned)x->ph);
+    }
+    rk__window_resized(x->w, x->pw / dpi_scale, x->ph / dpi_scale, dpi_scale);
+  }
+  XFlush(dpy);
+  rk__app_request_frame();
+}
+
 static void handle(XEvent *ev) {
   if (ev->type == PropertyNotify && ev->xproperty.atom == A_XS_SETTINGS) { rk__app_settings_changed(); return; }
+  if (ev->type == PropertyNotify && ev->xproperty.atom == XA_RESOURCE_MANAGER && ev->xproperty.window == RootWindow(dpy, screen)) { rescale(); return; }
   if (ev->type == SelectionRequest) { clip_request(&ev->xselectionrequest); return; }
   if (ev->type == SelectionClear && ev->xselectionclear.window == clip_win) { free(clip_text); clip_text = NULL; return; }
   if (XFilterEvent(ev, None)) return;
@@ -702,5 +736,5 @@ static void x_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "x11", x_init, x_shutdown, x_open, x_close, x_show, x_title, x_present, x_move, x_minimize, x_zoom,
-  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, x_text_input, x_cursor, rk__desktop_choose_files
+  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, x_text_input, x_cursor, rk__desktop_choose_files, rk__desktop_notify
 };

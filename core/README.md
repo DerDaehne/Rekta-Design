@@ -134,8 +134,8 @@ press, focus everywhere and the keyboard, toasts, undo, the title bar, text
 fields and areas with the clipboard and input methods, every script through the
 system's fonts, checkboxes, options, toggles, segments, sliders, steppers, selects, comboboxes and dates, scroll views, pictures, menus, long lists, tables
 that sort, resize and edit, trees, splits, rows the user puts in order, files
-dragged in from the system and a place to drop them, pivots along the top or
-down the side; headless, Wayland and X11 tested here (Wayland is
+dragged in from the system and a place to drop them, the system's file chooser
+and notifications, pivots along the top or down the side; headless, Wayland and X11 tested here (Wayland is
 the default where a compositor answers; `RK_PLATFORM=x11` picks X11), Win32 and
 Cocoa built and tested in CI.
 

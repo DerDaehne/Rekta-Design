@@ -131,6 +131,7 @@ RK_API void rk_app_post(void (*fn)(void *user), void *user);    /* any thread: r
 RK_API double rk_app_now(void);                    /* ms, monotonic (virtual when headless) */
 RK_API uint32_t rk_app_after(double ms, bool repeat, void (*fn)(void *user), void *user);   /* a timer id, never 0 */
 RK_API void rk_app_cancel(uint32_t timer);
+RK_API bool rk_app_notify(const char *title, const char *body);   /* a system notification; false where there is none */
 
 typedef enum rk_theme { RK_THEME_SYSTEM, RK_THEME_LIGHT, RK_THEME_DARK, RK_THEME_FORCE32 = 0x7fffffff } rk_theme;
 typedef enum rk_motion_pref { RK_MOTION_PREF_SYSTEM, RK_MOTION_PREF_ON, RK_MOTION_PREF_OFF, RK_MOTION_PREF_FORCE32 = 0x7fffffff } rk_motion_pref;
