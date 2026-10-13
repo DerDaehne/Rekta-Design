@@ -168,6 +168,7 @@ struct rk_view {
   /* drawing */
   rk_bitmap *layer;                                        /* while turning or fading */
   bool layer_ok; uint32_t layer_gen;                       /* the layer still shows the content: drawn again only if not */
+  float layer_fx, layer_fy;                                /* where in its first pixel the content sits in the layer */
   int anims;                                               /* animations running on it */
   float content_alpha;                                     /* while a size animates: the content fades back in */
   int transition; float transition_t; rk_bitmap *snapshot;  /* rk_transition + 1 while one runs */

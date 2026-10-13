@@ -180,17 +180,18 @@ static rk_view *clip_box(rk_view *u, rk_view *place) {
 
 static float turn_perspective(float reach) { return roundf(RK_TOK_TURNSTILE_PERSPECTIVE + 1.2f * RK_MAX(0.0f, reach)); }
 
-/* A unit's time against the token's: the root of the side of a square as large as the unit, over 220 px, from 0.6
-   (a line of text) through about 0.85 (a tile) to 1.1 (a table). */
-static double heft(rk_rect r) { float k = sqrtf(sqrtf(RK_MAX(1.0f, r.w * r.h)) / 220.0f); return RK_CLAMP(k, 0.6f, 1.1f); }
+/* A unit's time against the token's grows with its area, against a tile's (150 x 150): 0.8 x (area / tile)^0.35,
+   from 0.5 (a line of text, about 0.6) through 0.8 (a tile) and 1.0 (a wide tile) to 1.4 (a table). */
+static double heft(rk_rect r) { float k = 0.8f * powf(RK_MAX(1.0f, r.w * r.h) / 22500.0f, 0.35f); return RK_CLAMP(k, 0.5f, 1.4f); }
 
 /* The turn as rekta.css has it: leaving parts swing 60 degrees, gathering speed, whole for 40% of their time;
-   arriving parts swing in from 70 degrees, quick and without a long creep, whole after a third. Rows after the sixth
-   go with it, so the turn stays brief. */
+   arriving parts swing in from 70 degrees, quick at first, and land with a trace of speed left, so the motion ends
+   when the animation does. Heft also sets when a part starts: (heft - 0.5) x 6 x duration-stagger after the turn
+   begins, light parts first, heavy ones later; parts of one size go together. */
 #define TURN_OUT_ANGLE 60.0f
 #define TURN_IN_ANGLE 70.0f
-#define TURN_ROWS 6
-static const float turn_ease_out[4] = { 0.35f, 0.0f, 0.65f, 0.6f }, turn_ease_in[4] = { 0.22f, 0.9f, 0.36f, 1.0f };
+static double turn_start(double h) { return (h - 0.5) * 6 * rk_duration_of(RK_DURATION_STAGGER); }
+static const float turn_ease_out[4] = { 0.35f, 0.0f, 0.65f, 0.6f }, turn_ease_in[4] = { 0.22f, 0.9f, 0.6f, 0.98f };
 
 /* The units of a place in turning order, the pressed one last; each one's row, and how far each row reaches from
    its clip box's leading edge (the farther, the flatter the perspective). */
@@ -223,17 +224,19 @@ static void turn_pivot(rk_transform *t, rk_view *u, rk_view *place, float reach)
   t->perspective = turn_perspective(reach);
 }
 
-/* Leaving: each unit swings toward the viewer, then fades, a row at a time, duration-stagger apart, over
+/* Leaving: each unit swings toward the viewer, then fades, light ones first, over
    duration-short by its heft; the pressed tile keeps its press and goes last. Returns when the place can go: its last
    unit 75% through, fading, so the next swings in without a gap. */
 static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
   static int slots[1024]; static float reach[256];
   int n = turn_gather(t, place, pressed, slots, reach);
-  double out = rk_duration_of(RK_DURATION_SHORT), step = rk_duration_of(RK_DURATION_STAGGER), end = 0;
+  double out = rk_duration_of(RK_DURATION_SHORT), end = 0;
   float angle = back ? TURN_OUT_ANGLE : -TURN_OUT_ANGLE;
+  double last = 0;                                         /* the pressed tile goes when the heaviest other does */
+  for (int i = 0; i < n; i++) if (t->units[i] != pressed) last = RK_MAX(last, turn_start(heft(rk__window_rect(t->units[i]))));
   for (int i = 0; i < n; i++) {
     rk_view *u = t->units[i];
-    double at = RK_MIN(slots[i], u == pressed ? TURN_ROWS + 1 : TURN_ROWS) * step, d = out * heft(rk__window_rect(u));
+    double h = heft(rk__window_rect(u)), at = u == pressed ? last : turn_start(h), d = out * h;
     if (u == pressed) at = RK_MAX(at, rk_duration_of(RK_DURATION_PRESS) - (rk_app_now() - u->press_since));
     rk_transform from = u->ptransform, to = u->transform;
     turn_pivot(&to, u, place, slots[i] < 256 ? reach[slots[i]] : rk__window_rect(u).w);
@@ -258,7 +261,7 @@ static void turn_reset(turn *t) {
   turn_release(t);
 }
 
-/* Arriving: each unit swings in from the other side, fading in over the first third, a row at a time, over
+/* Arriving: each unit swings in from the other side, fading in over the first third, light ones first, over
    duration-moderate by its heft. The place assembles itself; nothing builds in after it. Back runs it the other
    way round. */
 static void turn_in(rk_view *place, bool back) {
@@ -266,10 +269,10 @@ static void turn_in(rk_view *place, bool back) {
   turn t = { 0 };
   rk__layout_pending();
   int n = turn_gather(&t, place, NULL, slots, reach);
-  double in = rk_duration_of(RK_DURATION_MODERATE), step = rk_duration_of(RK_DURATION_STAGGER);
+  double in = rk_duration_of(RK_DURATION_MODERATE);
   for (int i = 0; i < n; i++) {
     rk_view *u = t.units[i];
-    double at = RK_MIN(slots[i], TURN_ROWS) * step, d = in * heft(rk__window_rect(u));
+    double h = heft(rk__window_rect(u)), at = turn_start(h), d = in * h;
     rk_transform from = u->transform, to = u->transform;
     turn_pivot(&from, u, place, slots[i] < 256 ? reach[slots[i]] : rk__window_rect(u).w);
     to.origin_x = from.origin_x; to.origin_y = from.origin_y; to.perspective = from.perspective;

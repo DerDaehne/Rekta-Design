@@ -322,6 +322,17 @@ it; each entry says how.
   the web, and its pages start at the strip's indent. `examples/navigation.c`
   draws one app with its places either way, and `--film` writes its motion
   frame by frame.
+- **Heft sets the order, and nothing settles after the turn.** A part's heft
+  (0.8 × (area / tile)^0.35, 0.5 to 1.4) sets when it starts as well as how long
+  it takes: light parts first, heavy ones later. Arriving parts land with a
+  trace of speed left and are let go in the frame they land. A turning part's
+  layer starts on a whole pixel, so it rasterises exactly as the part will rest:
+  rekta.js moves a part with a fill or line onto its resting pixels and grows a
+  text-only part's box to the pixel without moving its text; the core draws a
+  layer's content at its sub-pixel offset and lands the layer on whole pixels
+  (fades too), and draws a view directly once its turn moves no corner by a
+  quarter pixel. Before, parts shifted by a pixel and sharpened a moment after
+  they stopped.
 - **The turn swings more and takes half the time.** Leaving parts swing 60°,
   gathering speed, and stay whole for 40% of their time before they fade;
   arriving parts swing in from 70°, quick and without a long creep. Heft runs

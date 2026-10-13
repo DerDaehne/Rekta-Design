@@ -235,12 +235,28 @@ static bool deep(const rk_transform *t) {
   return t->rotate_x != 0 || t->rotate_y != 0 || t->rotate_z != 0 || fabsf(t->scale_x - 1) > 1e-4f || fabsf(t->scale_y - 1) > 1e-4f;
 }
 
+/* A transform that moves no corner of the view by a quarter of a device pixel looks flat: the view is drawn sharp, as
+   at rest, rather than resampled through a layer. A turn's last frames would otherwise end soft and then sharpen a
+   moment after the motion stopped. */
+static bool seen_deep(const rk_transform *t, float w, float h, float k) {
+  if (!deep(t)) return false;
+  float cx[4] = { 0, w, w, 0 }, cy[4] = { 0, 0, h, h };
+  for (int i = 0; i < 4; i++) {
+    float px, py;
+    project(t, w, h, cx[i], cy[i], &px, &py);
+    if (fabsf(px - cx[i]) * k > 0.25f || fabsf(py - cy[i]) * k > 0.25f) return true;
+  }
+  return false;
+}
+
 static void draw_content(rk_canvas *c, rk_view *v, float x, float y, bool fill);
 
-static void composite_layer(rk_canvas *c, rk_bitmap *layer, rk_view *v, const rk_transform *t, float x, float y, float opacity) {
+/* The layer holds the view's content drawn ox, oy device px into it (where the view starts within its first pixel),
+   so at rest the layer lands on whole pixels and copies exactly what drawing the view directly would give. */
+static void composite_layer(rk_canvas *c, rk_bitmap *layer, rk_view *v, const rk_transform *t, float x, float y, float ox, float oy, float opacity) {
   float k = c->scale, q[8];
-  float w = layer->w / k, h = layer->h / k;
-  float cx[4] = { 0, w, w, 0 }, cy[4] = { 0, 0, h, h };
+  float w = layer->w / k, h = layer->h / k, lx = -ox / k, ly = -oy / k;
+  float cx[4] = { lx, lx + w, lx + w, lx }, cy[4] = { ly, ly, ly + h, ly + h };
   for (int i = 0; i < 4; i++) {
     float px, py;
     project(t, v->pframe.w, v->pframe.h, cx[i], cy[i], &px, &py);
@@ -260,7 +276,7 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
   float k = c->scale;
   rk_transform t = v->ptransform;
   float x = pox + (v->pframe.x + t.translate_x) * k, y = poy + (v->pframe.y + t.translate_y) * k;
-  bool flip = v->transition == RK_TRANSITION_FLIP + 1 && v->snapshot, turned = deep(&t);
+  bool flip = v->transition == RK_TRANSITION_FLIP + 1 && v->snapshot, turned = seen_deep(&t, v->pframe.w, v->pframe.h, k);
   /* outside what this frame draws: skip it (a container that does not clip may still have children reaching in) */
   float pad = turned ? RK_MAX(v->pframe.w, v->pframe.h) * 0.35f * k + 8 : 2;
   rk_irect vb = { (int)floorf(x - pad), (int)floorf(y - pad), (int)ceilf(x + v->pframe.w * k + pad), (int)ceilf(y + v->pframe.h * k + pad) };
@@ -275,7 +291,8 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
     c->alpha = sa;
     return;
   }
-  int lw = (int)ceilf(v->pframe.w * k), lh = (int)ceilf(v->pframe.h * k);
+  float fx = flip ? 0 : x - floorf(x), fy = flip ? 0 : y - floorf(y);
+  int lw = (int)ceilf(v->pframe.w * k + fx), lh = (int)ceilf(v->pframe.h * k + fy);
   if (lw <= 0 || lh <= 0) return;
   if (flip) {
     /* the old look turns away around the horizontal axis; at the half the new one turns in */
@@ -284,7 +301,7 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
     ft.translate_x = ft.translate_y = 0;
     if (tt < 0.5f) {
       ft.rotate_x += -90 * rk__ease(rk__ease_out, tt / 0.5f);
-      composite_layer(c, v->snapshot, v, &ft, x, y, opacity);
+      composite_layer(c, v->snapshot, v, &ft, x, y, 0, 0, opacity);
       return;
     }
     ft.rotate_x += 90 * (1 - rk__ease(rk__ease_in, (tt - 0.5f) / 0.5f));
@@ -292,18 +309,19 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
   }
   /* the layer is drawn again only when what is in it changed: a page that turns is drawn once */
   rk_bitmap *layer = v->layer;
-  if (!layer || layer->w != lw || layer->h != lh || !v->layer_ok || v->layer_gen != rk__layer_gen) {
+  if (!layer || layer->w != lw || layer->h != lh || !v->layer_ok || v->layer_gen != rk__layer_gen || fabsf(v->layer_fx - fx) > 0.01f || fabsf(v->layer_fy - fy) > 0.01f) {
     layer = ensure_layer(&v->layer, lw, lh);
     rk_canvas sub;
     memset(&sub, 0, sizeof sub);
     rk__canvas_init(&sub, layer, k);
-    draw_content(&sub, v, 0, 0, true);
+    draw_content(&sub, v, fx, fy, true);
+    v->layer_fx = fx; v->layer_fy = fy;
     rk__path_free(&sub.path);
     rk__bitmap_changed(layer);
     v->layer_ok = true; v->layer_gen = rk__layer_gen;
   }
-  if (!turned && !flip) rk__composite_at(c->target, rk__canvas_clip(c), layer, (int)lroundf(x), (int)lroundf(y), opacity);   /* a plain fade */
-  else composite_layer(c, layer, v, &t, x, y, opacity);
+  if (!turned && !flip) rk__composite_at(c->target, rk__canvas_clip(c), layer, (int)floorf(x), (int)floorf(y), opacity);   /* a plain fade */
+  else composite_layer(c, layer, v, &t, x, y, fx, fy, opacity);
   if (!v->anims && !v->transition) { rk__bitmap_free(v->layer); v->layer = NULL; }
 }
 

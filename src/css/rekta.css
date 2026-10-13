@@ -820,15 +820,17 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 
 /* Place change --------------------------------------------------------------------------------------------------- */
 /* A tile that links to another view turns the place around its leading edge (Metro's turnstile), a page turned in a
-   book. Leaving, each part in view swings toward the viewer, gathering speed, by --_rk-turn-out, top to bottom, a row
-   at a time, duration-stagger apart; it stays whole for the first 40% of its time, so the swing reads, then fades.
-   The pressed tile keeps its press and goes last, from its pressed pose. Arriving, each part of the new place swings
-   in from --_rk-turn-in, fast at first, ending without a long creep, there after the first third. Each part takes the token's time
-   (duration-short leaving, duration-moderate arriving) by its heft: a line of text 0.6 of it, a tile about 0.85, a
-   table up to 1.1, as a light thing starts and stops sooner than a heavy one. Back runs the other way round. rekta.js
-   sets data-rk-turn and the part's --_rk-turn-origin, --_rk-turn-oy, --_rk-turn-delay, --_rk-turn-duration and
-   --_rk-turn-perspective. */
-:root { --_rk-turn-out: 60deg; --_rk-turn-in: 70deg; --_rk-ease-turn-out: cubic-bezier(0.35, 0, 0.65, 0.6); --_rk-ease-turn-in: cubic-bezier(0.22, 0.9, 0.36, 1); }
+   book. Leaving, each part in view swings toward the viewer, gathering speed, by --_rk-turn-out; it stays whole for
+   the first 40% of its time, so the swing reads, then fades. The pressed tile keeps its press and goes last, from its
+   pressed pose. Arriving, each part of the new place swings in from --_rk-turn-in, fast at first, whole after the
+   first third. Each part's heft grows with its area: a line of text about 0.6, a tile 0.8, a wide tile 1.0, a table
+   up to 1.4. It sets both when the part starts, (heft - 0.5) x 6 x duration-stagger after the turn begins, and how
+   long it takes, the token's time (duration-short leaving, duration-moderate arriving) x heft: light parts go first
+   and quickest, heavy ones later and slower, as a light thing starts and stops sooner than a heavy one. An arriving part lands with a trace of speed left and fills backwards
+   only, so its motion, its animation and its layer end in the same frame: nothing settles afterwards. Back runs the
+   other way round. rekta.js sets data-rk-turn and the part's --_rk-turn-origin, --_rk-turn-oy, --_rk-turn-delay,
+   --_rk-turn-duration and --_rk-turn-perspective. */
+:root { --_rk-turn-out: 60deg; --_rk-turn-in: 70deg; --_rk-ease-turn-out: cubic-bezier(0.35, 0, 0.65, 0.6); --_rk-ease-turn-in: cubic-bezier(0.22, 0.9, 0.6, 0.98); }
 [data-rk-turn='out'], [data-rk-turn='back-out'], [data-rk-turn='pressed'] {
   transform-origin: var(--_rk-turn-origin, 0px) var(--_rk-turn-oy, 50%); pointer-events: none;
   animation: rk-turn-out var(--_rk-turn-duration, var(--rk-duration-short)) var(--_rk-ease-turn-out) var(--_rk-turn-delay, 0ms) both;
@@ -838,18 +840,35 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 /* doubled, so a tile's build-in gives way to its turn */
 [data-rk-turn][data-rk-turn='in'], [data-rk-turn][data-rk-turn='back-in'] {
   transform-origin: var(--_rk-turn-origin, 0px) var(--_rk-turn-oy, 50%);
-  animation: rk-turn-in var(--_rk-turn-duration, var(--rk-duration-moderate)) var(--_rk-ease-turn-in) var(--_rk-turn-delay, 0ms) both;
+  animation: rk-turn-in var(--_rk-turn-duration, var(--rk-duration-moderate)) var(--_rk-ease-turn-in) var(--_rk-turn-delay, 0ms) backwards;
 }
 [data-rk-turn][data-rk-turn='back-in'] { animation-name: rk-turn-back-in; }
-@keyframes rk-turn-out { 40% { opacity: 1; } to { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(calc(-1 * var(--_rk-turn-out))); } }
-@keyframes rk-turn-back-out { 40% { opacity: 1; } to { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(var(--_rk-turn-out)); } }
+@keyframes rk-turn-out {
+  from { transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(0deg); }
+  40% { opacity: 1; }
+  to { opacity: 0; transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(calc(-1 * var(--_rk-turn-out))); }
+}
+@keyframes rk-turn-back-out {
+  from { transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(0deg); }
+  40% { opacity: 1; }
+  to { opacity: 0; transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(var(--_rk-turn-out)); }
+}
 @keyframes rk-turn-pressed {
   from { transform-origin: 50% 50%; }
   40% { opacity: 1; }
   to { opacity: 0; transform-origin: var(--_rk-turn-origin, 0px) var(--_rk-turn-oy, 50%); transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateX(0deg) rotateY(calc(-1 * var(--_rk-turn-out))) scale(1); }
 }
-@keyframes rk-turn-in { from { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(var(--_rk-turn-in)); } 35% { opacity: 1; } }
-@keyframes rk-turn-back-in { from { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(calc(-1 * var(--_rk-turn-in))); } 35% { opacity: 1; } }
+/* the end keeps the snap: the last frames sit on the pixels the part rests on */
+@keyframes rk-turn-in {
+  from { opacity: 0; transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(var(--_rk-turn-in)); }
+  35% { opacity: 1; }
+  to { transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(0deg); }
+}
+@keyframes rk-turn-back-in {
+  from { opacity: 0; transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(calc(-1 * var(--_rk-turn-in))); }
+  35% { opacity: 1; }
+  to { transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(0deg); }
+}
 
 /* Input-dependent rules ------------------------------------------------------------------------------------------ */
 /* Hover tints only where hover exists: on touch they would stick after a tap. */
