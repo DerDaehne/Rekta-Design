@@ -36,6 +36,7 @@ function ok(cond, what, detail = '') { if (cond) passed += 1; else failures.push
 async function open(opts = {}, path = '') {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference', ...opts });
   const p = await ctx.newPage();
+  if (process.env.SMOKE_CPU) await (await ctx.newCDPSession(p)).send('Emulation.setCPUThrottlingRate', { rate: +process.env.SMOKE_CPU });   /* a busy runner, here */
   const tag = `${opts.viewport ? opts.viewport.width : 1440}${opts.reducedMotion === 'reduce' ? '/reduced' : ''}`;
   p.on('pageerror', (e) => errors.push(`${tag}: ${e.message}`));
   p.on('console', (m) => { if (m.type() === 'error') errors.push(`${tag} console: ${m.text()}`); });
@@ -48,6 +49,11 @@ const focused = (p) => p.evaluate(() => { const a = document.activeElement; retu
 const text = async (p, sel) => { const el = await p.$(sel); return el ? (await el.textContent()).trim() : '(none)'; };
 const toast = (p) => text(p, '.rk-toast:not([data-rk-phase]) .rk-toast-msg');
 const isOpen = (p, sel) => p.evaluate((s) => document.querySelector(s).matches(':popover-open'), sel);
+// Waits until cond() holds (polling, up to ms) and says whether it did: a busy runner gets there, just later.
+const until = async (p, cond, ms = 2000) => {
+  for (const end = Date.now() + ms; Date.now() < end; await p.waitForTimeout(50)) if (await cond()) return true;
+  return !!(await cond());
+};
 const sheetTitle = (p) => p.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return d ? d.querySelector('h2').textContent : null; });
 const go = async (p, id) => { await p.click(`#nav a[href="#${id}"]`); await p.waitForTimeout(900); };
 const TURN = 1300;
@@ -177,13 +183,20 @@ ok((await p.evaluate(() => document.querySelector('#comp-body tr').dataset.name)
 await p.click('#comp-status'); await p.waitForTimeout(200); await p.click('#comp-status-menu [data-v=warning]'); await p.waitForTimeout(200);
 ok((await text(p, '#comp-status')) === 'status: waiting' && (await p.evaluate(() => [...document.querySelectorAll('#comp-body tr')].filter((r) => !r.hidden).length)) === 3, 'a filter keeps the waiting components', await text(p, '#comp-status'));
 await p.keyboard.press('Escape'); await p.click('#comp-clear'); await p.waitForTimeout(200);
-await p.click('#comp-more'); await p.waitForTimeout(200); await p.click('#comp-menu [data-act=refresh]'); await p.waitForTimeout(100);
+await p.click('#comp-more'); await p.waitForTimeout(200);
 const line = () => p.evaluate(() => getComputedStyle(document.querySelector('#comp-region'), '::before').visibility);
-ok((await p.getAttribute('#comp-region', 'aria-busy')) === 'true' && (await line()) === 'hidden', 'loading: no line before the delay');
-await p.waitForTimeout(400);
-ok((await line()) === 'visible', 'loading: the line after the delay');
-await p.waitForTimeout(1300);
-ok((await toast(p)) === 'Components refreshed.', 'refresh ends with a toast');
+// the choice and the look in one step: a slow runner's round trips must not eat the busy delay
+const busyAtOnce = await p.evaluate(() => {
+  document.querySelector('#comp-menu [data-act=refresh]').click();
+  const r = document.querySelector('#comp-region');
+  return r.getAttribute('aria-busy') === 'true' && getComputedStyle(r, '::before').visibility === 'hidden';
+});
+ok(busyAtOnce, 'loading: no line before the delay');
+// the line comes once the delay is over, while the 1.2s load still runs: wait for it rather than guess when a busy runner gets there
+const lineCame = await p.waitForFunction(() => getComputedStyle(document.querySelector('#comp-region'), '::before').visibility === 'visible', null, { timeout: 1100, polling: 50 }).then(() => true, () => false);
+ok(lineCame, 'loading: the line after the delay', await line());
+const toastCame = await p.waitForFunction(() => document.querySelector('.rk-toast:not([data-rk-phase]) .rk-toast-msg')?.textContent.trim() === 'Components refreshed.', null, { timeout: 3000, polling: 50 }).then(() => true, () => false);
+ok(toastCame, 'refresh ends with a toast', await toast(p));
 await p.click('#comp-more'); await p.waitForTimeout(200); await p.click('#comp-menu [data-act=fail]'); await p.waitForTimeout(1900);
 ok((await p.getAttribute('#comp-error', 'data-status')) === 'error', 'a failed refresh says so in the region');
 await p.click('#comp-retry'); await p.waitForTimeout(1600);
@@ -195,8 +208,8 @@ ok(await p.evaluate(() => getComputedStyle(document.querySelector('#pick-rows li
 await p.click('#pick-rows li:nth-child(3)', { modifiers: ['Control'] }); await p.waitForTimeout(200);
 ok((await picks()).length === 2 && (await text(p, '.rk-ab-count')) === '2 selected' && await mode(), 'rows: Ctrl+click starts the mode');
 await p.screenshot({ path: join(shots, 'rows-selected.png') });
-await p.click('#sel-copy'); await p.waitForTimeout(300);
-ok(/^(Copied 2 names\.|Copying needs clipboard access; 2 selected\.)$/.test(await toast(p)), 'the app bar acts on the selection', await toast(p));
+await p.click('#sel-copy');
+ok(await until(p, async () => /^(Copied 2 names\.|Copying needs clipboard access; 2 selected\.)$/.test(await toast(p))), 'the app bar acts on the selection', await toast(p));
 await p.click('#pick-rows li:nth-child(1)'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 ok((await picks()).length === 0 && !(await mode()), 'rows: Escape ends the mode');
 
@@ -218,19 +231,30 @@ await p.waitForFunction(() => { const t = document.querySelector('.rk-toast:not(
 ok((await text(p, `${tileRow} td:nth-child(3)`)) === 'surfaces' && (await toast(p)).startsWith('Moved Tile to'), 'Enter keeps the value; the history remembers it', await toast(p));
 await p.focus(tileRow); await p.keyboard.press('F2'); await p.waitForTimeout(100); await p.keyboard.press('Escape'); await p.waitForTimeout(100);
 ok((await text(p, `${tileRow} td:nth-child(3)`)) === 'surfaces' && await visible(p, 'home'), 'F2 edits, Escape puts the old value back, not the place');
-await p.click('#comp-body tr[data-name="Tag"]', { button: 'right' }); await p.waitForTimeout(250);
-ok(await isOpen(p, '#comp-ctx') && (await p.getAttribute('#comp-body tr[data-name="Tag"]', 'aria-selected')) === 'true' && (await p.evaluate(() => document.activeElement.dataset.act)) === 'show', 'a right click opens the row’s menu, selects the row, focuses the first item');
-await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
-ok(await p.evaluate(() => document.querySelector('#comp-body tr[data-name="Tag"]').hidden) && (await toast(p)).startsWith('Archived Tag'), 'the menu archives the row', await toast(p));
-await p.keyboard.press('Control+z'); await p.waitForTimeout(300);
-ok(!(await p.evaluate(() => document.querySelector('#comp-body tr[data-name="Tag"]').hidden)) && (await toast(p)).startsWith('Undone: archived Tag'), 'Ctrl+Z brings it back', await toast(p));
-await p.keyboard.press('Control+Shift+z'); await p.waitForTimeout(300);
-ok(await p.evaluate(() => document.querySelector('#comp-body tr[data-name="Tag"]').hidden), 'Ctrl+Shift+Z archives it again');
-await p.keyboard.press('Control+z'); await p.waitForTimeout(300);
-await p.focus('#comp-body tr[data-name="Rows"]'); await p.keyboard.press('Shift+F10'); await p.waitForTimeout(250);
-ok(await isOpen(p, '#comp-ctx'), 'Shift+F10 opens the menu from the keyboard');
-await p.keyboard.press('Escape'); await p.waitForTimeout(200);
-ok(!(await isOpen(p, '#comp-ctx')) && (await focused(p)) === 'Rows' && await visible(p, 'home'), 'Escape closes it and focus returns to the row', await focused(p));
+const tagHidden = () => p.evaluate(() => document.querySelector('#comp-body tr[data-name="Tag"]').hidden);
+await p.click('#comp-body tr[data-name="Tag"]', { button: 'right' });
+const ctxState = () => p.evaluate(() => {
+  const at = document.querySelector('#comp-body tr[data-name="Tag"]').getBoundingClientRect(), hit = document.elementFromPoint(at.x + at.width / 2, at.y + at.height / 2);
+  return `open ${document.querySelector('#comp-ctx').matches(':popover-open')}, selected ${document.querySelector('#comp-body tr[data-name="Tag"]').getAttribute('aria-selected')}, focus ${document.activeElement.dataset.act || document.activeElement.tagName}, under the pointer ${hit ? hit.className || hit.tagName : '-'}, toast ${document.querySelector('.rk-toast:not([data-rk-phase])') ? 'yes' : 'no'}`;
+});
+ok(await until(p, async () => await isOpen(p, '#comp-ctx') && (await p.getAttribute('#comp-body tr[data-name="Tag"]', 'aria-selected')) === 'true' && (await p.evaluate(() => document.activeElement.dataset.act)) === 'show'), 'a right click opens the row’s menu, selects the row, focuses the first item', await ctxState());
+await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter');
+ok(await until(p, async () => await tagHidden() && (await toast(p)).startsWith('Archived Tag')), 'the menu archives the row', await toast(p));
+await p.keyboard.press('Control+z');
+ok(await until(p, async () => !(await tagHidden()) && (await toast(p)).startsWith('Undone: archived Tag')), 'Ctrl+Z brings it back', await toast(p));
+await p.keyboard.press('Control+Shift+z');
+ok(await until(p, tagHidden), 'Ctrl+Shift+Z archives it again');
+await p.keyboard.press('Control+z'); await until(p, async () => !(await tagHidden()));
+await p.focus('#comp-body tr[data-name="Rows"]'); await p.keyboard.press('Shift+F10');
+ok(await until(p, () => isOpen(p, '#comp-ctx')), 'Shift+F10 opens the menu from the keyboard');
+await p.keyboard.press('Escape');
+ok(await until(p, async () => !(await isOpen(p, '#comp-ctx')) && (await focused(p)) === 'Rows') && await visible(p, 'home'), 'Escape closes it and focus returns to the row', await focused(p));
+await p.focus('#comp-body tr[data-name="Rows"]'); await p.keyboard.press('Shift+F10'); await until(p, () => isOpen(p, '#comp-ctx'));
+await p.evaluate(() => document.querySelector('#nav').dispatchEvent(new Event('scroll')));
+ok(await isOpen(p, '#comp-ctx'), 'a scroll elsewhere leaves the menu open');
+await p.evaluate(() => { document.querySelector('#comp-table').style.transform = 'translateY(40px)'; document.querySelector('#nav').dispatchEvent(new Event('scroll')); });
+ok(!(await isOpen(p, '#comp-ctx')), 'a scroll that moves its row closes it');
+await p.evaluate(() => { document.querySelector('#comp-table').style.transform = ''; });
 
 // Desktop: tooltips, the tree, a sortable list, ten thousand lines.
 await go(p, 'desktop');
@@ -552,9 +576,14 @@ await m.close();
 const q = await open();
 const anims = (sel) => q.evaluate((s) => [...document.querySelectorAll(s)].reduce((n, el) => n + el.getAnimations().length, 0), sel);
 const setSize = (pg, v) => pg.evaluate((x) => { const r = document.querySelector(`input[name=b-size][value="${x}"]`); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }, v);
-await setSize(q, 'h2'); await q.waitForTimeout(60);
-ok(await anims('#built') > 0 && await anims('#built ~ .rk-tile') > 0, 'a resized tile scales to its size and its neighbours glide');
-ok(await q.evaluate(() => !!document.querySelector('#builder .rk-segments-slide')), 'the segments accent slides to the new choice');
+// the change and the look in one step, so a slow runner cannot miss the 250ms slide
+const resized = await q.evaluate(() => {
+  const r = document.querySelector('input[name=b-size][value="h2"]'); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true }));
+  const n = (s) => [...document.querySelectorAll(s)].reduce((k, el) => k + el.getAnimations().length, 0);
+  return { tile: n('#built'), next: n('#built ~ .rk-tile'), slide: !!document.querySelector('#builder .rk-segments-slide') };
+});
+ok(resized.tile > 0 && resized.next > 0, 'a resized tile scales to its size and its neighbours glide', JSON.stringify(resized));
+ok(resized.slide, 'the segments accent slides to the new choice');
 await q.waitForTimeout(500);
 ok(await anims('#built, #built ~ .rk-tile') === 0 && await q.evaluate(() => document.querySelector('#built').classList.contains('rk-h2') && !document.querySelector('.rk-segments-slide')), 'the re-flow settles');
 await q.evaluate(() => { const v = document.querySelector('#b-value'); v.value = '13'; v.dispatchEvent(new Event('input', { bubbles: true })); });
@@ -578,8 +607,7 @@ ok(await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])
 await q.waitForTimeout(600);
 await q.evaluate(() => document.querySelector('#press-sheet').showModal()); await q.waitForTimeout(300);
 ok(await q.evaluate(() => { const d = document.querySelector('#press-sheet'); d.close(); return d.open && d.dataset.rkPhase === 'leaving'; }), 'a closing sheet leaves before it closes');
-await q.waitForTimeout(400);
-ok(!(await q.evaluate(() => document.querySelector('#press-sheet').open)), 'then it is closed');
+ok(await until(q, async () => !(await q.evaluate(() => document.querySelector('#press-sheet').open))), 'then it is closed');
 const linePts = () => q.evaluate(() => document.querySelector('#chart-line path.rk-line').getAttribute('d'));
 const l0 = await linePts();
 await q.evaluate(() => { const r = document.querySelector('input[name=line-what][value=reviews]'); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); });

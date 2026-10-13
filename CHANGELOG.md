@@ -9,6 +9,141 @@ it; each entry says how.
 
 ### Added
 
+- **rekta-core** (`core/`): Rekta Design as native views in C for
+  Windows (Win32), macOS (Cocoa) and Linux (Wayland first, Xlib as the
+  fallback), with no dependency
+  beyond the system and a vendored `stb_truetype.h`. One header
+  (`core/include/rekta.h`) with a clean ABI: opaque reference-counted
+  objects, size-prefixed descriptors, 32-bit enums, callbacks with a user
+  pointer. Windows, controllers and views composed as in UIKit; column,
+  row, tile-grid and overlay layouts; implicit animations named by their
+  meaning (`RK_MOTION_STATE`, `REFLOW`, `ENTER`, `LEAVE`, `MORPH`) and
+  transitions (`PEEK`, `FLIP`, `CROSSFADE`); the press, the turnstile,
+  panoramas with a gliding strip and scrolling sections, pivots, sheets,
+  toasts, the title bar, keyboard focus. A software renderer with exact
+  anti-aliasing draws the same pixels on every platform; a headless
+  platform with a virtual clock runs the tests (73 checks, 14 reference
+  images) and the demo's tour. Stage 1 of docs/core.md: text fields,
+  menus and tables come next, screen-reader bridges after them.
+- rekta-core on Linux speaks Wayland natively: shared-memory buffers with
+  damage and frame callbacks, resizes acknowledged and drawn in the same
+  commit (the content keeps up with the edge, clicks land where they
+  should), its own title bar and resize edges, fractional scales,
+  cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
+  fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
+  its shared memory while the window changes size.
+- rekta-core: table cells edit in place. `RK_COLUMN_EDITABLE` and
+  `rk_table_on_edit(table, commit, user)`: a double click or F2 opens a
+  field as tall as the row over the cell, its old value selected; Enter
+  or Tab keeps the value (Tab goes on to the next editable cell, Shift+Tab
+  back), Escape puts the old one back, a click elsewhere keeps it.
+  commit() returns NULL or why not; the reason shows below the cell,
+  which stays open. A view in the focus chain may now take Tab before
+  focus moves. The demo's builds table has a note column whose edits go
+  through the undo history.
+- rekta-core: table columns change width. A column's edge in the head
+  drags it (48px at least), a double click gives it its own width back,
+  `rk_table_set_column_width` / `rk_table_column_width` let the app set
+  and remember it. The head works from the keyboard: Up from the first
+  row goes in, Left and Right move, Enter sorts, Ctrl+Left/Right resize,
+  Down returns. The pointer takes the shape of what is under it - an
+  I-beam over text, the column edge's - on every platform (cursor-shape
+  or the theme on Wayland, font cursors on X11, WM_SETCURSOR, NSCursor).
+  A list now shows focus on its active row only, not around itself too.
+- rekta-core: input methods on every platform. X11 takes the best style
+  the input method offers - on the spot (the field shows what is being
+  composed), over the spot (the input method draws it at the caret), or
+  none - and places its window at the caret between compositions (uim
+  drops a composition whose attributes change inside it); LC_CTYPE comes
+  from the environment when the app left it at C, as GLFW does, or XIM
+  finds no input method. Windows: IMM32, loaded at run time, so the link
+  line stays as it was: the composition and candidate windows at the
+  caret, the composition shown by the field, the result typed. macOS:
+  the view is an NSTextInputClient while a field has focus. Checked on
+  X11 against uim-xim with Byeoru (한글, both styles).
+- rekta-core: focus everywhere. A toast holds while focus or the
+  pointer is on it, Escape dismisses it and focus goes back where it
+  came from (over a sheet too, its action is last in the Tab order); with
+  nothing focused taking them, Up and Down scroll the section in sight;
+  Home and End in a strip of titles. A test walks a window of every
+  control and fails on anything that takes input but not focus.
+  rekta(3) has a Keys section.
+- rekta-core has text areas: `rk_field_set_lines(field, lines)` makes a
+  field show several lines, as the web's textarea rows. The text wraps
+  at the input's width (at spaces; inside a word only when it is wider
+  than the line), Enter breaks a line, Ctrl+Enter submits, Up and Down
+  keep their column, Home and End their line, the wheel and the caret
+  scroll it. A one-line field is the same code with one line.
+- rekta-core has undo, as the web's `undoStack()`: `rk_window_do(window,
+  label, run, undo, user, free_user)` runs an action and keeps it (the
+  last 50); its toast offers undo, an undo's toast offers redo; Ctrl
+  (Cmd) and Z undoes, with Shift or Ctrl+Y redoes; a new action drops
+  what was undone. Text fields keep a history of their own, a word at a
+  time. The demo's archive button goes through it.
+- rekta-core has tables, as the web's `.rk-table`: `rk_table(count, cell,
+  user)` is a long list with columns (every `rk_list_` call works on it),
+  drawing only the rows in sight; `rk_table_add_column` with a width and
+  `RK_COLUMN_NUMERIC` / `RK_COLUMN_SORTABLE`; a head that stays put, a
+  click on it sorts ascending then descending through `rk_table_on_sort`
+  (the app sorts its rows). The demo has a sortable table of builds.
+- rekta-core has menus, as states.md's floating surfaces: `rk_menu`,
+  `rk_menu_add` (a verb, a key hint, a handler), separators, group labels,
+  items with a square that toggles and keeps the menu open, disabled
+  items that say why. `rk_view_set_menu` attaches one: a button opens it,
+  any other view on a right click or Shift+F10. Below the opener, above
+  where there is no room, never outside the window; a fade and a 4px
+  shift over duration-float; the keys and the press outside as on the
+  web.
+- rekta-core has text fields: `rk_field(label, placeholder)` as the web's
+  `.rk-field` (label above, 1px border, a hint or a marked error below),
+  one line, edited with the desktop's keys and the pointer, Enter
+  submits. The caret blinks for ten seconds after an edit and then stays
+  lit, so a field left alone wakes nothing. Copy and paste use the
+  system clipboard: CF_UNICODETEXT on Windows, NSPasteboard on macOS, the
+  CLIPBOARD selection on X11, wl_data_device on Wayland. On Wayland, dead
+  keys and the Compose key compose (xkbcommon), and input methods work
+  through text-input-v3: what they compose shows underlined at the caret
+  (`RK_EVENT_COMPOSE`), their window follows the caret.
+- rekta-core has long lists: `rk_list(count, item, user)` draws only the
+  rows in sight and keeps nothing for each item (the callback fills a row
+  while it is drawn), scrolls on the glide, and selects the Metro way
+  (click shows, Ctrl+click and Shift+click select several, Escape ends it,
+  keys as the web's `virtual()`). The demo lists a million builds.
+- rekta-core draws a frame's changes as up to eight separate parts and
+  presents them together (several damage rectangles in one Wayland
+  commit); an app with nothing moving uses no CPU and never wakes. On
+  Wayland a frame is drawn straight into the buffer the compositor shows
+  (no copy of the frame, no framebuffer of its own): the demo needs 13 MB
+  instead of 18.
+- rekta-core's API is narrower and says who owns what in one rule:
+  constructors are named after what they make (`rk_label`, `rk_button`,
+  `rk_tile`, `rk_column`, `rk_row`, `rk_tile_grid`, `rk_rows`, `rk_icon`,
+  `rk_progress`, `rk_panorama`, `rk_pivot`, `rk_places`) and return a
+  reference; adding, showing and presenting take it over (`rk_add` and
+  `rk_insert` return the child). `rk_button(label, on_press, user)` takes
+  its handler, `rk_button_set_kind` and `rk_button_set_icon` the rest; a
+  button keeps its own width in a column. `rk_window_show(window, root)`
+  replaces `rk_window_set_root`; `rk_view_find` finds a button by its label;
+  `rk_view_tap` and `rk_window_key` join the testing calls. A man page,
+  `core/man/rekta.3`, explains the API by task, with
+  `core/examples/hello.c` as its example (built and run by `make test`,
+  checked against the copies in the man page and the README). Breaking:
+  `rk_view_add`, `rk_view_insert`, `rk_window_set_root` and the
+  `rk_*_create` constructors of built-in views are gone.
+- rekta-core scrolls and glides smoothly: a wheel step, a section from
+  the nav strip or the keyboard travels on a quintic that sets off and
+  comes to rest without a jolt, and a new step picks it up mid-way with
+  its speed (quick wheel steps go further). The strip's titles slide and
+  change size the same way. Frames follow the display: on Wayland the
+  compositor's frame callbacks pace them (any refresh rate), elsewhere
+  the display's rate (`RK_FPS` overrides).
+- `core/demo/demo.c` shows every feature of the core in six sections;
+  `flake.nix` builds it on Linux and macOS (`nix run`, `nix develop`,
+  `nix flake check` with the tests).
+- The token build also writes the C sources of rekta-core
+  (`core/src/rk_tokens.h`, `rk_icons.h`, `rk_fonts.h`); `--check` fails
+  when they are out of date.
+
 - Inputs, native where they can be: `select.rk-input` with a chevron;
   number, date and time fields in Rekta's frame (the date and time
   pickers' icons from Rekta's set); a combobox that filters as you type
@@ -136,6 +271,13 @@ it; each entry says how.
   sections drop the kickers that repeated the strip's titles.
 
 ### Fixed
+
+- A context menu closed on any scroll in the page, so a strip gliding to its
+  active title closed one just opened; it now closes when a scroll moves
+  what it was opened on.
+
+- rekta-core: removing a view that is already leaving (two toasts in one
+  frame) freed it under its own animation; it now keeps leaving.
 
 - The classic script carries `async` functions; `--check` now fails
   when `rekta.global.js` does not parse.

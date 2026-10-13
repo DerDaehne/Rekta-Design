@@ -2,3 +2,5 @@ node_modules/
 dist/
 _site/
 site-shots/
+result
+result-*
