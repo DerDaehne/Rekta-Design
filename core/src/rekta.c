@@ -25,6 +25,7 @@
 #include "pool.c"
 #include "raster.c"
 #include "png.c"
+#include "fontfind.c"
 #include "text.c"
 #include "canvas.c"
 #include "view.c"

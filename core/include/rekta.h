@@ -142,6 +142,9 @@ RK_API void rk_app_set_motion(rk_motion_pref motion);
 RK_API bool rk_app_reduced_motion(void);
 RK_API void rk_app_set_density(rk_density density);
 RK_API void rk_app_set_accent(rk_color light, rk_color dark);    /* 0, 0: the ink of the theme */
+/* A font file (TrueType or OpenType, or a collection's first face) for the characters Barlow lacks, tried before the
+   system's: an app that writes Japanese may bring its own. False when it cannot be read or drawn with. */
+RK_API bool rk_app_add_font(const char *path);
 RK_API void rk_app_on_change(void (*fn)(void *user), void *user);   /* theme, motion, density or accent changed */
 
 /* Window ---------------------------------------------------------------------------------------------------------- */

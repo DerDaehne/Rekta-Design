@@ -23,7 +23,7 @@ typedef struct field {
   int rows;                                                /* the lines the input shows; 1 is a one-line field */
   float box_h;                                             /* the input's height for one line; 0: control-height */
   int *starts, nlines, lcap;                               /* where each line begins, as laid out for wrap_w */
-  float wrap_w, goal;                                      /* the width laid out for; Up and Down keep to the goal's x */
+  float wrap_w, goal, drawn_w;                             /* the width laid out for (and last drawn at); Up and Down keep to the goal's x */
   bool stale;                                              /* the text changed since the lines were laid out */
   char *label, *placeholder, *hint; bool error;
   char *preedit;                                           /* what an input method is composing, shown at the caret */
@@ -86,11 +86,10 @@ static void wrap(rk_view *v, field *f) {
     int hard = nl ? (int)(nl - f->text) : f->len, fit = hard;
     if (inner > 0 && width(f, start, hard) > inner) {
       fit = start;
-      for (int j = start; j < hard;) {                       /* whole words while they fit */
-        int k = j;
-        while (k < hard && f->text[k] == ' ') k++;
-        while (k < hard && f->text[k] != ' ') k++;
-        if (width(f, start, k) > inner) break;
+      for (int j = start; j < hard;) {                       /* whole words (CJK: characters) while they fit */
+        int k = rk__text_next_break(f->text, j, hard), vis = k;
+        while (vis > start && f->text[vis - 1] == ' ') vis--;
+        if (width(f, start, vis) > inner) break;
         fit = j = k;
       }
       if (fit == start) {                                    /* a word wider than the line breaks where it must */
@@ -136,6 +135,7 @@ static int offset_at(rk_view *v, const field *f, rk_point p) {
 }
 
 static void keep_caret_in_sight(rk_view *v, field *f) {
+  if (v->pframe.w <= 2 * PAD) return;                      /* not laid out yet: the draw places it */
   wrap(v, f);
   if (multi(f)) {
     float lh = line_h(f), inner = f->rows * lh, y = line_of(f, f->caret) * lh;
@@ -388,6 +388,7 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_canvas_fill_round_rect(c, (rk_rect){ box.x + bw, box.y + bw, box.w - 2 * bw, box.h - 2 * bw }, RK_MAX(0.0f, r - bw), rk_color_of(RK_ROLE_BG));
   if (focused) rk_canvas_stroke_rect(c, (rk_rect){ box.x - 4, box.y - 4, box.w + 8, box.h + 8 }, 2, rk_color_of(RK_ROLE_FOCUS));
   wrap(v, f);
+  if (f->wrap_w != f->drawn_w) { f->drawn_w = f->wrap_w; keep_caret_in_sight(v, f); }   /* a new width: the caret in sight of it */
   rk_textfmt t = input_fmt(f);
   float lh = line_h(f), x0 = box.x + PAD - f->scroll, y0 = box.y + input_pad_y(f) - f->scroll_y;
   rk_color ink = rk_color_of(RK_ROLE_TEXT);

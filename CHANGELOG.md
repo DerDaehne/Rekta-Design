@@ -32,6 +32,15 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core sets every script Barlow lacks a glyph for, from another
+  face: one the app brings (`rk_app_add_font`) or one the system offers -
+  fontconfig on Linux and CoreText on macOS, both opened at run time so
+  nothing more is linked (Linux adds `-ldl` for older glibc), and the
+  system's fonts on Windows in an order that suits the user's language.
+  Faces are mapped, not read, and which face draws a character is
+  remembered. Lines break between CJK characters, never before closing
+  punctuation or after opening, in labels and fields alike. Arabic,
+  Hebrew and the Indic scripts still wait for shaping.
 - rekta-core: table cells edit in place. `RK_COLUMN_EDITABLE` and
   `rk_table_on_edit(table, commit, user)`: a double click or F2 opens a
   field as tall as the row over the cell, its old value selected; Enter
@@ -271,6 +280,9 @@ it; each entry says how.
   sections drop the kickers that repeated the strip's titles.
 
 ### Fixed
+
+- rekta-core: a field given its text before it was laid out showed only the
+  end of it; it now starts at the start once it has a width.
 
 - A context menu closed on any scroll in the page, so a strip gliding to its
   active title closed one just opened; it now closes when a scroll moves

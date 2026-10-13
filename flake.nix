@@ -39,6 +39,10 @@
             install -Dm644 man/rekta.3 $out/share/man/man3/rekta.3
             runHook postInstall
           '';
+          # fontconfig is opened at run time for the characters Barlow lacks; Nix keeps it off the default path
+          postFixup = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+            patchelf --add-rpath ${pkgs.lib.getLib pkgs.fontconfig}/lib $out/bin/rekta-demo
+          '';
           meta = {
             description = "Rekta Design as native views in C, and a demo of every feature";
             homepage = "https://github.com/DerDaehne/Rekta-Design";

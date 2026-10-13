@@ -101,6 +101,14 @@ typedef struct rk_line { int start, len; float width; } rk_line;
 int rk__text_wrap(const char *s, const rk_textfmt *f, float max_width, rk_line *lines, int max);
 void rk__text_draw(rk_canvas *c, const char *s, int len, float x, float top, const rk_textfmt *f, rk_color color);
 void rk__text_shutdown(void);
+void rk__text_forget(void);
+/* fontfind.c: the system's fonts for a character Barlow lacks, and font files mapped into memory */
+typedef struct rk_font_ref { char path[512]; int index; char psname[128]; } rk_font_ref;   /* psname picks a face in a collection */
+int rk__font_candidates(int cp, int weight, rk_font_ref *out, int max);
+const unsigned char *rk__font_map(const char *path, size_t *size);
+void rk__font_unmap(const unsigned char *data, size_t size);
+int rk__utf8_put(unsigned char *out, int cp);
+int rk__text_next_break(const char *s, int from, int end);   /* where a line may end next after from (at most end) */
 
 /* Canvas (canvas.c) ----------------------------------------------------------------------------------------------- */
 

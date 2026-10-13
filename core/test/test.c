@@ -277,6 +277,66 @@ static void test_spring(void) {
 static int pressed_count;
 static void count_press(rk_view *v, void *u) { (void)v; (void)u; pressed_count++; }
 
+/* Text: where lines may break (CJK between characters, kinsoku), and a face for what Barlow lacks. */
+static int breaks(const char *s, int *at, int max) {
+  int n = 0, len = (int)strlen(s);
+  for (int i = 0; i < len && n < max;) { i = rk__text_next_break(s, i, len); at[n++] = i; }
+  return n;
+}
+
+static void test_fonts(void) {
+  int at[16], n;
+  n = breaks("two words-here", at, 16);
+  CHECK(n == 3 && at[0] == 4 && at[1] == 10 && at[2] == 14, "Latin: after spaces and hyphens (%d: %d %d %d)", n, at[0], at[1], at[2]);
+  n = breaks("\xe6\xbc\xa2\xe5\xad\x97\xe3\x80\x82\xe3\x81\x8b", at, 16);   /* 漢字。か */
+  CHECK(n == 3 && at[0] == 3 && at[1] == 9 && at[2] == 12, "CJK: between characters, never before 。 (%d: %d %d %d)", n, at[0], at[1], at[2]);
+  n = breaks("\xe3\x81\x82\xe3\x80\x8c\xe3\x81\x84", at, 16);   /* あ「い */
+  CHECK(n == 2 && at[0] == 3 && at[1] == 9, "nor after 「 (%d: %d %d)", n, at[0], at[1]);
+  n = breaks("Rekta \xed\x95\x9c\xea\xb8\x80", at, 16);   /* Rekta 한글 */
+  CHECK(n == 3 && at[0] == 6 && at[1] == 9 && at[2] == 12, "Latin, then Hangul (%d: %d %d %d)", n, at[0], at[1], at[2]);
+  rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
+  const char *jp = "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e\xe3\x81\xae\xe6\x96\x87\xe7\xab\xa0\xe3\x81\xaf\xe7\xa9\xba\xe7\x99\xbd\xe3\x81\xaa\xe3\x81\x97\xe3\x81\xa7\xe6\x8a\x98\xe3\x82\x8a\xe8\xbf\x94\xe3\x81\x99\xe3\x80\x82";
+  rk_line lines[16];
+  float one = rk__text_width("\xe6\x97\xa5", -1, &f);
+  n = rk__text_wrap(jp, &f, one * 5.5f, lines, 16);
+  bool fit = n > 2;
+  for (int i = 0; i < n; i++) fit = fit && lines[i].width <= one * 5.5f + 0.5f && lines[i].len % 3 == 0;
+  CHECK(fit, "Japanese without spaces wraps at the width, a character at a time (%d lines)", n);
+  CHECK(!memcmp(jp + lines[n - 1].start + lines[n - 1].len - 3, "\xe3\x80\x82", 3) && lines[n - 1].len > 3, "and 。 never starts a line");
+
+  /* a face for what Barlow lacks: any font this system has that has one of these */
+  static const char *const files[] = { "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf", "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+                                       "C:\\Windows\\Fonts\\seguisym.ttf", "C:\\Windows\\Fonts\\arial.ttf", "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+                                       "/System/Library/Fonts/Apple Symbols.ttf" };
+  static const int wanted[] = { 0x2211, 0x221e, 0x2318, 0x2603, 0xd55c, 0x6f22 };   /* ∑ ∞ ⌘ ☃ 한 漢 */
+  font *barlow = font_for(400);
+  const char *file = NULL;
+  for (size_t i = 0; i < sizeof files / sizeof *files && !file; i++) { FILE *t = fopen(files[i], "rb"); if (t) { fclose(t); file = files[i]; } }
+  if (!file) { printf("  (no font to fall back on here: the fallback checks are skipped)\n"); return; }
+  CHECK(rk_app_add_font(file), "an app's font is taken (%s)", file);
+  int cp = 0;
+  for (size_t i = 0; i < sizeof wanted / sizeof *wanted && !cp; i++)
+    if (!stbtt_FindGlyphIndex(&barlow->info, wanted[i]) && face_has(&fonts[RK_FONT_FILE_COUNT], wanted[i])) cp = wanted[i];
+  if (!cp) { printf("  (%s has none of the characters Barlow lacks: skipped)\n", file); return; }
+  unsigned char u[5] = { 0 };
+  rk__utf8_put(u, cp);
+  int g = 0, gb = 0;
+  font *face = fallback_for(cp, 400, &g), *bold = fallback_for(cp, 600, &gb);
+  CHECK(face == &fonts[RK_FONT_FILE_COUNT] && g && bold == face, "U+%04X comes from it, at any weight", cp);
+  rk_window *w = window(200, 80);
+  rk_view *l = rk_label((const char *)u, RK_TEXT_TITLE);
+  show(w, l, "fallback");
+  rk_app_run_for(50);
+  rk_bitmap *b = w->fb;
+  rk_rect r = rk__window_rect(l);
+  int ink = 0;
+  for (int y = (int)r.y; b && y < (int)(r.y + r.h) && y < b->h; y++)
+    for (int x = (int)r.x; x < (int)(r.x + r.w) && x < b->w; x++) if ((b->px[y * b->stride + x] & 0xff) < 0x80) ink++;
+  CHECK(ink > 20, "and is drawn (%d dark pixels)", ink);
+  CHECK(!rk_app_add_font("/no/such/font.ttf"), "a file that is not there is refused");
+  done(w);
+}
+
 static void test_api(void) {
   int before = rk__live_views;
   rk_window *w = window(600, 400);
@@ -675,7 +735,10 @@ static void test_textarea(void) {
   rk_view *line = rk_add(page, rk_field("One line", NULL));
   rk_field_set_lines(area, 4);
   rk_field_on_submit(area, on_field_submit, NULL);
+  rk_field_set_text(line, "set before it is laid out");
   show(w, page, "text area");
+  rk_app_run_for(50);
+  CHECK(((field *)line->state)->scroll == 0, "text set before the layout starts at the start (%.0f)", ((field *)line->state)->scroll);
   field *f = area->state;
   CHECK(rk__window_rect(area).h > rk__window_rect(line).h + 3 * 20, "four lines tall (%.0f)", rk__window_rect(area).h);
   rk_field_set_text(area, "The build on Thursday failed twice before anyone noticed, and the second time it took the docs with it.");
@@ -1017,6 +1080,7 @@ static void launch(void *user) {
   test_layout();
   test_input();
   test_api();
+  test_fonts();
   test_list();
   test_field();
   test_menu();

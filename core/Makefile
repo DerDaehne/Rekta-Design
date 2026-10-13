@@ -25,7 +25,7 @@ else ifneq (,$(findstring MINGW,$(UNAME))$(findstring MSYS,$(UNAME))$(OS))
   LIBS := -luser32 -lgdi32 -ladvapi32
   EXE := .exe
 else
-  LIBS := -lX11 -lXext -lm -lpthread
+  LIBS := -lX11 -lXext -lm -lpthread -ldl
   ifeq ($(WAYLAND),1)
     WAYLAND_PC := wayland-client wayland-cursor xkbcommon
     CFLAGS += $(shell pkg-config --cflags $(WAYLAND_PC) 2>/dev/null)

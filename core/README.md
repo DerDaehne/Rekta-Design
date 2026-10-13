@@ -46,7 +46,7 @@ and link:
 
 | OS | link with |
 |---|---|
-| Linux | `-lwayland-client -lwayland-cursor -lxkbcommon -lrt -lX11 -lXext -lm -lpthread` (or `-DRK_NO_WAYLAND` and only the X11 half) |
+| Linux | `-lwayland-client -lwayland-cursor -lxkbcommon -lrt -lX11 -lXext -lm -lpthread -ldl` (or `-DRK_NO_WAYLAND` and only the X11 half) |
 | macOS | `-framework Cocoa -framework QuartzCore` |
 | Windows | `user32 gdi32 advapi32` |
 

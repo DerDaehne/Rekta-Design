@@ -12,7 +12,7 @@ rekta-core
 .In rekta.h
 .Pp
 Link with, on Linux:
-.Dl -lrekta -lwayland-client -lwayland-cursor -lxkbcommon -lrt -lX11 -lXext -lm -lpthread
+.Dl -lrekta -lwayland-client -lwayland-cursor -lxkbcommon -lrt -lX11 -lXext -lm -lpthread -ldl
 on macOS:
 .Dl -lrekta -framework Cocoa -framework QuartzCore
 on Windows:
@@ -106,6 +106,16 @@ Each follows the system until set.
 A change of theme or accent cross-fades the windows.
 .Fn rk_app_on_change
 tells you when any of them changed.
+.It Fn rk_app_add_font "const char *path"
+A font file for the characters Barlow lacks, tried before the system's
+fonts; false when it cannot be read or drawn with.
+Without it a character Barlow lacks comes from the system: fontconfig on
+Linux, CoreText on macOS (both opened at run time), the system's fonts on
+Windows in an order that suits the user's language.
+Lines break at spaces, after a hyphen, and between CJK characters, never
+before closing punctuation or after opening.
+Text is set a character at a time, left to right: scripts that join or
+reorder (Arabic, Hebrew, the Indic scripts) are not shaped yet.
 .El
 .Ss Windows
 .Bl -tag -width Ds
