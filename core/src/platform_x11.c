@@ -12,18 +12,24 @@
 #include <sys/shm.h>
 #include <X11/keysym.h>
 #include <fcntl.h>
+#include <locale.h>
 #include <poll.h>
 #include <time.h>
 #include <unistd.h>
 
 typedef struct xwin {
   rk_window *w; Window win; GC gc; XIC ic; int pw, ph; bool maximized;
+  char *preedit; int plen, pcap;                             /* what the input method composes, on the spot (UTF-8) */
+  XPoint spot; bool spot_due, composing;                     /* the caret for the input method, sent between compositions */
   XImage *shm_img; XShmSegmentInfo shm;                      /* the frame in memory the X server reads directly */
 } xwin;
 
 static Display *dpy;
 static int screen;
 static XIM im;
+static XIMStyle im_style;                                     /* on the spot, over the spot, or nothing */
+static XFontSet im_fonts;                                     /* over the spot needs one */
+static XIC make_ic(struct xwin *x);
 static int wake_pipe[2] = { -1, -1 };
 static float dpi_scale = 1;
 static bool use_shm, shm_failed;
@@ -81,8 +87,19 @@ static bool x_init(const rk_app_desc *d) {
   A_TARGETS = XInternAtom(dpy, "TARGETS", False);
   A_RK_PASTE = XInternAtom(dpy, "_REKTA_PASTE", False);
   clip_win = XCreateSimpleWindow(dpy, RootWindow(dpy, screen), 0, 0, 1, 1, 0, 0, 0);
+  /* XIM needs a locale the input method knows; like GLFW, take the environment's character type if the app left it at C */
+  const char *ctype = setlocale(LC_CTYPE, NULL);
+  if (!ctype || !strcmp(ctype, "C") || !strcmp(ctype, "POSIX")) setlocale(LC_CTYPE, "");
   XSetLocaleModifiers("");
   im = XOpenIM(dpy, NULL, NULL, NULL);
+  im_style = XIMPreeditNothing | XIMStatusNothing;
+  XIMStyles *styles = NULL;
+  if (im && !XGetIMValues(im, XNQueryInputStyle, &styles, NULL) && styles) {
+    static const XIMStyle wanted[] = { XIMPreeditCallbacks | XIMStatusNothing, XIMPreeditPosition | XIMStatusNothing, XIMPreeditNothing | XIMStatusNothing, XIMPreeditNone | XIMStatusNone };
+    for (int k = 0, found = 0; k < 4 && !found; k++)
+      for (int i = 0; i < styles->count_styles; i++) if (styles->supported_styles[i] == wanted[k]) { im_style = wanted[k]; found = 1; break; }
+    XFree(styles);
+  }
   const char *noshm = getenv("RK_NO_SHM");
   use_shm = XShmQueryExtension(dpy) && !(noshm && *noshm == '1');
   read_dpi();
@@ -96,8 +113,9 @@ static void x_shutdown(void) {
   free(clip_text); clip_text = NULL;
   if (clip_win) { XDestroyWindow(dpy, clip_win); clip_win = 0; }
   if (im) XCloseIM(im);
+  if (im_fonts) XFreeFontSet(dpy, im_fonts);
   if (dpy) XCloseDisplay(dpy);
-  dpy = NULL; im = NULL;
+  dpy = NULL; im = NULL; im_fonts = NULL;
   if (wake_pipe[0] >= 0) { close(wake_pipe[0]); close(wake_pipe[1]); wake_pipe[0] = wake_pipe[1] = -1; }
 }
 
@@ -131,7 +149,7 @@ static void *x_open(rk_window *w, const rk_window_desc *d) {
     XChangeProperty(dpy, x->win, A_MOTIF, A_MOTIF, 32, PropModeReplace, (unsigned char *)motif, 5);
   }
   x->gc = XCreateGC(dpy, x->win, 0, NULL);
-  if (im) x->ic = XCreateIC(im, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, XNClientWindow, x->win, XNFocusWindow, x->win, NULL);
+  if (im) x->ic = make_ic(x);
   wins[nwins++] = x;
   rk__window_resized(w, x->pw / dpi_scale, x->ph / dpi_scale, dpi_scale);
   if (d->title) {
@@ -175,12 +193,114 @@ static bool shm_ensure(xwin *x, int w, int h) {
   return true;
 }
 
+/* On the spot: the input method tells what it composes, a change at a time, and the field shows it at its caret. */
+static int pe_start(XIC ic, XPointer client, XPointer call) { (void)ic; (void)call; xwin *x = (xwin *)client; x->plen = 0; x->composing = true; return -1; }
+
+static void pe_send(xwin *x) {
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.type = RK_EVENT_COMPOSE; e.time = rk_app_now(); e.text = x->plen ? x->preedit : "";
+  rk__window_event(x->w, &e);
+}
+
+static void pe_done(XIC ic, XPointer client, XPointer call) { (void)ic; (void)call; xwin *x = (xwin *)client; x->plen = 0; x->composing = false; pe_send(x); }
+
+static int utf8_put(char *out, unsigned c) {
+  if (c < 0x80) { out[0] = (char)c; return 1; }
+  if (c < 0x800) { out[0] = (char)(0xc0 | c >> 6); out[1] = (char)(0x80 | (c & 63)); return 2; }
+  if (c < 0x10000) { out[0] = (char)(0xe0 | c >> 12); out[1] = (char)(0x80 | (c >> 6 & 63)); out[2] = (char)(0x80 | (c & 63)); return 3; }
+  out[0] = (char)(0xf0 | c >> 18); out[1] = (char)(0x80 | (c >> 12 & 63)); out[2] = (char)(0x80 | (c >> 6 & 63)); out[3] = (char)(0x80 | (c & 63)); return 4;
+}
+
+static int byte_at(const xwin *x, int chars) {                 /* the byte offset of the chars'th character */
+  int i = 0;
+  for (; i < x->plen && chars > 0; chars--) { i++; while (i < x->plen && ((unsigned char)x->preedit[i] & 0xc0) == 0x80) i++; }
+  return i;
+}
+
+static void pe_draw(XIC ic, XPointer client, XPointer call) {
+  (void)ic;
+  xwin *x = (xwin *)client;
+  XIMPreeditDrawCallbackStruct *d = (XIMPreeditDrawCallbackStruct *)call;
+  char add[1024];
+  int n = 0;
+  if (d->text && d->text->length) {
+    if (d->text->encoding_is_wchar) {
+      for (int i = 0; i < d->text->length && n < (int)sizeof add - 4; i++) n += utf8_put(add + n, (unsigned)d->text->string.wide_char[i]);
+    } else if (d->text->string.multi_byte) {                 /* the locale's encoding: UTF-8 where an input method runs today */
+      n = (int)strlen(d->text->string.multi_byte);
+      if (n > (int)sizeof add) n = (int)sizeof add;
+      memcpy(add, d->text->string.multi_byte, (size_t)n);
+    }
+  }
+  int a = byte_at(x, d->chg_first), b = byte_at(x, d->chg_first + d->chg_length);
+  x->preedit = rk__grow(x->preedit, &x->pcap, x->plen - (b - a) + n + 1, 1);
+  memmove(x->preedit + a + n, x->preedit + b, (size_t)(x->plen - b));
+  memcpy(x->preedit + a, add, (size_t)n);
+  x->plen += n - (b - a);
+  x->preedit[x->plen] = 0;
+  pe_send(x);
+}
+
+static void pe_caret(XIC ic, XPointer client, XPointer call) { (void)ic; (void)client; (void)call; }   /* the caret stays at the end */
+
+static XIC make_ic(xwin *x) {
+  XIC ic = NULL;
+  if (im_style & XIMPreeditCallbacks) {
+    XIMCallback cb[4] = { { (XPointer)x, (XIMProc)(void (*)(void))pe_start }, { (XPointer)x, (XIMProc)pe_done }, { (XPointer)x, (XIMProc)pe_draw }, { (XPointer)x, (XIMProc)pe_caret } };
+    XVaNestedList pe = XVaCreateNestedList(0, XNPreeditStartCallback, &cb[0], XNPreeditDoneCallback, &cb[1], XNPreeditDrawCallback, &cb[2], XNPreeditCaretCallback, &cb[3], NULL);
+    ic = XCreateIC(im, XNInputStyle, im_style, XNClientWindow, x->win, XNFocusWindow, x->win, XNPreeditAttributes, pe, NULL);
+    XFree(pe);
+  } else if (im_style & XIMPreeditPosition) {
+    if (!im_fonts) {
+      char **missing = NULL, *def = NULL;
+      int nmissing = 0;
+      im_fonts = XCreateFontSet(dpy, "-*-*-medium-r-normal--14-*-*-*-*-*-*-*,-*-*-*-*-*--*-*-*-*-*-*-*-*,*", &missing, &nmissing, &def);
+      if (missing) XFreeStringList(missing);
+    }
+    XPoint spot = { 0, 0 };
+    XVaNestedList pe = XVaCreateNestedList(0, XNSpotLocation, &spot, XNFontSet, im_fonts, NULL);
+    if (im_fonts) ic = XCreateIC(im, XNInputStyle, im_style, XNClientWindow, x->win, XNFocusWindow, x->win, XNPreeditAttributes, pe, NULL);
+    XFree(pe);
+  }
+  if (!ic) ic = XCreateIC(im, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, XNClientWindow, x->win, XNFocusWindow, x->win, NULL);
+  return ic;
+}
+
+/* A field's caret: the input method's window goes beside it; a field that lets go ends what was being composed.
+   The caret is only noted here and goes out once the events are done, between compositions: an input method opens
+   the next one right after a commit, and a change of preedit attributes inside it makes uim, for one, drop it. The
+   candidate window is placed before typing starts, which is when it needs to be. */
+static void x_text_input(void *n, bool on, rk_rect caret) {
+  xwin *x = n;
+  if (!x || !x->ic) return;
+  if (!on) {
+    if (x->composing) { char *s = Xutf8ResetIC(x->ic); if (s) XFree(s); x->plen = 0; }
+    return;
+  }
+  XPoint spot = { (short)(caret.x * dpi_scale), (short)((caret.y + caret.h) * dpi_scale) };
+  if (spot.x != x->spot.x || spot.y != x->spot.y) { x->spot = spot; x->spot_due = true; }
+}
+
+static void send_spots(void) {
+  if (XEventsQueued(dpy, QueuedAfterFlush)) return;          /* what is on its way may open a composition: after it */
+  for (int i = 0; i < nwins; i++) {
+    xwin *x = wins[i];
+    if (!x->spot_due || !x->ic || x->composing) continue;   /* never inside a composition: uim, for one, loses it */
+    x->spot_due = false;
+    XVaNestedList pe = XVaCreateNestedList(0, XNSpotLocation, &x->spot, NULL);
+    XSetICValues(x->ic, XNPreeditAttributes, pe, NULL);
+    XFree(pe);
+  }
+}
+
 static void x_close(void *n) {
   xwin *x = n;
   if (!x) return;
   shm_free(x);
   for (int i = 0; i < nwins; i++) if (wins[i] == x) { wins[i] = wins[--nwins]; break; }
   if (x->ic) XDestroyIC(x->ic);
+  free(x->preedit);
   XFreeGC(dpy, x->gc);
   XDestroyWindow(dpy, x->win);
   XFlush(dpy);
@@ -404,6 +524,7 @@ static void handle(XEvent *ev) {
 }
 
 static bool x_wait(double ms) {
+  send_spots();
   XFlush(dpy);
   if (!XPending(dpy)) {
     struct pollfd fds[2] = { { ConnectionNumber(dpy), POLLIN, 0 }, { wake_pipe[0], POLLIN, 0 } };
@@ -472,5 +593,5 @@ static void x_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "x11", x_init, x_shutdown, x_open, x_close, x_show, x_title, x_present, x_move, x_minimize, x_zoom,
-  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, NULL
+  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, x_text_input
 };

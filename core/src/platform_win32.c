@@ -1,7 +1,8 @@
 /* platform_win32.c: Windows through Win32. Rekta's own title bar replaces the caption (WM_NCCALCSIZE), keeping the
    system's resize edges, snapping and shadow; pixels go up with SetDIBitsToDevice; DPI is per monitor; the theme
    comes from the registry (AppsUseLightTheme) and the motion setting from SPI_GETCLIENTAREAANIMATION. Functions
-   newer than Windows 7 are looked up at run time, so the library links only against system DLLs. */
+   newer than Windows 7, and the input method's (imm32.dll), are looked up at run time, so the library links only
+   against the DLLs it always did. */
 #include "rk_internal.h"
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -11,6 +12,7 @@
 #endif
 #include <windows.h>
 #include <windowsx.h>
+#include <imm.h>
 
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED 0x02E0
@@ -19,7 +21,10 @@
 #define WM_MOUSEHWHEEL 0x020E
 #endif
 
-typedef struct wwin { rk_window *w; HWND hwnd; bool own_frame; const rk_bitmap *last; float scale; int minw, minh; } wwin;
+typedef struct wwin {
+  rk_window *w; HWND hwnd; bool own_frame; const rk_bitmap *last; float scale; int minw, minh;
+  RECT caret; bool caret_known;                                /* a field's caret, device pixels: the input method's place */
+} wwin;
 
 static HINSTANCE inst;
 static DWORD main_thread;
@@ -28,6 +33,18 @@ static const wchar_t *CLASS = L"RektaWindow";
 typedef UINT(WINAPI *GetDpiForWindow_t)(HWND);
 typedef HRESULT(WINAPI *DwmSetWindowAttribute_t)(HWND, DWORD, LPCVOID, DWORD);
 typedef struct { int l, r, t, b; } margins_t;
+typedef HIMC(WINAPI *ImmGetContext_t)(HWND);
+typedef BOOL(WINAPI *ImmReleaseContext_t)(HWND, HIMC);
+typedef LONG(WINAPI *ImmGetCompositionStringW_t)(HIMC, DWORD, LPVOID, DWORD);
+typedef BOOL(WINAPI *ImmSetCompositionWindow_t)(HIMC, LPCOMPOSITIONFORM);
+typedef BOOL(WINAPI *ImmSetCandidateWindow_t)(HIMC, LPCANDIDATEFORM);
+typedef BOOL(WINAPI *ImmNotifyIME_t)(HIMC, DWORD, DWORD, DWORD);
+static ImmGetContext_t pImmGetContext;
+static ImmReleaseContext_t pImmReleaseContext;
+static ImmGetCompositionStringW_t pImmGetCompositionStringW;
+static ImmSetCompositionWindow_t pImmSetCompositionWindow;
+static ImmSetCandidateWindow_t pImmSetCandidateWindow;
+static ImmNotifyIME_t pImmNotifyIME;
 typedef HRESULT(WINAPI *DwmExtendFrame_t)(HWND, const margins_t *);
 static GetDpiForWindow_t pGetDpiForWindow;
 static DwmSetWindowAttribute_t pDwmSetWindowAttribute;
@@ -93,6 +110,60 @@ static void sync_size(wwin *x) {
   RECT r;
   GetClientRect(x->hwnd, &r);
   rk__window_resized(x->w, (r.right - r.left) / x->scale, (r.bottom - r.top) / x->scale, x->scale);
+}
+
+/* The input method: its composition and candidate windows go to the field's caret; what it composes is shown by the
+   field, underlined (RK_EVENT_COMPOSE), and what it commits is typed (RK_EVENT_TEXT). */
+static void ime_place(wwin *x) {
+  if (!pImmGetContext || !x->caret_known) return;
+  HIMC imc = pImmGetContext(x->hwnd);
+  if (!imc) return;
+  COMPOSITIONFORM cf;
+  memset(&cf, 0, sizeof cf);
+  cf.dwStyle = CFS_POINT; cf.ptCurrentPos.x = x->caret.left; cf.ptCurrentPos.y = x->caret.top;
+  pImmSetCompositionWindow(imc, &cf);
+  CANDIDATEFORM cand;
+  memset(&cand, 0, sizeof cand);
+  cand.dwIndex = 0; cand.dwStyle = CFS_EXCLUDE; cand.ptCurrentPos.x = x->caret.left; cand.ptCurrentPos.y = x->caret.bottom; cand.rcArea = x->caret;
+  pImmSetCandidateWindow(imc, &cand);
+  pImmReleaseContext(x->hwnd, imc);
+}
+
+static void ime_send(wwin *x, rk_event_type type, const char *text) {
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.type = type; e.time = w_now(); e.text = text;
+  rk__window_event(x->w, &e);
+}
+
+/* One of the composition's strings, as UTF-8 (malloc'd), or NULL. */
+static char *ime_string(HIMC imc, DWORD which) {
+  LONG bytes = pImmGetCompositionStringW(imc, which, NULL, 0);
+  if (bytes < 0) return NULL;
+  wchar_t *ws = rk__alloc((size_t)bytes + sizeof(wchar_t));
+  if (bytes) pImmGetCompositionStringW(imc, which, ws, (DWORD)bytes);
+  ws[bytes / sizeof(wchar_t)] = 0;
+  int n = WideCharToMultiByte(CP_UTF8, 0, ws, -1, NULL, 0, NULL, NULL);
+  char *u = rk__alloc(n > 0 ? (size_t)n : 1);
+  if (n > 0) WideCharToMultiByte(CP_UTF8, 0, ws, -1, u, n, NULL, NULL);
+  free(ws);
+  return u;
+}
+
+static void w_text_input(void *n, bool on, rk_rect caret) {
+  wwin *x = n;
+  if (!x || !pImmGetContext) return;
+  if (!on) {                                                   /* the field let go: what was being composed goes */
+    HIMC imc = pImmGetContext(x->hwnd);
+    if (imc) { pImmNotifyIME(imc, NI_COMPOSITIONSTR, CPS_CANCEL, 0); pImmReleaseContext(x->hwnd, imc); }
+    x->caret_known = false;
+    return;
+  }
+  float k = x->scale;
+  RECT r = { (LONG)(caret.x * k), (LONG)(caret.y * k), (LONG)((caret.x + caret.w) * k), (LONG)((caret.y + caret.h) * k) };
+  if (x->caret_known && EqualRect(&r, &x->caret)) return;
+  x->caret = r; x->caret_known = true;
+  ime_place(x);
 }
 
 static LRESULT CALLBACK proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
@@ -192,6 +263,23 @@ static LRESULT CALLBACK proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       if (msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP) return 0;   /* no menu mode on Alt or F10 */
       break;
     }
+    case WM_IME_SETCONTEXT: lp &= ~(LPARAM)ISC_SHOWUICOMPOSITIONWINDOW; break;   /* the field shows the composition */
+    case WM_IME_STARTCOMPOSITION: ime_place(x); return 0;
+    case WM_IME_COMPOSITION: {
+      if (!pImmGetContext) break;
+      HIMC imc = pImmGetContext(h);
+      if (!imc) break;
+      if (lp & GCS_RESULTSTR) {                                /* committed: typed, as one piece */
+        char *u = ime_string(imc, GCS_RESULTSTR);
+        ime_send(x, RK_EVENT_COMPOSE, "");
+        if (u && *u) ime_send(x, RK_EVENT_TEXT, u);
+        free(u);
+      }
+      if (lp & GCS_COMPSTR) { char *u = ime_string(imc, GCS_COMPSTR); ime_send(x, RK_EVENT_COMPOSE, u ? u : ""); free(u); }
+      pImmReleaseContext(h, imc);
+      return 0;                                                /* no WM_IME_CHAR: the text has been typed */
+    }
+    case WM_IME_ENDCOMPOSITION: ime_send(x, RK_EVENT_COMPOSE, ""); return 0;
     case WM_CHAR: {
       static wchar_t high;
       wchar_t c = (wchar_t)wp;
@@ -226,6 +314,16 @@ static bool w_init(const rk_app_desc *d) {
   if (setctx) setctx((HANDLE)-4);                              /* per monitor, version 2 */
   else { typedef BOOL(WINAPI *SetAware_t)(void); SetAware_t aware = user ? (SetAware_t)(void (*)(void))GetProcAddress(user, "SetProcessDPIAware") : NULL; if (aware) aware(); }
   pGetDpiForWindow = user ? (GetDpiForWindow_t)(void (*)(void))GetProcAddress(user, "GetDpiForWindow") : NULL;
+  HMODULE imm = LoadLibraryW(L"imm32.dll");
+  if (imm) {
+    pImmGetContext = (ImmGetContext_t)(void (*)(void))GetProcAddress(imm, "ImmGetContext");
+    pImmReleaseContext = (ImmReleaseContext_t)(void (*)(void))GetProcAddress(imm, "ImmReleaseContext");
+    pImmGetCompositionStringW = (ImmGetCompositionStringW_t)(void (*)(void))GetProcAddress(imm, "ImmGetCompositionStringW");
+    pImmSetCompositionWindow = (ImmSetCompositionWindow_t)(void (*)(void))GetProcAddress(imm, "ImmSetCompositionWindow");
+    pImmSetCandidateWindow = (ImmSetCandidateWindow_t)(void (*)(void))GetProcAddress(imm, "ImmSetCandidateWindow");
+    pImmNotifyIME = (ImmNotifyIME_t)(void (*)(void))GetProcAddress(imm, "ImmNotifyIME");
+    if (!pImmReleaseContext || !pImmGetCompositionStringW || !pImmSetCompositionWindow || !pImmSetCandidateWindow || !pImmNotifyIME) pImmGetContext = NULL;
+  }
   HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
   if (dwm) {
     pDwmSetWindowAttribute = (DwmSetWindowAttribute_t)(void (*)(void))GetProcAddress(dwm, "DwmSetWindowAttribute");
@@ -349,5 +447,5 @@ static void w_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "win32", w_init, w_shutdown, w_open, w_close, w_show, w_title, w_present, w_move, w_minimize, w_zoom,
-  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, NULL
+  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input
 };

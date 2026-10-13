@@ -1,12 +1,17 @@
 /* platform_cocoa.m: macOS through Cocoa (compile with -fobjc-arc). The window's content reaches under a transparent
    title bar, so Rekta's title bar sits beside the system's traffic lights; pixels go up as a CALayer's contents; the
-   theme follows the effective appearance and the motion setting the accessibility display options. */
+   theme follows the effective appearance and the motion setting the accessibility display options. While a field
+   has focus, keys go through the text input system (NSTextInputClient): an input method's composing text is shown
+   by the field, underlined, and what it commits is typed; dead keys compose the same way. */
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #include "rk_internal.h"
 
 @class RKView;
-typedef struct cwin { rk_window *w; NSWindow *__unsafe_unretained win; RKView *__unsafe_unretained view; } cwin;
+typedef struct cwin {
+  rk_window *w; NSWindow *__unsafe_unretained win; RKView *__unsafe_unretained view;
+  bool ime; NSRect caret;                                      /* a field has focus; its caret in the view */
+} cwin;
 
 static NSMutableArray *windows;                                /* keeps windows and delegates alive */
 
@@ -31,9 +36,12 @@ static uint32_t key_of(NSEvent *e) {
   return RK_KEY_NONE;
 }
 
-@interface RKView : NSView
+@interface RKView : NSView <NSTextInputClient>
 @property(nonatomic) cwin *owner;
+@property(nonatomic, strong) NSString *marked;                 /* what the input method is composing */
 @end
+
+static NSString *plain(id s) { return [s isKindOfClass:[NSAttributedString class]] ? ((NSAttributedString *)s).string : (NSString *)s; }
 
 @implementation RKView
 - (BOOL)isFlipped { return YES; }
@@ -93,6 +101,13 @@ static uint32_t key_of(NSEvent *e) {
   memset(&ev, 0, sizeof ev);
   ev.size = sizeof ev; ev.type = down ? RK_EVENT_KEY_DOWN : RK_EVENT_KEY_UP; ev.time = rk_app_now();
   ev.key = key_of(e); ev.mods = mods_of(e.modifierFlags);
+  if (down && self.owner->ime && !(ev.mods & (RK_MOD_CTRL | RK_MOD_SUPER))) {
+    /* a field has focus: the key is a key for the app (unless something is being composed, then it belongs to the
+       input method), and its text comes through the text input system */
+    if (ev.key && !self.marked.length) rk__window_event(self.owner->w, &ev);
+    if (self.owner && self.owner->ime) [self interpretKeyEvents:@[ e ]];
+    return;
+  }
   if (ev.key) rk__window_event(self.owner->w, &ev);
   NSString *chars = e.characters;
   if (down && chars.length && !(ev.mods & (RK_MOD_CTRL | RK_MOD_SUPER))) {
@@ -103,6 +118,47 @@ static uint32_t key_of(NSEvent *e) {
       rk__window_event(self.owner->w, &t);
     }
   }
+}
+
+/* NSTextInputClient: the field holds the text; the view only passes on what is composed and what is committed. */
+- (void)send:(rk_event_type)type text:(NSString *)s {
+  if (!self.owner) return;
+  rk_event ev;
+  memset(&ev, 0, sizeof ev);
+  ev.size = sizeof ev; ev.type = type; ev.time = rk_app_now(); ev.text = s.UTF8String ? s.UTF8String : "";
+  rk__window_event(self.owner->w, &ev);
+}
+- (BOOL)hasMarkedText { return self.marked.length > 0; }
+- (NSRange)markedRange { return self.marked.length ? NSMakeRange(0, self.marked.length) : NSMakeRange(NSNotFound, 0); }
+- (NSRange)selectedRange { return NSMakeRange(NSNotFound, 0); }
+- (void)setMarkedText:(id)s selectedRange:(NSRange)sel replacementRange:(NSRange)rep {
+  (void)sel; (void)rep;
+  self.marked = [plain(s) copy];
+  [self send:RK_EVENT_COMPOSE text:self.marked];
+}
+- (void)unmarkText {                                           /* what was composed stays: it is typed */
+  NSString *t = self.marked;
+  self.marked = nil;
+  [self send:RK_EVENT_COMPOSE text:@""];
+  if (t.length) [self send:RK_EVENT_TEXT text:t];
+}
+- (void)insertText:(id)s replacementRange:(NSRange)rep {
+  (void)rep;
+  NSString *t = plain(s);
+  if (self.marked.length) { self.marked = nil; [self send:RK_EVENT_COMPOSE text:@""]; }
+  if (!t.length) return;
+  unichar c = [t characterAtIndex:0];
+  if (c < 0x20 || c == 0x7f || (c >= 0xF700 && c <= 0xF8FF)) return;   /* a control or a function key's character */
+  [self send:RK_EVENT_TEXT text:t];
+}
+- (void)doCommandBySelector:(SEL)sel { (void)sel; }            /* Enter, arrows, Backspace: already sent as keys */
+- (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText { return @[]; }
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)r actualRange:(NSRangePointer)a { (void)r; (void)a; return nil; }
+- (NSUInteger)characterIndexForPoint:(NSPoint)p { (void)p; return NSNotFound; }
+- (NSRect)firstRectForCharacterRange:(NSRange)r actualRange:(NSRangePointer)a {   /* where the candidate window goes */
+  (void)r; (void)a;
+  if (!self.owner || !self.window) return NSZeroRect;
+  return [self.window convertRectToScreen:[self convertRect:self.owner->caret toView:nil]];
 }
 @end
 
@@ -261,6 +317,20 @@ static char *c_clip_get(void) {
   }
 }
 
+static void c_text_input(void *n, bool on, rk_rect caret) {
+  cwin *x = n;
+  if (!x) return;
+  x->ime = on;
+  if (!on) {                                                   /* the field let go: what was being composed goes */
+    if (x->view.marked.length) { [x->view.inputContext discardMarkedText]; x->view.marked = nil; }
+    return;
+  }
+  NSRect r = NSMakeRect(caret.x, caret.y, caret.w, caret.h);
+  if (NSEqualRects(r, x->caret)) return;
+  x->caret = r;
+  [x->view.inputContext invalidateCharacterCoordinates];
+}
+
 static double c_refresh(void) {
   if (@available(macOS 12.0, *)) { NSInteger n = NSScreen.mainScreen.maximumFramesPerSecond; if (n > 1) return (double)n; }
   return 60;
@@ -270,5 +340,5 @@ static void c_resize(void *n, float w, float h) { cwin *x = n; if (x && !x->win.
 
 const rk_platform rk__platform_native = {
   "cocoa", c_init, c_shutdown, c_open, c_close, c_show, c_title, c_present, c_move, c_minimize, c_zoom,
-  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, NULL
+  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, c_text_input
 };

@@ -32,6 +32,17 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core: input methods on every platform. X11 takes the best style
+  the input method offers - on the spot (the field shows what is being
+  composed), over the spot (the input method draws it at the caret), or
+  none - and places its window at the caret between compositions (uim
+  drops a composition whose attributes change inside it); LC_CTYPE comes
+  from the environment when the app left it at C, as GLFW does, or XIM
+  finds no input method. Windows: IMM32, loaded at run time, so the link
+  line stays as it was: the composition and candidate windows at the
+  caret, the composition shown by the field, the result typed. macOS:
+  the view is an NSTextInputClient while a field has focus. Checked on
+  X11 against uim-xim with Byeoru (한글, both styles).
 - rekta-core: focus everywhere. A toast holds while focus or the
   pointer is on it, Escape dismisses it and focus goes back where it
   came from (over a sheet too, its action is last in the Tab order); with
