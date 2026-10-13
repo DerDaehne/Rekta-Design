@@ -19,7 +19,7 @@ BUILD := build
 UNAME := $(shell uname -s 2>/dev/null)
 SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h third_party/stb_truetype.h third_party/stb_image.h
 WAYLAND ?= 1
-VERSION := $(shell awk '/^\#define RK_VERSION_(MAJOR|MINOR|PATCH) /{ v = v (v == "" ? "" : ".") $$3 } END { print v }' include/rekta.h)
+VERSION := $(shell awk '/^.define RK_VERSION_(MAJOR|MINOR|PATCH) /{ v = v (v == "" ? "" : ".") $$3 } END { print v }' include/rekta.h)
 MAJOR := $(word 1,$(subst ., ,$(VERSION)))
 MINOR := $(word 2,$(subst ., ,$(VERSION)))
 # before 1.0 a minor version may break the ABI, so it is part of the soname

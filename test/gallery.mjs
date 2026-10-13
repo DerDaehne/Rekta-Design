@@ -2,7 +2,7 @@
 // Chromium, each in a frame 320 px wide with 16 px around it, light and dark, held to each other. Text is rasterized by
 // different engines, so pixels are not compared one for one; what must agree is
 //   size     the frame's height, within 2 px
-//   extent   where the ink lies (anything off the background), each edge within 3 px
+//   extent   where the ink lies (anything off the background), each edge within 2 px
 //   colour   every solid colour one side fills a share of the frame with, the other fills too (within 10 per channel)
 //   shape    the two at a quarter of the size, in grey, apart by at most 8 on average
 // and every specimen exists on both sides. Writes report.html beside the core images: each pair side by side.
@@ -167,7 +167,7 @@ for (const name of Object.keys(specimens)) {
     const ec = extent(core), ew = extent(web);
     if (!ec || !ew) notes.push('nothing drawn');
     else {
-      const off = ['x0', 'y0', 'x1', 'y1'].filter((k) => Math.abs(ec[k] - ew[k]) > 3);
+      const off = ['x0', 'y0', 'x1', 'y1'].filter((k) => Math.abs(ec[k] - ew[k]) > 2);
       if (off.length) notes.push(`ink at ${ec.x0},${ec.y0}–${ec.x1},${ec.y1} in core, ${ew.x0},${ew.y0}–${ew.x1},${ew.y1} on the web`);
     }
     const sc = solids(core), sw = solids(web);

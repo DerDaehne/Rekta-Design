@@ -84,7 +84,7 @@ static rk_size button_measure(rk_view *v, rk_size avail, void *st) {
   if (b->kind == RK_BUTTON_BAR) return (rk_size){ RK_MAX(48.0f, 20 + iw + (tw && iw ? 6 : 0) + tw), 48 };
   if (b->kind == BUTTON_TOAST) return (rk_size){ RK_MAX(rk_metric_of(RK_CONTROL_HEIGHT), tw + 2 * rk_metric_of(RK_SPACE_M)), rk_metric_of(RK_CONTROL_HEIGHT) + 4 };
   float pad = rk_metric_of(RK_CONTROL_PADDING);
-  return (rk_size){ ceilf(tw + iw + (tw && iw ? 8 : 0) + 2 * pad), rk_metric_of(RK_CONTROL_HEIGHT) };
+  return (rk_size){ ceilf(tw + iw + (tw && iw ? 8 : 0) + 2 * pad + 4), rk_metric_of(RK_CONTROL_HEIGHT) };   /* the 2 px frame outside the padding */
 }
 static void button_draw(rk_view *v, rk_canvas *c, void *st) {
   button *b = st;

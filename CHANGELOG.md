@@ -368,8 +368,8 @@ it; each entry says how.
 
 ### Changed
 
-- **rekta-core, as the web**: segments are 4 px wider each (the frame is
-  outside the padding) and their outer corners take `radius-s`, the chosen
+- **rekta-core, as the web**: buttons and segments are 4 px wider each (the
+  2 px frame is outside the padding) and their outer corners take `radius-s`, the chosen
   one's frame in the accent; a row's rule is outside its padding, the last row
   has one below as well, and the meta stands on the title's baseline; in a
   compact window (under 760 × 481) tiles stretch to fill the row, at least two
