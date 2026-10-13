@@ -158,9 +158,6 @@ a text field, which keeps a history of its own, a word at a time.
 .It Fn rk_window_set_title , Fn rk_window_set_size , Fn rk_window_size , Fn rk_window_scale , Fn rk_window_focus
 As named.
 Sizes are logical pixels; the scale is device pixels per logical pixel.
-.El
-.Ss Containers and views
-.Bl -tag -width Ds
 .It Fn rk_window_choose_files "rk_window *window" "const char *accept" "bool multiple" "void (*chosen)(rk_window *window, const char *const *files, int count, void *user)" "void *user"
 The system's file chooser over the window, with the filter
 .Fn rk_drop
@@ -168,6 +165,9 @@ uses;
 .Fa chosen
 comes later with the paths, or with none if it was cancelled.
 False when the system has none here.
+.El
+.Ss Containers and views
+.Bl -tag -width Ds
 .It Fn rk_column , Fn rk_row , Fn rk_tile_grid
 Containers with the spacing the design gives them: a column top to
 bottom, a row left to right, a grid of tiles in tile units.
