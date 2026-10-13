@@ -16,6 +16,7 @@ typedef struct field {
   int caret, anchor;                                       /* byte offsets; the selection is between them */
   float scroll;                                            /* how far the text has moved left to keep the caret in sight */
   char *label, *placeholder, *hint; bool error;
+  char *preedit;                                           /* what an input method is composing, shown at the caret */
   bool lit, dragging;                                      /* the caret shows; a drag selects */
   uint32_t blink; double edited, last_click;
   rk_view *view;
@@ -73,6 +74,16 @@ static void keep_caret_in_sight(rk_view *v, field *f) {
 
 static void blink(void *user);
 
+/* An input method places its window by the caret, in window coordinates. */
+static void tell_input_method(rk_view *v, field *f, bool on) {
+  rk_window *w = rk__view_window(v);
+  if (!w || !rk__platform()->text_input) return;
+  rk_rect r = rk__window_rect(v), box = input_rect(v, f);
+  rk_textfmt t = input_fmt();
+  rk_rect caret = { r.x + box.x + PAD - f->scroll + x_at(f, f->caret), r.y + box.y + (box.h - t.size) / 2 - 2, 1, t.size + 4 };
+  rk__platform()->text_input(w->native, on, caret);
+}
+
 /* An edit or a move: the caret shows at once and blinks a while, then stays lit. */
 static void touched(rk_view *v, field *f) {
   f->lit = true;
@@ -80,6 +91,7 @@ static void touched(rk_view *v, field *f) {
   rk_window *w = rk__view_window(v);
   if (!f->blink && w && w->focus == v && !rk__reduced()) f->blink = rk_app_after(BLINK_MS, true, blink, f);
   keep_caret_in_sight(v, f);
+  if (w && w->focus == v) tell_input_method(v, f, true);
   rk__view_dirty(v);
 }
 
@@ -174,6 +186,10 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
       if (!e->text) return false;
       replace(v, f, e->text, (int)strlen(e->text));
       return true;
+    case RK_EVENT_COMPOSE:
+      rk__setstr(&f->preedit, e->text && *e->text ? e->text : NULL);
+      rk__view_dirty(v);
+      return true;
     case RK_EVENT_KEY_DOWN: return field_key(v, f, e);
     case RK_EVENT_POINTER_DOWN: {
       if (e->button || e->position.y < box.y || e->position.y > box.y + box.h) return e->button == 0;
@@ -198,6 +214,8 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
     case RK_EVENT_FOCUS: touched(v, f); return false;
     case RK_EVENT_BLUR:
       if (f->blink) { rk_app_cancel(f->blink); f->blink = 0; }
+      rk__setstr(&f->preedit, NULL);
+      tell_input_method(v, f, false);
       f->dragging = false;
       rk__view_dirty(v);
       return false;
@@ -221,6 +239,16 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
   float ty = box.y + (box.h - t.size) / 2, x0 = box.x + PAD - f->scroll;
   rk_canvas_push_clip(c, (rk_rect){ box.x + bw, box.y, box.w - 2 * bw, box.h });
   if (!f->len && f->placeholder) rk__text_draw(c, f->placeholder, -1, box.x + PAD, ty, &t, rk_color_of(RK_ROLE_TEXT_MEDIUM));
+  if (focused && f->preedit) {                               /* composing: the text so far, underlined, at the caret */
+    float cx = x0 + x_at(f, f->caret), pw = rk__text_width(f->preedit, -1, &t);
+    rk__text_draw(c, f->text, f->caret, x0, ty, &t, rk_color_of(RK_ROLE_TEXT));
+    rk__text_draw(c, f->preedit, -1, cx, ty, &t, rk_color_of(RK_ROLE_TEXT));
+    rk_canvas_fill_rect(c, (rk_rect){ cx, ty + t.size + 1, pw, 1 }, rk_color_of(RK_ROLE_TEXT));
+    rk__text_draw(c, f->text + f->caret, f->len - f->caret, cx + pw, ty, &t, rk_color_of(RK_ROLE_TEXT));
+    rk_canvas_fill_rect(c, (rk_rect){ cx + pw, ty - 2, 1, t.size + 4 }, rk_color_of(RK_ROLE_TEXT));
+    rk_canvas_pop_clip(c);
+    goto hint;
+  }
   rk__text_draw(c, f->text, f->len, x0, ty, &t, rk_color_of(RK_ROLE_TEXT));
   int lo = sel_lo(f), hi = sel_hi(f);
   if (focused && lo != hi) {                                 /* the selection: the accent, its text on it */
@@ -232,6 +260,7 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
   }
   if (focused && lo == hi && f->lit) rk_canvas_fill_rect(c, (rk_rect){ x0 + x_at(f, f->caret), ty - 2, 1, t.size + 4 }, rk_color_of(RK_ROLE_TEXT));
   rk_canvas_pop_clip(c);
+hint:
   if (f->hint) {
     rk_textfmt h = hint_fmt();
     float hy = box.y + box.h + rk_metric_of(RK_SPACE_XS), hx = 0;
@@ -251,7 +280,7 @@ static rk_size field_measure(rk_view *v, rk_size avail, void *st) {
 static void field_destroy(void *st) {
   field *f = st;
   if (f->blink) rk_app_cancel(f->blink);
-  free(f->text); free(f->label); free(f->placeholder); free(f->hint); free(f);
+  free(f->text); free(f->label); free(f->placeholder); free(f->hint); free(f->preedit); free(f);
 }
 
 static const rk_class field_class = { { sizeof(rk_view_class), "rk_field", field_draw, field_measure, NULL, field_event, field_destroy }, NULL, NULL };

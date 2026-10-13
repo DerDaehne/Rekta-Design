@@ -290,6 +290,7 @@ typedef struct rk_platform {
   rk_bitmap *(*target)(void *native, int w, int h, bool *fresh);   /* NULL, or the buffer to draw the next frame into */
   void (*clip_set)(const char *utf8);                      /* NULL, or the system clipboard takes the text */
   char *(*clip_get)(void);                                 /* NULL, or the system clipboard's text (malloc'd), or NULL */
+  void (*text_input)(void *native, bool on, rk_rect caret);   /* NULL, or an input method follows a field's caret */
 } rk_platform;
 
 extern const rk_platform rk__platform_headless;

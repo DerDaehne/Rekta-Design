@@ -27,6 +27,8 @@
 #include "wayland/fractional-scale-v1-client-protocol.h"
 #include "wayland/viewporter-client-protocol.h"
 #include "wayland/cursor-shape-v1-client-protocol.h"
+#include "wayland/text-input-unstable-v3-client-protocol.h"
+#include "wayland/text-input-unstable-v3-protocol.c"
 #include "wayland/xdg-shell-protocol.c"
 #include "wayland/xdg-decoration-unstable-v1-protocol.c"
 #include "wayland/fractional-scale-v1-protocol.c"
@@ -83,7 +85,7 @@ static struct wl_cursor_theme *cursor_theme; static struct wl_surface *cursor_su
 static struct xkb_context *xkb; static struct xkb_keymap *keymap; static struct xkb_state *kstate;
 static struct xkb_compose_table *ctable; static struct xkb_compose_state *cstate;   /* dead keys and Compose */
 static wwin *wwins[64]; static int nwwins;
-static wwin *pointer_win, *key_win;
+static wwin *pointer_win, *key_win, *ti_win;                  /* ti_win: where the input method's text goes */
 static float px, py; static uint32_t serial, pointer_serial; static int cursor_shape = -1;
 static int axis_discrete[2]; static float axis_value[2]; static bool axis_pending;
 static int repeat_rate = 25, repeat_delay = 500; static uint32_t repeat_key; static double repeat_next;
@@ -350,6 +352,7 @@ static void wl_close(void *n) {
   if (!x) return;
   for (int i = 0; i < nwwins; i++) if (wwins[i] == x) { wwins[i] = wwins[--nwwins]; break; }
   if (pointer_win == x) pointer_win = NULL;
+  if (ti_win == x) ti_win = NULL;
   if (key_win == x) { key_win = NULL; repeat_key = 0; }
   if (x->frame_cb) wl_callback_destroy(x->frame_cb);
   for (int i = 0; i < 3; i++) buf_free(&x->bufs[i]);
@@ -681,6 +684,53 @@ static char *wl_clip_get(void) {
   return out;
 }
 
+/* Input methods: text-input-v3. While a field has focus the input method follows its caret; what it composes comes
+   as RK_EVENT_COMPOSE, what it commits as RK_EVENT_TEXT. */
+
+static struct zwp_text_input_manager_v3 *ti_mgr;
+static struct zwp_text_input_v3 *ti;
+static bool ti_on;
+static char *ti_preedit, *ti_commit;
+
+static void ti_enter(void *d, struct zwp_text_input_v3 *t, struct wl_surface *s) { (void)d; (void)t; ti_win = wfind(s); }
+static void ti_leave(void *d, struct zwp_text_input_v3 *t, struct wl_surface *s) { (void)d; (void)t; (void)s; ti_win = NULL; }
+static void ti_preedit_string(void *d, struct zwp_text_input_v3 *t, const char *text, int32_t b, int32_t e) {
+  (void)d; (void)t; (void)b; (void)e;
+  free(ti_preedit); ti_preedit = rk__strdup(text ? text : "");
+}
+static void ti_commit_string(void *d, struct zwp_text_input_v3 *t, const char *text) { (void)d; (void)t; free(ti_commit); ti_commit = rk__strdup(text); }
+static void ti_delete(void *d, struct zwp_text_input_v3 *t, uint32_t before, uint32_t after) { (void)d; (void)t; (void)before; (void)after; }
+static void ti_done(void *d, struct zwp_text_input_v3 *t, uint32_t serial) {
+  (void)d; (void)t; (void)serial;
+  wwin *x = ti_win ? ti_win : key_win;
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.time = rk_app_now();
+  if (x && ti_commit && *ti_commit) { e.type = RK_EVENT_TEXT; e.text = ti_commit; rk__window_event(x->w, &e); }
+  if (x) { e.type = RK_EVENT_COMPOSE; e.text = ti_preedit ? ti_preedit : ""; rk__window_event(x->w, &e); }
+  free(ti_commit); ti_commit = NULL;
+  free(ti_preedit); ti_preedit = NULL;
+}
+static const struct zwp_text_input_v3_listener ti_listener = {
+  .enter = ti_enter, .leave = ti_leave, .preedit_string = ti_preedit_string, .commit_string = ti_commit_string,
+  .delete_surrounding_text = ti_delete, .done = ti_done
+};
+
+static void wl_text_input(void *n, bool on, rk_rect caret) {
+  (void)n;
+  if (!ti) return;
+  if (on) {
+    if (!ti_on) { zwp_text_input_v3_enable(ti); zwp_text_input_v3_set_content_type(ti, ZWP_TEXT_INPUT_V3_CONTENT_HINT_NONE, ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_NORMAL); }
+    zwp_text_input_v3_set_cursor_rectangle(ti, (int32_t)caret.x, (int32_t)caret.y, (int32_t)ceilf(caret.w), (int32_t)ceilf(caret.h));
+    zwp_text_input_v3_commit(ti);
+  } else if (ti_on) {
+    zwp_text_input_v3_disable(ti);
+    zwp_text_input_v3_commit(ti);
+  }
+  ti_on = on;
+  wl_display_flush(wdpy);
+}
+
 static void seat_caps(void *d, struct wl_seat *s, uint32_t caps) {
   (void)d;
   if ((caps & WL_SEAT_CAPABILITY_POINTER) && !pointer) {
@@ -705,6 +755,7 @@ static void global(void *d, struct wl_registry *r, uint32_t name, const char *if
   (void)d;
   if (!strcmp(iface, wl_compositor_interface.name)) { compositor_v = RK_MIN(v, 6u); compositor = wl_registry_bind(r, name, &wl_compositor_interface, compositor_v); }
   else if (!strcmp(iface, wl_shm_interface.name)) shm = wl_registry_bind(r, name, &wl_shm_interface, 1);
+  else if (!strcmp(iface, zwp_text_input_manager_v3_interface.name)) ti_mgr = wl_registry_bind(r, name, &zwp_text_input_manager_v3_interface, 1);
   else if (!strcmp(iface, wl_data_device_manager_interface.name)) data_mgr = wl_registry_bind(r, name, &wl_data_device_manager_interface, RK_MIN(v, 3u));
   else if (!strcmp(iface, wl_seat_interface.name) && !seat) { seat = wl_registry_bind(r, name, &wl_seat_interface, RK_MIN(v, 7u)); wl_seat_add_listener(seat, &seat_listener, NULL); }
   else if (!strcmp(iface, xdg_wm_base_interface.name)) { wm_base = wl_registry_bind(r, name, &xdg_wm_base_interface, RK_MIN(v, 5u)); xdg_wm_base_add_listener(wm_base, &wm_listener, NULL); }
@@ -732,6 +783,7 @@ static bool wl_init(const rk_app_desc *d) {
   if (xkb) ctable = xkb_compose_table_new_from_locale(xkb, locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
   if (ctable) cstate = xkb_compose_state_new(ctable, XKB_COMPOSE_STATE_NO_FLAGS);
   wl_display_roundtrip(wdpy);                                    /* the seat's capabilities, the keymap */
+  if (ti_mgr && seat) { ti = zwp_text_input_manager_v3_get_text_input(ti_mgr, seat); zwp_text_input_v3_add_listener(ti, &ti_listener, NULL); }
   if (data_mgr && seat) { data_dev = wl_data_device_manager_get_data_device(data_mgr, seat); wl_data_device_add_listener(data_dev, &dd_listener, NULL); }
   if (pipe(wpipe) == 0) { fcntl(wpipe[0], F_SETFL, O_NONBLOCK); fcntl(wpipe[1], F_SETFL, O_NONBLOCK); }
   return true;
@@ -752,6 +804,10 @@ static void wl_shutdown(void) {
   if (keyboard) wl_keyboard_destroy(keyboard);
   if (seat) wl_seat_destroy(seat);
   if (shape_mgr) wp_cursor_shape_manager_v1_destroy(shape_mgr);
+  if (ti) zwp_text_input_v3_destroy(ti);
+  if (ti_mgr) zwp_text_input_manager_v3_destroy(ti_mgr);
+  ti = NULL; ti_mgr = NULL; ti_on = false;
+  free(ti_preedit); free(ti_commit); ti_preedit = ti_commit = NULL;
   offer_free(selection); selection = NULL;
   if (own_source) { wl_data_source_destroy(own_source); own_source = NULL; }
   free(own_text); own_text = NULL;
@@ -829,5 +885,5 @@ static void wl_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_wayland = {
   "wayland", wl_init, wl_shutdown, wl_open, wl_close, wl_show, wl_title, wl_present_fb, wl_move, wl_minimize, wl_zoom,
-  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get
+  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get, wl_text_input
 };

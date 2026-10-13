@@ -251,6 +251,7 @@ RK_API void rk_view_set_access_value(rk_view *view, const char *value);
 typedef enum rk_event_type {
   RK_EVENT_POINTER_DOWN, RK_EVENT_POINTER_UP, RK_EVENT_POINTER_MOVE, RK_EVENT_POINTER_ENTER, RK_EVENT_POINTER_LEAVE,
   RK_EVENT_WHEEL, RK_EVENT_KEY_DOWN, RK_EVENT_KEY_UP, RK_EVENT_TEXT, RK_EVENT_FOCUS, RK_EVENT_BLUR,
+  RK_EVENT_COMPOSE,                                /* text an input method is composing; "" when it is done */
   RK_EVENT_FORCE32 = 0x7fffffff
 } rk_event_type;
 
@@ -271,7 +272,7 @@ typedef struct rk_event {
   float wheel_x, wheel_y;                          /* logical px */
   uint32_t key;                                    /* RK_KEY_* */
   uint32_t mods;                                   /* RK_MOD_* */
-  const char *text;                                /* RK_EVENT_TEXT: UTF-8 */
+  const char *text;                                /* RK_EVENT_TEXT, RK_EVENT_COMPOSE: UTF-8 */
 } rk_event;
 
 typedef struct rk_view_class {

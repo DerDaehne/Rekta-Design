@@ -38,7 +38,10 @@ it; each entry says how.
   submits. The caret blinks for ten seconds after an edit and then stays
   lit, so a field left alone wakes nothing. Copy and paste use the
   system clipboard: CF_UNICODETEXT on Windows, NSPasteboard on macOS, the
-  CLIPBOARD selection on X11, wl_data_device on Wayland.
+  CLIPBOARD selection on X11, wl_data_device on Wayland. On Wayland, dead
+  keys and the Compose key compose (xkbcommon), and input methods work
+  through text-input-v3: what they compose shows underlined at the caret
+  (`RK_EVENT_COMPOSE`), their window follows the caret.
 - rekta-core has long lists: `rk_list(count, item, user)` draws only the
   rows in sight and keeps nothing for each item (the callback fills a row
   while it is drawn), scrolls on the glide, and selects the Metro way

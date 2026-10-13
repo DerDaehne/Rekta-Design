@@ -407,6 +407,14 @@ static void test_field(void) {
   CHECK(!strcmp(rk_field_text(name), "Grüe "), "Left over a two-byte character, Delete (%s)", rk_field_text(name));
   key(w, RK_KEY_ENTER, 0);
   CHECK(field_submits == 1, "Enter submits");
+  /* an input method: what it composes shows at the caret and is not text yet; what it commits is */
+  rk_event pe = { sizeof pe, RK_EVENT_COMPOSE, 0, { 0, 0 }, 0, 0, 0, 0, 0, "ka" };
+  rk_window_inject(w, &pe);
+  CHECK(!strcmp(rk_field_text(name), "Grüe ") && ((field *)name->state)->preedit, "composing is shown, not typed");
+  type_text(w, "ko");
+  pe.text = "";
+  rk_window_inject(w, &pe);
+  CHECK(!strcmp(rk_field_text(name), "Grükoe ") && !((field *)name->state)->preedit, "the committed text is typed at the caret (%s)", rk_field_text(name));
   /* the pointer: a click at the start, a double click on the word */
   rk_field_set_text(name, "badge name");
   rk_rect r = rk__window_rect(name);

@@ -270,5 +270,5 @@ static void c_resize(void *n, float w, float h) { cwin *x = n; if (x && !x->win.
 
 const rk_platform rk__platform_native = {
   "cocoa", c_init, c_shutdown, c_open, c_close, c_show, c_title, c_present, c_move, c_minimize, c_zoom,
-  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get
+  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, NULL
 };
