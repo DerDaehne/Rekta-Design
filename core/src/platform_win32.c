@@ -15,6 +15,7 @@
 #include <imm.h>
 #include <ole2.h>
 #include <shellapi.h>
+#include <commdlg.h>
 
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED 0x02E0
@@ -479,6 +480,71 @@ static void drop_detach(wwin *x) {
   x->drop = NULL;
 }
 
+/* The file chooser: the system's open dialog (comdlg32, looked up at run time), over the window. It is modal, as it
+   is for every Windows app; the answer still comes through the loop, a moment after it closes. */
+typedef BOOL(WINAPI *GetOpenFileNameW_t)(LPOPENFILENAMEW);
+typedef struct chosen_files { void (*done)(void *, const char *const *, int); void *ctx; char **files; int n; } chosen_files;
+static void chooser_answer(void *user) {
+  chosen_files *c = user;
+  c->done(c->ctx, (const char *const *)c->files, c->n);
+  rk__free_paths(c->files, c->n);
+  free(c);
+}
+static char *utf8_of(const wchar_t *ws) {
+  int k = WideCharToMultiByte(CP_UTF8, 0, ws, -1, NULL, 0, NULL, NULL);
+  char *u = rk__alloc(k > 0 ? (size_t)k : 1);
+  if (k > 0) WideCharToMultiByte(CP_UTF8, 0, ws, -1, u, k, NULL, NULL);
+  return u;
+}
+static bool w_choose(void *n, const char *accept, bool multiple, void (*done)(void *, const char *const *, int), void *ctx) {
+  static GetOpenFileNameW_t open_dialog;
+  static bool tried;
+  if (!tried) { tried = true; HMODULE dlg = LoadLibraryW(L"comdlg32.dll"); open_dialog = dlg ? (GetOpenFileNameW_t)(void (*)(void))GetProcAddress(dlg, "GetOpenFileNameW") : NULL; }
+  if (!open_dialog) return false;
+  wwin *x = n;
+  /* the filter: "Accepted files\0*.png;*.jpg\0All files\0*.*\0\0" */
+  char **globs = NULL;
+  int ng = rk__accept_globs(accept, &globs);
+  size_t len = 64;
+  for (int i = 0; i < ng; i++) len += strlen(globs[i]) + 1;
+  wchar_t *filter = rk__alloc(len * sizeof *filter), *f = filter;
+  if (ng) {
+    const wchar_t *name = L"Accepted files";
+    wcscpy(f, name); f += wcslen(name) + 1;
+    for (int i = 0; i < ng; i++) {
+      for (const char *g = globs[i]; *g; g++) *f++ = (wchar_t)(unsigned char)*g;
+      *f++ = i + 1 < ng ? L';' : 0;
+    }
+  }
+  const wchar_t *all = L"All files\0*.*\0";
+  memcpy(f, all, 15 * sizeof *f);                           /* "All files", "*.*" and the list's second 0 */
+  rk__free_paths(globs, ng);
+  DWORD cap = 32768;
+  wchar_t *buf = rk__alloc(cap * sizeof *buf);
+  OPENFILENAMEW o;
+  memset(&o, 0, sizeof o);
+  o.lStructSize = sizeof o; o.hwndOwner = x ? x->hwnd : NULL; o.lpstrFilter = filter; o.lpstrFile = buf; o.nMaxFile = cap;
+  o.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | (multiple ? OFN_ALLOWMULTISELECT : 0);
+  chosen_files *c = rk__alloc(sizeof *c);
+  c->done = done; c->ctx = ctx;
+  if (open_dialog(&o)) {
+    /* one file: its path; several: the folder, then each name, each ended by a 0, the list by two */
+    const wchar_t *first = buf, *next = buf + wcslen(buf) + 1;
+    if (!multiple || !*next) { c->files = rk__alloc(sizeof *c->files); c->files[0] = utf8_of(first); c->n = 1; }
+    else for (; *next; next += wcslen(next) + 1) {
+      size_t l = wcslen(first) + wcslen(next) + 2;
+      wchar_t *full = rk__alloc(l * sizeof *full);
+      wcscpy(full, first); wcscat(full, L"\\"); wcscat(full, next);
+      c->files = realloc(c->files, (size_t)(c->n + 1) * sizeof *c->files);
+      c->files[c->n++] = utf8_of(full);
+      free(full);
+    }
+  }
+  free(filter); free(buf);
+  rk_app_after(0, false, chooser_answer, c);
+  return true;
+}
+
 static void *w_open(rk_window *w, const rk_window_desc *d) {
   wwin *x = rk__alloc(sizeof *x);
   x->w = w; x->own_frame = !d->system_frame;
@@ -583,5 +649,5 @@ static void w_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "win32", w_init, w_shutdown, w_open, w_close, w_show, w_title, w_present, w_move, w_minimize, w_zoom,
-  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input, w_cursor, NULL
+  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input, w_cursor, w_choose
 };

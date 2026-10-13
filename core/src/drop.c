@@ -65,6 +65,40 @@ bool rk__accepts(const char *accept, const char *path) {
   return false;
 }
 
+/* The filter as glob patterns ("*.png") for the system's choosers: every extension it names or stands for. NULL and
+   0 when it takes any file. The strings and the array are malloc'd (rk__free_paths). */
+int rk__accept_globs(const char *accept, char ***out) {
+  char **globs = NULL;
+  int n = 0, cap = 0;
+  *out = NULL;
+  if (!accept || !*accept) return 0;
+  for (const char *p = accept; *p;) {
+    while (*p == ' ' || *p == ',') p++;
+    const char *e = p;
+    while (*e && *e != ',') e++;
+    size_t len = (size_t)(e - p);
+    while (len && p[len - 1] == ' ') len--;
+    const char *one[2] = { NULL, NULL };
+    const char *const *list = one;
+    char ext[64] = "";
+    if (len == 1 && p[0] == '*') { rk__free_paths(globs, n); return 0; }   /* any file */
+    if (len && p[0] == '.' && len < sizeof ext) { memcpy(ext, p, len); ext[len] = 0; one[0] = ext; }
+    else if (len > 2 && p[len - 2] == '/' && p[len - 1] == '*')
+      list = !strncmp(p, "image/", 6) ? family_image : !strncmp(p, "text/", 5) ? family_text : !strncmp(p, "audio/", 6) ? family_audio : !strncmp(p, "video/", 6) ? family_video : one;
+    else for (size_t i = 0; i < sizeof exact / sizeof *exact; i++) if (strlen(exact[i].type) == len && !strncmp(exact[i].type, p, len)) one[0] = exact[i].ext;
+    for (int i = 0; list[i]; i++) {
+      size_t l = strlen(list[i]) + 2;
+      char *g = rk__alloc(l);
+      snprintf(g, l, "*%s", list[i]);
+      globs = rk__grow(globs, &cap, n + 1, sizeof *globs);
+      globs[n++] = g;
+    }
+    p = e;
+  }
+  *out = globs;
+  return n;
+}
+
 /* An edge around a rounded rectangle, dashed along each side or solid; the corners drawn whole. */
 static void edge_rect(rk_canvas *c, rk_rect r, float rad, float width, rk_color ink, bool solid) {
   float dash = 6, gap = 4, half = width / 2;

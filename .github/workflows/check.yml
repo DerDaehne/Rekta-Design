@@ -38,7 +38,7 @@ jobs:
         with:
           node-version: 24
       - name: Install Wayland and X11 headers, a headless compositor and a virtual display
-        run: sudo apt-get update -q && sudo apt-get install -y -q pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxext-dev weston xvfb mandoc
+        run: sudo apt-get update -q && sudo apt-get install -y -q pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxext-dev weston xvfb mandoc dbus
       - name: The generated C sources are up to date
         run: node scripts/build.mjs --check
       - name: Build for X11 alone
@@ -51,6 +51,10 @@ jobs:
         run: mandoc -T lint -W warning core/man/rekta.3
       - name: Tests and the demo script under AddressSanitizer and UBSan
         run: make -C core sanitize
+      - name: Files dropped from another X client (XDND) arrive, filtered
+        run: cd core && sh test/dnd/x11.sh
+      - name: The file chooser asks the desktop portal, and zenity without one
+        run: cd core && sh test/dnd/chooser.sh
       - name: The demo opens a window and runs (X11)
         run: xvfb-run -a timeout 3 ./core/build/demo || test $? -eq 124
       - name: The demo opens a window and runs (Wayland, under a headless Weston)

@@ -970,5 +970,5 @@ static void wl_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_wayland = {
   "wayland", wl_init, wl_shutdown, wl_open, wl_close, wl_show, wl_title, wl_present_fb, wl_move, wl_minimize, wl_zoom,
-  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get, wl_text_input, wl_cursor, NULL
+  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get, wl_text_input, wl_cursor, rk__desktop_choose_files
 };

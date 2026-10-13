@@ -51,6 +51,7 @@
 #  elif defined(__APPLE__)
      /* platform_cocoa.m is compiled on its own, as Objective-C */
 #  else
+#    include "desktop_linux.c"
 #    include "platform_x11.c"
 #    if defined(RK_WAYLAND)
 #      include "platform_wayland.c"

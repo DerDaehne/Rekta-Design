@@ -385,9 +385,38 @@ static double c_refresh(void) {
   return 60;
 }
 
+/* The file chooser: an open panel as a sheet on the window; the extensions come from the filter. */
+static bool c_choose(void *n, const char *accept, bool multiple, void (*done)(void *, const char *const *, int), void *ctx) {
+  cwin *x = n;
+  NSOpenPanel *panel = [NSOpenPanel openPanel];
+  panel.canChooseFiles = YES; panel.canChooseDirectories = NO; panel.allowsMultipleSelection = multiple;
+  char **globs = NULL;
+  int ng = rk__accept_globs(accept, &globs);
+  if (ng) {
+    NSMutableArray *types = [NSMutableArray array];
+    for (int i = 0; i < ng; i++) [types addObject:[NSString stringWithUTF8String:globs[i] + 2]];   /* "*.png" -> "png" */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    panel.allowedFileTypes = types;                          /* by extension, as the filter is written */
+#pragma clang diagnostic pop
+  }
+  rk__free_paths(globs, ng);
+  void (^answer)(NSModalResponse) = ^(NSModalResponse r) {
+    NSArray *urls = r == NSModalResponseOK ? panel.URLs : @[];
+    int count = (int)urls.count;
+    char **paths = count ? rk__alloc((size_t)count * sizeof *paths) : NULL;
+    for (int i = 0; i < count; i++) paths[i] = rk__strdup(((NSURL *)urls[(NSUInteger)i]).fileSystemRepresentation);
+    done(ctx, (const char *const *)paths, count);
+    rk__free_paths(paths, count);
+  };
+  if (x && x->win) [panel beginSheetModalForWindow:x->win completionHandler:answer];
+  else [panel beginWithCompletionHandler:answer];
+  return true;
+}
+
 static void c_resize(void *n, float w, float h) { cwin *x = n; if (x && !x->win.zoomed) [x->win setContentSize:NSMakeSize(w, h)]; }
 
 const rk_platform rk__platform_native = {
   "cocoa", c_init, c_shutdown, c_open, c_close, c_show, c_title, c_present, c_move, c_minimize, c_zoom,
-  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, c_text_input, c_cursor, NULL
+  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, c_text_input, c_cursor, c_choose
 };

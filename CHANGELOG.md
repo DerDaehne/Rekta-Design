@@ -16,8 +16,12 @@ it; each entry says how.
   refused. New events `RK_EVENT_DRAG_ENTER`, `_DRAG_MOVE`, `_DRAG_LEAVE` and
   `_DROP` (with `files`, `nfiles` appended to `rk_event`): the view under the
   pointer that takes `DRAG_MOVE` gets the drop, and files dropped where none
-  does are refused. `rk_window_choose_files` asks the system's file chooser;
-  a click on the drop place opens it. Files come in on every platform: XDND 5 on
+  does are refused. `rk_window_choose_files` asks the system's file chooser,
+  filtered as the drop place is, and answers later; a click on the drop place
+  opens it. On Linux it asks the desktop portal over D-Bus (libdbus looked up
+  at run time), else zenity or kdialog (tested end to end by
+  `core/test/dnd/chooser.sh` against a stand-in portal); on Windows the open
+  dialog (comdlg32 looked up at run time); on macOS an `NSOpenPanel` as a sheet. Files come in on every platform: XDND 5 on
   X11 (tested end to end under Xvfb by `core/test/dnd/x11.sh`), the data
   device on Wayland, an OLE `IDropTarget` on Windows (ole32 and shell32 looked
   up at run time) and `NSDraggingDestination` on macOS.

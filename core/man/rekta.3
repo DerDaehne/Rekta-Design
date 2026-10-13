@@ -164,6 +164,9 @@ The system's file chooser over the window, with the filter
 uses;
 .Fa chosen
 comes later with the paths, or with none if it was cancelled.
+On Linux this is the desktop portal, else
+.Xr zenity 1
+or kdialog; on Windows the open dialog; on macOS an open panel as a sheet.
 False when the system has none here.
 .El
 .Ss Containers and views

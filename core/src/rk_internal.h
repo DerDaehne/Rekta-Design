@@ -255,6 +255,7 @@ void rk__window_event(rk_window *w, const rk_event *e);
 bool rk__window_drag(rk_window *w, const rk_event *e);
 int rk__uri_list_paths(const char *text, size_t n, char ***out);   /* text/uri-list: the local files' paths */
 void rk__free_paths(char **paths, int n);       /* from the platform: whether a view takes the files */
+int rk__accept_globs(const char *accept, char ***out);       /* the filter as "*.png" patterns; 0: any file */
 bool rk__accepts(const char *accept, const char *path);    /* a file chooser's or a drop's filter: ".png,.jpg", "image/" with a star */
 void rk__window_close_request(rk_window *w);
 void rk__window_pointer_cancel(rk_window *w);
@@ -344,6 +345,7 @@ typedef struct rk_platform {
   bool (*choose_files)(void *native, const char *accept, bool multiple, void (*done)(void *ctx, const char *const *files, int n), void *ctx);
 } rk_platform;
 extern const char *const *rk__headless_choice; extern int rk__headless_nchoice;   /* what the headless chooser answers */
+bool rk__desktop_choose_files(void *native, const char *accept, bool multiple, void (*done)(void *, const char *const *, int), void *ctx);   /* Linux */
 
 extern const rk_platform rk__platform_headless;
 extern const rk_platform rk__platform_native;              /* the OS this was built for */
