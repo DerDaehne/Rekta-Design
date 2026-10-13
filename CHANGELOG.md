@@ -32,6 +32,14 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has menus, as states.md's floating surfaces: `rk_menu`,
+  `rk_menu_add` (a verb, a key hint, a handler), separators, group labels,
+  items with a square that toggles and keeps the menu open, disabled
+  items that say why. `rk_view_set_menu` attaches one: a button opens it,
+  any other view on a right click or Shift+F10. Below the opener, above
+  where there is no room, never outside the window; a fade and a 4px
+  shift over duration-float; the keys and the press outside as on the
+  web.
 - rekta-core has text fields: `rk_field(label, placeholder)` as the web's
   `.rk-field` (label above, 1px border, a hint or a marked error below),
   one line, edited with the desktop's keys and the pointer, Enter

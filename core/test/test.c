@@ -439,6 +439,80 @@ static void test_field(void) {
   done(w);
 }
 
+/* Menus float by what opened them; keys and choices as states.md says. */
+static int menu_chosen = -1, menu_calls;
+static void on_menu(rk_view *m, int item, void *u) { (void)m; (void)u; menu_chosen = item; menu_calls++; }
+
+static void test_menu(void) {
+  rk_window *w = window(560, 420);
+  rk_view *page = col(16, 24);
+  rk_view *row = rk_add(page, rk_row());
+  rk_view *more = rk_add(row, rk_button("more", NULL, NULL));
+  rk_view *m = rk_menu();
+  int open_i = rk_menu_add(m, "open", "Enter", on_menu, NULL);
+  int rename_i = rk_menu_add(m, "rename", "F2", on_menu, NULL);
+  rk_menu_add_separator(m);
+  rk_menu_add_label(m, "show");
+  int done_i = rk_menu_add(m, "done", NULL, on_menu, NULL);
+  int failed_i = rk_menu_add(m, "failed", NULL, on_menu, NULL);
+  int delete_i = rk_menu_add(m, "delete (needs rights)", "Del", on_menu, NULL);
+  rk_menu_set_check(m, done_i, 1);
+  rk_menu_set_check(m, failed_i, 0);
+  rk_menu_set_disabled(m, delete_i, true);
+  rk_view_set_menu(more, m);
+  rk_view *tile = rk_add(rk_add(page, rk_tile_grid()), rk_tile("12", "builds"));
+  rk_view *ctx = rk_menu();
+  rk_menu_add(ctx, "pin to start", NULL, on_menu, NULL);
+  rk_view_set_menu(tile, ctx);
+  show(w, page, "menu");
+
+  rk_view_tap(more);
+  rk_app_run_for(200);
+  rk_rect b = rk__window_rect(more), mr = rk__window_rect(m);
+  CHECK(w->floats->nkids == 1 && rk_window_focused(w) == m && rk_menu_opener(m) == more, "a menu button opens its menu, focus in it");
+  CHECK(mr.y >= b.y + b.h && fabsf(mr.x - b.x) < 1, "below the button, at its leading edge (%g %g)", mr.x, mr.y);
+  key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_DOWN, 0);
+  key(w, RK_KEY_ENTER, 0);
+  CHECK(menu_chosen == rename_i && w->floats->nkids == 0 && rk_window_focused(w) == more, "Down, Enter: chosen, closed, focus back (%d)", menu_chosen);
+  key(w, RK_KEY_ENTER, 0);                                     /* the button, from the keyboard */
+  rk_app_run_for(200);
+  CHECK(w->floats->nkids == 1 && ((menu *)m->state)->active == open_i, "from the keyboard, the first item is active");
+  key(w, 'D', 0);
+  CHECK(((menu *)m->state)->active == done_i, "a letter jumps to the next item starting with it");
+  key(w, RK_KEY_UP, 0); key(w, RK_KEY_UP, 0); key(w, RK_KEY_UP, 0);
+  CHECK(((menu *)m->state)->active == delete_i, "Up wraps, past the label and the line (%d)", ((menu *)m->state)->active);
+  menu_calls = 0;
+  key(w, RK_KEY_ENTER, 0);
+  CHECK(menu_calls == 0 && w->floats->nkids == 1, "a disabled item does nothing");
+  key(w, RK_KEY_UP, 0); key(w, RK_KEY_SPACE, 0);
+  CHECK(rk_menu_check(m, failed_i) == 1 && w->floats->nkids == 1 && menu_chosen == failed_i, "a check toggles and the menu stays");
+  rk_app_run_for(100);
+  shot(w, "menu");
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(w->floats->nkids == 0 && rk_window_focused(w) == more, "Escape closes, focus back");
+  rk_view_tap(more);
+  click(w, (rk_point){ 500, 380 }, 10);
+  CHECK(w->floats->nkids == 0, "a press outside closes it");
+  /* a context menu: a right click at the pointer, Shift+F10 below the view */
+  rk_rect t = rk__window_rect(tile);
+  rk_event rc = { sizeof rc, RK_EVENT_POINTER_DOWN, 0, { t.x + 40, t.y + 30 }, 1, 0, 0, 0, 0, NULL };
+  rk_window_inject(w, &rc); rc.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &rc);
+  rk_rect cr = rk__window_rect(ctx);
+  CHECK(w->floats->nkids == 1 && rk_menu_opener(ctx) == tile && fabsf(cr.x - (t.x + 40)) < 1, "a right click opens the context menu at the pointer");
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_window_focus(w, tile->focusable ? tile : NULL);
+  tile->focusable = true; rk_window_focus(w, tile);
+  key(w, RK_KEY_F10, RK_MOD_SHIFT);
+  CHECK(w->floats->nkids == 1 && rk_window_focused(w) == ctx, "Shift+F10 opens it from the keyboard");
+  key(w, RK_KEY_ESCAPE, 0);
+  /* near the bottom edge: above */
+  rk_menu_open_at(ctx, tile, (rk_point){ 10, 380 - t.y });
+  cr = rk__window_rect(ctx);
+  CHECK(cr.y + cr.h <= 420 - 15, "never outside the window (%g)", cr.y + cr.h);
+  rk_menu_close(ctx);
+  done(w);
+}
+
 static void test_navigation(void) {
   rk_window *w = window(900, 600);
   rk_controller *home = rk_panorama();
@@ -597,6 +671,7 @@ static void launch(void *user) {
   test_api();
   test_list();
   test_field();
+  test_menu();
   test_navigation();
   test_spring();
   scene_tiles("tiles", 1);

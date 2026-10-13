@@ -57,6 +57,7 @@ Adding, showing and presenting take that reference over:
 .Fn rk_places ,
 .Fn rk_places_go ,
 .Fn rk_controller_present ,
+.Fn rk_view_set_menu ,
 .Fn rk_controller_create_with_view
 and
 .Fn rk_window_show .
@@ -177,6 +178,31 @@ change what it shows.
 A tile with an activate handler presses and opens something.
 .It Fn rk_rows , Fn rk_rows_add
 Hairline rows: a title on the left, a meta or a status on the right.
+.It Fn rk_menu
+A menu.
+.Fn rk_menu_add
+adds an item \(em a lowercase verb or option, a key hint, a handler \(em
+and returns its index;
+.Fn rk_menu_add_separator
+and
+.Fn rk_menu_add_label
+group them.
+.Fn rk_menu_set_check
+gives an item a square that a choice toggles while the menu stays open;
+.Fn rk_menu_set_disabled
+greys one out.
+.Fn rk_view_set_menu
+attaches it: a button opens it when pressed, any other view on a right
+click or Shift+F10.
+.Fn rk_menu_open
+and
+.Fn rk_menu_open_at
+open it by hand; it floats below what opened it, above where there is no
+room, never outside the window.
+Keys: Up and Down, Home and End, a letter, Enter or Space, Escape; Tab or
+a press outside closes it.
+.Fn rk_menu_opener
+tells a handler which view the menu was for.
 .It Fn rk_field "const char *label" "const char *placeholder"
 A text field: a label above, the input, a hint below.
 One line, edited with the desktop's keys (arrows, Ctrl by word, Shift to

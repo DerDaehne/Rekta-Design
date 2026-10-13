@@ -144,6 +144,7 @@ struct rk_view {
   bool passthrough;                                        /* a layer: only its children take the pointer */
   bool hug;                                                /* keeps its own width across a stack, as a button */
   bool draws_focus;                                        /* draws its own focus ring (a field: around its input) */
+  rk_view *menu;                                           /* a button opens it; any other view on a right click */
   /* layout */
   rk_layout layout; rk_insets padding; float gap; rk_align main, cross;
   float grow, fixed_w, fixed_h, min_w, min_h; int span_c, span_r;
@@ -215,7 +216,7 @@ struct rk_window {
   rk_object obj;
   void *native;
   rk_view *root;                                           /* title bar, content, sheets, toasts */
-  rk_view *titlebar, *content, *sheets, *toasts;
+  rk_view *titlebar, *content, *sheets, *toasts, *floats;   /* floats: menus, above everything */
   rk_controller *controller;
   rk_bitmap *fb;                                           /* what the last frame was drawn into */
   rk_bitmap *own_fb; bool fb_elsewhere;                    /* ours, where the platform gives no buffer */
@@ -235,6 +236,7 @@ void rk__window_resized(rk_window *w, float width, float height, float scale);  
 void rk__window_event(rk_window *w, const rk_event *e);
 void rk__window_close_request(rk_window *w);
 void rk__window_pointer_cancel(rk_window *w);
+void rk__menus_close(rk_window *w);
 void rk__window_frame(rk_window *w, double now);           /* layout, draw and present if needed */
 void rk__window_invalidate(rk_window *w);                 /* everything */
 void rk__window_damage(rk_window *w, rk_rect r);          /* a part, in logical window coordinates */

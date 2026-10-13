@@ -141,6 +141,17 @@ static void grow(rk_view *v, void *u) {
   rk_animate_commit();
 }
 
+/* A tile's context menu: what it is for comes from the tile that opened it. */
+static void tile_grow(rk_view *menu, int item, void *user) { (void)menu; (void)item; (void)user; grow(NULL, NULL); }
+static void tile_unpin(rk_view *menu, int item, void *user) { (void)menu; (void)item; (void)user; unpin(NULL, NULL); }
+
+static rk_view *tile_menu(void) {
+  rk_view *m = rk_menu();
+  rk_menu_add(m, "resize", NULL, tile_grow, NULL);
+  rk_menu_add(m, "unpin", NULL, tile_unpin, NULL);
+  return m;
+}
+
 static rk_view *rekta_section(void) {
   rk_view *s = rk_column();
   rk_add(s, rk_label("Tiles, not cards.", RK_TEXT_GROUP));
@@ -166,6 +177,7 @@ static rk_view *rekta_section(void) {
   D.grow_tile = rk_add(D.board, rk_tile("12", "builds today"));
   rk_tile_set_status(D.grow_tile, RK_STATUS_SUCCESS, NULL);
   rk_view_set_name(D.grow_tile, "grow");
+  rk_view_set_menu(D.grow_tile, tile_menu());                   /* a right click or Shift+F10 */
 
   rk_add(D.board, rk_tile("51", "icons"));
 
@@ -353,6 +365,34 @@ static void advance(rk_view *v, void *u) {
   rk_progress_set(D.bar, p);                                   /* the value glides */
 }
 
+/* A menu: two options that sort (one is chosen), a command, and one that cannot run yet and says why. */
+static int sort_by_name, sort_by_time;
+
+static void sort_by(rk_view *menu, int item, void *user) {
+  (void)user;
+  rk_menu_set_check(menu, sort_by_name, item == sort_by_name);
+  rk_menu_set_check(menu, sort_by_time, item == sort_by_time);
+  rk_window_toast(rk_view_window(rk_menu_opener(menu)), item == sort_by_name ? "Sorted by name." : "Sorted by time.", NULL, NULL, NULL);
+}
+
+static void export_all(rk_view *menu, int item, void *user) {
+  (void)item; (void)user;
+  rk_window_toast(rk_view_window(rk_menu_opener(menu)), "Exported to builds.csv.", NULL, NULL, NULL);
+}
+
+static rk_view *more_menu(void) {
+  rk_view *m = rk_menu();
+  rk_menu_add_label(m, "sort by");
+  sort_by_name = rk_menu_add(m, "name", NULL, sort_by, NULL);
+  sort_by_time = rk_menu_add(m, "time", NULL, sort_by, NULL);
+  rk_menu_set_check(m, sort_by_name, 1);
+  rk_menu_set_check(m, sort_by_time, 0);
+  rk_menu_add_separator(m);
+  rk_menu_add(m, "export", "Ctrl+E", export_all, NULL);
+  rk_menu_set_disabled(m, rk_menu_add(m, "print (needs a printer)", "Ctrl+P", NULL, NULL), true);
+  return m;
+}
+
 /* A field says what is wrong and how to put it right, on Enter; typing again lifts the error. */
 static void check_mail(rk_view *field, void *user) {
   (void)user;
@@ -381,6 +421,7 @@ static rk_view *controls_section(void) {
     rk_view *b = rk_add(app_bar, rk_button(bar[i][0], NULL, NULL));
     rk_button_set_kind(b, RK_BUTTON_BAR);
     rk_button_set_icon(b, bar[i][1]);
+    if (!bar[i][0]) rk_view_set_menu(b, more_menu());          /* "more" opens a menu */
   }
 
   rk_add(s, rk_label("a field", RK_TEXT_KICKER));
@@ -580,6 +621,8 @@ static void tour(void) {
   press("open a sheet"); rk_app_run_for(500); shot("12-sheet");
   key(RK_KEY_ESCAPE); rk_app_run_for(600);
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("13-controls");
+  press("more"); rk_app_run_for(300); shot("13-menu");
+  key(RK_KEY_ESCAPE); rk_app_run_for(200);
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("14-lists");
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("15-type");
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700);

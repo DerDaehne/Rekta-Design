@@ -8,7 +8,7 @@
  *         (it is named after the thing; where the thing is a type of its own - window, view, controller - it is
  *         *_create);
  *       - adding, showing and presenting take that reference over: rk_add(), rk_insert(), rk_panorama_add(),
- *         rk_pivot_add(), rk_places(), rk_places_go(), rk_controller_present(), rk_window_show() and
+ *         rk_pivot_add(), rk_places(), rk_places_go(), rk_controller_present(), rk_view_set_menu(), rk_window_show() and
  *         rk_controller_create_with_view(). What you put into the tree belongs to the tree; you never release it.
  *         To move a view that is already in a tree, pass rk_retain(view);
  *       - every other pointer you get is borrowed. A view stays valid while it is in the tree.
@@ -184,7 +184,7 @@ typedef enum rk_align { RK_ALIGN_STRETCH, RK_ALIGN_START, RK_ALIGN_CENTER, RK_AL
 typedef enum rk_access_role {
   RK_ACCESS_NONE, RK_ACCESS_GROUP, RK_ACCESS_TEXT, RK_ACCESS_HEADING, RK_ACCESS_BUTTON, RK_ACCESS_LINK,
   RK_ACCESS_LIST, RK_ACCESS_LIST_ITEM, RK_ACCESS_TAB_LIST, RK_ACCESS_TAB, RK_ACCESS_TAB_PANEL, RK_ACCESS_DIALOG,
-  RK_ACCESS_IMAGE, RK_ACCESS_PROGRESS, RK_ACCESS_STATUS, RK_ACCESS_TEXT_FIELD,
+  RK_ACCESS_IMAGE, RK_ACCESS_PROGRESS, RK_ACCESS_STATUS, RK_ACCESS_TEXT_FIELD, RK_ACCESS_MENU,
   RK_ACCESS_FORCE32 = 0x7fffffff
 } rk_access_role;
 
@@ -202,6 +202,7 @@ RK_API rk_view *rk_view_child(rk_view *view, int index);
 RK_API rk_window *rk_view_window(rk_view *view);
 RK_API void rk_view_set_name(rk_view *view, const char *name);  /* for finding it: tests, the gallery */
 RK_API rk_view *rk_view_find(rk_view *root, const char *name);   /* by name, or a button by its label */
+RK_API void rk_view_set_menu(rk_view *view, rk_view *menu);   /* takes menu: a button opens it; another view on a right click or Shift+F10 */
 
 /* geometry */
 RK_API rk_rect rk_view_frame(rk_view *view);      /* in the parent */
@@ -336,6 +337,21 @@ RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1;
 /* Hairline rows: a title on the left, a meta or a status tag on the right. */
 RK_API rk_view *rk_rows(void);
 RK_API rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_status status);   /* the row, borrowed */
+
+/* A menu floats by what opened it: below it, above where there is no room. One item a row - a lowercase verb or
+   option, a key hint at the end; an item with a check (rk_menu_set_check) toggles and stays open, any other closes
+   the menu and then runs its handler. Up, Down, Home, End, a letter, Enter or Space, Escape. */
+RK_API rk_view *rk_menu(void);
+RK_API int rk_menu_add(rk_view *menu, const char *label, const char *key, void (*fn)(rk_view *menu, int item, void *user), void *user);   /* the item's index */
+RK_API void rk_menu_add_separator(rk_view *menu);
+RK_API void rk_menu_add_label(rk_view *menu, const char *label);   /* a group's name */
+RK_API void rk_menu_set_check(rk_view *menu, int item, int check); /* -1: none (the default), 0: empty, 1: filled */
+RK_API int rk_menu_check(rk_view *menu, int item);
+RK_API void rk_menu_set_disabled(rk_view *menu, int item, bool disabled);
+RK_API void rk_menu_open(rk_view *menu, rk_view *from);            /* below from; focus goes back to it */
+RK_API void rk_menu_open_at(rk_view *menu, rk_view *from, rk_point point);   /* at a point in from: a context menu */
+RK_API void rk_menu_close(rk_view *menu);
+RK_API rk_view *rk_menu_opener(rk_view *menu);                    /* what opened it, while open and in a handler */
 
 /* A text field, as the web's: a label above, the input, a hint below - or an error, its cause and remedy, marked.
    One line, edited with the desktop's keys and the pointer; Enter submits. */

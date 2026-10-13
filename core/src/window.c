@@ -16,6 +16,7 @@ static void root_layout(rk_view *v, void *state) {
   rk__set_frame(w->content, (rk_rect){ 0, top, v->frame.w, v->frame.h - top });
   rk__set_frame(w->sheets, (rk_rect){ 0, 0, v->frame.w, v->frame.h });
   rk__set_frame(w->toasts, (rk_rect){ 0, top, v->frame.w, v->frame.h - top });
+  rk__set_frame(w->floats, (rk_rect){ 0, 0, v->frame.w, v->frame.h });
 }
 static const rk_class root_class = { { sizeof(rk_view_class), "rk_window_root", NULL, NULL, root_layout, NULL, NULL }, NULL, NULL };
 
@@ -61,6 +62,7 @@ rk_window *rk_window_create(const rk_window_desc *desc) {
   /* a toast says something happened; a sheet asks, above everything (the web's dialogs are in the top layer) */
   w->toasts = rk__view_create(&toasts_class, NULL); w->toasts->passthrough = true; rk__view_add(w->root, w->toasts); rk_release(w->toasts);
   w->sheets = rk_view_create(); w->sheets->passthrough = true; rk__view_add(w->root, w->sheets); rk_release(w->sheets);
+  w->floats = rk_view_create(); w->floats->passthrough = true; rk__view_add(w->root, w->floats); rk_release(w->floats);   /* menus, on top */
   w->native = rk__platform()->open(w, &d);
   if (!w->native && !rk__headless()) { rk_release(w); return NULL; }
   w->next = open_windows; open_windows = w;
@@ -451,6 +453,7 @@ static rk_view *hit(rk_view *v, float x, float y) {
 }
 
 static rk_view *hit_window(rk_window *w, float x, float y) {
+  if (w->floats->nkids) { rk_view *h = hit(w->floats, x, y); if (h) return h; }   /* a menu, over everything */
   /* a sheet takes everything while it is up */
   if (w->sheets->nkids) { rk_view *h = hit(w->sheets, x, y); return h ? h : w->sheets; }
   rk_view *h = hit(w->root, x, y);
@@ -471,7 +474,7 @@ static bool dispatch(rk_window *w, rk_view *from, const rk_event *e) {
 }
 
 static rk_view *pressable(rk_view *v) {
-  for (; v; v = v->parent) if (v->press != RK_PRESS_NONE || v->on_activate) return v;
+  for (; v; v = v->parent) if (v->press != RK_PRESS_NONE || v->on_activate || (v->menu && v->access == RK_ACCESS_BUTTON)) return v;
   return NULL;
 }
 
@@ -511,6 +514,7 @@ static void press_end(rk_window *w, rk_view *v) {
 }
 
 static void activate(rk_view *v) {
+  if (v->menu && v->access == RK_ACCESS_BUTTON) { rk_menu_open(v->menu, v); return; }   /* a menu button */
   if (!v->on_activate) return;
   rk_window *w = rk__view_window(v);
   rk_view *was = w ? w->activated : NULL;
@@ -617,6 +621,15 @@ static void event(rk_window *w, const rk_event *e) {
     case RK_EVENT_POINTER_DOWN: {
       w->pointer = e->position;
       rk_view *h = hit_window(w, e->position.x, e->position.y);
+      if (w->floats->nkids && (!h || h->parent != w->floats)) {    /* a press outside a menu closes it, and goes on */
+        rk__menus_close(w);
+        h = hit_window(w, e->position.x, e->position.y);
+      }
+      if (e->button == 1) {                                        /* a right click: the nearest context menu */
+        rk_view *t = h;
+        while (t && !(t->menu && t->access != RK_ACCESS_BUTTON)) t = t->parent;
+        if (t) { rk_rect r = rk__window_rect(t); rk_menu_open_at(t->menu, t, (rk_point){ e->position.x - r.x, e->position.y - r.y }); break; }
+      }
       w->focus_visible = false;
       rk_view *f = focusable_up(h);
       if (f) rk_window_focus(w, f);
@@ -647,6 +660,11 @@ static void event(rk_window *w, const rk_event *e) {
     case RK_EVENT_KEY_DOWN: {
       if (e->key == RK_KEY_TAB && !(e->mods & (RK_MOD_CTRL | RK_MOD_ALT | RK_MOD_SUPER))) { focus_step(w, e->mods & RK_MOD_SHIFT ? -1 : 1); break; }
       rk_view *f = w->focus;
+      if (e->key == RK_KEY_F10 && (e->mods & RK_MOD_SHIFT)) {        /* Shift+F10: the focused view's context menu, below it */
+        rk_view *t = f;
+        while (t && !(t->menu && t->access != RK_ACCESS_BUTTON)) t = t->parent;
+        if (t) { w->focus_visible = true; rk_menu_open(t->menu, t); break; }
+      }
       if (f && (e->key == RK_KEY_ENTER || e->key == RK_KEY_SPACE) && pressable(f) == f && !f->pressed) {
         w->focus_visible = true;
         press_start(w, f, 0, 0);

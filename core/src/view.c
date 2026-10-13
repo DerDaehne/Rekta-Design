@@ -10,6 +10,7 @@ static void view_destroy(void *self) {
   if (v->cls && v->cls->pub.destroy) v->cls->pub.destroy(v->state);
   if (v->free_user) v->free_user(v->user);
   free(v->name); free(v->access_label); free(v->access_value);
+  rk_release(v->menu);
   rk__bitmap_free(v->layer); rk__bitmap_free(v->snapshot);
   free(v->own_cls);
 }
@@ -164,6 +165,7 @@ rk_view *rk_view_parent(rk_view *v) { return v->parent; }
 int rk_view_count(rk_view *v) { return v->nkids; }
 rk_view *rk_view_child(rk_view *v, int i) { return i >= 0 && i < v->nkids ? v->kids[i] : NULL; }
 void rk_view_set_name(rk_view *v, const char *name) { rk__setstr(&v->name, name); }
+void rk_view_set_menu(rk_view *v, rk_view *menu) { rk_release(v->menu); v->menu = menu; }   /* takes menu */
 
 /* By name, or a button by what it says: tests and tours find "pin a tile" without naming it. */
 rk_view *rk_view_find(rk_view *root, const char *name) {

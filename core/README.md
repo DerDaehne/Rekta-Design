@@ -134,6 +134,6 @@ picks X11),
 Win32 and Cocoa built and tested in CI.
 
 Not there yet: multi-line text, input methods' composing text on X11, Windows and macOS,
-menus, tables (stage 2); screen readers
+tables (stage 2); screen readers
 (the accessibility tree is built, the bridges to UI Automation, NSAccessibility
 and AT-SPI are stage 3), several windows' focus between them.
