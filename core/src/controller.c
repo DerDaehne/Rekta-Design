@@ -144,10 +144,11 @@ int rk_places_depth(rk_controller *c) { return c->kind == K_PLACES ? ((places *)
 /* The turn: a place change (motion.md). Its units are the parts a place shows, top to bottom, a row at a time. Each turns around the leading edge of the box that clips it, in a time that follows its size: a
    small unit turns quicker than a large one, as something light starts and stops sooner than something heavy. */
 
-/* A view turns as one when it is a tile or shows something of its own (a class that draws, a fill, a rule) or clips
-   what it holds; a plain layout box lets its children turn one by one, so each row, label and button keeps its heft. */
+/* A view turns as one when it is a tile or shows something of its own (a class that draws, a fill, a rule); a plain
+   layout box lets its children turn one by one, so each row, label and button keeps its heft, and so does one that
+   clips: its parts turn from its edge. Parts out of the window's sight stand still. */
 static bool turns_whole(rk_view *k) {
-  if (rk__is_tile(k) || !k->nkids || k->clip || k->rule_top || k->rule_bottom || k->fill_role || (k->fill[0] & 0xff)) return true;
+  if (rk__is_tile(k) || !k->nkids || k->rule_top || k->rule_bottom || k->fill_role || (k->fill[0] & 0xff)) return true;
   return k->cls && k->cls->pub.draw;
 }
 
@@ -155,6 +156,9 @@ static void collect_units(rk_view *v, turn *t) {
   for (int i = 0; i < v->nkids; i++) {
     rk_view *k = v->kids[i];
     if (k->hidden || !rk__view_visible(k)) continue;
+    rk_window *w = rk__view_window(k);
+    rk_rect r = rk__window_rect(k);
+    if (w && (r.x >= w->size.w || r.y >= w->size.h || r.x + r.w <= 0 || r.y + r.h <= 0)) continue;
     if (turns_whole(k)) {
       t->units = rk__grow(t->units, &t->cap, t->n + 1, sizeof *t->units);
       t->units[t->n++] = rk_retain(k);

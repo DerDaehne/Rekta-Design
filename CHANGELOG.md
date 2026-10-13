@@ -322,6 +322,12 @@ it; each entry says how.
   the web, and its pages start at the strip's indent. `examples/navigation.c`
   draws one app with its places either way, and `--film` writes its motion
   frame by frame.
+- **Web: the turn has heft, and a list down the side.** rekta.js turns every
+  part of a place by itself, leaving and arriving, in a time that follows its
+  size (`--_rk-turn-duration`); a scroller lets its parts turn from its edge.
+  `rk-pivot--side` in an `rk-side` lays a pivot's titles down the side, the
+  title in sight stepped in by `space-m`; compact, it is the strip again. A
+  pivot with `rk-pivot--nav` turns its panels as a place change does.
 - **rekta-core: a pivot down the side.** `rk_pivot_set_layout(pivot,
   RK_PIVOT_SIDE)` lays the titles out as a list down the leading side, an equal
   alternative to the strip along the top, as tabs are in a browser. The title

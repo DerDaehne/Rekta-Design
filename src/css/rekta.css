@@ -144,6 +144,17 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-pivot--nav > a, .rk-pivot--nav > button { font-size: var(--rk-font-size-nav-active); }
 .rk-pivot > [aria-current], .rk-pivot > [aria-selected='true'] { --_rk-s: 1; color: var(--rk-text-primary); }
 /* A strip whose titles all fit does not glide; its titles only change size. */
+/* Down the side (rk-pivot--side in an rk-side): the titles as a list beside the facets, as tabs are in a browser
+   either way. One size; the title in sight steps in by space-m and darkens over duration-pivot-size, the one before
+   steps back: the motion says which was picked. Compact, it is the strip along the top again. */
+.rk-side { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--rk-space-xl); align-items: start; }
+.rk-pivot--side { flex-direction: column; align-items: flex-start; gap: var(--rk-space-xs); overflow: visible; padding-inline-end: var(--rk-space-m); }
+.rk-pivot--side > :is(a, button) {
+  --_rk-s: 1; --_rk-step: 0px; font-size: var(--rk-font-size-pivot-active); margin: 0; transform: translateX(var(--_rk-step));
+  transition: transform var(--rk-duration-pivot-size) ease-in-out, color var(--rk-duration-pivot-size) ease-in-out;
+}
+.rk-pivot--side > :is([aria-current], [aria-selected='true']) { --_rk-step: var(--rk-space-m); }
+.rk-pivot--side > :is([aria-current], [aria-selected='true']):dir(rtl) { --_rk-step: calc(-1 * var(--rk-space-m)); }
 
 /* Buttons and switches ------------------------------------------------------------------------------------------- */
 /* Primary takes the accent slot (ink by default). Height follows the density: 44px for touch, 32px for a fine pointer. */
@@ -807,19 +818,26 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 }
 
 /* Place change --------------------------------------------------------------------------------------------------- */
-/* A tile that links to another view turns the place around its leading edge (Metro's turnstile). Leaving, each unit
-   in view swings toward the viewer over duration-short as it fades, top to bottom, a row at a time, duration-stagger
-   apart; the pressed tile keeps its press and goes last, from its pressed pose. The new place swings in from
-   turnstile-angle over duration-moderate and its tiles build in. Back runs the other way round. rekta.js sets
-   data-rk-turn and the unit's --_rk-turn-origin, --_rk-turn-oy, --_rk-turn-delay and --_rk-turn-perspective. */
+/* A tile that links to another view turns the place around its leading edge (Metro's turnstile), a page turned in a
+   book. Leaving, each part in view swings toward the viewer as it fades, top to bottom, a row at a time,
+   duration-stagger apart; the pressed tile keeps its press and goes last, from its pressed pose. Arriving, each part
+   of the new place swings in from turnstile-angle the same way. Each part takes the token's time (duration-short
+   leaving, duration-moderate arriving) by its heft: a line of text 0.6 of it, a tile about all of it, a table up to
+   1.4, as a light thing starts and stops sooner than a heavy one. Back runs the other way round. rekta.js sets
+   data-rk-turn and the part's --_rk-turn-origin, --_rk-turn-oy, --_rk-turn-delay, --_rk-turn-duration and
+   --_rk-turn-perspective. */
 [data-rk-turn='out'], [data-rk-turn='back-out'], [data-rk-turn='pressed'] {
   transform-origin: var(--_rk-turn-origin, 0px) var(--_rk-turn-oy, 50%); pointer-events: none;
-  animation: rk-turn-out var(--rk-duration-short) var(--rk-ease-out) var(--_rk-turn-delay, 0ms) both;
+  animation: rk-turn-out var(--_rk-turn-duration, var(--rk-duration-short)) var(--rk-ease-out) var(--_rk-turn-delay, 0ms) both;
 }
 [data-rk-turn='back-out'] { animation-name: rk-turn-back-out; }
 [data-rk-turn='pressed'] { animation-name: rk-turn-pressed; }
-[data-rk-turn='in'], [data-rk-turn='back-in'] { transform-origin: 0 var(--_rk-turn-oy, 50%); animation: rk-turn-in var(--rk-duration-moderate) var(--rk-ease-out) both; }
-[data-rk-turn='back-in'] { animation-name: rk-turn-back-in; }
+/* doubled, so a tile's build-in gives way to its turn */
+[data-rk-turn][data-rk-turn='in'], [data-rk-turn][data-rk-turn='back-in'] {
+  transform-origin: var(--_rk-turn-origin, 0px) var(--_rk-turn-oy, 50%);
+  animation: rk-turn-in var(--_rk-turn-duration, var(--rk-duration-moderate)) var(--rk-ease-out) var(--_rk-turn-delay, 0ms) both;
+}
+[data-rk-turn][data-rk-turn='back-in'] { animation-name: rk-turn-back-in; }
 @keyframes rk-turn-out { to { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(calc(-1 * var(--rk-turnstile-angle))); } }
 @keyframes rk-turn-back-out { to { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(var(--rk-turnstile-angle)); } }
 @keyframes rk-turn-pressed {
@@ -894,6 +912,13 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 }
 /* Compact viewport: toasts rise from the app bar. */
 @media (max-width: 759.98px), (max-height: 480px) {
+  .rk-side { grid-template-columns: minmax(0, 1fr); row-gap: var(--rk-space-m); }
+  .rk-pivot--side { flex-direction: row; align-items: baseline; gap: var(--rk-space-l); overflow-x: auto; padding-inline-end: 0; }
+  .rk-pivot--side > :is(a, button) {
+    --_rk-s: var(--rk-pivot-scale, 0.6); transform: scale(var(--_rk-s)); margin-inline-end: calc(var(--_rk-w, 0px) * (var(--_rk-s) - 1));
+    transition: transform var(--rk-duration-pivot-size) ease-in-out, margin-inline-end var(--rk-duration-pivot-size) ease-in-out, color var(--rk-duration-short) var(--rk-ease-base);
+  }
+  .rk-pivot--side > :is([aria-current], [aria-selected='true']) { --_rk-s: 1; }
   .rk-toasts { --_rk-from: 12px; inset: auto 0 calc(var(--rk-appbar-height) + env(safe-area-inset-bottom) + var(--rk-space-s)); top: auto; }
   @supports (anchor-name: --a) { .rk-toasts { top: auto; } }
 }

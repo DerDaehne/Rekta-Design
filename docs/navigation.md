@@ -57,6 +57,18 @@ render all its facets side by side as a panorama instead of one at a
 time, with the pivot strip still present below them for narrower
 viewports or as a jump list.
 
+### Along the top or down the side
+
+A pivot that picks the place can lay its titles along the top (the strip)
+or down the leading side (`rk-pivot--side` in an `rk-side`;
+`rk_pivot_set_layout(pivot, RK_PIVOT_SIDE)` in the core), as a browser's
+tabs can be horizontal or vertical. They are equal alternatives: same
+fixed order, same facets, same turn between places. Down the side the
+titles are one size (`pivot-active`), the inactive ones at
+`text-contrast-medium`; the title in sight steps in by `space-m` and takes
+`text-primary`. Up and Down pick a title, Home and End the first and last.
+Compact, the list is the strip along the top again.
+
 ## Places, history and back
 
 A **place** is one screen of the app: one `<main>`, named by its title.
