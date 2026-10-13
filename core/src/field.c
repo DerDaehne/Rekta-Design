@@ -348,6 +348,7 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
       return true;
     }
     case RK_EVENT_POINTER_MOVE:
+      v->cursor = f->dragging || (e->position.y >= box.y && e->position.y < box.y + box.h) ? RK__CURSOR_TEXT : RK__CURSOR_ARROW;
       if (!f->dragging) return false;
       move_to(v, f, offset_at(v, f, e->position), true);
       return true;

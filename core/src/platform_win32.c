@@ -24,6 +24,7 @@
 typedef struct wwin {
   rk_window *w; HWND hwnd; bool own_frame; const rk_bitmap *last; float scale; int minw, minh;
   RECT caret; bool caret_known;                                /* a field's caret, device pixels: the input method's place */
+  int cursor;                                                  /* the pointer's shape over the content */
 } wwin;
 
 static HINSTANCE inst;
@@ -150,6 +151,9 @@ static char *ime_string(HIMC imc, DWORD which) {
   return u;
 }
 
+static HCURSOR cursor_of(int shape) { return LoadCursor(NULL, shape == RK__CURSOR_TEXT ? IDC_IBEAM : shape == RK__CURSOR_COL_RESIZE ? IDC_SIZEWE : IDC_ARROW); }
+static void w_cursor(void *n, int shape) { wwin *x = n; if (x) { x->cursor = shape; SetCursor(cursor_of(shape)); } }
+
 static void w_text_input(void *n, bool on, rk_rect caret) {
   wwin *x = n;
   if (!x || !pImmGetContext) return;
@@ -263,6 +267,7 @@ static LRESULT CALLBACK proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       if (msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP) return 0;   /* no menu mode on Alt or F10 */
       break;
     }
+    case WM_SETCURSOR: if (LOWORD(lp) == HTCLIENT) { SetCursor(cursor_of(x->cursor)); return TRUE; } break;
     case WM_IME_SETCONTEXT: lp &= ~(LPARAM)ISC_SHOWUICOMPOSITIONWINDOW; break;   /* the field shows the composition */
     case WM_IME_STARTCOMPOSITION: ime_place(x); return 0;
     case WM_IME_COMPOSITION: {
@@ -447,5 +452,5 @@ static void w_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "win32", w_init, w_shutdown, w_open, w_close, w_show, w_title, w_present, w_move, w_minimize, w_zoom,
-  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input
+  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input, w_cursor
 };

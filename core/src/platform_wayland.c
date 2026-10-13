@@ -52,6 +52,7 @@ typedef struct wbuf {
 
 typedef struct wwin {
   rk_window *w;
+  int cursor;                                                   /* the content's shape, where no edge resizes */
   struct wl_surface *surface;
   struct xdg_surface *xs;
   struct xdg_toplevel *top;
@@ -403,14 +404,19 @@ static void set_cursor(uint32_t edge) {
     case XDG_TOPLEVEL_RESIZE_EDGE_TOP_RIGHT: shape = WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NE_RESIZE; break;
     case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_LEFT: shape = WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_SW_RESIZE; break;
     case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_RIGHT: shape = WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_SE_RESIZE; break;
-    default: break;
+    default:
+      if (pointer_win && pointer_win->cursor == RK__CURSOR_TEXT) shape = WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT;
+      if (pointer_win && pointer_win->cursor == RK__CURSOR_COL_RESIZE) shape = WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_COL_RESIZE;
+      break;
   }
   if (shape == cursor_shape) return;
   cursor_shape = shape;
   if (shape_dev) { wp_cursor_shape_device_v1_set_shape(shape_dev, pointer_serial, (uint32_t)shape); return; }
-  /* an older compositor: the themed arrow (resize shapes only through cursor-shape) */
+  /* an older compositor: the themed arrow, I-beam or column edge (the window's edges only through cursor-shape) */
   if (!cursor_theme) cursor_theme = wl_cursor_theme_load(getenv("XCURSOR_THEME"), 24, shm);
-  struct wl_cursor *c = cursor_theme ? wl_cursor_theme_get_cursor(cursor_theme, "left_ptr") : NULL;
+  const char *name = shape == WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT ? "xterm" : shape == WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_COL_RESIZE ? "sb_h_double_arrow" : "left_ptr";
+  struct wl_cursor *c = cursor_theme ? wl_cursor_theme_get_cursor(cursor_theme, name) : NULL;
+  if (!c && cursor_theme) c = wl_cursor_theme_get_cursor(cursor_theme, "left_ptr");
   if (!c) c = cursor_theme ? wl_cursor_theme_get_cursor(cursor_theme, "default") : NULL;
   if (!c || !c->image_count) return;
   struct wl_cursor_image *img = c->images[0];
@@ -419,6 +425,13 @@ static void set_cursor(uint32_t edge) {
   wl_surface_attach(cursor_surface, wl_cursor_image_get_buffer(img), 0, 0);
   wl_surface_damage(cursor_surface, 0, 0, (int32_t)img->width, (int32_t)img->height);
   wl_surface_commit(cursor_surface);
+}
+
+static void wl_cursor(void *n, int shape) {
+  wwin *x = n;
+  if (!x) return;
+  x->cursor = shape;
+  if (pointer_win == x) set_cursor(edge_at(x, px, py));
 }
 
 static uint32_t mods_now(void) {
@@ -885,5 +898,5 @@ static void wl_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_wayland = {
   "wayland", wl_init, wl_shutdown, wl_open, wl_close, wl_show, wl_title, wl_present_fb, wl_move, wl_minimize, wl_zoom,
-  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get, wl_text_input
+  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get, wl_text_input, wl_cursor
 };

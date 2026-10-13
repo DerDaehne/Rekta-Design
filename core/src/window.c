@@ -627,6 +627,9 @@ static void event(rk_window *w, const rk_event *e) {
       rk_view *h = w->capture ? w->capture : hit_window(w, e->position.x, e->position.y);
       w->hover = h;                                            /* nothing is drawn differently under the pointer */
       dispatch(w, h, e);
+      int shape = RK__CURSOR_ARROW;                            /* the move has told the views what lies under it */
+      for (rk_view *v = h; v; v = v->parent) if (v->cursor) { shape = v->cursor; break; }
+      if (shape != w->cursor && !w->closed) { w->cursor = shape; if (rk__platform()->cursor) rk__platform()->cursor(w->native, shape); }
       break;
     }
     case RK_EVENT_POINTER_DOWN: {

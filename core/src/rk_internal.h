@@ -144,6 +144,7 @@ struct rk_view {
   bool passthrough;                                        /* a layer: only its children take the pointer */
   bool hug;                                                /* keeps its own width across a stack, as a button */
   bool draws_focus;                                        /* draws its own focus ring (a field: around its input) */
+  uint8_t cursor;                                          /* the pointer's shape over it, as its last move left it */
   rk_view *menu;                                           /* a button opens it; any other view on a right click */
   /* layout */
   rk_layout layout; rk_insets padding; float gap; rk_align main, cross;
@@ -226,6 +227,7 @@ struct rk_window {
   char *title;
   rk_view *focus, *hover, *pressed, *capture;
   rk_view *focus_back;                                     /* where focus was before it went into a toast */
+  int cursor;                                              /* the shape the platform shows */
   rk_view *activated;                                      /* the view whose activate handler is running */
   bool focus_visible;                                      /* focus came from the keyboard */
   rk_point pointer;
@@ -274,6 +276,8 @@ void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r);
 
 /* App and platform (app.c, platform_*.c) -------------------------------------------------------------------------- */
 
+enum { RK__CURSOR_ARROW, RK__CURSOR_TEXT, RK__CURSOR_COL_RESIZE };   /* a view's cursor: what is under the pointer */
+
 typedef struct rk_platform {
   const char *name;
   bool (*init)(const rk_app_desc *desc);
@@ -297,6 +301,7 @@ typedef struct rk_platform {
   void (*clip_set)(const char *utf8);                      /* NULL, or the system clipboard takes the text */
   char *(*clip_get)(void);                                 /* NULL, or the system clipboard's text (malloc'd), or NULL */
   void (*text_input)(void *native, bool on, rk_rect caret);   /* NULL, or an input method follows a field's caret */
+  void (*cursor)(void *native, int shape);                 /* NULL, or the pointer takes an RK__CURSOR_ shape */
 } rk_platform;
 
 extern const rk_platform rk__platform_headless;

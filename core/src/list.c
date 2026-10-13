@@ -8,7 +8,10 @@
    A table is a list with columns, as the web's .rk-table: a head that stays put (size-xs, semibold, text-high, a
    hairline below; a sorted column's head in the text colour with its triangle), cells from a callback in tabular
    figures, numbers to the right. A click on a sortable head sorts by it, ascending and then descending; the app sorts
-   (it owns the rows) and the table draws again. */
+   (it owns the rows) and the table draws again. A column's trailing edge in the head drags its width (48px at
+   least); a double click on it gives the column back its own. From the keyboard, Up from the first row goes into the
+   head: Left and Right move between its columns, Enter or Space sorts, Ctrl with Left or Right changes the width by
+   space-m (with Shift, four times that), Down or Escape goes back to the rows. */
 #include "rk_internal.h"
 
 typedef struct list {
@@ -19,7 +22,9 @@ typedef struct list {
   void (*show)(rk_view *list, int index, void *user); void *show_user;
   void (*change)(rk_view *list, void *user); void *change_user;
   /* a table */
-  struct column { char *title; float width, x, w; unsigned flags; } *cols; int ncols, ccap;
+  struct column { char *title; float width, x, w, set; unsigned flags; } *cols; int ncols, ccap;   /* set: a width given since */
+  int head;                                                /* -1, or the column the keyboard is on in the head */
+  int resizing, edge_col; float drag_x, drag_w; double edge_at;   /* a column edge being dragged; the last press on one */
   const char *(*cell)(int row, int column, void *user);
   int sort_col, sort_dir;
   void (*sort)(rk_view *table, int column, int dir, void *user); void *sort_user;
@@ -45,13 +50,35 @@ static float body_height(rk_view *v, const list *l) { return RK_MAX(0.0f, v->fra
 static float max_scroll(rk_view *v, const list *l) { return RK_MAX(0.0f, l->count * row_height() - body_height(v, l)); }
 
 /* Columns: the fixed widths first, the rest shared by those without one; a check's room on the left. */
+#define MIN_COLUMN 48.0f
 static float check_room(void) { return 14 + 2 * rk_metric_of(RK_SPACE_S); }
+static float col_width(const struct column *c) { return c->set > 0 ? c->set : c->width; }
 static void place_columns(list *l, float W) {
   float fixed = 0, x = check_room();
   int flex = 0;
-  for (int i = 0; i < l->ncols; i++) { if (l->cols[i].width > 0) fixed += l->cols[i].width; else flex++; }
+  for (int i = 0; i < l->ncols; i++) { if (col_width(&l->cols[i]) > 0) fixed += col_width(&l->cols[i]); else flex++; }
   float share = flex ? RK_MAX(0.0f, W - check_room() - fixed) / flex : 0;
-  for (int i = 0; i < l->ncols; i++) { l->cols[i].x = x; l->cols[i].w = l->cols[i].width > 0 ? l->cols[i].width : share; x += l->cols[i].w; }
+  for (int i = 0; i < l->ncols; i++) { l->cols[i].x = x; l->cols[i].w = col_width(&l->cols[i]) > 0 ? col_width(&l->cols[i]) : share; x += l->cols[i].w; }
+}
+
+/* The column whose trailing edge is under x in the head, or -1. */
+static int edge_under(const list *l, float x) {
+  for (int k = 0; k < l->ncols; k++) if (fabsf(x - (l->cols[k].x + l->cols[k].w)) <= 4) return k;
+  return -1;
+}
+
+static void set_width(rk_view *v, list *l, int k, float w) {
+  l->cols[k].set = w > 0 ? RK_MAX(MIN_COLUMN, w) : 0;
+  place_columns(l, v->frame.w);
+  rk__view_dirty(v);
+}
+
+static void sort_by(rk_view *v, list *l, int k) {
+  if (k < 0 || k >= l->ncols || !(l->cols[k].flags & RK_COLUMN_SORTABLE)) return;
+  l->sort_dir = k == l->sort_col && l->sort_dir > 0 ? -1 : 1;
+  l->sort_col = k;
+  if (l->sort) l->sort(v, k, l->sort_dir, l->sort_user);
+  rk__view_dirty(v);
 }
 
 static void list_changed(rk_view *v, list *l) {
@@ -156,7 +183,7 @@ static void draw_row(rk_view *v, rk_canvas *c, list *l, int i, float y, bool rin
 
 /* Only the rows the frame draws: those between the top and the bottom of the canvas's clip. */
 /* A table's head: each column's title; a sorted one in the text colour with its triangle. */
-static void draw_head(rk_view *v, rk_canvas *c, list *l) {
+static void draw_head(rk_view *v, rk_canvas *c, list *l, bool focused) {
   float W = v->pframe.w, hh = head_height(l), pad = rk_metric_of(RK_SPACE_S);
   rk_textfmt f = rk__textfmt(RK_TEXT_LABEL, 0);
   rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, hh }, rk_color_of(RK_ROLE_BG));
@@ -175,6 +202,8 @@ static void draw_head(rk_view *v, rk_canvas *c, list *l) {
       rk_canvas_fill_polygon(c, l->sort_dir > 0 ? up : down, 3, ink);
     }
   }
+  if (focused && l->head >= 0 && l->head < l->ncols)        /* the keyboard is in the head: its column, ringed */
+    rk_canvas_stroke_rect(c, (rk_rect){ l->cols[l->head].x, 0, l->cols[l->head].w, hh }, 2, rk_color_of(RK_ROLE_FOCUS));
 }
 
 static void list_draw(rk_view *v, rk_canvas *c, void *st) {
@@ -188,9 +217,9 @@ static void list_draw(rk_view *v, rk_canvas *c, void *st) {
   bool focused = w && w->focus == v && w->focus_visible;
   if (!l->ncols) rk_canvas_fill_rect(c, (rk_rect){ 0, 0, v->pframe.w, 1 }, rk_color_of(RK_ROLE_TEXT_LOW));
   rk_canvas_push_clip(c, (rk_rect){ 0, hh, v->pframe.w, RK_MAX(0.0f, v->pframe.h - hh) });
-  for (int i = first; i <= last; i++) draw_row(v, c, l, i, hh + i * H - scroll, focused && i == l->active);
+  for (int i = first; i <= last; i++) draw_row(v, c, l, i, hh + i * H - scroll, focused && l->head < 0 && i == l->active);
   rk_canvas_pop_clip(c);
-  if (l->ncols) draw_head(v, c, l);
+  if (l->ncols) draw_head(v, c, l, focused);
 }
 
 /* Its natural height is all its rows; give it a size or let it grow to keep it shorter. */
@@ -217,22 +246,33 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
   switch (e->type) {
     case RK_EVENT_POINTER_DOWN:
       if (e->button) return false;
-      if (l->ncols && e->position.y < head_height(l)) {        /* a sortable head: ascending, then descending */
+      if (l->ncols && e->position.y < head_height(l)) {
         place_columns(l, v->frame.w);
-        for (int k = 0; k < l->ncols; k++) {
-          const struct column *col = &l->cols[k];
-          if (e->position.x < col->x || e->position.x >= col->x + col->w || !(col->flags & RK_COLUMN_SORTABLE)) continue;
-          l->sort_dir = k == l->sort_col && l->sort_dir > 0 ? -1 : 1;
-          l->sort_col = k;
-          if (l->sort) l->sort(v, k, l->sort_dir, l->sort_user);
-          rk__view_dirty(v);
+        int edge = edge_under(l, e->position.x);
+        if (edge >= 0) {                                        /* a column's edge: drag its width; twice, its own again */
+          if (e->time - l->edge_at < 400 && edge == l->edge_col) { set_width(v, l, edge, 0); l->edge_at = 0; return true; }
+          l->resizing = l->edge_col = edge; l->edge_at = e->time;
+          l->drag_x = e->position.x; l->drag_w = l->cols[edge].w;
+          return true;
         }
+        for (int k = 0; k < l->ncols; k++)                      /* a sortable head: ascending, then descending */
+          if (e->position.x >= l->cols[k].x && e->position.x < l->cols[k].x + l->cols[k].w) sort_by(v, l, k);
         return true;
       }
       l->pressed = row_at(v, l, e->position.y);
       rk__view_dirty(v);
       return true;
+    case RK_EVENT_POINTER_MOVE:
+      if (l->resizing >= 0) {
+        if (fabsf(e->position.x - l->drag_x) > 2) l->edge_at = 0;   /* a drag is not half of a double click */
+        set_width(v, l, l->resizing, RK_MAX(MIN_COLUMN, l->drag_w + e->position.x - l->drag_x));
+        v->cursor = RK__CURSOR_COL_RESIZE;
+        return true;
+      }
+      v->cursor = l->ncols && e->position.y < head_height(l) && edge_under(l, e->position.x) >= 0 ? RK__CURSOR_COL_RESIZE : RK__CURSOR_ARROW;
+      return false;
     case RK_EVENT_POINTER_UP: {
+      if (l->resizing >= 0) { l->resizing = -1; return true; }
       int i = row_at(v, l, e->position.y), was = l->pressed;
       l->pressed = -1;
       rk__view_dirty(v);
@@ -249,8 +289,26 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
     case RK_EVENT_KEY_DOWN: {
       int page = RK_MAX(1, (int)(body_height(v, l) / row_height()) - 1);
       bool ctrl = (e->mods & (RK_MOD_CTRL | RK_MOD_SUPER)) != 0;
+      if (l->head >= 0) {                                       /* in the head: columns, their order and widths */
+        float step = rk_metric_of(RK_SPACE_M) * (e->mods & RK_MOD_SHIFT ? 4 : 1);
+        switch (e->key) {
+          case RK_KEY_LEFT: case RK_KEY_RIGHT:
+            if (ctrl) set_width(v, l, l->head, RK_MAX(MIN_COLUMN, l->cols[l->head].w + (e->key == RK_KEY_RIGHT ? step : -step)));
+            else l->head = RK_CLAMP(l->head + (e->key == RK_KEY_RIGHT ? 1 : -1), 0, l->ncols - 1);
+            rk__view_dirty(v);
+            return true;
+          case RK_KEY_HOME: case RK_KEY_END: l->head = e->key == RK_KEY_HOME ? 0 : l->ncols - 1; rk__view_dirty(v); return true;
+          case RK_KEY_ENTER: case RK_KEY_SPACE: sort_by(v, l, l->head); return true;
+          case RK_KEY_DOWN: case RK_KEY_ESCAPE: l->head = -1; set_active(v, l, l->active); return true;
+          case RK_KEY_UP: return true;
+          default: return false;
+        }
+      }
       switch (e->key) {
-        case RK_KEY_UP: set_active(v, l, l->active - 1); return true;
+        case RK_KEY_UP:
+          if (l->ncols && l->active == 0) { place_columns(l, v->frame.w); l->head = l->sort_col >= 0 ? l->sort_col : 0; reveal_row(v, l, 0); rk__view_dirty(v); return true; }
+          set_active(v, l, l->active - 1);
+          return true;
         case RK_KEY_DOWN: set_active(v, l, l->active + 1); return true;
         case RK_KEY_HOME: set_active(v, l, 0); return true;
         case RK_KEY_END: set_active(v, l, l->count - 1); return true;
@@ -272,7 +330,8 @@ static bool list_event(rk_view *v, const rk_event *e, void *st) {
         default: return false;
       }
     }
-    case RK_EVENT_FOCUS: case RK_EVENT_BLUR: rk__view_dirty(v); return false;
+    case RK_EVENT_FOCUS: rk__view_dirty(v); return false;
+    case RK_EVENT_BLUR: l->head = -1; rk__view_dirty(v); return false;
     default: return false;
   }
 }
@@ -307,9 +366,9 @@ void rk_list_set_count(rk_view *v, int count) {
 
 rk_view *rk_list(int count, void (*item)(int index, rk_list_item *out, void *user), void *user) {
   list *l = rk__alloc(sizeof *l);
-  l->item = item; l->user = user; l->pressed = -1;
+  l->item = item; l->user = user; l->pressed = -1; l->head = l->resizing = l->edge_col = -1;
   rk_view *v = rk__view_create(&list_class, l);
-  v->clip = true; v->focusable = true;
+  v->clip = true; v->focusable = true; v->draws_focus = true;   /* the active row (or head column) shows focus */
   v->access = RK_ACCESS_LIST;
   rk_list_set_count(v, count);
   return v;
@@ -346,3 +405,15 @@ int rk_table_add_column(rk_view *v, const char *title, float width, unsigned fla
 
 void rk_table_on_sort(rk_view *v, void (*fn)(rk_view *, int, int, void *), void *user) { list *l = list_of(v); if (l) { l->sort = fn; l->sort_user = user; } }
 void rk_table_set_sort(rk_view *v, int column, int dir) { list *l = list_of(v); if (l) { l->sort_col = column; l->sort_dir = dir > 0 ? 1 : dir < 0 ? -1 : 0; rk__view_dirty(v); } }
+
+void rk_table_set_column_width(rk_view *v, int column, float width) {
+  list *l = list_of(v);
+  if (l && column >= 0 && column < l->ncols) set_width(v, l, column, width);
+}
+
+float rk_table_column_width(rk_view *v, int column) {
+  list *l = list_of(v);
+  if (!l || column < 0 || column >= l->ncols) return 0;
+  place_columns(l, v->frame.w);
+  return l->cols[column].w;
+}

@@ -390,6 +390,8 @@ RK_API rk_view *rk_table(int count, const char *(*cell)(int row, int column, voi
 RK_API int rk_table_add_column(rk_view *table, const char *title, float width, unsigned flags);   /* width 0: shares the rest */
 RK_API void rk_table_on_sort(rk_view *table, void (*fn)(rk_view *table, int column, int dir, void *user), void *user);   /* dir 1 or -1 */
 RK_API void rk_table_set_sort(rk_view *table, int column, int dir);   /* shows the sort the rows have (-1, 0, 1) */
+RK_API void rk_table_set_column_width(rk_view *table, int column, float width);   /* as a drag leaves it; 0: its own */
+RK_API float rk_table_column_width(rk_view *table, int column);   /* as laid out now */
 
 RK_API rk_view *rk_icon(const char *name, rk_role color);   /* 20 × 20 from the icon set */
 RK_API rk_view *rk_progress(float progress);                /* < 0: indeterminate */

@@ -317,6 +317,11 @@ static char *c_clip_get(void) {
   }
 }
 
+static void c_cursor(void *n, int shape) {
+  (void)n;
+  [shape == RK__CURSOR_TEXT ? NSCursor.IBeamCursor : shape == RK__CURSOR_COL_RESIZE ? NSCursor.resizeLeftRightCursor : NSCursor.arrowCursor set];
+}
+
 static void c_text_input(void *n, bool on, rk_rect caret) {
   cwin *x = n;
   if (!x) return;
@@ -340,5 +345,5 @@ static void c_resize(void *n, float w, float h) { cwin *x = n; if (x && !x->win.
 
 const rk_platform rk__platform_native = {
   "cocoa", c_init, c_shutdown, c_open, c_close, c_show, c_title, c_present, c_move, c_minimize, c_zoom,
-  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, c_text_input
+  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, c_text_input, c_cursor
 };

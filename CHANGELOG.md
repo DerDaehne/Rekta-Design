@@ -32,6 +32,15 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core: table columns change width. A column's edge in the head
+  drags it (48px at least), a double click gives it its own width back,
+  `rk_table_set_column_width` / `rk_table_column_width` let the app set
+  and remember it. The head works from the keyboard: Up from the first
+  row goes in, Left and Right move, Enter sorts, Ctrl+Left/Right resize,
+  Down returns. The pointer takes the shape of what is under it - an
+  I-beam over text, the column edge's - on every platform (cursor-shape
+  or the theme on Wayland, font cursors on X11, WM_SETCURSOR, NSCursor).
+  A list now shows focus on its active row only, not around itself too.
 - rekta-core: input methods on every platform. X11 takes the best style
   the input method offers - on the spot (the field shows what is being
   composed), over the spot (the input method draws it at the caret), or

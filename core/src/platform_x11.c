@@ -11,6 +11,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <X11/keysym.h>
+#include <X11/cursorfont.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <poll.h>
@@ -292,6 +293,16 @@ static void send_spots(void) {
     XSetICValues(x->ic, XNPreeditAttributes, pe, NULL);
     XFree(pe);
   }
+}
+
+static void x_cursor(void *n, int shape) {
+  static Cursor fonts[3];
+  static const unsigned glyphs[3] = { 0, XC_xterm, XC_sb_h_double_arrow };
+  xwin *x = n;
+  if (!x) return;
+  if (shape <= RK__CURSOR_ARROW || shape > RK__CURSOR_COL_RESIZE) { XUndefineCursor(dpy, x->win); return; }
+  if (!fonts[shape]) fonts[shape] = XCreateFontCursor(dpy, glyphs[shape]);
+  XDefineCursor(dpy, x->win, fonts[shape]);
 }
 
 static void x_close(void *n) {
@@ -593,5 +604,5 @@ static void x_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "x11", x_init, x_shutdown, x_open, x_close, x_show, x_title, x_present, x_move, x_minimize, x_zoom,
-  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, x_text_input
+  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, x_text_input, x_cursor
 };

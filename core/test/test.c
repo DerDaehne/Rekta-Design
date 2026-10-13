@@ -566,6 +566,46 @@ static void test_table(void) {
   rk_list_scroll_to(t, 0);
   rk_app_run_for(900);
   shot(w, "table");
+  /* a column's edge drags its width; twice on it gives the column its own back; the pointer shows the edge */
+  list *L = t->state;
+  float edge = r.x + L->cols[1].x + L->cols[1].w, y = r.y + 10;
+  rk_event mv = { sizeof mv, RK_EVENT_POINTER_MOVE, 0, { edge + 2, y }, 0, 0, 0, 0, 0, NULL };
+  rk_window_inject(w, &mv);
+  CHECK(w->cursor == RK__CURSOR_COL_RESIZE, "over a column's edge the pointer shows it (%d)", w->cursor);
+  rk_event dn = { sizeof dn, RK_EVENT_POINTER_DOWN, 0, { edge, y }, 0, 0, 0, 0, 0, NULL };
+  rk_window_inject(w, &dn);
+  mv.position = (rk_point){ edge + 60, y + 30 }; rk_window_inject(w, &mv);
+  dn.type = RK_EVENT_POINTER_UP; dn.position = mv.position; rk_window_inject(w, &dn);
+  CHECK(CLOSE_TO(rk_table_column_width(t, 1), 180, 0.5) && sorted_col == 2, "a drag widens it, and sorts nothing (%.0f)", rk_table_column_width(t, 1));
+  mv.position = (rk_point){ r.x + 60, r.y + hh + 2 * H }; rk_window_inject(w, &mv);
+  CHECK(w->cursor == RK__CURSOR_ARROW, "over the rows, the arrow");
+  edge = r.x + L->cols[1].x + L->cols[1].w;
+  dn.type = RK_EVENT_POINTER_DOWN; dn.position = (rk_point){ edge, y }; rk_window_inject(w, &dn);
+  mv.position = (rk_point){ edge - 500, y }; rk_window_inject(w, &mv);
+  dn.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &dn);
+  CHECK(rk_table_column_width(t, 1) == 48, "never narrower than 48 (%.0f)", rk_table_column_width(t, 1));
+  rk_app_run_for(500);
+  edge = r.x + L->cols[1].x + L->cols[1].w;
+  click(w, (rk_point){ edge, y }, 10); click(w, (rk_point){ edge, y }, 10);
+  CHECK(rk_table_column_width(t, 1) == 120, "a double click on the edge: its own width again (%.0f)", rk_table_column_width(t, 1));
+  /* the head from the keyboard: Up from the first row goes in; sorting and widths without the pointer */
+  rk_window_focus(w, t);
+  key(w, RK_KEY_HOME, 0); key(w, RK_KEY_UP, 0);
+  CHECK(L->head == 2, "Up from the first row: into the head, at the sorted column (%d)", L->head);
+  key(w, RK_KEY_LEFT, 0); key(w, RK_KEY_ENTER, 0);
+  CHECK(L->head == 1 && sorted_col == 2, "Left moves; Enter on a column that does not sort does nothing");
+  key(w, RK_KEY_LEFT, 0); key(w, RK_KEY_ENTER, 0);
+  CHECK(sorted_col == 0 && sorted_dir == 1, "Enter sorts by the column (%d %d)", sorted_col, sorted_dir);
+  float w0 = rk_table_column_width(t, 0), m = rk_metric_of(RK_SPACE_M);
+  key(w, RK_KEY_RIGHT, RK_MOD_CTRL);
+  CHECK(CLOSE_TO(rk_table_column_width(t, 0), w0 + m, 0.5), "Ctrl+Right widens it by space-m (%.0f)", rk_table_column_width(t, 0));
+  key(w, RK_KEY_LEFT, RK_MOD_CTRL | RK_MOD_SHIFT);
+  CHECK(CLOSE_TO(rk_table_column_width(t, 0), w0 - 3 * m, 0.5), "Ctrl+Shift+Left narrows it four times that (%.0f)", rk_table_column_width(t, 0));
+  w->focus_visible = true;
+  rk_app_run_for(100);
+  shot(w, "table-head");
+  key(w, RK_KEY_DOWN, 0);
+  CHECK(L->head == -1 && L->active == 0, "Down: back to the rows");
   done(w);
 }
 
@@ -623,6 +663,11 @@ static void test_textarea(void) {
   float lh = line_h(f), top = r.y + input_rect(area, f).y + input_pad_y(f) - f->scroll_y;
   click(w, (rk_point){ r.x + 12 + width(f, 6, 9), top + 1.5f * lh }, 10);
   CHECK(f->caret == 6 + 3, "a click on the second line (%d)", f->caret);
+  rk_event over = { sizeof over, RK_EVENT_POINTER_MOVE, 0, { r.x + 40, top + lh }, 0, 0, 0, 0, 0, NULL };
+  rk_window_inject(w, &over);
+  CHECK(w->cursor == RK__CURSOR_TEXT, "over the text, the I-beam");
+  over.position.y = r.y + 4; rk_window_inject(w, &over);
+  CHECK(w->cursor == RK__CURSOR_ARROW, "over the label, the arrow");
   rk_event wh = { sizeof wh, RK_EVENT_WHEEL, rk_app_now(), { r.x + 40, r.y + r.h - 20 }, 0, 0, 0, 0, 0, NULL };
   wh.wheel_y = -200;
   rk_window_inject(w, &wh);
