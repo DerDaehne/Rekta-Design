@@ -473,6 +473,8 @@ RK_API rk_controller *rk_pivot(void);
 RK_API void rk_pivot_add(rk_controller *pivot, rk_controller *facet);   /* takes facet */
 RK_API void rk_pivot_select(rk_controller *pivot, int index);
 RK_API int rk_pivot_selected(rk_controller *pivot);
+typedef enum rk_pivot_layout { RK_PIVOT_TOP, RK_PIVOT_SIDE, RK_PIVOT_LAYOUT_FORCE32 = 0x7fffffff } rk_pivot_layout;
+RK_API void rk_pivot_set_layout(rk_controller *pivot, rk_pivot_layout layout);   /* titles along the top or down the leading side */
 
 /* Sheets: a short question from the top edge over a shaded backdrop. Escape or a click on the shading dismisses. */
 RK_API void rk_controller_present(rk_controller *presenter, rk_controller *sheet);   /* takes sheet */

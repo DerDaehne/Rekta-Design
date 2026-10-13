@@ -333,7 +333,9 @@ void rk_places_back(rk_controller *c) {
 
 typedef struct strip {
   char **titles; int n, active;
-  bool nav;
+  bool nav, side, level_set;                                         /* side: a pivot's titles as a list down the leading side */
+  int motion;                                              /* down the side: 0 the sizes change, 1 the place in sight steps in */
+  rk_glide *in;                                            /* down the side: each title's step in, 1 for the place in sight */
   rk_controller *pivot;                                    /* a pivot's strip: the nav level when nothing holds the pivot */
   rk_glide *scale;                                         /* each title's size, 1 active, INACTIVE otherwise */
   rk_glide glide;                                          /* how far the strip has slid */
@@ -342,7 +344,10 @@ typedef struct strip {
 
 #define INACTIVE 0.6f
 
-static rk_textfmt strip_fmt(rk_view *v, strip *s) { return rk__textfmt(s->nav ? RK_TEXT_NAV : RK_TEXT_PIVOT, rk__host_width(v)); }
+static rk_textfmt strip_fmt(rk_view *v, strip *s) {
+  return rk__textfmt(s->nav && !(s->side && s->motion == 1) ? RK_TEXT_NAV : RK_TEXT_PIVOT, rk__host_width(v));
+}
+static float strip_rest(strip *s, int i) { return i == s->active || (s->side && s->motion == 1) ? 1 : INACTIVE; }
 
 /* Sizes and the slide glide: a change of section while one is under way carries on from its speed. */
 static float strip_scale(strip *s, int i, double now) { return s->scale ? rk__glide_at(&s->scale[i], now, NULL, NULL) : (i == s->active ? 1 : INACTIVE); }
@@ -350,7 +355,7 @@ static float strip_glide(strip *s, double now) { return rk__glide_at(&s->glide, 
 
 static bool strip_moving(strip *s, double now) {
   if (rk__glide_moving(&s->glide, now)) return true;
-  for (int i = 0; s->scale && i < s->n; i++) if (rk__glide_moving(&s->scale[i], now)) return true;
+  for (int i = 0; s->scale && i < s->n; i++) if (rk__glide_moving(&s->scale[i], now) || rk__glide_moving(&s->in[i], now)) return true;
   return false;
 }
 
@@ -371,9 +376,41 @@ static float strip_target(rk_view *v, strip *s) {
 
 static void strip_level(strip *s);
 
+/* Down the side: one title a line from the top, flush with the facets; the strip is as wide as its widest title
+   at full size, so a title that grows never pushes the facets aside. */
+static float side_line(rk_textfmt *f, float k) { return f->size * k * f->line + rk_metric_of(RK_SPACE_XS); }
+
+static rk_size side_measure(rk_view *v, strip *s) {
+  rk_textfmt f = strip_fmt(v, s);
+  float w = 0, h = 0;
+  for (int i = 0; i < s->n; i++) { w = RK_MAX(w, rk__text_width(s->titles[i], -1, &f)); h += side_line(&f, strip_rest(s, i)); }
+  return (rk_size){ strip_pad(s) + w + rk_metric_of(RK_SPACE_XL) + rk_metric_of(RK_SPACE_M), h };
+}
+
+static void side_draw(rk_view *v, rk_canvas *c, strip *s, double now) {
+  rk_textfmt f = strip_fmt(v, s);
+  float y = 0, step = rk_metric_of(RK_SPACE_M);
+  for (int i = 0; i < s->n; i++) {
+    float k = strip_scale(s, i, now), in = rk__glide_at(&s->in[i], now, NULL, NULL);
+    rk_textfmt g = f; g.size = f.size * k;
+    rk_color col = s->motion == 1 ? rk__mix(rk_color_of(RK_ROLE_TEXT_MEDIUM), rk_color_of(RK_ROLE_TEXT), in) : rk_color_of(i == s->active ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
+    rk__text_draw(c, s->titles[i], -1, strip_pad(s) + (s->motion == 1 ? in * step : 0), y, &g, col);
+    y += side_line(&f, k);
+  }
+}
+
+static int side_hit(rk_view *v, strip *s, float py) {
+  rk_textfmt f = strip_fmt(v, s);
+  double now = rk_app_now();
+  float y = 0;
+  for (int i = 0; i < s->n; i++) { float h = side_line(&f, strip_scale(s, i, now)); if (py >= y && py < y + h) return i; y += h; }
+  return -1;
+}
+
 static rk_size strip_measure(rk_view *v, rk_size avail, void *st) {
   strip *s = st;
   strip_level(s);
+  if (s->side) return side_measure(v, s);
   rk_textfmt f = strip_fmt(v, s);
   return (rk_size){ isfinite(avail.w) ? avail.w : 600, RK_MAX(rk_metric_of(RK_TOUCH_TARGET), f.size * f.line) };
 }
@@ -381,6 +418,11 @@ static rk_size strip_measure(rk_view *v, rk_size avail, void *st) {
 static void strip_draw(rk_view *v, rk_canvas *c, void *st) {
   strip *s = st;
   double now = rk_app_now();
+  if (s->side) {
+    side_draw(v, c, s, now);
+    if (strip_moving(s, now)) { rk__view_dirty(v); rk__app_request_frame(); }
+    return;
+  }
   rk_textfmt f = strip_fmt(v, s);
   float gap = rk_metric_of(RK_SPACE_L), x = strip_pad(s) - strip_glide(s, now), H = v->pframe.h;
   float base = H - (f.size * f.line - rk__text_ascent(&f));      /* titles share the baseline, as transform-origin left bottom */
@@ -397,6 +439,11 @@ static void strip_draw(rk_view *v, rk_canvas *c, void *st) {
 
 static bool strip_event(rk_view *v, const rk_event *e, void *st) {
   strip *s = st;
+  if (e->type == RK_EVENT_POINTER_UP && e->button == 0 && s->side) {
+    int i = side_hit(v, s, e->position.y);
+    if (i >= 0 && s->select) s->select(s->owner, i);
+    return true;
+  }
   if (e->type == RK_EVENT_POINTER_UP && e->button == 0) {
     double now = rk_app_now();
     rk_textfmt f = strip_fmt(v, s);
@@ -412,8 +459,9 @@ static bool strip_event(rk_view *v, const rk_event *e, void *st) {
     if (s->select) s->select(s->owner, e->key == RK_KEY_HOME ? 0 : s->n - 1);
     return true;
   }
-  if (e->type == RK_EVENT_KEY_DOWN && (e->key == RK_KEY_LEFT || e->key == RK_KEY_RIGHT) && s->n) {
-    int i = (s->active + (e->key == RK_KEY_RIGHT ? 1 : -1) + s->n) % s->n;
+  uint32_t back = s->side ? RK_KEY_UP : RK_KEY_LEFT, on = s->side ? RK_KEY_DOWN : RK_KEY_RIGHT;
+  if (e->type == RK_EVENT_KEY_DOWN && (e->key == back || e->key == on) && s->n) {
+    int i = (s->active + (e->key == on ? 1 : -1) + s->n) % s->n;
     if (s->select) s->select(s->owner, i);
     return true;
   }
@@ -423,7 +471,7 @@ static bool strip_event(rk_view *v, const rk_event *e, void *st) {
 static void strip_destroy(void *st) {
   strip *s = st;
   for (int i = 0; i < s->n; i++) free(s->titles[i]);
-  free(s->titles); free(s->scale); free(s);
+  free(s->titles); free(s->scale); free(s->in); free(s);
 }
 
 static const rk_class strip_class = { { sizeof(rk_view_class), "rk_strip", strip_draw, strip_measure, NULL, strip_event, strip_destroy }, NULL, NULL };
@@ -442,7 +490,9 @@ static void strip_add(rk_view *v, const char *title) {
   s->titles = realloc(s->titles, (size_t)(s->n + 1) * sizeof *s->titles);
   s->titles[s->n++] = rk__strdup(title ? title : "");
   s->scale = realloc(s->scale, (size_t)s->n * sizeof *s->scale);
-  rk__glide_set(&s->scale[s->n - 1], s->n - 1 == s->active ? 1 : INACTIVE);
+  s->in = realloc(s->in, (size_t)s->n * sizeof *s->in);
+  rk__glide_set(&s->scale[s->n - 1], strip_rest(s, s->n - 1));
+  rk__glide_set(&s->in[s->n - 1], s->n - 1 == s->active);
   rk__view_relayout_up(v);
 }
 
@@ -451,8 +501,11 @@ static void strip_activate(rk_view *v, int index) {
   if (index == s->active || index < 0 || index >= s->n) return;
   double now = rk_app_now();
   s->active = index;
-  for (int i = 0; i < s->n; i++) rk__glide_to(&s->scale[i], now, i == index ? 1 : INACTIVE, rk_duration_of(RK_DURATION_PIVOT_SIZE));
-  rk__glide_to(&s->glide, now, strip_target(v, s), rk_duration_of(RK_DURATION_PIVOT_GLIDE));
+  for (int i = 0; i < s->n; i++) {
+    rk__glide_to(&s->scale[i], now, strip_rest(s, i), rk_duration_of(RK_DURATION_PIVOT_SIZE));
+    rk__glide_to(&s->in[i], now, i == index, rk_duration_of(RK_DURATION_PIVOT_SIZE));
+  }
+  if (!s->side) rk__glide_to(&s->glide, now, strip_target(v, s), rk_duration_of(RK_DURATION_PIVOT_GLIDE));
   rk__view_dirty(v);
   rk__app_request_frame();
 }
@@ -807,11 +860,29 @@ static void strip_level(strip *s) {
   if (!s->pivot) return;
   bool top = true;
   for (rk_controller *a = s->pivot->parent; a; a = a->parent) if (a->kind == K_PIVOT || a->kind == K_PANORAMA) top = false;
-  if (top == s->nav) return;
-  s->nav = top;
+  if (top == s->nav && s->level_set) return;
+  s->nav = top; s->level_set = true;
   pivot *p = s->pivot->impl;
   float xl = top ? rk_metric_of(RK_SPACE_XL) : 0;
-  rk_view_set_padding(p->body, (rk_insets){ 0, xl, 0, xl });
+  rk_view_set_padding(p->body, (rk_insets){ 0, xl, 0, s->side ? 0 : xl });
+}
+
+/* Along the top the titles are the facets' heading; down the side they are a list beside them, as tabs are in a
+   browser either way. Same facets, same keys turned a quarter, same motion. */
+void rk_pivot_set_layout(rk_controller *c, rk_pivot_layout layout) {
+  if (c->kind != K_PIVOT) return;
+  pivot *p = c->impl;
+  strip *s = p->strip->state;
+  bool side = layout == RK_PIVOT_SIDE;
+  if (side == s->side) return;
+  const char *m = getenv("RK_SIDE_MOTION");               /* for the comparison in examples/navigation.c, until one is chosen */
+  s->side = side; s->motion = m && !strcmp(m, "step") ? 1 : 0; s->level_set = false;
+  for (int i = 0; i < s->n; i++) rk__glide_set(&s->scale[i], strip_rest(s, i));
+  rk_view_set_layout(c->view, side ? RK_LAYOUT_ROW : RK_LAYOUT_COLUMN);
+  rk_view_set_gap(c->view, side ? 0 : rk_metric_of(RK_SPACE_M));
+  rk_view_set_align(c->view, RK_ALIGN_START, RK_ALIGN_STRETCH);
+  rk_view_set_padding(c->view, (rk_insets){ side ? rk_metric_of(RK_SPACE_L) : 0, 0, 0, 0 });   /* the list and its facet start together, clear of the bar */
+  rk__view_relayout_up(p->strip);
 }
 
 rk_controller *rk_pivot(void) {
@@ -863,7 +934,8 @@ void rk_pivot_select(rk_controller *c, int index) {
   rk__controller_attach(to, c->window);
   rk__layout_pending();
   rk_transform t0 = nv->transform, t1 = nv->transform;
-  t0.translate_x += dir * RK_TOK_SLIDE_DISTANCE;
+  if (((strip *)p->strip->state)->side) t0.translate_y += dir * RK_TOK_SLIDE_DISTANCE;   /* from below or above, where its title is */
+  else t0.translate_x += dir * RK_TOK_SLIDE_DISTANCE;
   double d = 0.75 * rk_duration_of(RK_DURATION_MODERATE);
   float a0 = 0, a1 = nv->opacity;
   rk__animate(nv, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_out);
