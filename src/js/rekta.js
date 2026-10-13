@@ -2057,19 +2057,21 @@ function menuKeys(e, list, close) {
 // contextMenu(scope, el, { target, onOpen, onSelect }): a menu opened where the pointer is: a right click, a long
 // press on touch (long-press), or Shift+F10 or the context-menu key on a focused target, then below it. target picks
 // what has a menu inside scope; onOpen(target, event) prepares the menu for it (return false to leave the browser's
-// own); onSelect(item, target) acts. Keys as in a menu; Escape or a choice returns focus to the target.
+// own); onSelect(item, target) acts. Keys as in a menu; Escape or a choice returns focus to the target. A press
+// outside, a resize, or a scroll that moves the target closes it; a scroll elsewhere (a strip gliding) does not.
 export function contextMenu(scope, el, { target = '[tabindex], a, button', onOpen = null, onSelect = null } = {}) {
   el.id = el.id || uid('rk-context');
   el.setAttribute('role', 'menu');
   // Manual: the press that opens it has already happened, so the browser's light dismiss would close it at once.
   if (canPopover) el.setAttribute('popover', 'manual'); else el.hidden = true;
   el.classList.add('rk-float');
-  let current = null, hold = 0, start = null, swallow = false;
+  let current = null, hold = 0, start = null, swallow = false, at = null;
   const items = () => [...el.querySelectorAll('.rk-menu-item')].filter((i) => i.getClientRects().length);
   function openAt(t, x, y, e) {
     if (onOpen && onOpen(t, e) === false) return false;
     current = t;
     openFloat(el); placeAt(el, x, y);
+    at = t.getBoundingClientRect();
     const first = items().find((i) => i.getAttribute('aria-disabled') !== 'true') || items()[0];
     if (first) first.focus();
     return true;
@@ -2118,6 +2120,12 @@ export function contextMenu(scope, el, { target = '[tabindex], a, button', onOpe
   const outside = (e) => { if (isOpen(el) && !el.contains(e.target)) close(false); };
   el.addEventListener('focusout', (e) => { if (isOpen(el) && e.relatedTarget && !el.contains(e.relatedTarget)) close(false); });
   const away = (e) => { if (isOpen(el) && !(e.target instanceof Node && el.contains(e.target))) close(false); };
+  // A scroll closes it only when what it was opened on moves: a strip gliding to its title elsewhere leaves it open.
+  const scrolled = (e) => {
+    if (!isOpen(el) || (e.target instanceof Node && el.contains(e.target))) return;
+    const r = current && current.isConnected ? current.getBoundingClientRect() : null;
+    if (!r || !at || Math.abs(r.left - at.left) > 2 || Math.abs(r.top - at.top) > 2) close(false);
+  };
   scope.addEventListener('contextmenu', ctx);
   scope.addEventListener('keydown', keydown);
   scope.addEventListener('pointerdown', down);
@@ -2127,7 +2135,7 @@ export function contextMenu(scope, el, { target = '[tabindex], a, button', onOpe
   el.addEventListener('keydown', key);
   el.addEventListener('click', choose);
   document.addEventListener('pointerdown', outside, true);
-  addEventListener('scroll', away, true); addEventListener('resize', away); addEventListener('blur', away);
+  addEventListener('scroll', scrolled, true); addEventListener('resize', away); addEventListener('blur', away);
   return {
     open(t) { const [x, y] = atElement(t); return openAt(t, x, y, null); },
     close,
@@ -2137,7 +2145,7 @@ export function contextMenu(scope, el, { target = '[tabindex], a, button', onOpe
       scope.removeEventListener('pointermove', move); scope.removeEventListener('click', click, true);
       for (const ev of ['pointerup', 'pointercancel']) scope.removeEventListener(ev, up);
       el.removeEventListener('keydown', key); el.removeEventListener('click', choose);
-      document.removeEventListener('pointerdown', outside, true); removeEventListener('scroll', away, true); removeEventListener('resize', away); removeEventListener('blur', away);
+      document.removeEventListener('pointerdown', outside, true); removeEventListener('scroll', scrolled, true); removeEventListener('resize', away); removeEventListener('blur', away);
     },
   };
 }

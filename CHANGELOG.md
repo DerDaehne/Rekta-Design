@@ -272,6 +272,10 @@ it; each entry says how.
 
 ### Fixed
 
+- A context menu closed on any scroll in the page, so a strip gliding to its
+  active title closed one just opened; it now closes when a scroll moves
+  what it was opened on.
+
 - rekta-core: removing a view that is already leaving (two toasts in one
   frame) freed it under its own animation; it now keeps leaving.
 

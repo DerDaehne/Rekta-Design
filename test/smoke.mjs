@@ -249,6 +249,12 @@ await p.focus('#comp-body tr[data-name="Rows"]'); await p.keyboard.press('Shift+
 ok(await until(p, () => isOpen(p, '#comp-ctx')), 'Shift+F10 opens the menu from the keyboard');
 await p.keyboard.press('Escape');
 ok(await until(p, async () => !(await isOpen(p, '#comp-ctx')) && (await focused(p)) === 'Rows') && await visible(p, 'home'), 'Escape closes it and focus returns to the row', await focused(p));
+await p.focus('#comp-body tr[data-name="Rows"]'); await p.keyboard.press('Shift+F10'); await until(p, () => isOpen(p, '#comp-ctx'));
+await p.evaluate(() => document.querySelector('#nav').dispatchEvent(new Event('scroll')));
+ok(await isOpen(p, '#comp-ctx'), 'a scroll elsewhere leaves the menu open');
+await p.evaluate(() => { document.querySelector('#comp-table').style.transform = 'translateY(40px)'; document.querySelector('#nav').dispatchEvent(new Event('scroll')); });
+ok(!(await isOpen(p, '#comp-ctx')), 'a scroll that moves its row closes it');
+await p.evaluate(() => { document.querySelector('#comp-table').style.transform = ''; });
 
 // Desktop: tooltips, the tree, a sortable list, ten thousand lines.
 await go(p, 'desktop');
