@@ -9,6 +9,15 @@ it; each entry says how.
 
 ### Added
 
+- **rekta-core: files dragged in, and a place to drop them** (`rk_drop`), as
+  the web's `.rk-drop`: a 2 px dashed text-medium edge that turns solid, in the
+  text colour over the hover fill, while files are over it; a filter by
+  extension or family (`image/*`); the app hears the files taken and those
+  refused. New events `RK_EVENT_DRAG_ENTER`, `_DRAG_MOVE`, `_DRAG_LEAVE` and
+  `_DROP` (with `files`, `nfiles` appended to `rk_event`): the view under the
+  pointer that takes `DRAG_MOVE` gets the drop, and files dropped where none
+  does are refused. `rk_window_choose_files` asks the system's file chooser;
+  a click on the drop place opens it.
 - **rekta-core: rows the user puts in order** (`rk_rows_set_sortable`), as
   the web's `sortable()`: a grip on each row; dragged 4 px a row lifts (bg and a
   1 px text-medium edge, no shadow) and follows, the others step aside over

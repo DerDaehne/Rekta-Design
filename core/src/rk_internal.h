@@ -240,6 +240,7 @@ struct rk_window {
   rk_irect damage[RK_DAMAGE_MAX]; int ndamage; bool damage_all;   /* what the next frame draws, in device pixels */
   char *title;
   rk_view *focus, *hover, *pressed, *capture;
+  rk_view *drag_over;                                      /* the view that took the files being dragged (weak) */
   rk_view *focus_back;                                     /* where focus was before it went into a toast */
   int cursor;                                              /* the shape the platform shows */
   rk_view *activated;                                      /* the view whose activate handler is running */
@@ -251,6 +252,8 @@ struct rk_window {
 
 void rk__window_resized(rk_window *w, float width, float height, float scale);   /* from the platform */
 void rk__window_event(rk_window *w, const rk_event *e);
+bool rk__window_drag(rk_window *w, const rk_event *e);       /* from the platform: whether a view takes the files */
+bool rk__accepts(const char *accept, const char *path);    /* a file chooser's or a drop's filter: ".png,.jpg", "image/" with a star */
 void rk__window_close_request(rk_window *w);
 void rk__window_pointer_cancel(rk_window *w);
 void rk__menus_close(rk_window *w);
@@ -335,7 +338,10 @@ typedef struct rk_platform {
   char *(*clip_get)(void);                                 /* NULL, or the system clipboard's text (malloc'd), or NULL */
   void (*text_input)(void *native, bool on, rk_rect caret);   /* NULL, or an input method follows a field's caret */
   void (*cursor)(void *native, int shape);                 /* NULL, or the pointer takes an RK__CURSOR_ shape */
+  /* NULL, or the system's file chooser: false if it cannot open; else done() comes later, n 0 if it was cancelled */
+  bool (*choose_files)(void *native, const char *accept, bool multiple, void (*done)(void *ctx, const char *const *files, int n), void *ctx);
 } rk_platform;
+extern const char *const *rk__headless_choice; extern int rk__headless_nchoice;   /* what the headless chooser answers */
 
 extern const rk_platform rk__platform_headless;
 extern const rk_platform rk__platform_native;              /* the OS this was built for */

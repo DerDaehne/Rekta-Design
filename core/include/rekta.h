@@ -168,6 +168,11 @@ RK_API float rk_window_scale(rk_window *window);   /* device pixels per logical 
 RK_API void rk_window_on_close(rk_window *window, bool (*should_close)(rk_window *window, void *user), void *user);
 RK_API bool rk_window_focus(rk_window *window, rk_view *view);  /* false if the view cannot take focus */
 RK_API rk_view *rk_window_focused(rk_window *window);
+/* The system's file chooser over the window, filtered by accept: extensions (".png,.jpg") or families ("image/" with
+   a star); NULL or "" takes any file. chosen() comes later with the paths, or with none if it was cancelled. False
+   when the system has none here. */
+RK_API bool rk_window_choose_files(rk_window *window, const char *accept, bool multiple,
+                                   void (*chosen)(rk_window *window, const char *const *files, int count, void *user), void *user);
 /* The app's history, as the web's undoStack(): rk_window_do runs an action and remembers it (up to 50) - its toast in
    the window offers undo. Ctrl (Cmd) and Z undoes, with Shift or Ctrl+Y redoes, outside text fields. free_user, if
    given, lets user go when the action leaves the history. */
@@ -265,6 +270,11 @@ typedef enum rk_event_type {
   RK_EVENT_POINTER_DOWN, RK_EVENT_POINTER_UP, RK_EVENT_POINTER_MOVE, RK_EVENT_POINTER_ENTER, RK_EVENT_POINTER_LEAVE,
   RK_EVENT_WHEEL, RK_EVENT_KEY_DOWN, RK_EVENT_KEY_UP, RK_EVENT_TEXT, RK_EVENT_FOCUS, RK_EVENT_BLUR,
   RK_EVENT_COMPOSE,                                /* text an input method is composing; "" when it is done */
+  /* Files dragged from the system: DRAG_MOVE asks the view under the pointer, and its parents, whether they take them
+     (true: they do; the system shows a copy). The one that took them hears DRAG_LEAVE when they go elsewhere, or the
+     DROP with their paths. Files dropped where nothing takes them are refused. DRAG_ENTER is the platform's; views
+     see it as a DRAG_MOVE. */
+  RK_EVENT_DRAG_ENTER, RK_EVENT_DRAG_MOVE, RK_EVENT_DRAG_LEAVE, RK_EVENT_DROP,
   RK_EVENT_FORCE32 = 0x7fffffff
 } rk_event_type;
 
@@ -286,6 +296,7 @@ typedef struct rk_event {
   uint32_t key;                                    /* RK_KEY_* */
   uint32_t mods;                                   /* RK_MOD_* */
   const char *text;                                /* RK_EVENT_TEXT, RK_EVENT_COMPOSE: UTF-8 */
+  const char *const *files; int nfiles;            /* RK_EVENT_DROP: the files' paths, UTF-8, valid for the call */
 } rk_event;
 
 typedef struct rk_view_class {
@@ -422,6 +433,12 @@ RK_API void rk_list_on_change(rk_view *list, void (*fn)(rk_view *list, void *use
 RK_API bool rk_list_selected(rk_view *list, int index);
 RK_API int rk_list_selection_count(rk_view *list);
 RK_API void rk_list_scroll_to(rk_view *list, int index);   /* glides it into sight and makes it the active row */
+
+/* A place to drop files: a dashed edge that turns solid while files are over it. accept filters them as the file
+   chooser does; files() hears those taken and those refused, only when one was taken. A click or Enter opens the
+   system's file chooser with the same filter. Files dropped where nothing takes them are refused. */
+RK_API rk_view *rk_drop(const char *title, const char *hint, const char *accept,
+                        void (*files)(rk_view *drop, const char *const *taken, int ntaken, const char *const *refused, int nrefused, void *user), void *user);
 
 /* A tree: items that hold items, opened and closed in place. The app adds the items and keeps their numbers; parent
    -1 is the top. A click, Enter or Space selects an item and shows it (on_show); selection never follows focus. A

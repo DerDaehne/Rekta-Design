@@ -161,6 +161,13 @@ Sizes are logical pixels; the scale is device pixels per logical pixel.
 .El
 .Ss Containers and views
 .Bl -tag -width Ds
+.It Fn rk_window_choose_files "rk_window *window" "const char *accept" "bool multiple" "void (*chosen)(rk_window *window, const char *const *files, int count, void *user)" "void *user"
+The system's file chooser over the window, with the filter
+.Fn rk_drop
+uses;
+.Fa chosen
+comes later with the paths, or with none if it was cancelled.
+False when the system has none here.
 .It Fn rk_column , Fn rk_row , Fn rk_tile_grid
 Containers with the spacing the design gives them: a column top to
 bottom, a row left to right, a grid of tiles in tile units.
@@ -361,6 +368,21 @@ and
 follow the selection.
 .Fn rk_list_scroll_to
 glides a row into sight.
+.It Fn rk_drop "const char *title" "const char *hint" "const char *accept" "void (*files)(rk_view *drop, const char *const *taken, int ntaken, const char *const *refused, int nrefused, void *user)" "void *user"
+A place to drop files: a dashed edge that turns solid while files are
+dragged over it.
+.Fa accept
+filters them by extension
+.Pq Qq .png,.jpg
+or by family
+.Pq Qq image/* ;
+NULL takes any.
+.Fa files
+hears the files taken and those refused, only when one was taken.
+A click or Enter opens the system's file chooser
+.Pq Fn rk_window_choose_files
+with the same filter.
+Files dropped where no view takes them are refused.
 .It Fn rk_tree void
 Items that hold items, opened and closed in place.
 .Fn rk_tree_add "tree" "parent" "title"

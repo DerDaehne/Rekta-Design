@@ -140,7 +140,7 @@ static void edit_start(rk_view *v, list *l, int row, int col) {
   l->editor = ed;
   rk__view_add(v, ed); rk_release(ed);
   place_editor(v, l);
-  rk_event all = { sizeof all, RK_EVENT_KEY_DOWN, rk_app_now(), { 0, 0 }, 0, 0, 0, 'A', RK_MOD_CTRL, NULL };
+  rk_event all = { sizeof all, RK_EVENT_KEY_DOWN, rk_app_now(), { 0, 0 }, 0, 0, 0, 'A', RK_MOD_CTRL, NULL, NULL, 0 };
   ed->cls->pub.event(ed, &all, ed->state);                  /* the old value, selected: typing replaces it */
   rk_window *w = rk__view_window(v);
   if (w) rk_window_focus(w, ed);

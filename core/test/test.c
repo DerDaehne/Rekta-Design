@@ -159,7 +159,7 @@ static int activations;
 static void on_activate(rk_view *v, void *u) { (void)v; (void)u; activations++; }
 
 static void click(rk_window *w, rk_point p, double hold) {
-  rk_event e = { sizeof e, RK_EVENT_POINTER_DOWN, 0, p, 0, 0, 0, 0, 0, NULL };
+  rk_event e = { sizeof e, RK_EVENT_POINTER_DOWN, 0, p, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &e);
   rk_app_run_for(hold);
   e.type = RK_EVENT_POINTER_UP;
@@ -167,7 +167,7 @@ static void click(rk_window *w, rk_point p, double hold) {
 }
 
 static void key(rk_window *w, uint32_t k, uint32_t mods) {
-  rk_event e = { sizeof e, RK_EVENT_KEY_DOWN, 0, { 0, 0 }, 0, 0, 0, k, mods, NULL };
+  rk_event e = { sizeof e, RK_EVENT_KEY_DOWN, 0, { 0, 0 }, 0, 0, 0, k, mods, NULL, NULL, 0 };
   rk_window_inject(w, &e);
 }
 
@@ -182,7 +182,7 @@ static void test_input(void) {
   show(w, root, "input");
   rk_rect r = rk__window_rect(t);
   /* pressed near the top left, the tile tilts there: that edge goes back */
-  rk_event e = { sizeof e, RK_EVENT_POINTER_DOWN, 0, { r.x + 10, r.y + 10 }, 0, 0, 0, 0, 0, NULL };
+  rk_event e = { sizeof e, RK_EVENT_POINTER_DOWN, 0, { r.x + 10, r.y + 10 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &e);
   rk_app_run_for(120);
   CHECK(t->ptransform.rotate_x > 4 && t->ptransform.rotate_y < -4 && CLOSE_TO(t->ptransform.scale_x, 0.97, 0.001), "press pose %g %g %g", t->ptransform.rotate_x, t->ptransform.rotate_y, t->ptransform.scale_x);
@@ -381,7 +381,7 @@ static void list_change(rk_view *l, void *u) { (void)l; (void)u; selection_chang
 static void tap_row(rk_window *w, rk_view *list, int row, uint32_t mods) {
   rk_rect r = rk__window_rect(list);
   rk_point p = { r.x + 40, r.y + (row + 0.5f) * rk_metric_of(RK_ROW_HEIGHT) - list->pvalue };
-  rk_event e = { sizeof e, RK_EVENT_POINTER_DOWN, 0, p, 0, 0, 0, 0, mods, NULL };
+  rk_event e = { sizeof e, RK_EVENT_POINTER_DOWN, 0, p, 0, 0, 0, 0, mods, NULL, NULL, 0 };
   rk_window_inject(w, &e);
   e.type = RK_EVENT_POINTER_UP;
   rk_window_inject(w, &e);
@@ -420,7 +420,7 @@ static void test_list(void) {
   key(w, RK_KEY_END, 0);
   rk_app_run_for(1200);
   CHECK(CLOSE_TO(list->pvalue, 100000 * H - 300, 0.5), "End glides to the last row (%g)", list->pvalue);
-  rk_event wheel = { sizeof wheel, RK_EVENT_WHEEL, 0, { 200, 200 }, 0, 0, -480, 0, 0, NULL };
+  rk_event wheel = { sizeof wheel, RK_EVENT_WHEEL, 0, { 200, 200 }, 0, 0, -480, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &wheel);
   rk_app_run_for(600);
   CHECK(CLOSE_TO(list->pvalue, 100000 * H - 300 - 480, 0.5), "the wheel scrolls it (%g)", list->pvalue);
@@ -436,7 +436,7 @@ static void on_field_change(rk_view *f, void *u) { (void)f; (void)u; field_chang
 static void on_field_submit(rk_view *f, void *u) { (void)f; (void)u; field_submits++; }
 
 static void type_text(rk_window *w, const char *t) {
-  rk_event e = { sizeof e, RK_EVENT_TEXT, 0, { 0, 0 }, 0, 0, 0, 0, 0, t };
+  rk_event e = { sizeof e, RK_EVENT_TEXT, 0, { 0, 0 }, 0, 0, 0, 0, 0, t, NULL, 0 };
   rk_window_inject(w, &e);
 }
 
@@ -468,7 +468,7 @@ static void test_field(void) {
   key(w, RK_KEY_ENTER, 0);
   CHECK(field_submits == 1, "Enter submits");
   /* an input method: what it composes shows at the caret and is not text yet; what it commits is */
-  rk_event pe = { sizeof pe, RK_EVENT_COMPOSE, 0, { 0, 0 }, 0, 0, 0, 0, 0, "ka" };
+  rk_event pe = { sizeof pe, RK_EVENT_COMPOSE, 0, { 0, 0 }, 0, 0, 0, 0, 0, "ka", NULL, 0 };
   rk_window_inject(w, &pe);
   CHECK(!strcmp(rk_field_text(name), "Grüe ") && ((field *)name->state)->preedit, "composing is shown, not typed");
   type_text(w, "ko");
@@ -482,7 +482,7 @@ static void test_field(void) {
   click(w, (rk_point){ r.x + 13, y }, 10);
   type_text(w, "<");
   CHECK(!strcmp(rk_field_text(name), "<badge name"), "a click places the caret (%s)", rk_field_text(name));
-  rk_event d = { sizeof d, RK_EVENT_POINTER_DOWN, rk_app_now(), { r.x + 12 + rk_text_measure("<badge na", RK_TEXT_BODY, 0).w, y }, 0, 0, 0, 0, 0, NULL };
+  rk_event d = { sizeof d, RK_EVENT_POINTER_DOWN, rk_app_now(), { r.x + 12 + rk_text_measure("<badge na", RK_TEXT_BODY, 0).w, y }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &d); d.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &d);
   d.type = RK_EVENT_POINTER_DOWN; d.time += 100; rk_window_inject(w, &d); d.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &d);
   type_text(w, "tag");
@@ -566,7 +566,7 @@ static void test_menu(void) {
   CHECK(w->floats->nkids == 0, "a press outside closes it");
   /* a context menu: a right click at the pointer, Shift+F10 below the view */
   rk_rect t = rk__window_rect(tile);
-  rk_event rc = { sizeof rc, RK_EVENT_POINTER_DOWN, 0, { t.x + 40, t.y + 30 }, 1, 0, 0, 0, 0, NULL };
+  rk_event rc = { sizeof rc, RK_EVENT_POINTER_DOWN, 0, { t.x + 40, t.y + 30 }, 1, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &rc); rc.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &rc);
   rk_rect cr = rk__window_rect(ctx);
   CHECK(w->floats->nkids == 1 && rk_menu_opener(ctx) == tile && fabsf(cr.x - (t.x + 40)) < 1, "a right click opens the context menu at the pointer");
@@ -629,10 +629,10 @@ static void test_table(void) {
   /* a column's edge drags its width; twice on it gives the column its own back; the pointer shows the edge */
   list *L = t->state;
   float edge = r.x + L->cols[1].x + L->cols[1].w, y = r.y + 10;
-  rk_event mv = { sizeof mv, RK_EVENT_POINTER_MOVE, 0, { edge + 2, y }, 0, 0, 0, 0, 0, NULL };
+  rk_event mv = { sizeof mv, RK_EVENT_POINTER_MOVE, 0, { edge + 2, y }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &mv);
   CHECK(w->cursor == RK__CURSOR_COL_RESIZE, "over a column's edge the pointer shows it (%d)", w->cursor);
-  rk_event dn = { sizeof dn, RK_EVENT_POINTER_DOWN, 0, { edge, y }, 0, 0, 0, 0, 0, NULL };
+  rk_event dn = { sizeof dn, RK_EVENT_POINTER_DOWN, 0, { edge, y }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &dn);
   mv.position = (rk_point){ edge + 60, y + 30 }; rk_window_inject(w, &mv);
   dn.type = RK_EVENT_POINTER_UP; dn.position = mv.position; rk_window_inject(w, &dn);
@@ -723,7 +723,7 @@ static void test_controls(void) {
   r = rk__window_rect(sld);
   float x0, x1;
   slider_track(sld, sl, &x0, &x1);
-  rk_event p = { sizeof p, RK_EVENT_POINTER_DOWN, 0, { r.x + x0 + (x1 - x0) * 0.71f, r.y + r.h / 2 }, 0, 0, 0, 0, 0, NULL };
+  rk_event p = { sizeof p, RK_EVENT_POINTER_DOWN, 0, { r.x + x0 + (x1 - x0) * 0.71f, r.y + r.h / 2 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &p);
   CHECK(rk_control_value(sld) == 70, "a press on the track moves it there, on its step (%g)", rk_control_value(sld));
   p.type = RK_EVENT_POINTER_MOVE; p.position.x = r.x + x1 + 200; rk_window_inject(w, &p);
@@ -847,7 +847,7 @@ static void test_scroll(void) {
   scroller *s = sc->state;
   CHECK(s->max > 1000 && sc->value == 0, "taller than it is: it scrolls (%.0f)", s->max);
   rk_rect r = rk__window_rect(sc);
-  rk_event wh = { sizeof wh, RK_EVENT_WHEEL, 0, { r.x + 40, r.y + 100 }, 0, 0, 0, 0, 0, NULL };
+  rk_event wh = { sizeof wh, RK_EVENT_WHEEL, 0, { r.x + 40, r.y + 100 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   wh.wheel_y = 300; rk_window_inject(w, &wh);
   rk_app_run_for(500);
   CHECK(sc->pvalue == 300 && s->bar, "the wheel glides it, the bar shows (%.0f)", sc->pvalue);
@@ -883,7 +883,7 @@ static void test_scroll(void) {
   wh.wheel_y = 10; rk_window_inject(w, &wh); rk_app_run_for(300);
   float ty, th;
   thumb_of(s, r.h, &ty, &th);
-  rk_event d = { sizeof d, RK_EVENT_POINTER_DOWN, 0, { r.x + r.w - 2, r.y + ty + th / 2 }, 0, 0, 0, 0, 0, NULL };
+  rk_event d = { sizeof d, RK_EVENT_POINTER_DOWN, 0, { r.x + r.w - 2, r.y + ty + th / 2 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &d);
   d.type = RK_EVENT_POINTER_MOVE; d.position.y += (r.h - th) / 2; rk_window_inject(w, &d);
   d.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &d);
@@ -1124,12 +1124,12 @@ static void test_textarea(void) {
   float lh = line_h(f), top = r.y + input_rect(area, f).y + input_pad_y(f) - f->scroll_y;
   click(w, (rk_point){ r.x + 12 + width(f, 6, 9), top + 1.5f * lh }, 10);
   CHECK(f->caret == 6 + 3, "a click on the second line (%d)", f->caret);
-  rk_event over = { sizeof over, RK_EVENT_POINTER_MOVE, 0, { r.x + 40, top + lh }, 0, 0, 0, 0, 0, NULL };
+  rk_event over = { sizeof over, RK_EVENT_POINTER_MOVE, 0, { r.x + 40, top + lh }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &over);
   CHECK(w->cursor == RK__CURSOR_TEXT, "over the text, the I-beam");
   over.position.y = r.y + 4; rk_window_inject(w, &over);
   CHECK(w->cursor == RK__CURSOR_ARROW, "over the label, the arrow");
-  rk_event wh = { sizeof wh, RK_EVENT_WHEEL, rk_app_now(), { r.x + 40, r.y + r.h - 20 }, 0, 0, 0, 0, 0, NULL };
+  rk_event wh = { sizeof wh, RK_EVENT_WHEEL, rk_app_now(), { r.x + 40, r.y + r.h - 20 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   wh.wheel_y = -200;
   rk_window_inject(w, &wh);
   CHECK(f->scroll_y == 0, "the wheel scrolls it back to the top (%.0f)", f->scroll_y);
@@ -1230,7 +1230,7 @@ static void test_focus(void) {
   rk_app_run_for(300);
   toast = w->toasts->kids[w->toasts->nkids - 1];
   rk_rect tr = rk__window_rect(toast);
-  rk_event mv = { sizeof mv, RK_EVENT_POINTER_MOVE, rk_app_now(), { tr.x + 20, tr.y + tr.h / 2 }, 0, 0, 0, 0, 0, NULL };
+  rk_event mv = { sizeof mv, RK_EVENT_POINTER_MOVE, rk_app_now(), { tr.x + 20, tr.y + tr.h / 2 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &mv);
   rk_app_run_for(rk_duration_of(RK_TIMING_TOAST) + 1500);
   CHECK(!toast->leaving, "the pointer holds it");
@@ -1343,7 +1343,7 @@ static void split_item(int index, rk_list_item *out, void *user) {
   out->title = t; out->meta = index % 3 ? "done" : NULL; out->status = index % 3 ? RK_STATUS_NONE : RK_STATUS_ERROR;
 }
 static void pointer(rk_window *w, int type, rk_point p) {
-  rk_event e = { sizeof e, type, rk_app_now(), p, 0, 0, 0, 0, 0, NULL };
+  rk_event e = { sizeof e, type, rk_app_now(), p, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &e);
 }
 
@@ -1466,6 +1466,55 @@ static void test_sort(void) {
   done(w);
 }
 
+/* A place to drop files: files dragged over it make the edge solid; dropped, the filter sorts them; a click asks the
+   system's chooser. Nothing else takes files, so dropped beside it they are refused. */
+static int drop_taken, drop_refused, drop_calls;
+static char drop_first[64];
+static void dropped(rk_view *d, const char *const *taken, int nt, const char *const *refused, int nr, void *u) {
+  (void)d; (void)refused; (void)u;
+  drop_calls++; drop_taken = nt; drop_refused = nr;
+  snprintf(drop_first, sizeof drop_first, "%s", nt ? taken[0] : "");
+}
+static bool drag(rk_window *w, int type, rk_point p, const char *const *files, int n) {
+  rk_event e = { sizeof e, type, rk_app_now(), p, 0, 0, 0, 0, 0, NULL, files, n };
+  return rk__window_drag(w, &e);
+}
+
+static void test_drop(void) {
+  rk_window *w = window(520, 360);
+  rk_view *root = col(16, 24);
+  rk_add(root, rk_label("files", RK_TEXT_LABEL));
+  rk_view *d = rk_add(root, rk_drop("Drop pictures here", "or choose them · nothing leaves your device", "image/*", dropped, NULL));
+  rk_add(root, rk_label("Beside the place, files are refused.", RK_TEXT_BODY));
+  show(w, root, "drop");
+  CHECK(d->frame.h >= 120, "120 px tall at least: %g", d->frame.h);
+  shot(w, "drop");
+  rk_rect r = rk__window_rect(d);
+  rk_point in = { r.x + r.w / 2, r.y + r.h / 2 }, out = { r.x + 10, r.y + r.h + 30 };
+  static const char *const files[] = { "/home/ada/a.png", "/home/ada/notes.txt", "/home/ada/C.JPG" };
+  CHECK(drag(w, RK_EVENT_DRAG_ENTER, in, NULL, 0) && ((drop_zone *)d->state)->over, "dragged over it: taken, the edge solid");
+  rk_app_run_for(300);
+  shot(w, "drop-over");
+  CHECK(!drag(w, RK_EVENT_DRAG_MOVE, out, NULL, 0) && !((drop_zone *)d->state)->over, "beside it: nothing takes them, it lets go");
+  CHECK(!drag(w, RK_EVENT_DROP, out, files, 3) && drop_calls == 0, "dropped beside it: refused, nothing heard");
+  drag(w, RK_EVENT_DRAG_ENTER, in, NULL, 0);
+  CHECK(drag(w, RK_EVENT_DROP, in, files, 3), "dropped on it: taken");
+  CHECK(drop_calls == 1 && drop_taken == 2 && drop_refused == 1 && !strcmp(drop_first, "/home/ada/a.png"), "image/* takes a.png and C.JPG, refuses notes.txt");
+  CHECK(!((drop_zone *)d->state)->over, "the edge dashed again");
+  static const char *const only_text[] = { "/home/ada/notes.txt" };
+  drag(w, RK_EVENT_DROP, in, only_text, 1);
+  CHECK(drop_calls == 1, "only refused files: nothing heard");
+  CHECK(rk__accepts(".pdf, .md", "Report.PDF") && !rk__accepts(".pdf", "pdf") && rk__accepts("application/pdf", "a.pdf") && rk__accepts(NULL, "x"), "the filter");
+  /* a click asks the system's chooser; its answer goes through the same filter */
+  static const char *const chosen[] = { "/tmp/photo.jpeg", "/tmp/readme.md" };
+  rk__headless_choice = chosen; rk__headless_nchoice = 2;
+  click(w, in, 30);
+  rk_app_run_for(300);
+  CHECK(drop_calls == 2 && drop_taken == 1 && !strcmp(drop_first, "/tmp/photo.jpeg"), "a click: the chooser's photo taken (%d)", drop_calls);
+  rk__headless_choice = NULL; rk__headless_nchoice = 0;
+  done(w);
+}
+
 /* A pivot down the side: its titles in a list, Up and Down pick, the one in sight steps in; a top pivot turns the place. */
 static void test_side_pivot(void) {
   rk_window *w = window(900, 500);
@@ -1548,7 +1597,7 @@ static void test_navigation(void) {
   rk_app_run_for(1200);
   CHECK(rk_view_window(t) == w && t->popacity == 1 && t->ptransform.rotate_y == 0, "home is back as it was");
   /* the wheel moves the panorama sideways; the strip follows */
-  rk_event wheel = { sizeof wheel, RK_EVENT_WHEEL, 0, { 450, 300 }, 0, 0, 600, 0, 0, NULL };
+  rk_event wheel = { sizeof wheel, RK_EVENT_WHEEL, 0, { 450, 300 }, 0, 0, 600, 0, 0, NULL, NULL, 0 };
   rk_window_inject(w, &wheel);
   rk_app_run_for(800);
   CHECK(rk_controller_view(home)->value > 0, "scrolled: %g", rk_controller_view(home)->value);
@@ -1690,6 +1739,7 @@ static void launch(void *user) {
   test_tree();
   test_split();
   test_sort();
+  test_drop();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

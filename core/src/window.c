@@ -570,7 +570,7 @@ bool rk_window_focus(rk_window *w, rk_view *v) {
   if (v && !v->focusable) return false;
   if (w->focus == v) return true;
   if (v && rk__view_within(v, w->toasts) && !rk__view_within(w->focus, w->toasts)) w->focus_back = w->focus;
-  rk_event e = { sizeof e, RK_EVENT_BLUR, rk_app_now(), { 0, 0 }, 0, 0, 0, 0, 0, NULL };
+  rk_event e = { sizeof e, RK_EVENT_BLUR, rk_app_now(), { 0, 0 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   if (w->focus) dispatch(w, w->focus, &e);
   w->focus = v;
   e.type = RK_EVENT_FOCUS;
@@ -722,7 +722,71 @@ static void event(rk_window *w, const rk_event *e) {
       break;
     }
     case RK_EVENT_WHEEL: dispatch(w, hit_window(w, e->position.x, e->position.y), e); break;
+    case RK_EVENT_DRAG_ENTER: case RK_EVENT_DRAG_MOVE: case RK_EVENT_DRAG_LEAVE: case RK_EVENT_DROP: rk__window_drag(w, e); break;
     default: dispatch(w, w->focus ? w->focus : w->root, e); break;
+  }
+}
+
+/* Files dragged over the window: on every move the view under the pointer, or the nearest parent, that answers
+   DRAG_MOVE with true takes them; the one before hears DRAG_LEAVE. The drop goes to the one that took them there. */
+static void drag_leave(rk_window *w) {
+  rk_view *t = w->drag_over;
+  w->drag_over = NULL;
+  if (!t || !t->cls || !t->cls->pub.event) return;
+  rk_event e = { sizeof e, RK_EVENT_DRAG_LEAVE, rk_app_now(), { 0, 0 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
+  t->cls->pub.event(t, &e, t->state);
+}
+
+static rk_view *drag_taker(rk_window *w, const rk_event *e) {
+  rk_event m = *e;
+  m.type = RK_EVENT_DRAG_MOVE;
+  for (rk_view *v = hit_window(w, e->position.x, e->position.y); v; v = v->parent) {
+    if (!v->cls || !v->cls->pub.event) continue;
+    rk_rect r = rk__window_rect(v);
+    m.position = (rk_point){ e->position.x - r.x, e->position.y - r.y };
+    if (v->cls->pub.event(v, &m, v->state)) return v;
+  }
+  return NULL;
+}
+
+/* The system's file chooser, for this window. */
+typedef struct choosing { rk_window *w; void (*chosen)(rk_window *, const char *const *, int, void *); void *user; } choosing;
+static void chooser_done(void *ctx, const char *const *files, int n) {
+  choosing *c = ctx;
+  if (c->chosen) c->chosen(c->w, files, n, c->user);
+  rk_release(c->w);
+  free(c);
+}
+bool rk_window_choose_files(rk_window *w, const char *accept, bool multiple, void (*chosen)(rk_window *w, const char *const *files, int n, void *user), void *user) {
+  const rk_platform *p = rk__platform();
+  if (!w || w->closed || !p->choose_files) return false;
+  choosing *c = rk__alloc(sizeof *c);
+  c->w = rk_retain(w); c->chosen = chosen; c->user = user;
+  if (p->choose_files(w->native, accept, multiple, chooser_done, c)) return true;
+  rk_release(w); free(c);
+  return false;
+}
+
+bool rk__window_drag(rk_window *w, const rk_event *e) {
+  rk__layout_pending();
+  switch (e->type) {
+    case RK_EVENT_DRAG_ENTER: case RK_EVENT_DRAG_MOVE: {
+      rk_view *t = drag_taker(w, e);
+      if (t != w->drag_over) { drag_leave(w); w->drag_over = t; }
+      return t != NULL;
+    }
+    case RK_EVENT_DRAG_LEAVE: drag_leave(w); return false;
+    case RK_EVENT_DROP: {
+      rk_view *t = drag_taker(w, e);                         /* where it is let go, which may not be where it last moved */
+      if (t != w->drag_over) drag_leave(w);
+      w->drag_over = NULL;
+      if (!t) return false;
+      rk_event d = *e;
+      rk_rect r = rk__window_rect(t);
+      d.position = (rk_point){ e->position.x - r.x, e->position.y - r.y };
+      return t->cls->pub.event(t, &d, t->state);
+    }
+    default: return false;
   }
 }
 

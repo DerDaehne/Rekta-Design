@@ -717,7 +717,7 @@ static rk_point middle(rk_view *v) {
 }
 
 static void pointer(rk_event_type type, rk_point p) {
-  rk_event e = { sizeof e, type, 0, p, 0, 0, 0, 0, 0, NULL };
+  rk_event e = { sizeof e, type, 0, p, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   rk_window_inject(D.window, &e);
 }
 
@@ -827,7 +827,7 @@ static void perf(void) {
   rk_point top = { rk_window_size(D.window).w / 2, 40 };
   for (int dir = 1; dir >= -1; dir -= 2)
     for (int i = 0; i < 14; i++) {
-      rk_event e = { sizeof e, RK_EVENT_WHEEL, 0, top, 0, 0, 48.0f * dir, 0, 0, NULL };
+      rk_event e = { sizeof e, RK_EVENT_WHEEL, 0, top, 0, 0, 48.0f * dir, 0, 0, NULL, NULL, 0 };
       rk_window_inject(D.window, &e);
       rk_app_run_for(i < 10 ? 40 : 120);
     }

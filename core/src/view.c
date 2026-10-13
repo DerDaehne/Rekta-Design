@@ -107,6 +107,7 @@ void rk__view_detach(rk_view *v) {
     if (w->hover == v) w->hover = NULL;
     if (w->pressed == v) w->pressed = NULL;
     if (w->capture == v) w->capture = NULL;
+    for (rk_view *f = w->drag_over; f; f = f->parent) if (f == v) { w->drag_over = NULL; break; }
   }
   rk__view_relayout_up(p);
   rk_release(v);
