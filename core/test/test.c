@@ -766,6 +766,68 @@ static void test_controls(void) {
   done(w);
 }
 
+/* A select opens a menu of its options; a field with options suggests them as you type. */
+static void test_select(void) {
+  rk_window *w = window(460, 420);
+  rk_view *page = col(8, 16);
+  static const char *const fruit[] = { "apple", "banana", "cherry", "damson" };
+  static const char *const city[] = { "Berlin", "Bern", "Bonn", "Hamburg", "Munich" };
+  rk_view *sel = rk_add(page, rk_select(fruit, 4, -1));
+  rk_view *town = rk_add(page, rk_field("City", "Where you live"));
+  rk_field_set_options(town, city, 5);
+  rk_control_on_change(sel, control_changed, NULL);
+  show(w, page, "select");
+  CHECK(rk_control_value(sel) == -1, "nothing chosen yet");
+  rk_view_tap(sel);
+  rk_app_run_for(200);
+  CHECK(w->floats->nkids == 1 && rk_window_focused(w) == w->floats->kids[0], "a press opens its menu");
+  key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_ENTER, 0);
+  rk_app_run_for(100);
+  CHECK(rk_control_value(sel) == 1 && w->floats->nkids == 0 && rk_window_focused(w) == sel, "Down, Down, Enter: banana, and focus is back (%g)", rk_control_value(sel));
+  key(w, RK_KEY_DOWN, 0);
+  CHECK(rk_control_value(sel) == 2 && w->floats->nkids == 0, "Down on the box changes it in place");
+  key(w, 'D', 0);
+  CHECK(rk_control_value(sel) == 3, "a letter jumps to its option");
+  key(w, RK_KEY_ENTER, 0);
+  rk_app_run_for(100);
+  CHECK(w->floats->nkids == 1 && rk__menu_active(w->floats->kids[0]) == 3, "Enter opens it at the chosen option");
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(w->floats->nkids == 0 && rk_control_value(sel) == 3, "Escape closes it, the choice stays");
+
+  rk_window_focus(w, town);
+  type_text(w, "b");
+  rk_app_run_for(100);
+  rk_view *list = w->floats->nkids ? w->floats->kids[0] : NULL;
+  CHECK(list && rk_window_focused(w) == town && ((menu *)list->state)->n == 4, "typing shows the options that contain it, focus stays in the field (%d)", list ? ((menu *)list->state)->n : 0);
+  type_text(w, "e"); type_text(w, "r");
+  CHECK(list && ((menu *)list->state)->n == 2, "fewer as it narrows (%d)", list ? ((menu *)list->state)->n : 0);
+  w->focus_visible = true;
+  key(w, RK_KEY_DOWN, 0);
+  rk_app_run_for(250);
+  shot(w, "select");
+  key(w, RK_KEY_ENTER, 0);
+  CHECK(!strcmp(rk_field_text(town), "Berlin") && w->floats->nkids == 0, "Down and Enter take one (%s)", rk_field_text(town));
+  key(w, 'Z', RK_MOD_CTRL);
+  CHECK(!strcmp(rk_field_text(town), "ber"), "an edit like any other: Ctrl+Z takes it back (%s)", rk_field_text(town));
+  type_text(w, "x");
+  CHECK(w->floats->nkids == 0 && !strcmp(rk_field_text(town), "berx"), "nothing matches: no list, the text stays");
+  key(w, RK_KEY_BACKSPACE, 0); key(w, RK_KEY_BACKSPACE, 0);
+  CHECK(w->floats->nkids == 0, "deleting does not open it");
+  key(w, RK_KEY_DOWN, 0);
+  CHECK(w->floats->nkids == 1, "Down opens it");
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(w->floats->nkids == 0 && rk_window_focused(w) == town, "Escape closes it, focus stays");
+  rk_field_set_text(town, "");
+  type_text(w, "m");
+  rk_app_run_for(250);
+  list = w->floats->nkids ? w->floats->kids[0] : NULL;
+  rk_rect lr = list ? rk__window_rect(list) : (rk_rect){ 0, 0, 0, 0 };
+  float y = lr.y + rk_metric_of(RK_SPACE_XS) + rk_metric_of(RK_ROW_HEIGHT) * 1.5f;   /* Hamburg, Munich: the second */
+  click(w, (rk_point){ lr.x + 40, y }, 10);
+  CHECK(!strcmp(rk_field_text(town), "Munich") && rk_window_focused(w) == town, "a click takes one (%s)", rk_field_text(town));
+  done(w);
+}
+
 /* Editing a cell: a double click or F2 opens it; Enter or Tab keeps the value, Escape puts the old one back; the app
    may refuse, and the cell says why and stays open. */
 static char comp_name[8][32] = { "Tile", "Rows", "Tag", "Sheet", "Toast", "Menu", "Field", "Table" };
@@ -910,7 +972,7 @@ static bool takes_input(const rk_view *v) {
   if (v->press != RK_PRESS_NONE || v->on_activate || v->menu) return true;
   const char *n = v->cls ? v->cls->pub.name : "";
   return !strcmp(n, "rk_field") || !strcmp(n, "rk_list") || !strcmp(n, "rk_strip") || !strcmp(n, "rk_check") || !strcmp(n, "rk_choices") ||
-         !strcmp(n, "rk_toggle") || !strcmp(n, "rk_segments") || !strcmp(n, "rk_slider") || !strcmp(n, "rk_stepper");
+         !strcmp(n, "rk_toggle") || !strcmp(n, "rk_segments") || !strcmp(n, "rk_slider") || !strcmp(n, "rk_stepper") || !strcmp(n, "rk_select");
 }
 static int unreachable(const rk_view *v, const rk_view *skip) {
   if (v == skip || v->hidden) return 0;
@@ -1185,6 +1247,7 @@ static void launch(void *user) {
   test_table();
   test_cell_edit();
   test_controls();
+  test_select();
   test_textarea();
   test_undo();
   test_focus();

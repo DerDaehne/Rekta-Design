@@ -465,6 +465,12 @@ static rk_view *controls_section(void) {
   D.bar = rk_add(s, rk_progress(0.25f));
   rk_add(s, rk_progress(-1));                                  /* working on it, no end known */
   rk_button_set_kind(rk_add(rk_add(s, rk_row()), rk_button("advance", advance, NULL)), RK_BUTTON_QUIET);
+  static const char *const sizes[] = { "small", "medium", "large", "a whole wall" };
+  static const char *const cities[] = { "Amsterdam", "Berlin", "Bern", "Bonn", "Copenhagen", "Hamburg", "Lisbon", "Munich", "Vienna" };
+  rk_add(s, rk_label("a select, and a field that suggests", RK_TEXT_KICKER));
+  rk_add(rk_add(s, rk_row()), rk_select(sizes, 4, 1));
+  rk_view *city = rk_add(s, rk_field("City", "Type, or Down for the list"));
+  rk_field_set_options(city, cities, 9);
   rk_add(s, rk_label("a slider sets the bar; a stepper counts", RK_TEXT_KICKER));
   rk_control_on_change(rk_add(s, rk_slider(0, 100, 5, 25)), slide_bar, NULL);
   rk_view *copies = rk_add(s, rk_row());

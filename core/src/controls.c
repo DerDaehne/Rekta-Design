@@ -13,7 +13,11 @@
    tabular figures; a press anywhere moves it there and a drag follows. Stepper: minus, the number, plus, joined in
    1px frames; a press steps, a held one repeats; typing a number and Enter (or leaving) takes it, Escape puts it
    back. Both snap to their step between their minimum and maximum, and know Up, Down, Page Up, Page Down, Home and
-   End. Included after widgets.c. */
+   End.
+
+   Select: a box like a field's input with the chosen option and a chevron; a press, Enter, Space or Alt+Down opens a
+   menu of the options below it, the chosen one marked; Up and Down change it in place, a letter jumps to the next
+   option starting with it. Included after widgets.c. */
 #include "rk_internal.h"
 
 typedef struct control {
@@ -593,12 +597,114 @@ rk_view *rk_stepper(double min, double max, double step, double value) {
   return v;
 }
 
+/* Select -------------------------------------------------------------------------------------------------------- */
+
+typedef struct select_box { control c; char **labels; int n; rk_view *menu, *view; bool down; } select_box;
+
+#define SELECT_PAD 12.0f
+#define SELECT_CHEVRON 40.0f
+
+static rk_size select_measure(rk_view *v, rk_size avail, void *st) {
+  (void)v; (void)avail;
+  select_box *s = st;
+  rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
+  float w = rk__text_width("choose one", -1, &f);
+  for (int i = 0; i < s->n; i++) w = RK_MAX(w, rk__text_width(s->labels[i], -1, &f));
+  return (rk_size){ RK_MAX(160.0f, ceilf(w + SELECT_PAD + SELECT_CHEVRON)), rk_metric_of(RK_CONTROL_HEIGHT) };
+}
+
+static void select_draw(rk_view *v, rk_canvas *c, void *st) {
+  select_box *s = st;
+  rk_window *w = rk__view_window(v);
+  bool focused = w && w->focus == v, off = s->c.disabled, open = rk__menu_open(s->menu);
+  float W = v->pframe.w, h = v->pframe.h, r = rk_metric_of(RK_RADIUS_S);
+  rk_color edge = rk_color_of(off ? RK_ROLE_DISABLED : focused || open ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
+  rk_canvas_fill_round_rect(c, (rk_rect){ 0, 0, W, h }, r, edge);
+  rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, h - 2 }, r - 1, rk_color_of(RK_ROLE_BG));
+  if (s->down || open) rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, h - 2 }, r - 1, rk_color_of(RK_ROLE_HOVER));
+  rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
+  f.line = 1;
+  int at = (int)s->c.value;
+  const char *text = at >= 0 && at < s->n ? s->labels[at] : "choose one";
+  rk_canvas_push_clip(c, (rk_rect){ 1, 0, W - SELECT_CHEVRON, h });
+  rk__text_draw(c, text, -1, SELECT_PAD, (h - f.size) / 2, &f, rk_color_of(off ? RK_ROLE_DISABLED : at >= 0 ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM));
+  rk_canvas_pop_clip(c);
+  float cx = W - SELECT_CHEVRON / 2, cy = h / 2 + (open ? 2 : -2), d = open ? -4 : 4;   /* the chevron: down, up while open */
+  rk_point chev[3] = { { cx - 4, cy - d / 2 }, { cx, cy + d / 2 }, { cx + 4, cy - d / 2 } };
+  rk_canvas_polyline(c, chev, 3, 1.6f, rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT));
+  if (shows_focus(v)) focus_ring(c, (rk_rect){ 0, 0, W, h });
+}
+
+static void select_chosen(rk_view *menu, int item, void *user) { (void)menu; select_box *s = user; user_set(s->view, &s->c, item); }
+
+static void select_open(rk_view *v, select_box *s) {
+  if (s->c.disabled || !s->n) return;
+  rk__menu_mark(s->menu, (int)s->c.value);
+  rk__menu_shape(s->menu, v->pframe.w, (int)s->c.value);
+  rk_menu_open(s->menu, v);
+}
+
+static bool select_event(rk_view *v, const rk_event *e, void *st) {
+  select_box *s = st;
+  switch (e->type) {
+    case RK_EVENT_POINTER_DOWN: if (e->button) return false; s->down = true; rk__view_dirty(v); return true;
+    case RK_EVENT_POINTER_UP:
+      if (!s->down) return false;
+      s->down = false;
+      rk__view_dirty(v);
+      if (e->position.x >= 0 && e->position.y >= 0 && e->position.x < v->pframe.w && e->position.y < v->pframe.h) select_open(v, s);
+      return true;
+    case RK_EVENT_KEY_DOWN: {
+      int at = (int)s->c.value;
+      if (e->key == RK_KEY_ENTER || e->key == RK_KEY_SPACE || (e->key == RK_KEY_DOWN && (e->mods & RK_MOD_ALT))) { select_open(v, s); return true; }
+      if (e->key == RK_KEY_DOWN) { user_set(v, &s->c, RK_MIN(at + 1, s->n - 1)); return true; }
+      if (e->key == RK_KEY_UP) { user_set(v, &s->c, RK_MAX(at - 1, 0)); return true; }
+      if (e->key == RK_KEY_HOME) { user_set(v, &s->c, 0); return true; }
+      if (e->key == RK_KEY_END) { user_set(v, &s->c, s->n - 1); return true; }
+      if (e->key >= 'A' && e->key <= 'Z' && !(e->mods & (RK_MOD_CTRL | RK_MOD_ALT | RK_MOD_SUPER))) {   /* the next option with that letter */
+        for (int k = 1; k <= s->n; k++) {
+          int i = (RK_MAX(at, -1) + k) % s->n;
+          if ((s->labels[i][0] | 32) == (char)(e->key | 32)) { user_set(v, &s->c, i); break; }
+        }
+        return true;
+      }
+      return false;
+    }
+    case RK_EVENT_FOCUS: case RK_EVENT_BLUR: s->down = false; rk__view_dirty(v); return false;
+    default: return false;
+  }
+}
+
+static bool select_valid(rk_view *v, double value) { select_box *s = v->state; return value == floor(value) && value >= -1 && value < s->n; }
+static void select_destroy(void *st) {
+  select_box *s = st;
+  rk_menu_close(s->menu);
+  rk_release(s->menu);
+  for (int i = 0; i < s->n; i++) free(s->labels[i]);
+  free(s->labels); free(s);
+}
+static const rk_class select_class = { { sizeof(rk_view_class), "rk_select", select_draw, select_measure, NULL, select_event, select_destroy }, NULL, NULL };
+
+rk_view *rk_select(const char *const *options, int count, int chosen) {
+  select_box *s = rk__alloc(sizeof *s);
+  s->n = RK_MAX(0, count); s->labels = copy_labels(options, s->n);
+  s->c.value = chosen >= 0 && chosen < s->n ? chosen : -1;
+  s->c.valid = select_valid;
+  s->menu = rk_menu();
+  for (int i = 0; i < s->n; i++) rk_menu_add(s->menu, s->labels[i], NULL, select_chosen, s);
+  rk_view *v = rk__view_create(&select_class, s);
+  s->view = v;
+  v->focusable = true; v->draws_focus = true; v->hug = true;
+  v->access = RK_ACCESS_COMBO_BOX;
+  return v;
+}
+
 /* The value, for every control ------------------------------------------------------------------------------------ */
 
 static control *control_of(rk_view *v) {
   if (!v) return NULL;
   if (v->cls == &check_class || v->cls == &choices_class || v->cls == &toggle_class || v->cls == &segments_class || v->cls == &slider_class ||
-      v->cls == &stepper_class) return v->state;
+      v->cls == &stepper_class || v->cls == &select_class) return v->state;
   return NULL;
 }
 

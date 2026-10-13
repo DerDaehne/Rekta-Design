@@ -245,6 +245,11 @@ leaving, takes it; Escape puts it back).
 Both snap to
 .Fa step
 (0: none) and know Up, Down, Page Up, Page Down, Home and End.
+.It Fn rk_select "const char *const *options" "int count" "int chosen"
+A box with the chosen option and a chevron: a press, Enter, Space or
+Alt+Down opens a menu of the options below it, the chosen one marked;
+Up and Down change it in place, a letter jumps to the next option
+starting with it.
 .It Fn rk_control_value , Fn rk_control_set_value , Fn rk_control_on_change , Fn rk_control_set_disabled
 Every control holds a number: 0 or 1, the chosen index, or the number.
 A number snaps to the range and step; an index the control lacks is
@@ -283,6 +288,12 @@ Ctrl+Enter submits; Up and Down keep to the column they started from,
 Home and End to the line, Ctrl+Home and Ctrl+End go to either end.
 Pasted line breaks are kept as
 .Ql \en .
+.It Fn rk_field_set_options "rk_view *field" "const char *const *options" "int count"
+Makes the field a combobox: the options that contain what is typed float
+below the input without taking focus; Down opens the list or moves down
+it, Up moves up, Enter takes the active option, Escape closes it.
+What is typed need not be an option; taking one is an edit Ctrl+Z
+takes back.
 .It Fn rk_list "int count" "void (*item)(int index, rk_list_item *out, void *user)" "void *user"
 A long list.
 Only the rows in sight are drawn and nothing is kept for each item:

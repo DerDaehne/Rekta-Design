@@ -279,7 +279,16 @@ void rk__titlebar_update(rk_view *bar);
 rk_view *rk__toast_create(const char *message, const char *action, void (*on_action)(void *), void *user);
 bool rk__view_within(const rk_view *v, const rk_view *ancestor);
 void rk__toast_leaving(rk_view *toast);
-void rk__field_set_box_height(rk_view *field, float h);                    /* focus inside it goes back to where it came from */
+void rk__field_set_box_height(rk_view *field, float h);
+/* menu.c, for the controls built on a menu */
+void rk__menu_mark(rk_view *menu, int chosen);              /* a mark on the chosen item, none on the others */
+void rk__menu_shape(rk_view *menu, float min_w, int prefer);
+void rk__menu_clear(rk_view *menu);
+void rk__menu_show_passive(rk_view *menu, rk_view *from, rk_rect below);   /* below: in the window */
+bool rk__menu_open(rk_view *menu);
+void rk__menu_move(rk_view *menu, int dir);
+int rk__menu_active(rk_view *menu);
+void rk__menu_choose(rk_view *menu, int item);                    /* focus inside it goes back to where it came from */
 bool rk__is_tile(rk_view *v);
 void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r);
 

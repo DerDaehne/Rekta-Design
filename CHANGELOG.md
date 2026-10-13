@@ -32,6 +32,12 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has a select and a combobox: `rk_select(options, count,
+  chosen)` opens a menu of its options below it, the chosen one marked
+  (Up and Down change it in place, a letter jumps); `rk_field_set_options`
+  makes any field a combobox, whose list of matching options floats
+  below the input without taking focus - typing, input methods and undo
+  stay the field's own.
 - rekta-core has sliders and steppers: `rk_slider(min, max, step,
   value)` (a 6px track the accent fills, an ink bar as the thumb, the
   value beside it in tabular figures; a press moves it, a drag follows)

@@ -8,6 +8,10 @@
    submits, Up and Down keep to the column they started from, Home and End keep to the line. Both are the same
    code: a one-line field is a text area with one line that never wraps.
 
+   rk_field_set_options makes it a combobox: a list of the options that contain what is typed floats below the
+   input without taking focus; Down opens it or moves down it, Up moves up, Enter takes the active option, Escape
+   closes it, the pointer chooses too. What is typed need not be an option.
+
    The caret blinks for ten seconds after the last edit and then stays lit, so a field left alone wakes nothing.
    Included after widgets.c. */
 #include "rk_internal.h"
@@ -32,6 +36,7 @@ typedef struct field {
   bool lit, dragging;                                      /* the caret shows; a drag selects */
   uint32_t blink; double edited, last_click;
   rk_view *view;
+  char **options; int noptions; rk_view *suggest; int *shown, nshown;   /* a combobox: the options, the list, which it shows */
   void (*change)(rk_view *, void *); void *change_user;
   void (*submit)(rk_view *, void *); void *submit_user;
 } field;
@@ -189,6 +194,40 @@ static void field_changed(rk_view *v, field *f) {
   if (f->change) f->change(v, f->change_user);
 }
 
+/* The options: those that contain what is typed (all, when nothing is), the one it is marked. */
+static char fold(char c) { return c >= 'A' && c <= 'Z' ? (char)(c + 32) : c; }   /* ASCII; other letters as they are */
+static bool contains(const char *hay, const char *needle) {
+  size_t n = strlen(needle);
+  for (const char *h = hay; *h; h++) {
+    size_t i = 0;
+    while (i < n && h[i] && fold(h[i]) == fold(needle[i])) i++;
+    if (i == n) return true;
+  }
+  return n == 0;
+}
+static bool same(const char *a, const char *b) { while (*a && fold(*a) == fold(*b)) { a++; b++; } return !*a && !*b; }
+
+static void suggest_chosen(rk_view *menu, int item, void *user);
+
+static void suggest(rk_view *v, field *f, bool open) {
+  if (!f->suggest) return;
+  rk__menu_clear(f->suggest);
+  f->nshown = 0;
+  int mark = -1;
+  for (int i = 0; i < f->noptions; i++) {
+    if (!contains(f->options[i], f->text)) continue;
+    if (same(f->options[i], f->text)) mark = f->nshown;
+    rk_menu_add(f->suggest, f->options[i], NULL, suggest_chosen, f);
+    f->shown[f->nshown++] = i;
+  }
+  rk__menu_mark(f->suggest, mark);
+  rk_window *w = rk__view_window(v);
+  if (!f->nshown || !w || w->focus != v || (!open && !rk__menu_open(f->suggest))) { rk_menu_close(f->suggest); return; }
+  rk_rect r = rk__window_rect(v), box = input_rect(v, f);
+  rk__menu_shape(f->suggest, box.w, -1);
+  rk__menu_show_passive(f->suggest, v, (rk_rect){ r.x + box.x, r.y + box.y, box.w, box.h });
+}
+
 static struct snap snap_now(const field *f) { struct snap s = { rk__strdup(f->text), f->caret, f->anchor }; return s; }
 static void snaps_drop(struct snap *s, int *n) { while (*n) free(s[--*n].text); }
 
@@ -220,6 +259,17 @@ static void restore(rk_view *v, field *f, struct snap *from, int *nfrom, struct 
 /* Replaces the selection with s (n bytes): typing, pasting, deleting. */
 static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing);
 static void replace(rk_view *v, field *f, const char *s, int n) { replace_as(v, f, s, n, false); }
+
+static void suggest_chosen(rk_view *menu, int item, void *user) {   /* an option taken: it is the text now, as an edit */
+  (void)menu;
+  field *f = user;
+  if (item < 0 || item >= f->nshown) return;
+  const char *o = f->options[f->shown[item]];
+  int caret = f->caret, anchor = f->anchor;
+  f->anchor = 0; f->caret = f->len;
+  replace(f->view, f, o, (int)strlen(o));
+  if (f->nundo) { f->undo[f->nundo - 1].caret = caret; f->undo[f->nundo - 1].anchor = anchor; }   /* undone: the caret where it was */
+}
 static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing) {
   int lo = sel_lo(f), hi = sel_hi(f);
   if (!n && lo == hi) return;
@@ -271,6 +321,13 @@ static void copy_selection(const field *f) {
 static bool field_key(rk_view *v, field *f, const rk_event *e) {
   bool shift = (e->mods & RK_MOD_SHIFT) != 0, word = (e->mods & (RK_MOD_CTRL | RK_MOD_ALT)) != 0, cmd = (e->mods & (RK_MOD_CTRL | RK_MOD_SUPER)) != 0;
   bool sel = f->caret != f->anchor;
+  if (f->suggest && !multi(f)) {                           /* a combobox: the list takes Up, Down, Enter and Escape */
+    bool open = rk__menu_open(f->suggest);
+    if (e->key == RK_KEY_DOWN) { if (open) rk__menu_move(f->suggest, 1); else suggest(v, f, true); return true; }
+    if (e->key == RK_KEY_UP && open) { rk__menu_move(f->suggest, -1); return true; }
+    if (e->key == RK_KEY_ENTER && open && rk__menu_active(f->suggest) >= 0) { rk__menu_choose(f->suggest, rk__menu_active(f->suggest)); return true; }
+    if (e->key == RK_KEY_ESCAPE && open) { rk_menu_close(f->suggest); return true; }
+  }
   switch (e->key) {
     case RK_KEY_LEFT:
       if (sel && !shift) move_to(v, f, sel_lo(f), false);
@@ -328,6 +385,7 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
     case RK_EVENT_TEXT:
       if (!e->text) return false;
       replace_as(v, f, e->text, (int)strlen(e->text), true);
+      suggest(v, f, true);
       return true;
     case RK_EVENT_COMPOSE:
       rk__setstr(&f->preedit, e->text && *e->text ? e->text : NULL);
@@ -365,6 +423,7 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
     }
     case RK_EVENT_FOCUS: touched(v, f); return false;
     case RK_EVENT_BLUR:
+      if (f->suggest) rk_menu_close(f->suggest);
       if (f->blink) { rk_app_cancel(f->blink); f->blink = 0; }
       rk__setstr(&f->preedit, NULL);
       tell_input_method(v, f, false);
@@ -444,6 +503,9 @@ static void field_destroy(void *st) {
   field *f = st;
   if (f->blink) rk_app_cancel(f->blink);
   snaps_drop(f->undo, &f->nundo); snaps_drop(f->redo, &f->nredo); free(f->undo); free(f->redo);
+  if (f->suggest) { rk_menu_close(f->suggest); rk_release(f->suggest); }
+  for (int i = 0; i < f->noptions; i++) free(f->options[i]);
+  free(f->options); free(f->shown);
   free(f->starts); free(f->text); free(f->label); free(f->placeholder); free(f->hint); free(f->preedit); free(f);
 }
 
@@ -503,4 +565,20 @@ void rk__field_set_box_height(rk_view *v, float h) {
   if (!f) return;
   f->box_h = h;
   rk__view_relayout_up(v);
+}
+
+void rk_field_set_options(rk_view *v, const char *const *options, int count) {
+  field *f = field_of(v);
+  if (!f) return;
+  if (f->suggest) rk_menu_close(f->suggest);
+  for (int i = 0; i < f->noptions; i++) free(f->options[i]);
+  free(f->options); free(f->shown);
+  f->options = NULL; f->shown = NULL; f->noptions = f->nshown = 0;
+  if (count <= 0 || !options) { if (f->suggest) { rk_release(f->suggest); f->suggest = NULL; } v->access = RK_ACCESS_TEXT_FIELD; return; }
+  f->options = rk__alloc((size_t)count * sizeof *f->options);
+  f->shown = rk__alloc((size_t)count * sizeof *f->shown);
+  for (int i = 0; i < count; i++) f->options[i] = rk__strdup(options[i] ? options[i] : "");
+  f->noptions = count;
+  if (!f->suggest) f->suggest = rk_menu();
+  v->access = RK_ACCESS_COMBO_BOX;
 }
