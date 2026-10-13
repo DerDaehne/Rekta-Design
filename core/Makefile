@@ -36,7 +36,7 @@ else
 endif
 HEADLESS_LIBS := -lm $(if $(EXE),,-lpthread)
 
-all: $(BUILD)/librekta.a $(BUILD)/demo$(EXE) $(BUILD)/hello$(EXE)
+all: $(BUILD)/librekta.a $(BUILD)/demo$(EXE) $(BUILD)/hello$(EXE) $(BUILD)/navigation$(EXE)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -57,6 +57,9 @@ $(BUILD)/demo$(EXE): demo/demo.c $(BUILD)/librekta.a
 # examples ignore the arguments their callbacks do not need
 $(BUILD)/hello$(EXE): examples/hello.c $(BUILD)/librekta.a
 	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude $< $(BUILD)/librekta.a $(LIBS) -o $@
+
+$(BUILD)/navigation$(EXE): examples/navigation.c $(BUILD)/librekta.a
+	$(CC) $(CFLAGS) -Iinclude $< $(BUILD)/librekta.a $(LIBS) -o $@
 
 $(BUILD)/hello-headless$(EXE): examples/hello.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude -DRK_HEADLESS_ONLY $< src/rekta.c $(HEADLESS_LIBS) -o $@

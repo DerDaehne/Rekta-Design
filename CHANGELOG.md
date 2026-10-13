@@ -317,6 +317,11 @@ it; each entry says how.
   nav level sideways and the facet level compact, where it sticks. The
   showcase drops its brand line; the strip opens on "rekta". Its
   sections drop the kickers that repeated the strip's titles.
+- **rekta-core: a pivot at the top is the place's title.** A pivot with no
+  pivot or panorama above it takes the nav level, as `rk-pivot--nav` does on
+  the web, and its pages start at the strip's indent. `examples/navigation.c`
+  draws one app with its places as a pivot and as two sketches of a list down
+  the left, to compare.
 
 ### Fixed
 

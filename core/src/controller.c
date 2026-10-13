@@ -109,7 +109,8 @@ static void places_free(void *p) {
 
 static void fill_layout(rk_view *v, void *st) {
   (void)st;
-  for (int i = 0; i < v->nkids; i++) rk__set_frame(v->kids[i], (rk_rect){ 0, 0, v->frame.w, v->frame.h });
+  rk_insets p = v->padding;
+  for (int i = 0; i < v->nkids; i++) rk__set_frame(v->kids[i], (rk_rect){ p.left, p.top, RK_MAX(0.0f, v->frame.w - p.left - p.right), RK_MAX(0.0f, v->frame.h - p.top - p.bottom) });
 }
 static const rk_class fill_class = { { sizeof(rk_view_class), "rk_fill", NULL, NULL, fill_layout, NULL, NULL }, NULL, NULL };
 
@@ -333,6 +334,7 @@ void rk_places_back(rk_controller *c) {
 typedef struct strip {
   char **titles; int n, active;
   bool nav;
+  rk_controller *pivot;                                    /* a pivot's strip: the nav level when nothing holds the pivot */
   rk_glide *scale;                                         /* each title's size, 1 active, INACTIVE otherwise */
   rk_glide glide;                                          /* how far the strip has slid */
   void (*select)(void *owner, int index); void *owner;
@@ -367,8 +369,11 @@ static float strip_target(rk_view *v, strip *s) {
   return s->active > 0 ? RK_CLAMP(prev, 0.0f, over) : 0;
 }
 
+static void strip_level(strip *s);
+
 static rk_size strip_measure(rk_view *v, rk_size avail, void *st) {
   strip *s = st;
+  strip_level(s);
   rk_textfmt f = strip_fmt(v, s);
   return (rk_size){ isfinite(avail.w) ? avail.w : 600, RK_MAX(rk_metric_of(RK_TOUCH_TARGET), f.size * f.line) };
 }
@@ -796,6 +801,19 @@ static void pivot_free(void *st) { pivot *p = st; for (int i = 0; i < p->n; i++)
 
 static rk_controller *pivot_visible(rk_controller *c) { pivot *p = c->impl; return p->n ? p->facets[p->sel] : NULL; }
 
+/* A pivot nothing else holds picks the place (navigation.md): its strip takes the nav level, as the panorama's does,
+   and its facets start where the strip's first title does. Inside a panorama or another pivot it picks a facet. */
+static void strip_level(strip *s) {
+  if (!s->pivot) return;
+  bool top = true;
+  for (rk_controller *a = s->pivot->parent; a; a = a->parent) if (a->kind == K_PIVOT || a->kind == K_PANORAMA) top = false;
+  if (top == s->nav) return;
+  s->nav = top;
+  pivot *p = s->pivot->impl;
+  float xl = top ? rk_metric_of(RK_SPACE_XL) : 0;
+  rk_view_set_padding(p->body, (rk_insets){ 0, xl, 0, xl });
+}
+
 rk_controller *rk_pivot(void) {
   rk_controller *c = rk_controller_create(NULL, NULL);
   pivot *p = rk__alloc(sizeof *p);
@@ -806,6 +824,7 @@ rk_controller *rk_pivot(void) {
   rk_view_set_gap(v, rk_metric_of(RK_SPACE_M));
   c->view = v; v->controller = c;
   p->strip = strip_create(false, pivot_select_cb, p);
+  ((strip *)p->strip->state)->pivot = c;
   p->body = rk__view_create(&fill_class, NULL);
   p->body->grow = 1;
   p->body->clip = true;
