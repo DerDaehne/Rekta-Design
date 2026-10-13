@@ -11,7 +11,11 @@ rekta-core
 .Sh SYNOPSIS
 .In rekta.h
 .Pp
-Link with, on Linux:
+Installed, pkg-config knows what to link:
+.Dl cc app.c $(pkg-config --cflags --libs rekta)
+The shared library shows only the functions below; its soname carries the
+minor version until 1.0, as a minor version may still change the ABI.
+Linking the static library by hand, on Linux:
 .Dl -lrekta -lwayland-client -lwayland-cursor -lxkbcommon -lrt -lX11 -lXext -lm -lpthread -ldl
 on macOS:
 .Dl -lrekta -framework Cocoa -framework QuartzCore

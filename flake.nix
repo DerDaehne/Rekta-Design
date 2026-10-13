@@ -27,21 +27,22 @@
           buildInputs = windowing pkgs;
           nativeBuildInputs = [ pkgs.pkg-config ];
           enableParallelBuilding = true;
-          buildFlags = [ "all" ];
+          buildFlags = [ "all" "shared" ];
           doCheck = true;
           nativeCheckInputs = [ pkgs.nodejs ];
           checkTarget = "test";
           installPhase = ''
             runHook preInstall
+            make install PREFIX=$out
             install -Dm755 build/demo $out/bin/rekta-demo
-            install -Dm644 build/librekta.a $out/lib/librekta.a
-            install -Dm644 include/rekta.h $out/include/rekta.h
-            install -Dm644 man/rekta.3 $out/share/man/man3/rekta.3
             runHook postInstall
           '';
-          # fontconfig is opened at run time for the characters Barlow lacks; Nix keeps it off the default path
+          # fontconfig (for the characters Barlow lacks) and libdbus (the file chooser, notifications) are opened at run
+          # time; Nix keeps them off the default path
           postFixup = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
-            patchelf --add-rpath ${pkgs.lib.getLib pkgs.fontconfig}/lib $out/bin/rekta-demo
+            for f in $out/bin/rekta-demo $out/lib/librekta.so.*.*.*; do
+              patchelf --add-rpath ${pkgs.lib.getLib pkgs.fontconfig}/lib:${pkgs.lib.getLib pkgs.dbus}/lib "$f"
+            done
           '';
           meta = {
             description = "Rekta Design as native views in C, and a demo of every feature";

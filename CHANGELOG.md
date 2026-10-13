@@ -9,6 +9,13 @@ it; each entry says how.
 
 ### Added
 
+- **rekta-core: packaging**: `make shared` builds `librekta.so.0.3`
+  (`librekta.0.3.dylib`, `rekta.dll`; `build.bat shared` with MSVC), built with
+  hidden visibility so it exports only the header's `RK_API` functions;
+  `make abi` holds it to that and runs a program against it. `make install`
+  adds the shared library and `rekta.pc`; `core/test/install.sh` installs into
+  a fresh prefix and builds an app through pkg-config, shared and static. The
+  Nix package installs the same.
 - **rekta-core: notifications** (`rk_app_notify`): a title and a body from the
   system. On Linux they go to `org.freedesktop.Notifications` over D-Bus from a
   thread of their own, with the body escaped for servers that read markup and

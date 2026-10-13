@@ -42,9 +42,17 @@ make shots         # the demo's tour as PNGs in build/shots
 make sanitize      # tests and demo under AddressSanitizer and UBSan
 ```
 
-On Windows, run `build.bat` (or `build.bat test`) from a Developer Command
-Prompt, or use MinGW with `make`. To use the library in your own build,
-compile `src/rekta.c` (and `src/platform_cocoa.m` with `-fobjc-arc` on macOS)
+On Windows, run `build.bat` (or `build.bat test`, `build.bat shared`) from a
+Developer Command Prompt, or use MinGW with `make`.
+
+`make install` (with `PREFIX`, default `/usr/local`) puts the static and the
+shared library, the header, the man page and `rekta.pc` in place, so an app
+builds with `cc app.c $(pkg-config --cflags --libs rekta)`. The shared library
+(`librekta.so.0.3`, `librekta.0.3.dylib`, `rekta.dll`) exports only the
+header's `RK_API` functions, which `make abi` checks; before 1.0 the soname
+carries the minor version, since a minor version may still break the ABI.
+
+To compile it into your own build instead, take `src/rekta.c` (and `src/platform_cocoa.m` with `-fobjc-arc` on macOS)
 and link:
 
 | OS | link with |
