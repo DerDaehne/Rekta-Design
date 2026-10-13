@@ -274,6 +274,7 @@ void rk__controller_attach(rk_controller *c, rk_window *w);
 bool rk__window_key(rk_window *w, const rk_event *e);     /* window-level keys: sheets, places back */
 rk_view *rk__controller_key_view(rk_controller *c);       /* where keys go when nothing has focus */
 void rk__reveal(rk_view *v);                               /* scroll it into view (keyboard focus) */
+void rk__reveal_rect(rk_view *v, rk_rect r);               /* a part of it, in its own coordinates */
 
 /* Built-in views (widgets.c) -------------------------------------------------------------------------------------- */
 

@@ -349,6 +349,33 @@ and
 follow the selection.
 .Fn rk_list_scroll_to
 glides a row into sight.
+.It Fn rk_tree void
+Items that hold items, opened and closed in place.
+.Fn rk_tree_add "tree" "parent" "title"
+adds an item under
+.Fa parent
+(\-1 at the top) and returns its number;
+.Fn rk_tree_set_meta
+puts a meta or a status on its right.
+A click, Enter or Space selects an item and calls the
+.Fn rk_tree_on_show
+handler; selection never follows focus.
+A click on the chevron or a double click opens or closes a branch, which
+glides open over its height;
+.Fn rk_tree_on_toggle
+hears it,
+.Fn rk_tree_open
+does it
+(item \-1: every branch).
+Up and Down move, Right opens or goes in, Left closes or goes up, * opens
+every sibling, a letter goes to the next item starting with it.
+.Fn rk_tree_select ,
+.Fn rk_tree_selected ,
+.Fn rk_tree_is_open ,
+.Fn rk_tree_parent
+and
+.Fn rk_tree_title
+read and set the rest.
 .It Fn rk_table "int count" "const char *(*cell)(int row, int column, void *user)" "void *user"
 A table: a list with columns, and every
 .Fn rk_list_*

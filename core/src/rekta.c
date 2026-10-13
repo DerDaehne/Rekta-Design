@@ -35,6 +35,7 @@
 #include "controls.c"
 #include "image.c"
 #include "list.c"
+#include "tree.c"
 #include "field.c"
 #include "menu.c"
 #include "undo.c"

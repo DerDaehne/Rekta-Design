@@ -1265,6 +1265,74 @@ static void test_undo(void) {
   done(w);
 }
 
+/* A tree: items in items; the keys and the pointer as the web's .rk-tree; a branch opens over its height. */
+static int tree_shown = -1, tree_toggles;
+static void tree_show(rk_view *t, int item, void *u) { (void)t; (void)u; tree_shown = item; }
+static void tree_toggled(rk_view *t, int item, bool open, void *u) { (void)t; (void)item; (void)open; (void)u; tree_toggles++; }
+static void test_tree(void) {
+  rk_window *w = window(560, 420);
+  rk_view *root = col(16, 24);
+  rk_view *tr = rk_add(root, rk_tree());
+  int src = rk_tree_add(tr, -1, "src"), ui = rk_tree_add(tr, src, "ui");
+  int button = rk_tree_add(tr, ui, "button.c"), field = rk_tree_add(tr, ui, "field.c");
+  int core = rk_tree_add(tr, src, "core.c"), docs = rk_tree_add(tr, -1, "docs");
+  int guide = rk_tree_add(tr, docs, "guide.md"), readme = rk_tree_add(tr, -1, "README.md");
+  rk_tree_set_meta(tr, core, "failed", RK_STATUS_ERROR);
+  rk_tree_set_meta(tr, readme, "2 kB", RK_STATUS_NONE);
+  rk_tree_on_show(tr, tree_show, NULL);
+  rk_tree_on_toggle(tr, tree_toggled, NULL);
+  show(w, root, "tree");
+  float H = rk_metric_of(RK_ROW_HEIGHT);
+  CHECK(CLOSE_TO(tr->frame.h, 3 * H, 0.5f), "closed, only the top rows: %g", tr->frame.h);
+  CHECK(rk_tree_parent(tr, field) == ui && !strcmp(rk_tree_title(tr, guide), "guide.md"), "parents and titles");
+  /* the keyboard: Right opens, Right again goes in, Down moves without selecting */
+  rk_window_focus(w, tr);
+  key(w, RK_KEY_RIGHT, 0);
+  CHECK(rk_tree_is_open(tr, src) && tree_toggles == 1, "Right opens the branch");
+  rk_app_run_for(120);
+  CHECK(tr->frame.h > 3 * H + 1 && tr->frame.h < 5 * H - 1, "half open, the rows below make room: %g", tr->frame.h);
+  rk_app_run_for(300);
+  CHECK(CLOSE_TO(tr->frame.h, 5 * H, 0.5f), "open: its two rows too");
+  key(w, RK_KEY_RIGHT, 0);
+  key(w, RK_KEY_RIGHT, 0);
+  key(w, RK_KEY_RIGHT, 0);
+  key(w, RK_KEY_DOWN, 0);
+  CHECK(rk_tree_is_open(tr, ui) && rk_tree_selected(tr) == -1, "in and open, nothing selected yet");
+  key(w, RK_KEY_ENTER, 0);
+  CHECK(tree_shown == field && rk_tree_selected(tr) == field, "Enter selects and shows: %d", tree_shown);
+  /* Left goes up, then closes */
+  key(w, RK_KEY_LEFT, 0);
+  key(w, RK_KEY_LEFT, 0);
+  CHECK(!rk_tree_is_open(tr, ui), "Left goes up to the branch, then closes it");
+  /* a letter: the next row that starts with it */
+  type_text(w, "r");
+  key(w, RK_KEY_ENTER, 0);
+  CHECK(tree_shown == readme, "a letter goes to README.md");
+  /* * opens every sibling */
+  type_text(w, "*");
+  rk_app_run_for(400);
+  CHECK(rk_tree_is_open(tr, src) && rk_tree_is_open(tr, docs), "* opens the siblings");
+  /* the pointer: a click on the chevron opens without selecting; a click on the row selects and shows */
+  rk_rect r = rk__window_rect(tr);
+  float ui_y = r.y + 1.5f * H;                                 /* src, ui, ... */
+  click(w, (rk_point){ r.x + rk_metric_of(RK_SPACE_M) + 8, ui_y }, 30);
+  rk_app_run_for(400);
+  CHECK(rk_tree_is_open(tr, ui) && rk_tree_selected(tr) == readme, "the chevron opens, the selection stays");
+  click(w, (rk_point){ r.x + 120, r.y + 2.5f * H }, 30);       /* button.c */
+  CHECK(tree_shown == button, "a click selects and shows button.c: %d", tree_shown);
+  rk_app_run_for(500);
+  click(w, (rk_point){ r.x + 120, r.y + 5.5f * H }, 30);       /* docs: twice opens and closes */
+  rk_app_run_for(60);
+  click(w, (rk_point){ r.x + 120, r.y + 5.5f * H }, 30);
+  CHECK(!rk_tree_is_open(tr, docs), "a double click closes docs");
+  rk_app_run_for(500);
+  rk_window_focus(w, tr);                                      /* from the keyboard again: the active row is ringed */
+  key(w, RK_KEY_DOWN, 0);
+  rk_app_run_for(300);
+  shot(w, "tree");
+  done(w);
+}
+
 /* A pivot down the side: its titles in a list, Up and Down pick, the one in sight steps in; a top pivot turns the place. */
 static void test_side_pivot(void) {
   rk_window *w = window(900, 500);
@@ -1486,6 +1554,7 @@ static void launch(void *user) {
   test_focus();
   test_navigation();
   test_side_pivot();
+  test_tree();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

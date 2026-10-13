@@ -849,13 +849,15 @@ void rk_panorama_add(rk_controller *c, const char *title, rk_view *section_view,
 }
 
 /* Keyboard focus never lands out of sight: the section scrolls it into view, the panorama brings the section. */
-void rk__reveal(rk_view *v) {
+void rk__reveal(rk_view *v) { rk__reveal_rect(v, (rk_rect){ 0, 0, v->frame.w, v->frame.h }); }
+
+void rk__reveal_rect(rk_view *v, rk_rect r) {
   for (rk_view *a = v->parent; a; a = a->parent) {
     if (a->cls == &secbox_class && a->nkids) {
       rk_view *content = a->kids[0];
       float y = 0;
       for (rk_view *x = v; x && x != content; x = x->parent) y += x->frame.y;
-      float top = y + content->frame.y, bottom = top + v->frame.h, view_h = a->frame.h, off = a->value;
+      float top = y + r.y + content->frame.y, bottom = top + r.h, view_h = a->frame.h, off = a->value;
       float max = RK_MAX(0.0f, content->frame.h + 2 * content->frame.y - view_h);
       if (top - off < 0) scroll_value(a, top - rk_metric_of(RK_SPACE_M), max, SETTLE_WHEEL);
       else if (bottom - off > view_h) scroll_value(a, bottom - view_h + rk_metric_of(RK_SPACE_M), max, SETTLE_WHEEL);
@@ -865,7 +867,7 @@ void rk__reveal(rk_view *v) {
       rk_view *content = a->kids[0];
       float y = 0;
       for (rk_view *x = v; x && x != content; x = x->parent) y += x->frame.y;
-      float top = y, bottom = top + v->frame.h, view_h = a->frame.h, off = a->value, m = rk_metric_of(RK_SPACE_S);
+      float top = y + r.y, bottom = top + r.h, view_h = a->frame.h, off = a->value, m = rk_metric_of(RK_SPACE_S);
       if (top - off < 0) scroller_to(sc, top - m, SETTLE_WHEEL);
       else if (bottom - off > view_h) scroller_to(sc, bottom - view_h + m, SETTLE_WHEEL);
     }

@@ -196,6 +196,7 @@ typedef enum rk_access_role {
   RK_ACCESS_LIST, RK_ACCESS_LIST_ITEM, RK_ACCESS_TAB_LIST, RK_ACCESS_TAB, RK_ACCESS_TAB_PANEL, RK_ACCESS_DIALOG,
   RK_ACCESS_IMAGE, RK_ACCESS_PROGRESS, RK_ACCESS_STATUS, RK_ACCESS_TEXT_FIELD, RK_ACCESS_MENU, RK_ACCESS_TABLE,
   RK_ACCESS_CHECKBOX, RK_ACCESS_RADIO_GROUP, RK_ACCESS_SWITCH, RK_ACCESS_SLIDER, RK_ACCESS_SPIN_BUTTON, RK_ACCESS_COMBO_BOX,
+  RK_ACCESS_TREE,
   RK_ACCESS_FORCE32 = 0x7fffffff
 } rk_access_role;
 
@@ -416,6 +417,22 @@ RK_API void rk_list_on_change(rk_view *list, void (*fn)(rk_view *list, void *use
 RK_API bool rk_list_selected(rk_view *list, int index);
 RK_API int rk_list_selection_count(rk_view *list);
 RK_API void rk_list_scroll_to(rk_view *list, int index);   /* glides it into sight and makes it the active row */
+
+/* A tree: items that hold items, opened and closed in place. The app adds the items and keeps their numbers; parent
+   -1 is the top. A click, Enter or Space selects an item and shows it (on_show); selection never follows focus. A
+   click on the chevron or a double click opens or closes; Right and Left open and close or go in and up; * opens every
+   sibling; a letter goes to the next item that starts with it. Long trees go in an rk_scroll. */
+RK_API rk_view *rk_tree(void);
+RK_API int rk_tree_add(rk_view *tree, int parent, const char *title);   /* the new item's number, or -1 */
+RK_API void rk_tree_set_meta(rk_view *tree, int item, const char *meta, rk_status status);   /* on the right, as a row's */
+RK_API void rk_tree_open(rk_view *tree, int item, bool open);   /* glides as a click does; item -1: every branch */
+RK_API bool rk_tree_is_open(rk_view *tree, int item);
+RK_API void rk_tree_select(rk_view *tree, int item);   /* -1: none; shows nothing */
+RK_API int rk_tree_selected(rk_view *tree);
+RK_API int rk_tree_parent(rk_view *tree, int item);   /* -1 at the top */
+RK_API const char *rk_tree_title(rk_view *tree, int item);
+RK_API void rk_tree_on_show(rk_view *tree, void (*fn)(rk_view *tree, int item, void *user), void *user);
+RK_API void rk_tree_on_toggle(rk_view *tree, void (*fn)(rk_view *tree, int item, bool open, void *user), void *user);
 
 /* A table is a list with columns - every rk_list_ call works on it. The head stays put; a click on a sortable head
    sorts by it, ascending then descending: the app sorts its rows in on_sort and the table draws them again. */

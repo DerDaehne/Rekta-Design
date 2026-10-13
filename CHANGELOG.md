@@ -9,6 +9,14 @@ it; each entry says how.
 
 ### Added
 
+- **rekta-core: a tree** (`rk_tree`), as the web's `.rk-tree`: rows at the
+  density's height, a level indented by `space-m`, a chevron that turns as a
+  branch opens over its height (`duration-short`, closing in 0.7 of it), the
+  selection as the accent fill. The web's keys and pointer: Right and Left open
+  and close or go in and up, `*` opens the siblings, a letter jumps; a click on
+  the chevron or a double click opens or closes. A key that moves the active row
+  of a tree or a list now shows the focus ring, as after Tab.
+
 - **rekta-core** (`core/`): Rekta Design as native views in C for
   Windows (Win32), macOS (Cocoa) and Linux (Wayland first, Xlib as the
   fallback), with no dependency

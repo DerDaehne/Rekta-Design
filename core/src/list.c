@@ -171,6 +171,8 @@ static void reveal_row(rk_view *v, list *l, int i) {
 
 static void set_active(rk_view *v, list *l, int i) {
   if (!l->count) return;
+  rk_window *w = rk__view_window(v);
+  if (w) w->focus_visible = true;                          /* moved by a key: the keyboard is in use, show where */
   l->active = RK_CLAMP(i, 0, l->count - 1);
   reveal_row(v, l, l->active);
   rk__view_dirty(v);
