@@ -24,7 +24,7 @@ typedef struct demo {
   rk_controller *places, *home, *sheet;                    /* borrowed: the window owns them */
   rk_view *board, *task, *presses, *grow_tile;             /* rekta */
   rk_view *live, *status, *events;                         /* live */
-  rk_view *fade, *inbox_label;                             /* motion */
+  rk_view *fade, *inbox_label, *copies;                    /* motion, controls */
   rk_view *bar, *chart;                                    /* controls */
   rk_view *now;                                            /* settings: what is in effect */
   int npresses, pinned, queue, status_i, ticks, events_n, fades, inbox;
@@ -372,6 +372,15 @@ static void new_figures(rk_view *v, void *u) {
   rk_view_redraw(D.chart);
 }
 
+static void slide_bar(rk_view *v, void *u) { (void)u; rk_progress_set(D.bar, (float)(rk_control_value(v) / 100)); }
+static void count_copies(rk_view *v, void *u) {
+  char text[48];
+  int n = (int)rk_control_value(v);
+  (void)u;
+  snprintf(text, sizeof text, n == 1 ? "%d copy, printed on Monday." : "%d copies, printed on Monday.", n);
+  rk_label_set_text(D.copies, text);
+}
+
 static void advance(rk_view *v, void *u) {
   (void)v; (void)u;
   static float p = 0.25f;
@@ -456,6 +465,12 @@ static rk_view *controls_section(void) {
   D.bar = rk_add(s, rk_progress(0.25f));
   rk_add(s, rk_progress(-1));                                  /* working on it, no end known */
   rk_button_set_kind(rk_add(rk_add(s, rk_row()), rk_button("advance", advance, NULL)), RK_BUTTON_QUIET);
+  rk_add(s, rk_label("a slider sets the bar; a stepper counts", RK_TEXT_KICKER));
+  rk_control_on_change(rk_add(s, rk_slider(0, 100, 5, 25)), slide_bar, NULL);
+  rk_view *copies = rk_add(s, rk_row());
+  rk_control_on_change(rk_add(copies, rk_stepper(1, 20, 1, 2)), count_copies, NULL);
+  D.copies = rk_add(copies, rk_label("2 copies, printed on Monday.", RK_TEXT_BODY));
+  rk_view_set_align(copies, RK_ALIGN_START, RK_ALIGN_CENTER);
 
   rk_add(s, rk_label("a custom view, drawn with the canvas", RK_TEXT_KICKER));
   chart *ch = calloc(1, sizeof *ch);

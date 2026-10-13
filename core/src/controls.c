@@ -7,7 +7,13 @@
    arrows choose. Toggle: a 46 x 22 square-cornered frame, the accent growing from the leading edge, an ink bar as the
    thumb, the state word beside it; the thumb moves over duration-short. Segments: two to five options side by side
    in joined 2px frames, the chosen one in the accent; the accent block slides to a new choice, and the text turns
-   light halfway. Included after widgets.c. */
+   light halfway.
+
+   Slider: a 6px track filled with the accent up to the value, a 10 x 24 ink bar as the thumb, the value beside it in
+   tabular figures; a press anywhere moves it there and a drag follows. Stepper: minus, the number, plus, joined in
+   1px frames; a press steps, a held one repeats; typing a number and Enter (or leaving) takes it, Escape puts it
+   back. Both snap to their step between their minimum and maximum, and know Up, Down, Page Up, Page Down, Home and
+   End. Included after widgets.c. */
 #include "rk_internal.h"
 
 typedef struct control {
@@ -16,6 +22,7 @@ typedef struct control {
   void (*change)(rk_view *control, void *user); void *change_user;
   void (*apply)(rk_view *v, double from, double to);       /* the control takes a value: the motion, if any */
   bool (*valid)(rk_view *v, double value);                 /* NULL: any */
+  double (*fit)(rk_view *v, double value);                 /* NULL: as given; else the nearest value it can take */
 } control;
 
 static float box_size(void) { return 20; }
@@ -27,6 +34,7 @@ static double short_motion(void) { return rk__reduced() ? 0 : rk_duration_of(RK_
 
 /* A value the user chose: drawn (with its motion) and told. */
 static void user_set(rk_view *v, control *c, double value) {
+  if (c->fit) value = c->fit(v, value);
   if (c->disabled || value == c->value || (c->valid && !c->valid(v, value))) return;
   double was = c->value;
   c->value = value;
@@ -355,11 +363,242 @@ rk_view *rk_segments(const char *const *options, int count, int chosen) {
   return v;
 }
 
+/* Numbers: a range and a step -------------------------------------------------------------------------------------- */
+
+typedef struct range { double min, max, step; } range;
+
+static double range_fit(const range *r, double v) {
+  if (v != v) v = r->min;                                  /* NaN */
+  if (r->step > 0) v = r->min + round((v - r->min) / r->step) * r->step;
+  v = RK_CLAMP(v, r->min, r->max);
+  return round(v * 1e6) / 1e6;                             /* no 0.30000000000000004 */
+}
+static int range_digits(const range *r) {
+  int d = 0;
+  for (double s = r->step; d < 6 && s > 0 && fabs(s - round(s)) > 1e-9; s *= 10) d++;
+  return d;
+}
+static void range_format(const range *r, double v, char *out, size_t size) { snprintf(out, size, "%.*f", range_digits(r), v); }
+static double range_page(const range *r) { double p = (r->max - r->min) / 10; return r->step > 0 ? RK_MAX(r->step, round(p / r->step) * r->step) : p; }
+
+/* The keys both know: a step, a page, the ends. True when the key was one of them. */
+static bool range_key(rk_view *v, control *c, const range *r, uint32_t key) {
+  double s = r->step > 0 ? r->step : (r->max - r->min) / 100;
+  switch (key) {
+    case RK_KEY_RIGHT: case RK_KEY_UP: user_set(v, c, c->value + s); return true;
+    case RK_KEY_LEFT: case RK_KEY_DOWN: user_set(v, c, c->value - s); return true;
+    case RK_KEY_PAGE_UP: user_set(v, c, c->value + range_page(r)); return true;
+    case RK_KEY_PAGE_DOWN: user_set(v, c, c->value - range_page(r)); return true;
+    case RK_KEY_HOME: user_set(v, c, r->min); return true;
+    case RK_KEY_END: user_set(v, c, r->max); return true;
+    default: return false;
+  }
+}
+
+/* Slider -------------------------------------------------------------------------------------------------------- */
+
+typedef struct slider { control c; range r; bool dragging; } slider;
+
+static rk_textfmt value_fmt(void) { rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0); f.weight = RK_TOK_WEIGHT_MEDIUM; f.tabular = true; f.line = 1; return f; }
+
+static float slider_out_w(const slider *s) {
+  rk_textfmt f = value_fmt();
+  char a[32], b[32];
+  range_format(&s->r, s->r.min, a, sizeof a); range_format(&s->r, s->r.max, b, sizeof b);
+  return ceilf(RK_MAX(3.5f * f.size, RK_MAX(rk__text_width(a, -1, &f), rk__text_width(b, -1, &f))));
+}
+static void slider_track(rk_view *v, const slider *s, float *x0, float *x1) { *x0 = 5; *x1 = RK_MAX(*x0 + 1, v->pframe.w - slider_out_w(s) - rk_metric_of(RK_SPACE_M) - 5); }
+static float slider_x(rk_view *v, const slider *s, double value) {
+  float x0, x1;
+  slider_track(v, s, &x0, &x1);
+  double t = s->r.max > s->r.min ? (value - s->r.min) / (s->r.max - s->r.min) : 0;
+  return x0 + (float)RK_CLAMP(t, 0.0, 1.0) * (x1 - x0);
+}
+static double slider_value_at(rk_view *v, const slider *s, float x) {
+  float x0, x1;
+  slider_track(v, s, &x0, &x1);
+  return s->r.min + RK_CLAMP((x - x0) / (x1 - x0), 0.0f, 1.0f) * (s->r.max - s->r.min);
+}
+
+static rk_size slider_measure(rk_view *v, rk_size avail, void *st) {
+  (void)v;
+  return (rk_size){ isfinite(avail.w) ? avail.w : 240 + slider_out_w(st), rk_metric_of(RK_CONTROL_HEIGHT) };
+}
+
+static void slider_draw(rk_view *v, rk_canvas *c, void *st) {
+  slider *s = st;
+  float x0, x1, h = v->pframe.h, cy = h / 2, vx = slider_x(v, s, s->c.value);
+  slider_track(v, s, &x0, &x1);
+  bool off = s->c.disabled;
+  rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
+  rk_canvas_fill_rect(c, (rk_rect){ x0 - 5, cy - 3, x1 - x0 + 10, 6 }, rk_color_of(RK_ROLE_TEXT_LOW));
+  rk_canvas_fill_rect(c, (rk_rect){ x0 - 5, cy - 3, vx - x0 + 5, 6 }, off ? ink : rk_color_of(RK_ROLE_ACCENT));
+  rk_rect thumb = { vx - 5, cy - 12, 10, 24 };
+  rk_canvas_fill_rect(c, thumb, ink);
+  char text[32];
+  range_format(&s->r, s->c.value, text, sizeof text);
+  rk_textfmt f = value_fmt();
+  rk__text_draw(c, text, -1, v->pframe.w - rk__text_width(text, -1, &f), (h - f.size) / 2, &f, ink);
+  if (shows_focus(v)) focus_ring(c, thumb);
+}
+
+static bool slider_event(rk_view *v, const rk_event *e, void *st) {
+  slider *s = st;
+  switch (e->type) {
+    case RK_EVENT_POINTER_DOWN:
+      if (e->button) return false;
+      s->dragging = true;
+      user_set(v, &s->c, slider_value_at(v, s, e->position.x));
+      return true;
+    case RK_EVENT_POINTER_MOVE:
+      if (!s->dragging) return false;
+      user_set(v, &s->c, slider_value_at(v, s, e->position.x));
+      return true;
+    case RK_EVENT_POINTER_UP: if (!s->dragging) return false; s->dragging = false; return true;
+    case RK_EVENT_KEY_DOWN: return range_key(v, &s->c, &s->r, e->key);
+    case RK_EVENT_FOCUS: case RK_EVENT_BLUR: rk__view_dirty(v); return false;
+    default: return false;
+  }
+}
+
+static double slider_fit(rk_view *v, double value) { return range_fit(&((slider *)v->state)->r, value); }
+static const rk_class slider_class = { { sizeof(rk_view_class), "rk_slider", slider_draw, slider_measure, NULL, slider_event, free }, NULL, NULL };
+
+rk_view *rk_slider(double min, double max, double step, double value) {
+  slider *s = rk__alloc(sizeof *s);
+  s->r = (range){ min, RK_MAX(min, max), RK_MAX(0.0, step) };
+  s->c.fit = slider_fit;
+  s->c.value = range_fit(&s->r, value);
+  rk_view *v = rk__view_create(&slider_class, s);
+  v->focusable = true; v->draws_focus = true;
+  v->access = RK_ACCESS_SLIDER;
+  return v;
+}
+
+/* Stepper ------------------------------------------------------------------------------------------------------- */
+
+typedef struct stepper { control c; range r; int down; uint32_t repeat; char typed[32]; int ntyped; rk_view *view; } stepper;
+
+static float stepper_bw(void) { return rk_metric_of(RK_CONTROL_HEIGHT); }
+static float stepper_fw(void) { rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0); return ceilf(5.5f * f.size); }
+
+static rk_size stepper_measure(rk_view *v, rk_size avail, void *st) { (void)v; (void)avail; (void)st; return (rk_size){ 2 * stepper_bw() + stepper_fw(), rk_metric_of(RK_CONTROL_HEIGHT) }; }
+
+static void stepper_draw(rk_view *v, rk_canvas *c, void *st) {
+  stepper *s = st;
+  float bw = stepper_bw(), fw = stepper_fw(), h = v->pframe.h, rad = rk_metric_of(RK_RADIUS_S);
+  bool off = s->c.disabled;
+  rk_color line = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT_MEDIUM), ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
+  rk_rect all = { 0, 0, 2 * bw + fw, h };
+  rk_canvas_fill_round_rect(c, all, rad, line);
+  rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, all.w - 2, h - 2 }, RK_MAX(0.0f, rad - 1), rk_color_of(RK_ROLE_BG));
+  rk_canvas_fill_rect(c, (rk_rect){ bw, 0, 1, h }, line);
+  rk_canvas_fill_rect(c, (rk_rect){ bw + fw - 1, 0, 1, h }, line);
+  for (int b = 0; b < 2; b++) {                            /* minus, plus: dimmed at their end */
+    float x = b ? bw + fw : 0, cx = x + bw / 2, cy = h / 2;
+    bool end = b ? s->c.value >= s->r.max : s->c.value <= s->r.min;
+    if (s->down == b && !end && !off) rk_canvas_fill_rect(c, (rk_rect){ x + 1, 1, bw - 2, h - 2 }, rk_color_of(RK_ROLE_HOVER));
+    rk_color k = end || off ? rk_color_of(RK_ROLE_DISABLED) : ink;
+    rk_canvas_fill_rect(c, (rk_rect){ cx - 6, cy - 1, 12, 2 }, k);
+    if (b) rk_canvas_fill_rect(c, (rk_rect){ cx - 1, cy - 6, 2, 12 }, k);
+  }
+  char text[40];
+  if (s->ntyped) snprintf(text, sizeof text, "%s", s->typed); else range_format(&s->r, s->c.value, text, sizeof text);
+  rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
+  f.tabular = true; f.line = 1;
+  float tw = rk__text_width(text, -1, &f);
+  rk__text_draw(c, text, -1, bw + (fw - tw) / 2, (h - f.size) / 2, &f, ink);
+  if (s->ntyped && shows_focus(v)) rk_canvas_fill_rect(c, (rk_rect){ bw + (fw + tw) / 2 + 1, (h - f.size) / 2 - 2, 1, f.size + 4 }, ink);   /* typing: the caret */
+  if (shows_focus(v)) focus_ring(c, all);
+}
+
+static void stepper_step(stepper *s, int dir) { user_set(s->view, &s->c, s->c.value + dir * (s->r.step > 0 ? s->r.step : 1)); }
+
+static void stepper_repeat(void *user) {
+  stepper *s = user;
+  if (s->down < 0) { rk_app_cancel(s->repeat); s->repeat = 0; return; }
+  stepper_step(s, s->down ? 1 : -1);
+}
+static void stepper_hold(void *user) {                     /* held: from now on it repeats */
+  stepper *s = user;
+  s->repeat = s->down >= 0 ? rk_app_after(80, true, stepper_repeat, s) : 0;
+}
+
+static void stepper_take_typed(stepper *s) {
+  if (!s->ntyped) return;
+  char buf[32];
+  snprintf(buf, sizeof buf, "%s", s->typed);
+  for (char *p = buf; *p; p++) if (*p == ',') *p = '.';
+  char *end = NULL;
+  double x = strtod(buf, &end);
+  s->ntyped = 0; s->typed[0] = 0;
+  if (end && end != buf) user_set(s->view, &s->c, x);
+  rk__view_dirty(s->view);
+}
+
+static bool stepper_event(rk_view *v, const rk_event *e, void *st) {
+  stepper *s = st;
+  float bw = stepper_bw(), fw = stepper_fw();
+  switch (e->type) {
+    case RK_EVENT_POINTER_DOWN: {
+      if (e->button) return false;
+      stepper_take_typed(s);
+      s->down = e->position.x < bw ? 0 : e->position.x >= bw + fw ? 1 : -1;
+      if (s->down >= 0) { stepper_step(s, s->down ? 1 : -1); s->repeat = rk_app_after(400, false, stepper_hold, s); }
+      rk__view_dirty(v);
+      return true;
+    }
+    case RK_EVENT_POINTER_UP:
+      s->down = -1;
+      if (s->repeat) { rk_app_cancel(s->repeat); s->repeat = 0; }
+      rk__view_dirty(v);
+      return true;
+    case RK_EVENT_TEXT: {
+      if (!e->text || s->c.disabled) return false;
+      for (const char *p = e->text; *p; p++) {
+        bool ok = (*p >= '0' && *p <= '9') || *p == '.' || *p == ',' || (*p == '-' && !s->ntyped && s->r.min < 0);
+        if (ok && s->ntyped < (int)sizeof s->typed - 1) { s->typed[s->ntyped++] = *p; s->typed[s->ntyped] = 0; }
+      }
+      rk__view_dirty(v);
+      return true;
+    }
+    case RK_EVENT_KEY_DOWN:
+      if (s->ntyped) {
+        if (e->key == RK_KEY_BACKSPACE) { s->typed[--s->ntyped] = 0; rk__view_dirty(v); return true; }
+        if (e->key == RK_KEY_ESCAPE) { s->ntyped = 0; s->typed[0] = 0; rk__view_dirty(v); return true; }
+        if (e->key == RK_KEY_ENTER) { stepper_take_typed(s); return true; }
+        stepper_take_typed(s);
+      }
+      return range_key(v, &s->c, &s->r, e->key);
+    case RK_EVENT_BLUR: stepper_take_typed(s); s->down = -1; rk__view_dirty(v); return false;
+    case RK_EVENT_FOCUS: rk__view_dirty(v); return false;
+    default: return false;
+  }
+}
+
+static double stepper_fit(rk_view *v, double value) { return range_fit(&((stepper *)v->state)->r, value); }
+static void stepper_destroy(void *st) { stepper *s = st; if (s->repeat) rk_app_cancel(s->repeat); free(s); }
+static const rk_class stepper_class = { { sizeof(rk_view_class), "rk_stepper", stepper_draw, stepper_measure, NULL, stepper_event, stepper_destroy }, NULL, NULL };
+
+rk_view *rk_stepper(double min, double max, double step, double value) {
+  stepper *s = rk__alloc(sizeof *s);
+  s->r = (range){ min, RK_MAX(min, max), RK_MAX(0.0, step) };
+  s->c.fit = stepper_fit;
+  s->c.value = range_fit(&s->r, value);
+  s->down = -1;
+  rk_view *v = rk__view_create(&stepper_class, s);
+  s->view = v;
+  v->focusable = true; v->draws_focus = true; v->hug = true;
+  v->access = RK_ACCESS_SPIN_BUTTON;
+  return v;
+}
+
 /* The value, for every control ------------------------------------------------------------------------------------ */
 
 static control *control_of(rk_view *v) {
   if (!v) return NULL;
-  if (v->cls == &check_class || v->cls == &choices_class || v->cls == &toggle_class || v->cls == &segments_class) return v->state;
+  if (v->cls == &check_class || v->cls == &choices_class || v->cls == &toggle_class || v->cls == &segments_class || v->cls == &slider_class ||
+      v->cls == &stepper_class) return v->state;
   return NULL;
 }
 
@@ -367,6 +606,7 @@ double rk_control_value(rk_view *v) { control *c = control_of(v); return c ? c->
 
 void rk_control_set_value(rk_view *v, double value) {
   control *c = control_of(v);
+  if (c && c->fit) value = c->fit(v, value);
   if (!c || value == c->value || (c->valid && !c->valid(v, value))) return;
   double was = c->value;
   c->value = value;

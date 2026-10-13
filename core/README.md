@@ -129,7 +129,7 @@ Stages 1 and 2 of [docs/core.md](../docs/core.md#stages): tokens, renderer,
 views, controllers (places with the turn, panorama, pivot, sheets), motion, the
 press, focus everywhere and the keyboard, toasts, undo, the title bar, text
 fields and areas with the clipboard and input methods, every script through the
-system's fonts, checkboxes, options, toggles and segments, menus, long lists, tables
+system's fonts, checkboxes, options, toggles, segments, sliders and steppers, menus, long lists, tables
 that sort, resize and edit; headless, Wayland and X11 tested here (Wayland is
 the default where a compositor answers; `RK_PLATFORM=x11` picks X11), Win32 and
 Cocoa built and tested in CI.

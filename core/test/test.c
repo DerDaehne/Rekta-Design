@@ -674,15 +674,17 @@ static int control_changes;
 static void control_changed(rk_view *v, void *u) { (void)v; (void)u; control_changes++; }
 
 static void test_controls(void) {
-  rk_window *w = window(520, 420);
+  rk_window *w = window(520, 520);
   rk_view *page = col(8, 16);
   rk_view *chk = rk_add(page, rk_check("Remember this device", false));
   static const char *const often[] = { "daily", "weekly", "never" }, *const span[] = { "day", "week", "month" };
   rk_view *opt = rk_add(page, rk_choices(often, 3, 1));
   rk_view *tog = rk_add(page, rk_toggle("Live tiles", false));
   rk_view *seg = rk_add(page, rk_segments(span, 3, 0));
-  rk_view *ctl[] = { chk, opt, tog, seg };
-  for (int i = 0; i < 4; i++) rk_control_on_change(ctl[i], control_changed, NULL);
+  rk_view *sld = rk_add(page, rk_slider(0, 100, 5, 40));
+  rk_view *stp = rk_add(page, rk_stepper(1, 12, 1, 3));
+  rk_view *ctl[] = { chk, opt, tog, seg, sld, stp };
+  for (int i = 0; i < 6; i++) rk_control_on_change(ctl[i], control_changed, NULL);
   show(w, page, "controls");
   rk_view_tap(chk);
   CHECK(rk_control_value(chk) == 1 && control_changes == 1, "a click checks it");
@@ -716,10 +718,47 @@ static void test_controls(void) {
   key(w, RK_KEY_HOME, 0); key(w, RK_KEY_END, 0); CHECK(rk_control_value(seg) == 2, "Home and End");
   rk_control_set_value(seg, 7);
   CHECK(rk_control_value(seg) == 2, "a value it cannot take is ignored");
+  /* the slider: a press puts it there, a drag follows, it snaps to its step; keys */
+  slider *sl = sld->state;
+  r = rk__window_rect(sld);
+  float x0, x1;
+  slider_track(sld, sl, &x0, &x1);
+  rk_event p = { sizeof p, RK_EVENT_POINTER_DOWN, 0, { r.x + x0 + (x1 - x0) * 0.71f, r.y + r.h / 2 }, 0, 0, 0, 0, 0, NULL };
+  rk_window_inject(w, &p);
+  CHECK(rk_control_value(sld) == 70, "a press on the track moves it there, on its step (%g)", rk_control_value(sld));
+  p.type = RK_EVENT_POINTER_MOVE; p.position.x = r.x + x1 + 200; rk_window_inject(w, &p);
+  p.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &p);
+  CHECK(rk_control_value(sld) == 100, "a drag past the end stops at the end (%g)", rk_control_value(sld));
+  rk_window_focus(w, sld);
+  key(w, RK_KEY_LEFT, 0); CHECK(rk_control_value(sld) == 95, "Left: a step down (%g)", rk_control_value(sld));
+  key(w, RK_KEY_PAGE_DOWN, 0); CHECK(rk_control_value(sld) == 85, "Page Down: a tenth (%g)", rk_control_value(sld));
+  key(w, RK_KEY_HOME, 0); CHECK(rk_control_value(sld) == 0, "Home: the start");
+  rk_control_set_value(sld, 42.6);
+  CHECK(rk_control_value(sld) == 45, "the app's value snaps too (%g)", rk_control_value(sld));
+  /* the stepper: a press steps, a held one repeats, typing and Enter take a number, the ends hold */
+  r = rk__window_rect(stp);
+  float bw = rk_metric_of(RK_CONTROL_HEIGHT);
+  click(w, (rk_point){ r.x + r.w - bw / 2, r.y + r.h / 2 }, 10);
+  CHECK(rk_control_value(stp) == 4, "plus steps up (%g)", rk_control_value(stp));
+  click(w, (rk_point){ r.x + r.w - bw / 2, r.y + r.h / 2 }, 400 + 80 * 3 + 40);
+  CHECK(rk_control_value(stp) >= 8 && rk_control_value(stp) <= 9, "held, it repeats (%g)", rk_control_value(stp));
+  rk_window_focus(w, stp);
+  type_text(w, "1"); type_text(w, "1");
+  CHECK(rk_control_value(stp) <= 9, "typing waits for Enter");
+  key(w, RK_KEY_ENTER, 0);
+  CHECK(rk_control_value(stp) == 11, "Enter takes it (%g)", rk_control_value(stp));
+  type_text(w, "40"); key(w, RK_KEY_ENTER, 0);
+  CHECK(rk_control_value(stp) == 12, "past the end: the end (%g)", rk_control_value(stp));
+  type_text(w, "5"); key(w, RK_KEY_ESCAPE, 0);
+  CHECK(rk_control_value(stp) == 12, "Escape puts the number back");
+  key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_HOME, 0); key(w, RK_KEY_DOWN, 0);
+  CHECK(rk_control_value(stp) == 1, "Down, Home, and no lower than the start (%g)", rk_control_value(stp));
   rk_control_set_disabled(chk, true);
   rk_view_tap(chk);
   CHECK(rk_control_value(chk) == 0 && !chk->focusable, "disabled: no change, no focus");
   rk_control_set_value(chk, 1);
+  rk_control_set_value(stp, 3);
+  rk_window_focus(w, seg);
   key(w, RK_KEY_LEFT, 0);
   w->focus_visible = true;
   rk_app_run_for(500);
@@ -871,7 +910,7 @@ static bool takes_input(const rk_view *v) {
   if (v->press != RK_PRESS_NONE || v->on_activate || v->menu) return true;
   const char *n = v->cls ? v->cls->pub.name : "";
   return !strcmp(n, "rk_field") || !strcmp(n, "rk_list") || !strcmp(n, "rk_strip") || !strcmp(n, "rk_check") || !strcmp(n, "rk_choices") ||
-         !strcmp(n, "rk_toggle") || !strcmp(n, "rk_segments");
+         !strcmp(n, "rk_toggle") || !strcmp(n, "rk_segments") || !strcmp(n, "rk_slider") || !strcmp(n, "rk_stepper");
 }
 static int unreachable(const rk_view *v, const rk_view *skip) {
   if (v == skip || v->hidden) return 0;

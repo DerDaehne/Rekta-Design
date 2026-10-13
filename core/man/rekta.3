@@ -237,9 +237,18 @@ One of several options: a group of circles, one stop for Tab, the arrows
 choose
 .Pq Fa chosen No -1 for none yet ;
 or two to five segments side by side, the accent sliding to the choice.
+.It Fn rk_slider "double min" "double max" "double step" "double value" , Fn rk_stepper "double min" "double max" "double step" "double value"
+A number in a range: a track the accent fills up to the value, with the
+value beside it (a press moves it there, a drag follows); or minus, the
+number and plus (a held press repeats; typing a number and Enter, or
+leaving, takes it; Escape puts it back).
+Both snap to
+.Fa step
+(0: none) and know Up, Down, Page Up, Page Down, Home and End.
 .It Fn rk_control_value , Fn rk_control_set_value , Fn rk_control_on_change , Fn rk_control_set_disabled
-Every control holds a number: 0 or 1, or the chosen index.
-A value the control cannot take is ignored; the change handler hears
+Every control holds a number: 0 or 1, the chosen index, or the number.
+A number snaps to the range and step; an index the control lacks is
+ignored; the change handler hears
 what the user changes, not what the app sets.
 A disabled control is greyed and leaves the Tab order.
 .It Fn rk_field "const char *label" "const char *placeholder"

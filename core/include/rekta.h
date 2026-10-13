@@ -195,7 +195,7 @@ typedef enum rk_access_role {
   RK_ACCESS_NONE, RK_ACCESS_GROUP, RK_ACCESS_TEXT, RK_ACCESS_HEADING, RK_ACCESS_BUTTON, RK_ACCESS_LINK,
   RK_ACCESS_LIST, RK_ACCESS_LIST_ITEM, RK_ACCESS_TAB_LIST, RK_ACCESS_TAB, RK_ACCESS_TAB_PANEL, RK_ACCESS_DIALOG,
   RK_ACCESS_IMAGE, RK_ACCESS_PROGRESS, RK_ACCESS_STATUS, RK_ACCESS_TEXT_FIELD, RK_ACCESS_MENU, RK_ACCESS_TABLE,
-  RK_ACCESS_CHECKBOX, RK_ACCESS_RADIO_GROUP, RK_ACCESS_SWITCH,
+  RK_ACCESS_CHECKBOX, RK_ACCESS_RADIO_GROUP, RK_ACCESS_SWITCH, RK_ACCESS_SLIDER, RK_ACCESS_SPIN_BUTTON,
   RK_ACCESS_FORCE32 = 0x7fffffff
 } rk_access_role;
 
@@ -370,8 +370,10 @@ RK_API rk_view *rk_check(const char *label, bool on);       /* a checkbox: Space
 RK_API rk_view *rk_choices(const char *const *options, int count, int chosen);   /* options, one chosen (-1: none yet) */
 RK_API rk_view *rk_toggle(const char *label, bool on);      /* the Metro switch, "on" or "off" beside it */
 RK_API rk_view *rk_segments(const char *const *options, int count, int chosen);  /* two to five, side by side */
+RK_API rk_view *rk_slider(double min, double max, double step, double value);   /* step 0: continuous */
+RK_API rk_view *rk_stepper(double min, double max, double step, double value);  /* minus, the number, plus */
 RK_API double rk_control_value(rk_view *control);
-RK_API void rk_control_set_value(rk_view *control, double value);   /* one the control cannot take is ignored */
+RK_API void rk_control_set_value(rk_view *control, double value);   /* a number snaps to the range and step; an index it lacks is ignored */
 RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, void *user), void *user);
 RK_API void rk_control_set_disabled(rk_view *control, bool disabled);
 
