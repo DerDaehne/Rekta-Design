@@ -262,9 +262,10 @@ function turnsWhole(el) {
   for (const n of el.childNodes) if (n.nodeType === 3 && n.textContent.trim()) return true;
   return false;
 }
-// A part's time against the token's: the root of the side of a square as large as it, over a tile's 160px, from 0.6
-// (a line of text) to 1.4 (a table).
-function heft(r) { return Math.min(1.4, Math.max(0.6, Math.sqrt(Math.sqrt(Math.max(1, r.width * r.height)) / 160))); }
+// A part's time against the token's: the root of the side of a square as large as it, over 220px, from 0.6 (a line
+// of text) through about 0.85 (a tile) to 1.1 (a table).
+function heft(r) { return Math.min(1.1, Math.max(0.6, Math.sqrt(Math.sqrt(Math.max(1, r.width * r.height)) / 220))); }
+const TURN_ROWS = 6;                                              // rows after the sixth go with it: the turn stays brief
 function turnUnits(place, last) {
   const list = [], vh = innerHeight, vw = innerWidth;
   const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw; };
@@ -331,7 +332,7 @@ export const turn = {
       let end = 0;
       u.list.forEach((el, i) => {
         const d = out * heft(u.at.get(el));
-        let at = Math.min(slots[i], el === held ? 10 : 9) * step;
+        let at = Math.min(slots[i], el === held ? TURN_ROWS + 1 : TURN_ROWS) * step;
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
         if (el === held) {
           at = Math.max(at, hold);
@@ -340,7 +341,7 @@ export const turn = {
           el.style.setProperty('--_rk-turn-delay', `${at}ms`);
           el.setAttribute('data-rk-turn', kind);
         }
-        end = Math.max(end, at + 0.8 * d);
+        end = Math.max(end, at + 0.75 * d);
       });
       const done = () => {
         timers.forEach(clearTimeout);
@@ -351,7 +352,7 @@ export const turn = {
         resolve();
       };
       turning = { finish: done };
-      // The place goes when its last unit is 80% through, all but faded, so the next one follows without a gap.
+      // The place goes when its last unit is 75% through, fading, so the next one swings in without a gap.
       timers.push(later(done, u.list.length ? end : 0));
     });
   },
@@ -368,12 +369,14 @@ export const turn = {
       const { slots } = turnRows(u, place, null);
       let end = 0;
       u.list.forEach((el, i) => {
-        const at = Math.min(slots[i], 9) * step, d = d0 * heft(u.at.get(el));
+        const at = Math.min(slots[i], TURN_ROWS) * step, d = d0 * heft(u.at.get(el));
         el.style.setProperty('--_rk-turn-delay', `${at}ms`);
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
         el.setAttribute('data-rk-turn', kind);
         end = Math.max(end, at + d);
       });
+      // Its parts turned in: that is the build-in, so its tiles do not rise again when the turn lets go of them.
+      if (arriving && u.list.length) place.setAttribute('data-rk-arriving', 'turned');
       if (focus) focus.focus({ preventScroll: true });
       const done = () => {
         clearTimeout(timer);

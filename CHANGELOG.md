@@ -322,6 +322,13 @@ it; each entry says how.
   the web, and its pages start at the strip's indent. `examples/navigation.c`
   draws one app with its places either way, and `--film` writes its motion
   frame by frame.
+- **The turn swings more and takes half the time.** Leaving parts swing 60°,
+  gathering speed, and stay whole for 40% of their time before they fade;
+  arriving parts swing in from 70°, quick and without a long creep. Heft runs
+  from 0.6 to 1.1 (a tile about 0.85), at most six rows are staggered, and the
+  next place starts when the last part is 75% through: a change takes about
+  0.8s instead of 1.4s. Tiles that turned in no longer rise a second time
+  after the turn (they seemed to settle). Web and core alike.
 - **Web: the turn has heft, and a list down the side.** rekta.js turns every
   part of a place by itself, leaving and arriving, in a time that follows its
   size (`--_rk-turn-duration`); a scroller lets its parts turn from its edge.
