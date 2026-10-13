@@ -446,6 +446,8 @@ static void stack(rk_view *v, bool column) {
   }
 }
 
+void rk__stack(rk_view *v, bool column) { stack(v, column); }
+
 void rk__layout(rk_view *v) {
   if (v->cls && v->cls->pub.layout) v->cls->pub.layout(v, v->state);
   else switch (v->layout) {

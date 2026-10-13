@@ -1298,6 +1298,19 @@ static void test_side_pivot(void) {
   key(w, RK_KEY_UP, 0);
   rk_app_run_for(1200);
   CHECK(rk_pivot_selected(nav) == 0 && rk_view_window(pages[0]) == w, "Up goes back");
+  /* a narrow window keeps the titles along the top, as the web's compact class does; wide again, down the side */
+  rk__window_resized(w, 600, 500, 1);
+  rk_app_run_for(100);
+  sr = rk__window_rect(strip); pr = rk__window_rect(pages[0]);
+  CHECK(pr.y >= sr.y + sr.h && sr.w > 500, "narrow: the strip runs along the top, the page below it");
+  key(w, RK_KEY_RIGHT, 0);
+  CHECK(rk_pivot_selected(nav) == 1, "narrow: Right picks the next title");
+  rk_app_run_for(1200);
+  shot(w, "pivot-side-narrow");
+  rk__window_resized(w, 900, 500, 1);
+  rk_app_run_for(100);
+  sr = rk__window_rect(strip); pr = rk__window_rect(pages[1]);
+  CHECK(pr.x >= sr.x + sr.w && fabsf(pr.y - sr.y) < 1, "wide again: the titles stand beside the page");
   done(w);
 }
 

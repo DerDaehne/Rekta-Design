@@ -187,6 +187,7 @@ void rk__view_relayout_up(rk_view *v);
 rk_window *rk__view_window(rk_view *v);
 float rk__host_width(rk_view *v);                          /* the width fluid type sizes follow */
 rk_size rk__measure(rk_view *v, rk_size avail);
+void rk__stack(rk_view *v, bool column);                    /* lay the children out as a column or row does */
 void rk__layout(rk_view *v);
 void rk__set_frame(rk_view *v, rk_rect f);                 /* animates inside a REFLOW, ENTER or LEAVE block */
 rk_rect rk__window_rect(rk_view *v);                       /* the presented frame in window coordinates */

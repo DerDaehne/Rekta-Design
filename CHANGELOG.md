@@ -352,7 +352,8 @@ it; each entry says how.
   RK_PIVOT_SIDE)` lays the titles out as a list down the leading side, an equal
   alternative to the strip along the top, as tabs are in a browser. The title
   in sight steps in by `space-m` and darkens over `duration-pivot-size`; Up and
-  Down pick a title.
+  Down pick a title. A window narrower than 760 px or lower than 481 px keeps
+  the titles along the top, as the web's compact class does.
 - **rekta-core: a pivot that picks the place turns it.** Its facet turns away
   and the next turns in, as a place change does; a pivot inside a place still
   slides.

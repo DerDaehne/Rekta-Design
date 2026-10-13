@@ -374,6 +374,7 @@ void rk_places_back(rk_controller *c) {
 typedef struct strip {
   char **titles; int n, active;
   bool nav, side, level_set;                                /* side: a pivot's titles as a list down the leading side */
+  bool want_side;                                          /* asked for down the side; a narrow window keeps them on top */
   rk_glide *in;                                            /* down the side: each title's step in, 1 for the place in sight */
   rk_controller *pivot;                                    /* a pivot's strip: the nav level when nothing holds the pivot */
   rk_glide *scale;                                         /* each title's size, 1 active, INACTIVE otherwise */
@@ -913,20 +914,38 @@ static void strip_level(strip *s) {
 }
 
 /* Along the top the titles are the facets' heading; down the side they are a list beside them, as tabs are in a
-   browser either way. Same facets, same keys turned a quarter, same motion. */
+   browser either way. Same facets, same keys turned a quarter, same motion. A window narrower than 760 px or lower
+   than 481 px (the web's compact class) keeps them along the top, where a small screen has room for them. */
+static void pivot_mode(pivot *p) {
+  strip *s = p->strip->state;
+  rk_view *v = p->self->view;
+  rk_window *w = rk__view_window(v);
+  bool narrow = w && (w->size.w < 760 || w->size.h < 481), side = s->want_side && !narrow;
+  if (side == s->side) return;
+  s->side = side; s->level_set = false;
+  for (int i = 0; i < s->n; i++) rk__glide_set(&s->scale[i], strip_rest(s, i));
+  rk__glide_set(&s->glide, 0);
+  v->layout = side ? RK_LAYOUT_ROW : RK_LAYOUT_COLUMN;
+  v->gap = side ? 0 : rk_metric_of(RK_SPACE_M);
+  v->padding = (rk_insets){ side ? rk_metric_of(RK_SPACE_L) : 0, 0, 0, 0 };   /* the list and its facet start together, clear of the bar */
+  strip_level(s);
+}
+
+static void pivot_layout(rk_view *v, void *st) {
+  pivot *p = st;
+  pivot_mode(p);
+  rk__stack(v, !((strip *)p->strip->state)->side);
+}
+
+static const rk_class pivot_class = { { sizeof(rk_view_class), "rk_pivot", NULL, NULL, pivot_layout, NULL, NULL }, NULL, NULL };
+
 void rk_pivot_set_layout(rk_controller *c, rk_pivot_layout layout) {
   if (c->kind != K_PIVOT) return;
   pivot *p = c->impl;
   strip *s = p->strip->state;
-  bool side = layout == RK_PIVOT_SIDE;
-  if (side == s->side) return;
-  s->side = side; s->level_set = false;
-  for (int i = 0; i < s->n; i++) rk__glide_set(&s->scale[i], strip_rest(s, i));
-  rk_view_set_layout(c->view, side ? RK_LAYOUT_ROW : RK_LAYOUT_COLUMN);
-  rk_view_set_gap(c->view, side ? 0 : rk_metric_of(RK_SPACE_M));
-  rk_view_set_align(c->view, RK_ALIGN_START, RK_ALIGN_STRETCH);
-  rk_view_set_padding(c->view, (rk_insets){ side ? rk_metric_of(RK_SPACE_L) : 0, 0, 0, 0 });   /* the list and its facet start together, clear of the bar */
-  rk__view_relayout_up(p->strip);
+  s->want_side = layout == RK_PIVOT_SIDE;
+  pivot_mode(p);
+  rk__view_relayout_up(c->view);
 }
 
 rk_controller *rk_pivot(void) {
@@ -934,9 +953,10 @@ rk_controller *rk_pivot(void) {
   pivot *p = rk__alloc(sizeof *p);
   p->self = c;
   c->kind = K_PIVOT; c->impl = p; c->impl_free = pivot_free;
-  rk_view *v = rk_view_create();
-  rk_view_set_layout(v, RK_LAYOUT_COLUMN);
+  rk_view *v = rk__view_create(&pivot_class, p);
+  rk_view_set_layout(v, RK_LAYOUT_COLUMN);                 /* how it measures; pivot_layout lays it out either way */
   rk_view_set_gap(v, rk_metric_of(RK_SPACE_M));
+  rk_view_set_align(v, RK_ALIGN_START, RK_ALIGN_STRETCH);
   c->view = v; v->controller = c;
   p->strip = strip_create(false, pivot_select_cb, p);
   ((strip *)p->strip->state)->pivot = c;
