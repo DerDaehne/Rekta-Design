@@ -141,6 +141,7 @@ struct rk_view {
   float radius;
   bool rule_top, rule_bottom, hidden, clip, focusable, leaving, entering, placed, fill_anim;
   bool passthrough;                                        /* a layer: only its children take the pointer */
+  bool hug;                                                /* keeps its own width across a stack, as a button */
   /* layout */
   rk_layout layout; rk_insets padding; float gap; rk_align main, cross;
   float grow, fixed_w, fixed_h, min_w, min_h; int span_c, span_r;
@@ -176,7 +177,9 @@ rk_size rk__measure(rk_view *v, rk_size avail);
 void rk__layout(rk_view *v);
 void rk__set_frame(rk_view *v, rk_rect f);                 /* animates inside a REFLOW, ENTER or LEAVE block */
 rk_rect rk__window_rect(rk_view *v);                       /* the presented frame in window coordinates */
-void rk__view_detach(rk_view *v);                          /* leaves its parent at once */
+void rk__view_detach(rk_view *v);
+void rk__view_insert(rk_view *parent, rk_view *child, int index);   /* retains child */
+void rk__view_add(rk_view *parent, rk_view *child);                          /* leaves its parent at once */
 rk_color rk__resolve_fill(rk_view *v);
 bool rk__view_visible(rk_view *v);
 

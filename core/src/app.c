@@ -30,7 +30,7 @@ static post *posts; static int nposts, pcap;
 static listener *listeners; static int nlisteners, lcap;
 
 const rk_platform *rk__platform(void) { return plat ? plat : &rk__platform_headless; }
-bool rk__headless(void) { return rk__platform() == &rk__platform_headless; }
+bool rk__headless(void) { return !strcmp(rk__platform()->name, "headless"); }   /* also a build without a windowing system */
 void rk__app_request_frame(void) { frame_wanted = true; }
 double rk_app_now(void) { return rk__platform()->now(); }
 

@@ -48,7 +48,7 @@ static void label_draw(rk_view *v, rk_canvas *c, void *st) {
 static void label_destroy(void *st) { label *l = st; free(l->text); free(l); }
 static const rk_class label_class = { { sizeof(rk_view_class), "rk_label", label_draw, label_measure, NULL, NULL, label_destroy }, NULL, NULL };
 
-rk_view *rk_label_create(const char *text, rk_text_style style) {
+rk_view *rk_label(const char *text, rk_text_style style) {
   label *l = rk__alloc(sizeof *l);
   l->text = rk__strdup(text ? text : ""); l->style = style;
   rk_view *v = rk__view_create(&label_class, l);
@@ -128,12 +128,30 @@ static rk_view *button_make(const char *text, const char *icon, int kind) {
   button *b = rk__alloc(sizeof *b);
   b->label = rk__strdup(text ? text : ""); b->icon = rk__strdup(icon); b->kind = kind;
   rk_view *v = rk__view_create(&button_class, b);
-  v->press = RK_PRESS_FLAT; v->focusable = true;
+  v->press = RK_PRESS_FLAT; v->focusable = true; v->hug = true;
   v->access = RK_ACCESS_BUTTON;
   rk__setstr(&v->access_label, text);
   return v;
 }
-rk_view *rk_button_create(const char *text, const char *icon, rk_button_kind kind) { return button_make(text, icon, kind); }
+rk_view *rk_button(const char *text, void (*on_press)(rk_view *button, void *user), void *user) {
+  rk_view *v = button_make(text, NULL, RK_BUTTON_DEFAULT);
+  if (on_press) rk_view_on_activate(v, on_press, user);
+  return v;
+}
+
+void rk_button_set_kind(rk_view *v, rk_button_kind kind) {
+  if (v->cls != &button_class) return;
+  ((button *)v->state)->kind = kind;
+  rk__view_relayout_up(v);
+}
+
+void rk_button_set_icon(rk_view *v, const char *icon) {
+  if (v->cls != &button_class) return;
+  button *b = v->state;
+  rk__setstr(&b->icon, icon);
+  if (!b->label || !*b->label) rk__setstr(&v->access_label, icon);   /* an icon alone is still named */
+  rk__view_relayout_up(v);
+}
 void rk_button_set_disabled(rk_view *v, const char *reason) {
   if (v->cls != &button_class) return;
   button *b = v->state;
@@ -229,13 +247,31 @@ static void tile_access(rk_view *v) {
   rk__setstr(&v->access_label, buf);
 }
 
-rk_view *rk_tile_create(rk_status status, const char *word) {
+rk_view *rk_tile(const char *value, const char *label) {
   tile *t = rk__alloc(sizeof *t);
   t->progress = -1;
   rk_view *v = rk__view_create(&tile_class, t);
   v->radius = rk_metric_of(RK_RADIUS_TILE);
   v->access = RK_ACCESS_GROUP;
-  rk_tile_set_status(v, status, word);
+  rk_tile_set_status(v, RK_STATUS_NONE, NULL);
+  rk_tile_set_stat(v, value, label);
+  return v;
+}
+
+/* Containers: a plain view with a layout and the spacing the design gives it. */
+static rk_view *container(rk_layout layout, float gap) {
+  rk_view *v = rk_view_create();
+  rk_view_set_layout(v, layout);
+  rk_view_set_gap(v, gap);
+  return v;
+}
+
+rk_view *rk_column(void) { return container(RK_LAYOUT_COLUMN, rk_metric_of(RK_SPACE_M)); }
+rk_view *rk_tile_grid(void) { return container(RK_LAYOUT_TILES, rk_metric_of(RK_SPACE_S)); }
+
+rk_view *rk_row(void) {
+  rk_view *v = container(RK_LAYOUT_ROW, rk_metric_of(RK_SPACE_S));
+  rk_view_set_align(v, RK_ALIGN_START, RK_ALIGN_START);
   return v;
 }
 
@@ -323,9 +359,9 @@ static void row_draw(rk_view *v, rk_canvas *c, void *st) {
   }
 }
 static void row_destroy(void *st) { row *r = st; free(r->title); free(r->meta); free(r); }
-static const rk_class row_class = { { sizeof(rk_view_class), "rk_row", row_draw, row_measure, NULL, NULL, row_destroy }, NULL, NULL };
+static const rk_class row_class = { { sizeof(rk_view_class), "rk_rows_row", row_draw, row_measure, NULL, NULL, row_destroy }, NULL, NULL };
 
-rk_view *rk_rows_create(void) {
+rk_view *rk_rows(void) {
   rk_view *v = rk_view_create();
   rk_view_set_layout(v, RK_LAYOUT_COLUMN);
   v->access = RK_ACCESS_LIST;
@@ -338,7 +374,7 @@ rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_stat
   rk_view *v = rk__view_create(&row_class, r);
   v->access = RK_ACCESS_LIST_ITEM;
   rk__setstr(&v->access_label, r->title);
-  rk_view_add(rows, v);
+  rk__view_add(rows, v);
   rk_release(v);
   return v;
 }
@@ -354,7 +390,7 @@ static void icon_draw(rk_view *v, rk_canvas *c, void *st) {
 static void icon_destroy(void *st) { icon *i = st; free(i->name); free(i); }
 static const rk_class icon_class = { { sizeof(rk_view_class), "rk_icon", icon_draw, icon_measure, NULL, NULL, icon_destroy }, NULL, NULL };
 
-rk_view *rk_icon_create(const char *name, rk_role color) {
+rk_view *rk_icon(const char *name, rk_role color) {
   icon *i = rk__alloc(sizeof *i);
   i->name = rk__strdup(name); i->color = color;
   rk_view *v = rk__view_create(&icon_class, i);
@@ -382,7 +418,7 @@ static void progress_draw(rk_view *v, rk_canvas *c, void *st) {
 }
 static const rk_class progress_class = { { sizeof(rk_view_class), "rk_progress", progress_draw, progress_measure, NULL, NULL, NULL }, NULL, NULL };
 
-rk_view *rk_progress_create(float progress) {
+rk_view *rk_progress(float progress) {
   rk_view *v = rk__view_create(&progress_class, NULL);
   v->value = v->pvalue = progress;
   v->access = RK_ACCESS_PROGRESS;
@@ -431,7 +467,7 @@ rk_view *rk__toast_create(const char *message, const char *action, void (*on_act
   v->min_h = rk_metric_of(RK_CONTROL_HEIGHT) + 4;
   v->access = RK_ACCESS_STATUS;
   rk__setstr(&v->access_label, message);
-  rk_view *msg = rk_label_create(message, RK_TEXT_BODY);
+  rk_view *msg = rk_label(message, RK_TEXT_BODY);
   rk_label_set_color(msg, RK_ROLE_BG);
   float m = rk_metric_of(RK_SPACE_M), s = rk_metric_of(RK_SPACE_S) + rk_metric_of(RK_SPACE_XS);
   rk_view *wrap = rk_view_create();
@@ -439,12 +475,12 @@ rk_view *rk__toast_create(const char *message, const char *action, void (*on_act
   rk_view_set_align(wrap, RK_ALIGN_CENTER, RK_ALIGN_STRETCH);
   rk_view_set_padding(wrap, (rk_insets){ s, m, s, m });
   rk_view_set_grow(wrap, 1);
-  rk_view_add(wrap, msg); rk_release(msg);
-  rk_view_add(v, wrap); rk_release(wrap);
+  rk__view_add(wrap, msg); rk_release(msg);
+  rk__view_add(v, wrap); rk_release(wrap);
   if (action) {
     rk_view *b = button_make(action, NULL, BUTTON_TOAST);
     rk_view_on_activate(b, toast_act, t);
-    rk_view_add(v, b); rk_release(b);
+    rk__view_add(v, b); rk_release(b);
   }
   t->timer = rk_app_after(rk_duration_of(RK_TIMING_TOAST), false, toast_leave, t);
   return v;
@@ -513,7 +549,7 @@ rk_view *rk__titlebar_create(rk_window *w) {
     b->focusable = false;
     rk_view_on_activate(b, fns[i], w);
     b->focusable = false;
-    rk_view_add(v, b); rk_release(b);
+    rk__view_add(v, b); rk_release(b);
   }
   return v;
 }

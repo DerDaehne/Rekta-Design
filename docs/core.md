@@ -67,10 +67,16 @@ All of it is in `core/include/rekta.h`.
 - **Values** cross by value and never change layout: `rk_point`, `rk_size`,
   `rk_rect`, `rk_insets`, `rk_transform`, `rk_color` (`0xRRGGBBAA`). Units are
   logical pixels (CSS px, Apple pt); the window scales to the screen.
-- **Objects** are opaque pointers: `rk_window`, `rk_view`, `rk_controller`.
-  They are reference counted. A function named `_create` returns a reference
-  you own; everything else is borrowed. A container retains what it holds:
-  after `rk_view_add(parent, child)` you may `rk_release(child)`.
+- **Objects** are opaque pointers: `rk_window`, `rk_view`, `rk_controller`,
+  reference counted under one rule. A constructor returns a reference you
+  own; it is named after the thing (`rk_label`, `rk_tile`, `rk_column`), or
+  `*_create` where the thing is a type of its own (window, view, controller).
+  Adding, showing and presenting take that reference over (`rk_add`,
+  `rk_insert`, `rk_panorama_add`, `rk_pivot_add`, `rk_places`,
+  `rk_places_go`, `rk_controller_present`, `rk_window_show`): what goes into
+  the tree belongs to the tree, and app code never releases it. `rk_add`
+  returns the child, so it can be kept to change it later. Everything else
+  is borrowed. `man ./core/man/rekta.3` has the whole API by task.
 - **Descriptors** that may grow start with `uint32_t size` (set it to
   `sizeof`): `rk_app_desc`, `rk_window_desc`, `rk_view_class`,
   `rk_controller_class`. A newer library reads an older, shorter struct.
@@ -86,8 +92,8 @@ All of it is in `core/include/rekta.h`.
 
 ## Composition
 
-**Window.** `rk_window_create` opens one; `rk_window_set_root` gives it a root
-controller, as `UIWindow.rootViewController`. A window may draw its own Rekta
+**Window.** `rk_window_create` opens one; `rk_window_show` shows it with a
+root controller, as `UIWindow.rootViewController`. A window may draw its own Rekta
 title bar (the default) or keep the system's frame.
 
 **Controller.** A controller owns one root view, created lazily by its

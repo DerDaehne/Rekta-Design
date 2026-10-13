@@ -4,6 +4,7 @@
 #   make test       headless tests and the reference images (needs node for the image comparison)
 #   make shots      the demo's script without a screen, as PNGs in build/shots
 #   make sanitize   the tests and the demo script under AddressSanitizer and UBSan
+#   make install    library, header and man page under PREFIX (default /usr/local)
 #   make perf       the loop under load (resize, a storm of presses, settling), measured at 1x and 2x
 # On Windows: build.bat (MSVC) or make with MinGW.
 
@@ -35,7 +36,7 @@ else
 endif
 HEADLESS_LIBS := -lm $(if $(EXE),,-lpthread)
 
-all: $(BUILD)/librekta.a $(BUILD)/demo$(EXE)
+all: $(BUILD)/librekta.a $(BUILD)/demo$(EXE) $(BUILD)/hello$(EXE)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -53,15 +54,24 @@ $(BUILD)/librekta.a: $(BUILD)/rekta.o $(PLATFORM_OBJ)
 $(BUILD)/demo$(EXE): demo/demo.c $(BUILD)/librekta.a
 	$(CC) $(CFLAGS) $< $(BUILD)/librekta.a $(LIBS) -o $@
 
+# examples ignore the arguments their callbacks do not need
+$(BUILD)/hello$(EXE): examples/hello.c $(BUILD)/librekta.a
+	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude $< $(BUILD)/librekta.a $(LIBS) -o $@
+
+$(BUILD)/hello-headless$(EXE): examples/hello.c $(SOURCES) | $(BUILD)
+	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude -DRK_HEADLESS_ONLY $< src/rekta.c $(HEADLESS_LIBS) -o $@
+
 $(BUILD)/test$(EXE): test/test.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY test/test.c $(HEADLESS_LIBS) -o $@
 
 $(BUILD)/demo-headless$(EXE): demo/demo.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY demo/demo.c src/rekta.c $(HEADLESS_LIBS) -o $@
 
-test: $(BUILD)/test$(EXE)
+test: $(BUILD)/test$(EXE) $(BUILD)/hello-headless$(EXE)
 	$(BUILD)/test$(EXE) $(BUILD)/test-out
 	node test/compare.mjs test/ref $(BUILD)/test-out
+	$(BUILD)/hello-headless$(EXE)
+	sh test/examples.sh
 
 shots: $(BUILD)/demo-headless$(EXE)
 	mkdir -p $(BUILD)/shots
@@ -78,7 +88,13 @@ sanitize: | $(BUILD)
 	mkdir -p $(BUILD)/shots-asan
 	$(BUILD)/demo-asan --shots $(BUILD)/shots-asan > /dev/null
 
+PREFIX ?= /usr/local
+install: $(BUILD)/librekta.a
+	install -Dm644 $(BUILD)/librekta.a $(DESTDIR)$(PREFIX)/lib/librekta.a
+	install -Dm644 include/rekta.h $(DESTDIR)$(PREFIX)/include/rekta.h
+	install -Dm644 man/rekta.3 $(DESTDIR)$(PREFIX)/share/man/man3/rekta.3
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all test shots perf sanitize clean
+.PHONY: all test shots perf sanitize install clean

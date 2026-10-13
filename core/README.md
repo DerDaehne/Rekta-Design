@@ -55,45 +55,57 @@ servers); `RK_HEADLESS=1` in the environment runs any build without a screen.
 
 ## A first app
 
+`examples/hello.c`, built with the library and run by `make test`; `man ./man/rekta.3`
+explains every call in it.
+
 ```c
+/* hello.c: a first app. A section of tiles, a button that counts, a tile that opens something. */
 #include "rekta.h"
+#include <stdio.h>
+
+static rk_view *builds;                            /* the one view that changes later */
+static int finished = 312;
 
 static void open_notes(rk_view *tile, void *user) {
-  (void)user;
   rk_window_toast(rk_view_window(tile), "Release notes are on their way.", NULL, NULL, NULL);
 }
 
-static void launch(void *user) {
-  (void)user;
-  rk_window *window = rk_window_create(&(rk_window_desc){ .size = sizeof(rk_window_desc), .title = "My tool", .width = 960, .height = 640 });
+static void build_one(rk_view *button, void *user) {
+  char text[16];
+  snprintf(text, sizeof text, "%d", ++finished);
+  rk_view_transition(builds, RK_TRANSITION_PEEK);  /* a new number peeks in */
+  rk_tile_set_stat(builds, text, "finished today");
+}
 
-  rk_view *board = rk_view_create();
-  rk_view_set_layout(board, RK_LAYOUT_TILES);
+static rk_view *today(void) {
+  rk_view *page = rk_column();
+  rk_add(page, rk_label("Today", RK_TEXT_GROUP));
 
-  rk_view *builds = rk_tile_create(RK_STATUS_SUCCESS, NULL);   /* the fill is the status */
-  rk_tile_set_stat(builds, "312", "finished today");
+  rk_view *tiles = rk_add(page, rk_tile_grid());
+  builds = rk_add(tiles, rk_tile("312", "finished today"));
+  rk_tile_set_status(builds, RK_STATUS_SUCCESS, NULL);
   rk_view_set_span(builds, 2, 1);
-  rk_view_add(board, builds);
-  rk_release(builds);                                         /* the board holds it now */
 
-  rk_view *notes = rk_tile_create(RK_STATUS_NONE, NULL);
-  rk_tile_set_stat(notes, "0.3", "release notes");
-  rk_view_on_activate(notes, open_notes, NULL);              /* it presses, and opens something */
-  rk_view_add(board, notes);
-  rk_release(notes);
+  rk_view *notes = rk_add(tiles, rk_tile("0.3", "release notes"));
+  rk_view_on_activate(notes, open_notes, NULL);    /* it presses, and opens something */
 
-  rk_controller *home = rk_panorama_create();
-  rk_panorama_add(home, "today", board, 0);
-  rk_release(board);
+  rk_add(page, rk_button("build one", build_one, NULL));
+  return page;
+}
 
-  rk_window_set_root(window, home);
-  rk_release(home);
-  rk_window_show(window);
-  rk_release(window);                                         /* the app keeps an open window */
+static void launch(void *user) {
+  rk_window_desc desc = { .size = sizeof desc, .title = "My tool", .width = 960, .height = 640 };
+  rk_window *window = rk_window_create(&desc);
+
+  rk_controller *home = rk_panorama();
+  rk_panorama_add(home, "today", today(), 0);
+  rk_window_show(window, home);
+  rk_release(window);                              /* an open window lives until it is closed */
 }
 
 int main(void) {
-  return rk_app_main(&(rk_app_desc){ .size = sizeof(rk_app_desc), .name = "My tool", .id = "de.example.tool", .launch = launch });
+  rk_app_desc app = { .size = sizeof app, .name = "My tool", .id = "de.example.tool", .launch = launch };
+  return rk_app_main(&app);
 }
 ```
 

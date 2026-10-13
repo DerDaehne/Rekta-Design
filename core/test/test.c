@@ -15,31 +15,26 @@ static void shot(rk_window *w, const char *name) {
 }
 
 static rk_window *window(float w, float h) {
-  rk_window_desc d = { sizeof d, "test", w, h, 0, 0, false };
+  rk_window_desc d = { .size = sizeof d, .title = "test", .width = w, .height = h };
   rk_window *win = rk_window_create(&d);
   return win;
 }
 
-/* takes the caller's reference to content */
+/* takes content */
 static void show(rk_window *w, rk_view *content, const char *title) {
-  rk_controller *c = rk_controller_create_with_view(content, title);
-  rk_release(content);
-  rk_window_set_root(w, c);
-  rk_release(c);
-  rk_window_show(w);
+  rk_window_show(w, rk_controller_create_with_view(content, title));
   rk_app_run_for(50);
 }
 
 static void done(rk_window *w) { rk_window_close(w); rk_release(w); }
 
+/* a column with the gap and padding a test measures against */
 static rk_view *col(float gap, float pad) {
-  rk_view *v = rk_view_create();
-  rk_view_set_layout(v, RK_LAYOUT_COLUMN);
+  rk_view *v = rk_column();
   rk_view_set_gap(v, gap);
   rk_view_set_padding(v, (rk_insets){ pad, pad, pad, pad });
   return v;
 }
-static void add(rk_view *p, rk_view *c) { rk_view_add(p, c); rk_release(c); }
 
 /* Tokens, easing ------------------------------------------------------------------------------------------------- */
 
@@ -119,21 +114,18 @@ static void test_text(void) {
 static void test_layout(void) {
   rk_window *w = window(800, 600);
   rk_view *root = col(8, 16);
-  rk_view *row = rk_view_create();
-  rk_view_set_layout(row, RK_LAYOUT_ROW);
+  rk_view *row = rk_add(root, rk_row());
   rk_view_set_gap(row, 10);
-  rk_view *a = rk_view_create(), *b = rk_view_create();
+  rk_view_set_align(row, RK_ALIGN_START, RK_ALIGN_STRETCH);    /* as a plain view: children fill its height */
+  rk_view *a = rk_add(row, rk_view_create()), *b = rk_add(row, rk_view_create());
   rk_view_set_size(a, 100, 40);
   rk_view_set_grow(b, 1); rk_view_set_min_size(b, 0, 40);
-  add(row, a); add(row, b);
-  add(root, row);
-  rk_view *grid = rk_view_create();
-  rk_view_set_layout(grid, RK_LAYOUT_TILES);
-  rk_view *big = rk_tile_create(RK_STATUS_INFO, NULL), *t1 = rk_tile_create(RK_STATUS_NONE, NULL), *t2 = rk_tile_create(RK_STATUS_NONE, NULL), *t3 = rk_tile_create(RK_STATUS_NONE, NULL);
+  rk_view *grid = rk_add(root, rk_tile_grid());
+  rk_view *big = rk_add(grid, rk_tile(NULL, NULL));
+  rk_view *t1 = rk_add(grid, rk_tile(NULL, NULL)), *t2 = rk_add(grid, rk_tile(NULL, NULL)), *t3 = rk_add(grid, rk_tile(NULL, NULL));
+  rk_tile_set_status(big, RK_STATUS_INFO, NULL);
   rk_view_set_span(big, 2, 2);
-  add(grid, big); add(grid, t1); add(grid, t2); add(grid, t3);
   rk_view_set_size(grid, 3 * 150 + 2 * 8, 0);
-  add(root, grid);
   show(w, root, "layout");
   rk_rect fb = rk_view_frame(b), fa = rk_view_frame(a);
   CHECK(fa.w == 100 && fb.x == 110 && CLOSE_TO(fb.w, 800 - 32 - 110, 0.01), "row: fixed then grow (%g %g)", fb.x, fb.w);
@@ -182,15 +174,11 @@ static void key(rk_window *w, uint32_t k, uint32_t mods) {
 static void test_input(void) {
   rk_window *w = window(800, 600);
   rk_view *root = col(8, 16);
-  rk_view *grid = rk_view_create();
-  rk_view_set_layout(grid, RK_LAYOUT_TILES);
-  rk_view *t = rk_tile_create(RK_STATUS_WARNING, NULL);
-  rk_tile_set_stat(t, "0", "presses");
+  rk_view *grid = rk_add(root, rk_tile_grid());
+  rk_view *t = rk_add(grid, rk_tile("0", "presses"));
+  rk_tile_set_status(t, RK_STATUS_WARNING, NULL);
   rk_view_on_activate(t, on_activate, NULL);
-  add(grid, t);
-  rk_view *b = rk_button_create("go", NULL, RK_BUTTON_DEFAULT);
-  rk_view_on_activate(b, on_activate, NULL);
-  add(root, grid); add(root, b);
+  rk_view *b = rk_add(root, rk_button("go", on_activate, NULL));
   show(w, root, "input");
   rk_rect r = rk__window_rect(t);
   /* pressed near the top left, the tile tilts there: that edge goes back */
@@ -233,15 +221,11 @@ static rk_controller *places_for_test;
 static void go_place(rk_view *v, void *u) {
   (void)v; (void)u;
   rk_view *p = col(16, 32);
-  add(p, rk_label_create("A place", RK_TEXT_TITLE));
-  rk_view *rows = rk_rows_create();
+  rk_add(p, rk_label("A place", RK_TEXT_TITLE));
+  rk_view *rows = rk_add(p, rk_rows());
   rk_rows_add(rows, "Nightly import", NULL, RK_STATUS_ERROR);
   rk_rows_add(rows, "schema.sql", "4 kB", RK_STATUS_NONE);
-  add(p, rows);
-  rk_controller *c = rk_controller_create_with_view(p, "a place");
-  rk_release(p);
-  rk_places_go(places_for_test, c);
-  rk_release(c);
+  rk_places_go(places_for_test, rk_controller_create_with_view(p, "a place"));
 }
 
 /* Scrolling glides: it starts gently, never overshoots, keeps its speed when the target moves on, and comes to rest in
@@ -289,25 +273,53 @@ static void test_spring(void) {
   done(w);
 }
 
+/* The API's one rule: what is added belongs to the tree. Nothing to release, nothing left over. */
+static int pressed_count;
+static void count_press(rk_view *v, void *u) { (void)v; (void)u; pressed_count++; }
+
+static void test_api(void) {
+  int before = rk__live_views;
+  rk_window *w = window(600, 400);
+  rk_view *page = rk_column();
+  rk_view *grid = rk_add(page, rk_tile_grid());
+  rk_view *t = rk_add(grid, rk_tile("12", "builds"));
+  CHECK(rk_view_parent(t) == grid && rk_view_count(grid) == 1, "rk_add returns the child, in place");
+  rk_view *b = rk_add(rk_add(page, rk_row()), rk_button("pin a tile", count_press, NULL));
+  CHECK(rk_view_find(page, "pin a tile") == b, "a button is found by its label");
+  rk_view_set_name(t, "builds");
+  CHECK(rk_view_find(page, "builds") == t, "a view by its name");
+  show(w, page, "api");
+  rk_view_tap(b);
+  CHECK(pressed_count == 1, "rk_view_tap presses it (%d)", pressed_count);
+  rk_window_focus(w, b);
+  rk_window_key(w, RK_KEY_ENTER);
+  rk_app_run_for(200);
+  CHECK(pressed_count == 2, "rk_window_key: Enter presses the focused button (%d)", pressed_count);
+  rk_view *moved = rk_insert(page, rk_retain(t), 0);           /* moving a view: pass rk_retain() */
+  CHECK(moved == t && rk_view_parent(t) == page && rk_view_count(grid) == 0, "rk_insert moves a retained view");
+  rk_view_remove(t);
+  rk_app_run_for(50);
+  done(w);
+  rk_app_run_for(50);
+  CHECK(rk__live_views == before, "nothing left over (%d views, %d before)", rk__live_views, before);
+}
+
 static void test_navigation(void) {
   rk_window *w = window(900, 600);
-  rk_controller *home = rk_panorama_create();
-  rk_view *s1 = col(16, 0), *grid = rk_view_create();
-  add(s1, rk_label_create("Tiles, not cards.", RK_TEXT_GROUP));
-  rk_view_set_layout(grid, RK_LAYOUT_TILES);
-  rk_view *t = rk_tile_create(RK_STATUS_INFO, NULL);
-  rk_tile_set_stat(t, "0.3", "release notes");
+  rk_controller *home = rk_panorama();
+  rk_view *s1 = col(16, 0);
+  rk_add(s1, rk_label("Tiles, not cards.", RK_TEXT_GROUP));
+  rk_view *grid = rk_add(s1, rk_tile_grid());
+  rk_view *t = rk_add(grid, rk_tile("0.3", "release notes"));
+  rk_tile_set_status(t, RK_STATUS_INFO, NULL);
   rk_view_on_activate(t, go_place, NULL);
-  add(grid, t);
-  for (int i = 0; i < 4; i++) { rk_view *x = rk_tile_create(i % 2 ? RK_STATUS_SUCCESS : RK_STATUS_NONE, NULL); rk_tile_set_stat(x, "12", "builds"); add(grid, x); }
-  add(s1, grid);
-  rk_panorama_add(home, "rekta", s1, 0); rk_release(s1);
+  for (int i = 0; i < 4; i++) rk_tile_set_status(rk_add(grid, rk_tile("12", "builds")), i % 2 ? RK_STATUS_SUCCESS : RK_STATUS_NONE, NULL);
+  rk_panorama_add(home, "rekta", s1, 0);
   rk_view *s2 = col(16, 0);
-  add(s2, rk_label_create("Second", RK_TEXT_GROUP));
-  rk_panorama_add(home, "second", s2, 0); rk_release(s2);
-  places_for_test = rk_places_create(home);
-  rk_window_set_root(w, places_for_test);
-  rk_window_show(w);
+  rk_add(s2, rk_label("Second", RK_TEXT_GROUP));
+  rk_panorama_add(home, "second", s2, 0);
+  places_for_test = rk_places(home);
+  rk_window_show(w, places_for_test);
   rk_app_run_for(100);
   rk_rect r = rk__window_rect(t);
   click(w, (rk_point){ r.x + r.w / 2, r.y + r.h / 2 }, 60);
@@ -331,19 +343,16 @@ static void test_navigation(void) {
   CHECK(rk_controller_view(home)->value > 0, "scrolled: %g", rk_controller_view(home)->value);
   /* a sheet from the top edge; Escape lets it leave the way it came */
   rk_view *q = col(16, 0);
-  add(q, rk_label_create("Reset the demo?", RK_TEXT_GROUP));
-  rk_view *btn = rk_button_create("reset", NULL, RK_BUTTON_PRIMARY);
-  add(q, btn);
-  rk_controller *sheet = rk_controller_create_with_view(q, "Reset?");
-  rk_release(q);
-  rk_controller_present(home, sheet);
+  rk_add(q, rk_label("Reset the demo?", RK_TEXT_GROUP));
+  rk_view *btn = rk_add(q, rk_button("reset", NULL, NULL));
+  rk_button_set_kind(btn, RK_BUTTON_PRIMARY);
+  rk_controller_present(home, rk_controller_create_with_view(q, "Reset?"));
   rk_app_run_for(400);
   CHECK(w->sheets->nkids == 2 && rk_window_focused(w) == btn, "a sheet: shading and box, focus inside");
   shot(w, "sheet");
   key(w, RK_KEY_ESCAPE, 0);
   rk_app_run_for(400);
   CHECK(w->sheets->nkids == 0, "dismissed");
-  rk_release(sheet);
   rk_window_toast(w, "One thing archived.", "undo", NULL, NULL);
   rk_app_run_for(400);
   CHECK(w->toasts->nkids == 1, "a toast");
@@ -351,14 +360,13 @@ static void test_navigation(void) {
   rk_app_run_for(5400);
   CHECK(w->toasts->nkids == 0, "gone after its time");
   done(w);
-  rk_release(places_for_test); rk_release(home);
 }
 
 /* Scenes for the reference images --------------------------------------------------------------------------------- */
 
-static rk_view *make_tile(rk_status st, const char *v, const char *l, int c, int r) {
-  rk_view *t = rk_tile_create(st, NULL);
-  rk_tile_set_stat(t, v, l);
+static rk_view *add_tile(rk_view *grid, rk_status st, const char *v, const char *l, int c, int r) {
+  rk_view *t = rk_add(grid, rk_tile(v, l));
+  rk_tile_set_status(t, st, NULL);
   rk_view_set_span(t, c, r);
   return t;
 }
@@ -367,21 +375,16 @@ static void scene_tiles(const char *name, float scale) {
   rk_window *w = window(720, 560);
   if (scale != 1) rk__window_resized(w, 720, 560, scale);
   rk_view *root = col(16, 32);
-  add(root, rk_label_create("Tiles, not cards.", RK_TEXT_GROUP));
-  rk_view *grid = rk_view_create();
-  rk_view_set_layout(grid, RK_LAYOUT_TILES);
-  rk_view *seen = make_tile(RK_STATUS_INFO, "1 / 3", "sections seen", 2, 2);
+  rk_add(root, rk_label("Tiles, not cards.", RK_TEXT_GROUP));
+  rk_view *grid = rk_add(root, rk_tile_grid());
+  rk_view *seen = add_tile(grid, RK_STATUS_INFO, "1 / 3", "sections seen", 2, 2);
   rk_tile_set_message(seen, "Every section you move to counts.");
   rk_tile_set_progress(seen, 0.33f);
-  add(grid, seen);
-  add(grid, make_tile(RK_STATUS_WARNING, "4", "waiting", 1, 1));
-  add(grid, make_tile(RK_STATUS_ERROR, "1", "failed", 1, 1));
-  rk_view *live = make_tile(RK_STATUS_NONE, "118", "requests a second", 2, 1);
+  add_tile(grid, RK_STATUS_WARNING, "4", "waiting", 1, 1);
+  add_tile(grid, RK_STATUS_ERROR, "1", "failed", 1, 1);
   float s[12] = { 4, 6, 5, 9, 8, 12, 11, 15, 13, 16, 14, 18 };
-  rk_tile_set_series(live, s, 12);
-  add(grid, live);
-  add(grid, make_tile(RK_STATUS_SUCCESS, "312", "finished today", 1, 1));
-  add(root, grid);
+  rk_tile_set_series(add_tile(grid, RK_STATUS_NONE, "118", "requests a second", 2, 1), s, 12);
+  add_tile(grid, RK_STATUS_SUCCESS, "312", "finished today", 1, 1);
   show(w, root, "tiles");
   shot(w, name);
   done(w);
@@ -390,20 +393,19 @@ static void scene_tiles(const char *name, float scale) {
 static void scene_type(void) {
   rk_window *w = window(720, 520);
   rk_view *root = col(8, 32);
-  add(root, rk_label_create("Title, semibold", RK_TEXT_TITLE));
-  add(root, rk_label_create("A group heading", RK_TEXT_GROUP));
-  add(root, rk_label_create("a kicker, tracked", RK_TEXT_KICKER));
-  add(root, rk_label_create("Body text in Barlow at size-s with the body line height, wrapping at the width of its column as a paragraph does. AV To Wa.", RK_TEXT_BODY));
-  add(root, rk_label_create("Strong text", RK_TEXT_STRONG));
-  add(root, rk_label_create("Small text", RK_TEXT_SMALL));
-  add(root, rk_label_create("label", RK_TEXT_LABEL));
-  add(root, rk_label_create("meta 0123456789", RK_TEXT_META));
-  add(root, rk_label_create("summary", RK_TEXT_PIVOT));
-  rk_view *icons = rk_view_create();
-  rk_view_set_layout(icons, RK_LAYOUT_ROW);
+  rk_add(root, rk_label("Title, semibold", RK_TEXT_TITLE));
+  rk_add(root, rk_label("A group heading", RK_TEXT_GROUP));
+  rk_add(root, rk_label("a kicker, tracked", RK_TEXT_KICKER));
+  rk_add(root, rk_label("Body text in Barlow at size-s with the body line height, wrapping at the width of its column as a paragraph does. AV To Wa.", RK_TEXT_BODY));
+  rk_add(root, rk_label("Strong text", RK_TEXT_STRONG));
+  rk_add(root, rk_label("Small text", RK_TEXT_SMALL));
+  rk_add(root, rk_label("label", RK_TEXT_LABEL));
+  rk_add(root, rk_label("meta 0123456789", RK_TEXT_META));
+  rk_add(root, rk_label("summary", RK_TEXT_PIVOT));
+  rk_view *icons = rk_add(root, rk_row());
   rk_view_set_gap(icons, 12);
-  for (int i = 0; i < RK_ICON_COUNT; i += 3) add(icons, rk_icon_create(rk_icon_defs[i].name, RK_ROLE_TEXT));
-  add(root, icons);
+  rk_view_set_align(icons, RK_ALIGN_START, RK_ALIGN_STRETCH);
+  for (int i = 0; i < RK_ICON_COUNT; i += 3) rk_add(icons, rk_icon(rk_icon_defs[i].name, RK_ROLE_TEXT));
   show(w, root, "type");
   shot(w, "type");
   done(w);
@@ -412,25 +414,20 @@ static void scene_type(void) {
 static void scene_controls(const char *name) {
   rk_window *w = window(720, 420);
   rk_view *root = col(16, 32);
-  rk_view *row = rk_view_create();
-  rk_view_set_layout(row, RK_LAYOUT_ROW);
-  rk_view_set_gap(row, 8);
-  rk_view_set_align(row, RK_ALIGN_START, RK_ALIGN_START);
-  add(row, rk_button_create("primary", NULL, RK_BUTTON_PRIMARY));
-  add(row, rk_button_create("default", NULL, RK_BUTTON_DEFAULT));
-  add(row, rk_button_create("quiet", NULL, RK_BUTTON_QUIET));
-  rk_view *off = rk_button_create("disabled", NULL, RK_BUTTON_DEFAULT);
-  rk_button_set_disabled(off, "nothing to do yet");
-  add(row, off);
-  add(row, rk_button_create("archive", "archive", RK_BUTTON_BAR));
-  add(root, row);
-  rk_view *rows = rk_rows_create();
+  rk_view *row = rk_add(root, rk_row());
+  rk_button_set_kind(rk_add(row, rk_button("primary", NULL, NULL)), RK_BUTTON_PRIMARY);
+  rk_add(row, rk_button("default", NULL, NULL));
+  rk_button_set_kind(rk_add(row, rk_button("quiet", NULL, NULL)), RK_BUTTON_QUIET);
+  rk_button_set_disabled(rk_add(row, rk_button("disabled", NULL, NULL)), "nothing to do yet");
+  rk_view *bar = rk_add(row, rk_button("archive", NULL, NULL));
+  rk_button_set_kind(bar, RK_BUTTON_BAR);
+  rk_button_set_icon(bar, "archive");
+  rk_view *rows = rk_add(root, rk_rows());
   rk_rows_add(rows, "Nightly import", NULL, RK_STATUS_ERROR);
   rk_rows_add(rows, "Release notes", NULL, RK_STATUS_WARNING);
   rk_rows_add(rows, "Deploy to staging", NULL, RK_STATUS_SUCCESS);
   rk_rows_add(rows, "schema.sql", "4 kB", RK_STATUS_NONE);
-  add(root, rows);
-  add(root, rk_progress_create(0.6f));
+  rk_add(root, rk_progress(0.6f));
   show(w, root, "controls");
   shot(w, name);
   done(w);
@@ -439,11 +436,7 @@ static void scene_controls(const char *name) {
 static void scene_flip(void) {
   rk_window *w = window(400, 240);
   rk_view *root = col(16, 32);
-  rk_view *grid = rk_view_create();
-  rk_view_set_layout(grid, RK_LAYOUT_TILES);
-  rk_view *t = make_tile(RK_STATUS_INFO, "3", "runners", 1, 1);
-  add(grid, t);
-  add(root, grid);
+  rk_view *t = add_tile(rk_add(root, rk_tile_grid()), RK_STATUS_INFO, "3", "runners", 1, 1);
   show(w, root, "flip");
   rk_view_transition(t, RK_TRANSITION_FLIP);
   rk_tile_set_status(t, RK_STATUS_ERROR, NULL);
@@ -466,6 +459,7 @@ static void launch(void *user) {
   test_text();
   test_layout();
   test_input();
+  test_api();
   test_navigation();
   test_spring();
   scene_tiles("tiles", 1);

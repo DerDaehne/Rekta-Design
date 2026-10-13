@@ -36,6 +36,7 @@
             install -Dm755 build/demo $out/bin/rekta-demo
             install -Dm644 build/librekta.a $out/lib/librekta.a
             install -Dm644 include/rekta.h $out/include/rekta.h
+            install -Dm644 man/rekta.3 $out/share/man/man3/rekta.3
             runHook postInstall
           '';
           meta = {
@@ -60,7 +61,7 @@
       devShells = each (pkgs: {
         default = pkgs.mkShell {
           packages = [ pkgs.gnumake pkgs.nodejs ] ++ windowing pkgs
-            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.pkg-config pkgs.gdb pkgs.xvfb-run pkgs.weston ];
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.pkg-config pkgs.gdb pkgs.xvfb-run pkgs.weston pkgs.mandoc ];
           shellHook = ''
             echo "rekta-core: make -C core && ./core/build/demo   (make -C core test, shots, sanitize)"
           '';

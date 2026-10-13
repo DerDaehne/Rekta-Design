@@ -110,7 +110,7 @@ void rk__view_detach(rk_view *v) {
   rk_release(v);
 }
 
-void rk_view_insert(rk_view *parent, rk_view *child, int index) {
+void rk__view_insert(rk_view *parent, rk_view *child, int index) {
   assert(parent && child && parent != child);
   rk_retain(child);
   if (child->parent) rk__view_detach(child);
@@ -129,7 +129,17 @@ void rk_view_insert(rk_view *parent, rk_view *child, int index) {
   rk__view_relayout_up(child);
 }
 
-void rk_view_add(rk_view *parent, rk_view *child) { rk_view_insert(parent, child, parent->nkids); }
+void rk__view_add(rk_view *parent, rk_view *child) { rk__view_insert(parent, child, parent->nkids); }
+
+/* The public add takes the caller's reference: a new view goes into the tree and belongs to it. */
+rk_view *rk_insert(rk_view *parent, rk_view *child, int index) {
+  if (!parent || !child || parent == child) { rk_release(child); return NULL; }
+  rk__view_insert(parent, child, index);
+  rk_release(child);
+  return child;
+}
+
+rk_view *rk_add(rk_view *parent, rk_view *child) { return rk_insert(parent, child, parent ? parent->nkids : 0); }
 
 static void left_done(rk_view *v, void *user) { (void)user; if (v->leaving) rk__view_detach(v); }
 
@@ -155,9 +165,11 @@ int rk_view_count(rk_view *v) { return v->nkids; }
 rk_view *rk_view_child(rk_view *v, int i) { return i >= 0 && i < v->nkids ? v->kids[i] : NULL; }
 void rk_view_set_name(rk_view *v, const char *name) { rk__setstr(&v->name, name); }
 
+/* By name, or a button by what it says: tests and tours find "pin a tile" without naming it. */
 rk_view *rk_view_find(rk_view *root, const char *name) {
   if (!root || !name) return NULL;
   if (root->name && !strcmp(root->name, name)) return root;
+  if (root->access == RK_ACCESS_BUTTON && root->access_label && !strcmp(root->access_label, name)) return root;
   for (int i = 0; i < root->nkids; i++) { rk_view *f = rk_view_find(root->kids[i], name); if (f) return f; }
   return NULL;
 }
@@ -414,7 +426,7 @@ static void stack(rk_view *v, bool column) {
     rk_view *k = v->kids[idx[j]];
     float cs = cross_len, co = 0;
     float fixed = column ? k->fixed_w : k->fixed_h;
-    if (v->cross != RK_ALIGN_STRETCH || fixed > 0) {                   /* a fixed size is not stretched */
+    if (v->cross != RK_ALIGN_STRETCH || fixed > 0 || k->hug) {         /* a fixed size, or a button, is not stretched */
       cs = RK_MIN(cross[j], cross_len);
       if (v->cross == RK_ALIGN_CENTER) co = (cross_len - cs) / 2;
       else if (v->cross == RK_ALIGN_END) co = cross_len - cs;

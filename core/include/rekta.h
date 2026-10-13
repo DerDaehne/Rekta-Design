@@ -3,8 +3,15 @@
  * The ABI rules (docs/core.md):
  *   - C99. Functions rk_noun_verb, types rk_noun, constants RK_NOUN.
  *   - Value types cross by value and never change layout. Units are logical pixels.
- *   - Objects are opaque and reference counted: a function named *_create returns a reference you own, everything
- *     else is borrowed. A container retains what it holds.
+ *   - Objects are opaque and reference counted. One rule for who owns what:
+ *       - a constructor returns a reference you own: rk_label(), rk_tile(), rk_column(), rk_window_create(), ...
+ *         (it is named after the thing; where the thing is a type of its own - window, view, controller - it is
+ *         *_create);
+ *       - adding, showing and presenting take that reference over: rk_add(), rk_insert(), rk_panorama_add(),
+ *         rk_pivot_add(), rk_places(), rk_places_go(), rk_controller_present(), rk_window_show() and
+ *         rk_controller_create_with_view(). What you put into the tree belongs to the tree; you never release it.
+ *         To move a view that is already in a tree, pass rk_retain(view);
+ *       - every other pointer you get is borrowed. A view stays valid while it is in the tree.
  *   - Descriptors that may grow start with `uint32_t size`; set it to sizeof the struct.
  *   - Callbacks are a function pointer plus a `void *user`.
  *   - Strings are UTF-8 and NUL-terminated; the library copies what it keeps.
@@ -147,10 +154,9 @@ typedef struct rk_window_desc {
   bool system_frame;                               /* keep the system's title bar instead of Rekta's */
 } rk_window_desc;
 
-RK_API rk_window *rk_window_create(const rk_window_desc *desc);
-RK_API void rk_window_set_root(rk_window *window, rk_controller *root);
+RK_API rk_window *rk_window_create(const rk_window_desc *desc);   /* an open window lives until closed */
+RK_API void rk_window_show(rk_window *window, rk_controller *root);  /* takes root; again: another root */
 RK_API rk_controller *rk_window_root(rk_window *window);
-RK_API void rk_window_show(rk_window *window);
 RK_API void rk_window_close(rk_window *window);
 RK_API void rk_window_set_title(rk_window *window, const char *title);
 RK_API rk_size rk_window_size(rk_window *window);
@@ -159,7 +165,6 @@ RK_API float rk_window_scale(rk_window *window);   /* device pixels per logical 
 RK_API void rk_window_on_close(rk_window *window, bool (*should_close)(rk_window *window, void *user), void *user);
 RK_API bool rk_window_focus(rk_window *window, rk_view *view);  /* false if the view cannot take focus */
 RK_API rk_view *rk_window_focused(rk_window *window);
-RK_API rk_view *rk_window_view_at(rk_window *window, rk_point point);   /* what a press there reaches, or NULL */
 /* A toast: a short message from the top edge, with an optional action (undo, retry) that keeps it for the toast
    timing and shows the time running out. */
 RK_API void rk_window_toast(rk_window *window, const char *message, const char *action, void (*on_action)(void *user), void *user);
@@ -185,18 +190,18 @@ typedef enum rk_access_role {
 
 typedef enum rk_press { RK_PRESS_NONE, RK_PRESS_TILE, RK_PRESS_ROW, RK_PRESS_FLAT, RK_PRESS_FORCE32 = 0x7fffffff } rk_press;
 
-RK_API rk_view *rk_view_create(void);              /* a plain view: a container with a layout */
+RK_API rk_view *rk_view_create(void);              /* a plain view; see rk_column() and the like for containers */
 
-/* the tree */
-RK_API void rk_view_add(rk_view *parent, rk_view *child);       /* retains child; moves it if it has a parent */
-RK_API void rk_view_insert(rk_view *parent, rk_view *child, int index);
-RK_API void rk_view_remove(rk_view *child);       /* from its parent */
+/* the tree: adding takes the child over and returns it, so it can be kept to change it later */
+RK_API rk_view *rk_add(rk_view *parent, rk_view *child);
+RK_API rk_view *rk_insert(rk_view *parent, rk_view *child, int index);
+RK_API void rk_view_remove(rk_view *child);       /* from its parent; gone unless you retained it */
 RK_API rk_view *rk_view_parent(rk_view *view);
 RK_API int rk_view_count(rk_view *view);
 RK_API rk_view *rk_view_child(rk_view *view, int index);
 RK_API rk_window *rk_view_window(rk_view *view);
 RK_API void rk_view_set_name(rk_view *view, const char *name);  /* for finding it: tests, the gallery */
-RK_API rk_view *rk_view_find(rk_view *root, const char *name);
+RK_API rk_view *rk_view_find(rk_view *root, const char *name);   /* by name, or a button by its label */
 
 /* geometry */
 RK_API rk_rect rk_view_frame(rk_view *view);      /* in the parent */
@@ -302,17 +307,25 @@ typedef enum rk_text_style {
 
 typedef enum rk_status { RK_STATUS_NONE, RK_STATUS_INFO, RK_STATUS_SUCCESS, RK_STATUS_WARNING, RK_STATUS_ERROR, RK_STATUS_FORCE32 = 0x7fffffff } rk_status;
 
-RK_API rk_view *rk_label_create(const char *text, rk_text_style style);   /* wraps at its width */
+/* Containers with the spacing the design gives them; change it with rk_view_set_gap() and the like. */
+RK_API rk_view *rk_column(void);                   /* top to bottom, gap space-m */
+RK_API rk_view *rk_row(void);                      /* left to right, gap space-s, aligned to the start */
+RK_API rk_view *rk_tile_grid(void);                /* tiles in units of tile-unit, gap space-s */
+
+RK_API rk_view *rk_label(const char *text, rk_text_style style);   /* wraps at its width */
 RK_API void rk_label_set_text(rk_view *label, const char *text);
 RK_API void rk_label_set_color(rk_view *label, rk_role role);
 
 typedef enum rk_button_kind { RK_BUTTON_DEFAULT, RK_BUTTON_PRIMARY, RK_BUTTON_QUIET, RK_BUTTON_BAR, RK_BUTTON_FORCE32 = 0x7fffffff } rk_button_kind;
-RK_API rk_view *rk_button_create(const char *label, const char *icon, rk_button_kind kind);   /* icon may be NULL */
+/* A button keeps its own width, also in a column. */
+RK_API rk_view *rk_button(const char *label, void (*on_press)(rk_view *button, void *user), void *user);   /* on_press may be NULL */
+RK_API void rk_button_set_kind(rk_view *button, rk_button_kind kind);   /* RK_BUTTON_DEFAULT until set */
+RK_API void rk_button_set_icon(rk_view *button, const char *icon);      /* from the icon set; NULL removes it */
 RK_API void rk_button_set_disabled(rk_view *button, const char *reason);  /* NULL enables; the reason is its tooltip */
 
-/* A tile: one status fill, one idea. Sizes are spans in a TILES parent (rk_view_set_span). A tile with an
-   activate handler presses and opens something; without one it only informs. */
-RK_API rk_view *rk_tile_create(rk_status status, const char *word);
+/* A tile: one status fill, one idea - a value and what it counts. Sizes are spans in a tile grid
+   (rk_view_set_span). A tile with an activate handler presses and opens something; without one it only informs. */
+RK_API rk_view *rk_tile(const char *value, const char *label);   /* no status until rk_tile_set_status() */
 RK_API void rk_tile_set_status(rk_view *tile, rk_status status, const char *word);
 RK_API void rk_tile_set_stat(rk_view *tile, const char *value, const char *label);
 RK_API void rk_tile_set_message(rk_view *tile, const char *message);     /* NULL removes it */
@@ -320,11 +333,11 @@ RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);  
 RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1; < 0 removes it */
 
 /* Hairline rows: a title on the left, a meta or a status tag on the right. */
-RK_API rk_view *rk_rows_create(void);
+RK_API rk_view *rk_rows(void);
 RK_API rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_status status);   /* the row, borrowed */
 
-RK_API rk_view *rk_icon_create(const char *name, rk_role color);   /* 20 × 20 from the icon set */
-RK_API rk_view *rk_progress_create(float progress);                /* < 0: indeterminate */
+RK_API rk_view *rk_icon(const char *name, rk_role color);   /* 20 × 20 from the icon set */
+RK_API rk_view *rk_progress(float progress);                /* < 0: indeterminate */
 RK_API void rk_progress_set(rk_view *view, float progress);
 
 /* Controllers ----------------------------------------------------------------------------------------------------- */
@@ -340,7 +353,7 @@ typedef struct rk_controller_class {
 } rk_controller_class;
 
 RK_API rk_controller *rk_controller_create(const rk_controller_class *cls, void *state);
-RK_API rk_controller *rk_controller_create_with_view(rk_view *view, const char *title);   /* no class needed */
+RK_API rk_controller *rk_controller_create_with_view(rk_view *view, const char *title);   /* takes view; no class needed */
 RK_API void *rk_controller_state(rk_controller *controller);
 RK_API rk_view *rk_controller_view(rk_controller *controller);    /* loads it on first use */
 RK_API void rk_controller_set_title(rk_controller *controller, const char *title);
@@ -350,23 +363,23 @@ RK_API rk_window *rk_controller_window(rk_controller *controller);
 
 /* Places: a navigation stack. Going to a place turns the old one away and the new one in; back (Escape, the back
    button, Alt+Left, the mouse's back button) turns the other way and puts focus back where it was. */
-RK_API rk_controller *rk_places_create(rk_controller *home);
-RK_API void rk_places_go(rk_controller *places, rk_controller *place);
+RK_API rk_controller *rk_places(rk_controller *home);   /* takes home */
+RK_API void rk_places_go(rk_controller *places, rk_controller *place);   /* takes place */
 RK_API void rk_places_back(rk_controller *places);
 RK_API int rk_places_depth(rk_controller *places);
 
 /* Panorama: one place laid out sideways in sections under a strip of their titles that glides by place. */
-RK_API rk_controller *rk_panorama_create(void);
-RK_API void rk_panorama_add(rk_controller *panorama, const char *title, rk_view *section, float width);   /* 0: the natural width */
+RK_API rk_controller *rk_panorama(void);
+RK_API void rk_panorama_add(rk_controller *panorama, const char *title, rk_view *section, float width);   /* takes section; width 0: natural */
 
 /* Pivot: facets of one place in a fixed order; the active title is large; a change slides from its side. */
-RK_API rk_controller *rk_pivot_create(void);
-RK_API void rk_pivot_add(rk_controller *pivot, rk_controller *facet);
+RK_API rk_controller *rk_pivot(void);
+RK_API void rk_pivot_add(rk_controller *pivot, rk_controller *facet);   /* takes facet */
 RK_API void rk_pivot_select(rk_controller *pivot, int index);
 RK_API int rk_pivot_selected(rk_controller *pivot);
 
 /* Sheets: a short question from the top edge over a shaded backdrop. Escape or a click on the shading dismisses. */
-RK_API void rk_controller_present(rk_controller *presenter, rk_controller *sheet);
+RK_API void rk_controller_present(rk_controller *presenter, rk_controller *sheet);   /* takes sheet */
 RK_API void rk_controller_dismiss(rk_controller *sheet);
 
 /* Motion ---------------------------------------------------------------------------------------------------------- */
@@ -403,6 +416,9 @@ RK_API rk_size rk_text_measure(const char *text, rk_text_style style, float max_
 /* Testing --------------------------------------------------------------------------------------------------------- */
 
 RK_API void rk_window_inject(rk_window *window, const rk_event *event);   /* as if it came from the system */
+RK_API void rk_view_tap(rk_view *view);            /* a press and release in its middle */
+RK_API void rk_window_key(rk_window *window, uint32_t key);   /* a key pressed and released (RK_KEY_*) */
+RK_API rk_view *rk_window_view_at(rk_window *window, rk_point point);   /* what a press there reaches, or NULL */
 RK_API bool rk_window_snapshot(rk_window *window, const char *png_path);  /* the window's pixels as a PNG */
 RK_API void rk_app_run_for(double ms);             /* headless: advance the virtual clock, running every frame */
 

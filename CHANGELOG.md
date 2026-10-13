@@ -32,6 +32,21 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core's API is narrower and says who owns what in one rule:
+  constructors are named after what they make (`rk_label`, `rk_button`,
+  `rk_tile`, `rk_column`, `rk_row`, `rk_tile_grid`, `rk_rows`, `rk_icon`,
+  `rk_progress`, `rk_panorama`, `rk_pivot`, `rk_places`) and return a
+  reference; adding, showing and presenting take it over (`rk_add` and
+  `rk_insert` return the child). `rk_button(label, on_press, user)` takes
+  its handler, `rk_button_set_kind` and `rk_button_set_icon` the rest; a
+  button keeps its own width in a column. `rk_window_show(window, root)`
+  replaces `rk_window_set_root`; `rk_view_find` finds a button by its label;
+  `rk_view_tap` and `rk_window_key` join the testing calls. A man page,
+  `core/man/rekta.3`, explains the API by task, with
+  `core/examples/hello.c` as its example (built and run by `make test`,
+  checked against the copies in the man page and the README). Breaking:
+  `rk_view_add`, `rk_view_insert`, `rk_window_set_root` and the
+  `rk_*_create` constructors of built-in views are gone.
 - rekta-core scrolls and glides smoothly: a wheel step, a section from
   the nav strip or the keyboard travels on a quintic that sets off and
   comes to rest without a jolt, and a new step picks it up mid-way with

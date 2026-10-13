@@ -56,11 +56,11 @@ rk_window *rk_window_create(const rk_window_desc *desc) {
   w->root->window = w;
   w->root->fill_role = RK_ROLE_BG;
   w->content = rk_view_create(); rk_view_set_layout(w->content, RK_LAYOUT_OVERLAY);
-  if (!d.system_frame) { w->titlebar = rk__titlebar_create(w); rk_view_add(w->root, w->titlebar); rk_release(w->titlebar); }
-  rk_view_add(w->root, w->content); rk_release(w->content);
+  if (!d.system_frame) { w->titlebar = rk__titlebar_create(w); rk__view_add(w->root, w->titlebar); rk_release(w->titlebar); }
+  rk__view_add(w->root, w->content); rk_release(w->content);
   /* a toast says something happened; a sheet asks, above everything (the web's dialogs are in the top layer) */
-  w->toasts = rk__view_create(&toasts_class, NULL); w->toasts->passthrough = true; rk_view_add(w->root, w->toasts); rk_release(w->toasts);
-  w->sheets = rk_view_create(); w->sheets->passthrough = true; rk_view_add(w->root, w->sheets); rk_release(w->sheets);
+  w->toasts = rk__view_create(&toasts_class, NULL); w->toasts->passthrough = true; rk__view_add(w->root, w->toasts); rk_release(w->toasts);
+  w->sheets = rk_view_create(); w->sheets->passthrough = true; rk__view_add(w->root, w->sheets); rk_release(w->sheets);
   w->native = rk__platform()->open(w, &d);
   if (!w->native && !rk__headless()) { rk_release(w); return NULL; }
   w->next = open_windows; open_windows = w;
@@ -69,7 +69,7 @@ rk_window *rk_window_create(const rk_window_desc *desc) {
   return w;
 }
 
-void rk_window_set_root(rk_window *w, rk_controller *c) {
+static void set_root(rk_window *w, rk_controller *c) {
   if (w->controller == c) return;
   if (w->controller) {
     rk__controller_appear(w->controller, false);
@@ -78,7 +78,7 @@ void rk_window_set_root(rk_window *w, rk_controller *c) {
   }
   w->controller = c ? rk_retain(c) : NULL;
   if (c) {
-    rk_view_add(w->content, rk_controller_view(c));
+    rk__view_add(w->content, rk_controller_view(c));
     rk__controller_attach(c, w);
     if (w->shown) rk__controller_appear(c, true);
   }
@@ -88,7 +88,9 @@ void rk_window_set_root(rk_window *w, rk_controller *c) {
 
 rk_controller *rk_window_root(rk_window *w) { return w->controller; }
 
-void rk_window_show(rk_window *w) {
+/* Shows the window with root as what it shows (takes the caller's reference); a later call puts another root in. */
+void rk_window_show(rk_window *w, rk_controller *root) {
+  if (root) { set_root(w, root); rk_release(root); }
   if (w->shown) return;
   w->shown = true;
   rk__platform()->show(w->native);
@@ -155,7 +157,7 @@ void rk_window_toast(rk_window *w, const char *message, const char *action, void
   }
   rk_view *t = rk__toast_create(message, action, on_action, user);
   rk_animate_begin(RK_MOTION_ENTER);
-  rk_view_add(w->toasts, t);
+  rk__view_add(w->toasts, t);
   rk_animate_commit();
   rk_release(t);
 }
@@ -525,6 +527,27 @@ void rk__window_event(rk_window *w, const rk_event *e) {
 void rk__window_pointer_cancel(rk_window *w) {
   if (w->pressed) press_end(w, w->pressed);
   w->capture = NULL;
+}
+
+/* Testing: a press and release in the middle of the view, and a key, as if they came from the system. */
+void rk_view_tap(rk_view *v) {
+  rk_window *w = rk__view_window(v);
+  if (!w) return;
+  rk__layout_pending();
+  rk_rect r = rk__window_rect(v);
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.time = rk_app_now(); e.position = (rk_point){ r.x + r.w / 2, r.y + r.h / 2 };
+  e.type = RK_EVENT_POINTER_DOWN; rk__window_event(w, &e);
+  e.type = RK_EVENT_POINTER_UP; rk__window_event(w, &e);
+}
+
+void rk_window_key(rk_window *w, uint32_t key) {
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.time = rk_app_now(); e.key = key;
+  e.type = RK_EVENT_KEY_DOWN; rk__window_event(w, &e);
+  e.type = RK_EVENT_KEY_UP; rk__window_event(w, &e);
 }
 
 rk_view *rk_window_view_at(rk_window *w, rk_point p) {
