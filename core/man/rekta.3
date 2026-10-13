@@ -229,6 +229,19 @@ Keys: Up and Down, Home and End, a letter, Enter or Space, Escape; Tab or
 a press outside closes it.
 .Fn rk_menu_opener
 tells a handler which view the menu was for.
+.It Fn rk_check "const char *label" "bool on" , Fn rk_toggle "const char *label" "bool on"
+A checkbox (Space toggles) and the Metro toggle, whose state word stands
+beside it; its thumb moves over duration-short.
+.It Fn rk_choices "const char *const *options" "int count" "int chosen" , Fn rk_segments "const char *const *options" "int count" "int chosen"
+One of several options: a group of circles, one stop for Tab, the arrows
+choose
+.Pq Fa chosen No -1 for none yet ;
+or two to five segments side by side, the accent sliding to the choice.
+.It Fn rk_control_value , Fn rk_control_set_value , Fn rk_control_on_change , Fn rk_control_set_disabled
+Every control holds a number: 0 or 1, or the chosen index.
+A value the control cannot take is ignored; the change handler hears
+what the user changes, not what the app sets.
+A disabled control is greyed and leaves the Tab order.
 .It Fn rk_field "const char *label" "const char *placeholder"
 A text field: a label above, the input, a hint below.
 One line, edited with the desktop's keys (arrows, Ctrl by word, Shift to

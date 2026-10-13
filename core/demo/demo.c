@@ -627,17 +627,29 @@ static void paint_now(void *u) {
   rk_label_set_text(D.now, buf);
 }
 
-static void set_theme(rk_view *v, void *u) { (void)v; rk_app_set_theme((rk_theme)(intptr_t)u); }
-static void set_density(rk_view *v, void *u) { (void)v; rk_app_set_density((rk_density)(intptr_t)u); }
-static void set_motion(rk_view *v, void *u) { (void)v; rk_app_set_motion((rk_motion_pref)(intptr_t)u); }
-static void set_accent(rk_view *v, void *u) { (void)v; if (u) rk_app_set_accent(0x8a2d6bffu, 0xd99ac6ffu); else rk_app_set_accent(0, 0); }
+static void set_theme(rk_view *v, void *u) { (void)u; rk_app_set_theme((rk_theme)(int)rk_control_value(v)); }
+static void set_density(rk_view *v, void *u) { (void)u; rk_app_set_density((rk_density)(int)rk_control_value(v)); }
+static void set_motion(rk_view *v, void *u) { (void)u; rk_app_set_motion((rk_motion_pref)(int)rk_control_value(v)); }
+static void set_accent(rk_view *v, void *u) { (void)u; if (rk_control_value(v)) rk_app_set_accent(0x8a2d6bffu, 0xd99ac6ffu); else rk_app_set_accent(0, 0); }
 
-/* A choice: a kicker and a row of buttons, the button's place in the row as the value its handler gets. */
+/* A choice: a kicker and segments, the chosen segment's place as the value. */
 static void choice(rk_view *s, const char *title, const char *const names[], int count, void (*fn)(rk_view *, void *)) {
   rk_add(s, rk_label(title, RK_TEXT_KICKER));
-  rk_view *buttons = rk_add(s, rk_row());
-  for (int i = 0; i < count; i++) rk_add(buttons, rk_button(names[i], fn, (void *)(intptr_t)i));
+  rk_view *seg = rk_add(rk_add(s, rk_row()), rk_segments(names, count, 0));
+  rk_view_set_name(seg, title);
+  rk_control_on_change(seg, fn, NULL);
 }
+
+static void say_notify(rk_view *v, void *u) {
+  (void)u;
+  rk_window_toast(rk_view_window(v), rk_control_value(v) ? "A failed build will say so." : "Failed builds stay quiet.", NULL, NULL, NULL);
+}
+static void say_digest(rk_view *v, void *u) {
+  static const char *const words[] = { "A digest every morning.", "A digest on Mondays.", "No digest." };
+  (void)u;
+  rk_window_toast(rk_view_window(v), words[(int)rk_control_value(v)], NULL, NULL, NULL);
+}
+static void say_sound(rk_view *v, void *u) { (void)u; rk_window_toast(rk_view_window(v), rk_control_value(v) ? "Sounds on." : "Sounds off.", NULL, NULL, NULL); }
 
 static rk_view *settings_section(void) {
   static const char *const theme[] = { "system", "light", "dark" }, *const density[] = { "as the pointer", "comfortable", "compact" };
@@ -650,6 +662,13 @@ static rk_view *settings_section(void) {
   choice(s, "motion", motion, 3, set_motion);
   choice(s, "accent", accent, 2, set_accent);
   D.now = rk_add(s, rk_label("", RK_TEXT_SMALL));
+
+  static const char *const digest[] = { "every morning", "on Mondays", "never" };
+  rk_add(s, rk_label("notifications", RK_TEXT_KICKER));
+  rk_control_on_change(rk_add(s, rk_check("Tell me when a build fails", true)), say_notify, NULL);
+  rk_add(s, rk_label("a digest", RK_TEXT_SMALL));
+  rk_control_on_change(rk_add(s, rk_choices(digest, 3, 1)), say_digest, NULL);
+  rk_control_on_change(rk_add(s, rk_toggle("Sounds", false)), say_sound, NULL);
   paint_now(NULL);
   rk_app_on_change(paint_now, NULL);
   return s;
@@ -677,6 +696,14 @@ static rk_point middle(rk_view *v) {
 static void pointer(rk_event_type type, rk_point p) {
   rk_event e = { sizeof e, type, 0, p, 0, 0, 0, 0, 0, NULL };
   rk_window_inject(D.window, &e);
+}
+
+/* a choice from the keyboard, as a person might: focus, then a key */
+static void choose(const char *name, uint32_t key) {
+  rk_view *v = find(name);
+  if (!v) return;
+  rk_window_focus(D.window, v);
+  rk_window_key(D.window, key);
 }
 
 /* a press held long enough to be seen, then released */
@@ -720,8 +747,8 @@ static void tour(void) {
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("14-lists");
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700); shot("15-type");
   key(RK_KEY_PAGE_DOWN); rk_app_run_for(700);
-  press("dark"); rk_app_run_for(700); shot("16-dark");
-  press("plum"); rk_app_run_for(700); shot("17-accent");
+  choose("theme", RK_KEY_END); rk_app_run_for(700); shot("16-dark");
+  choose("accent", RK_KEY_END); rk_app_run_for(700); shot("17-accent");
   key(RK_KEY_HOME); rk_app_run_for(900); shot("18-rekta-dark");
   rk_app_quit(0);
 }

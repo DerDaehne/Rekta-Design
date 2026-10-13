@@ -195,6 +195,7 @@ typedef enum rk_access_role {
   RK_ACCESS_NONE, RK_ACCESS_GROUP, RK_ACCESS_TEXT, RK_ACCESS_HEADING, RK_ACCESS_BUTTON, RK_ACCESS_LINK,
   RK_ACCESS_LIST, RK_ACCESS_LIST_ITEM, RK_ACCESS_TAB_LIST, RK_ACCESS_TAB, RK_ACCESS_TAB_PANEL, RK_ACCESS_DIALOG,
   RK_ACCESS_IMAGE, RK_ACCESS_PROGRESS, RK_ACCESS_STATUS, RK_ACCESS_TEXT_FIELD, RK_ACCESS_MENU, RK_ACCESS_TABLE,
+  RK_ACCESS_CHECKBOX, RK_ACCESS_RADIO_GROUP, RK_ACCESS_SWITCH,
   RK_ACCESS_FORCE32 = 0x7fffffff
 } rk_access_role;
 
@@ -362,6 +363,17 @@ RK_API void rk_menu_open(rk_view *menu, rk_view *from);            /* below from
 RK_API void rk_menu_open_at(rk_view *menu, rk_view *from, rk_point point);   /* at a point in from: a context menu */
 RK_API void rk_menu_close(rk_view *menu);
 RK_API rk_view *rk_menu_opener(rk_view *menu);                    /* what opened it, while open and in a handler */
+
+/* Controls that hold a value, as the web's. Each holds a number - 0 or 1, the chosen index - that the app reads and
+   sets; the change handler hears what the user changes, not what the app sets. */
+RK_API rk_view *rk_check(const char *label, bool on);       /* a checkbox: Space toggles */
+RK_API rk_view *rk_choices(const char *const *options, int count, int chosen);   /* options, one chosen (-1: none yet) */
+RK_API rk_view *rk_toggle(const char *label, bool on);      /* the Metro switch, "on" or "off" beside it */
+RK_API rk_view *rk_segments(const char *const *options, int count, int chosen);  /* two to five, side by side */
+RK_API double rk_control_value(rk_view *control);
+RK_API void rk_control_set_value(rk_view *control, double value);   /* one the control cannot take is ignored */
+RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, void *user), void *user);
+RK_API void rk_control_set_disabled(rk_view *control, bool disabled);
 
 /* A text field, as the web's: a label above, the input, a hint below - or an error, its cause and remedy, marked.
    One line, edited with the desktop's keys and the pointer; Enter submits. With more lines it is a text area: the

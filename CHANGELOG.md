@@ -32,6 +32,13 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has controls that hold a value, as the web's: `rk_check`,
+  `rk_choices` (one stop for Tab, the arrows choose), `rk_toggle` (the
+  Metro frame, accent fill and ink thumb, the state word beside it) and
+  `rk_segments` (the accent block slides to a new choice). One model for
+  all: `rk_control_value` / `set_value` / `on_change` / `set_disabled`.
+  The demo's settings are segments, with a checkbox, options and a toggle
+  for notifications.
 - rekta-core sets every script Barlow lacks a glyph for, from another
   face: one the app brings (`rk_app_add_font`) or one the system offers -
   fontconfig on Linux and CoreText on macOS, both opened at run time so

@@ -669,6 +669,64 @@ static void test_table(void) {
   done(w);
 }
 
+/* Controls that hold a value: checkbox, options, toggle, segments. */
+static int control_changes;
+static void control_changed(rk_view *v, void *u) { (void)v; (void)u; control_changes++; }
+
+static void test_controls(void) {
+  rk_window *w = window(520, 420);
+  rk_view *page = col(8, 16);
+  rk_view *chk = rk_add(page, rk_check("Remember this device", false));
+  static const char *const often[] = { "daily", "weekly", "never" }, *const span[] = { "day", "week", "month" };
+  rk_view *opt = rk_add(page, rk_choices(often, 3, 1));
+  rk_view *tog = rk_add(page, rk_toggle("Live tiles", false));
+  rk_view *seg = rk_add(page, rk_segments(span, 3, 0));
+  rk_view *ctl[] = { chk, opt, tog, seg };
+  for (int i = 0; i < 4; i++) rk_control_on_change(ctl[i], control_changed, NULL);
+  show(w, page, "controls");
+  rk_view_tap(chk);
+  CHECK(rk_control_value(chk) == 1 && control_changes == 1, "a click checks it");
+  rk_window_focus(w, chk); key(w, RK_KEY_SPACE, 0);
+  CHECK(rk_control_value(chk) == 0 && control_changes == 2, "Space unchecks it");
+  rk_rect r = rk__window_rect(opt);
+  float H = rk_metric_of(RK_CONTROL_HEIGHT);
+  click(w, (rk_point){ r.x + 30, r.y + 2.5f * H }, 10);
+  CHECK(rk_control_value(opt) == 2, "a click chooses an option (%g)", rk_control_value(opt));
+  rk_window_focus(w, opt); key(w, RK_KEY_DOWN, 0);
+  CHECK(rk_control_value(opt) == 0, "Down goes round to the first (%g)", rk_control_value(opt));
+  key(w, RK_KEY_UP, 0);
+  CHECK(rk_control_value(opt) == 2 && control_changes == 5, "Up back to the last");
+  rk_view_tap(tog);
+  rk_app_run_for(rk_duration_of(RK_DURATION_SHORT) / 2);
+  CHECK(rk_control_value(tog) == 1 && tog->pvalue > 0.1f && tog->pvalue < 0.9f, "the toggle turns on, its thumb on the way (%.2f)", tog->pvalue);
+  rk_app_run_for(400);
+  CHECK(tog->pvalue == 1, "and there");
+  int before = control_changes;
+  rk_control_set_value(tog, 0);
+  rk_app_run_for(400);
+  CHECK(rk_control_value(tog) == 0 && control_changes == before, "the app sets it without a change heard");
+  rk_view_tap(tog);
+  r = rk__window_rect(seg);
+  segments *sg = seg->state;
+  click(w, (rk_point){ r.x + sg->x[2] + 10, r.y + r.h / 2 }, 10);
+  rk_app_run_for(rk_duration_of(RK_DURATION_SHORT) / 2);
+  CHECK(rk_control_value(seg) == 2 && seg->pvalue > 0.1f && seg->pvalue < 0.9f, "a segment is chosen, the accent sliding (%.2f)", seg->pvalue);
+  rk_window_focus(w, seg);
+  key(w, RK_KEY_LEFT, 0); CHECK(rk_control_value(seg) == 1, "Left: the one before");
+  key(w, RK_KEY_HOME, 0); key(w, RK_KEY_END, 0); CHECK(rk_control_value(seg) == 2, "Home and End");
+  rk_control_set_value(seg, 7);
+  CHECK(rk_control_value(seg) == 2, "a value it cannot take is ignored");
+  rk_control_set_disabled(chk, true);
+  rk_view_tap(chk);
+  CHECK(rk_control_value(chk) == 0 && !chk->focusable, "disabled: no change, no focus");
+  rk_control_set_value(chk, 1);
+  key(w, RK_KEY_LEFT, 0);
+  w->focus_visible = true;
+  rk_app_run_for(500);
+  shot(w, "inputs");
+  done(w);
+}
+
 /* Editing a cell: a double click or F2 opens it; Enter or Tab keeps the value, Escape puts the old one back; the app
    may refuse, and the cell says why and stays open. */
 static char comp_name[8][32] = { "Tile", "Rows", "Tag", "Sheet", "Toast", "Menu", "Field", "Table" };
@@ -812,7 +870,8 @@ static void menu_noop(rk_view *m, int i, void *u) { (void)m; (void)i; (void)u; }
 static bool takes_input(const rk_view *v) {
   if (v->press != RK_PRESS_NONE || v->on_activate || v->menu) return true;
   const char *n = v->cls ? v->cls->pub.name : "";
-  return !strcmp(n, "rk_field") || !strcmp(n, "rk_list") || !strcmp(n, "rk_strip");
+  return !strcmp(n, "rk_field") || !strcmp(n, "rk_list") || !strcmp(n, "rk_strip") || !strcmp(n, "rk_check") || !strcmp(n, "rk_choices") ||
+         !strcmp(n, "rk_toggle") || !strcmp(n, "rk_segments");
 }
 static int unreachable(const rk_view *v, const rk_view *skip) {
   if (v == skip || v->hidden) return 0;
@@ -1086,6 +1145,7 @@ static void launch(void *user) {
   test_menu();
   test_table();
   test_cell_edit();
+  test_controls();
   test_textarea();
   test_undo();
   test_focus();
