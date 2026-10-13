@@ -527,6 +527,137 @@ static void scroll_value(rk_view *v, float to, float max, double settle) {
 #define SETTLE_WHEEL 260.0                                     /* ms a wheel step takes to come to rest */
 #define SETTLE_GO 520.0                                        /* ms to bring a section in */
 
+/* Scroll ---------------------------------------------------------------------------------------------------------- */
+/* A view that clips its content and scrolls it up and down on the panorama's spring. The wheel moves it until an end
+   (then what holds it moves); keys a focused view inside leaves (Up, Down, Page Up, Page Down, Home, End) move it;
+   focus landing inside brings the view in sight. A 4px bar shows while it moves and a moment after, and drags. */
+
+typedef struct scroller { float max; bool bar, dragging; uint32_t hide; float drag_y, drag_value; rk_view *view, *rail; } scroller;
+
+#define BAR_W 4.0f
+#define BAR_MIN 24.0f
+
+static void scroller_hide(void *user) { scroller *s = user; s->hide = 0; if (s->dragging) return; s->bar = false; s->rail->passthrough = true; rk__view_dirty(s->rail); }
+static void scroller_show(scroller *s) {   /* the bar shows, and takes the pointer while it does */
+  s->bar = true;
+  s->rail->passthrough = false;
+  if (s->hide) rk_app_cancel(s->hide);
+  s->hide = rk_app_after(900, false, scroller_hide, s);
+  rk__view_dirty(s->rail);
+}
+static void scroller_to(scroller *s, float to, double settle) {
+  if (s->max <= 0) return;
+  scroll_value(s->view, to, s->max, settle);
+  scroller_show(s);
+}
+
+static void scroller_layout(rk_view *v, void *st) {
+  scroller *s = st;
+  if (v->nkids < 2) return;
+  rk_view *c = v->kids[0];
+  rk_size n = rk__measure(c, (rk_size){ v->frame.w, INFINITY });
+  float h = RK_MAX(n.h, v->frame.h);
+  rk__set_frame(c, (rk_rect){ 0, 0, v->frame.w, h });
+  rk__set_frame(s->rail, (rk_rect){ v->frame.w - BAR_W - 4, 0, BAR_W + 4, v->frame.h });
+  s->max = RK_MAX(0.0f, h - v->frame.h);
+  if (v->value > s->max) v->value = v->pvalue = s->max;
+}
+
+static rk_size scroller_measure(rk_view *v, rk_size avail, void *st) {
+  (void)st;
+  if (!v->nkids) return (rk_size){ 0, 0 };
+  rk_size n = rk__measure(v->kids[0], (rk_size){ avail.w, INFINITY });
+  return (rk_size){ isfinite(avail.w) ? avail.w : n.w, n.h };
+}
+
+static void scroller_draw(rk_view *v, rk_canvas *c, void *st) {
+  (void)c; (void)st;
+  if (v->nkids) v->kids[0]->ptransform.translate_y = -v->pvalue;
+}
+
+static bool scroller_event(rk_view *v, const rk_event *e, void *st) {
+  scroller *s = st;
+  if (s->max <= 0) return false;
+  if (e->type == RK_EVENT_WHEEL) {
+    float to = RK_CLAMP(v->value + e->wheel_y, 0.0f, s->max);
+    if (to == v->value) return false;                          /* at its end: what holds it moves */
+    scroller_to(s, to, SETTLE_WHEEL);
+    return true;
+  }
+  if (e->type != RK_EVENT_KEY_DOWN || (e->mods & (RK_MOD_CTRL | RK_MOD_ALT | RK_MOD_SUPER))) return false;
+  float page = RK_MAX(40.0f, v->frame.h - 40), to = v->value;
+  switch (e->key) {
+    case RK_KEY_UP: to -= 40; break;
+    case RK_KEY_DOWN: to += 40; break;
+    case RK_KEY_PAGE_UP: to -= page; break;
+    case RK_KEY_PAGE_DOWN: to += page; break;
+    case RK_KEY_HOME: to = 0; break;
+    case RK_KEY_END: to = s->max; break;
+    default: return false;
+  }
+  to = RK_CLAMP(to, 0.0f, s->max);
+  if (to == v->value) return false;
+  scroller_to(s, to, SETTLE_WHEEL);
+  return true;
+}
+
+static void scroller_free(void *st) { scroller *s = st; if (s->hide) rk_app_cancel(s->hide); free(s); }
+static const rk_class scroll_class = { { sizeof(rk_view_class), "rk_scroll", scroller_draw, scroller_measure, scroller_layout, scroller_event, scroller_free }, NULL, NULL };
+
+/* The bar: a rail along the right edge that draws the thumb while it shows and drags it. */
+static void thumb_of(scroller *s, float H, float *y, float *h) {
+  *h = RK_MAX(BAR_MIN, H * H / (H + s->max));
+  *y = s->max > 0 ? (H - *h) * s->view->pvalue / s->max : 0;
+}
+static void rail_draw(rk_view *v, rk_canvas *c, void *st) {
+  scroller *s = st;
+  if (s->max <= 0 || !(s->bar || s->dragging)) return;
+  float y, h;
+  thumb_of(s, v->pframe.h, &y, &h);
+  rk_canvas_fill_rect(c, (rk_rect){ v->pframe.w - BAR_W, y, BAR_W, h }, rk_color_of(s->dragging ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM));
+  if (s->view->pvalue != s->view->value) rk__view_dirty(v);   /* it follows the glide */
+}
+static bool rail_event(rk_view *v, const rk_event *e, void *st) {
+  scroller *s = st;
+  if (s->max <= 0) return false;
+  float H = v->frame.h, y, h;
+  thumb_of(s, H, &y, &h);
+  switch (e->type) {
+    case RK_EVENT_POINTER_DOWN:
+      if (e->button || !s->bar) return false;                  /* only a bar in sight takes a press */
+      if (e->position.y < y || e->position.y > y + h) { scroller_to(s, s->max * (e->position.y - h / 2) / (H - h), SETTLE_GO); return true; }
+      s->dragging = true; s->drag_y = e->position.y; s->drag_value = s->view->value;
+      rk__view_dirty(v);
+      return true;
+    case RK_EVENT_POINTER_MOVE:
+      if (!s->dragging) return false;
+      s->view->value = s->view->pvalue = RK_CLAMP(s->drag_value + (e->position.y - s->drag_y) * s->max / RK_MAX(1.0f, H - h), 0.0f, s->max);
+      rk__anim_cancel(s->view, RK_PROP_VALUE);
+      scroller_show(s);
+      rk__view_dirty(s->view);
+      return true;
+    case RK_EVENT_POINTER_UP: if (!s->dragging) return false; s->dragging = false; rk__view_dirty(v); scroller_show(s); return true;
+    default: return false;
+  }
+}
+static const rk_class rail_class = { { sizeof(rk_view_class), "rk_scroll_bar", rail_draw, NULL, NULL, rail_event, NULL }, NULL, NULL };
+
+rk_view *rk_scroll(rk_view *content) {
+  scroller *s = rk__alloc(sizeof *s);
+  rk_view *v = rk__view_create(&scroll_class, s);
+  s->view = v;
+  v->clip = true;
+  v->access = RK_ACCESS_GROUP;
+  if (content) { rk__view_add(v, content); rk_release(content); }
+  else { rk_view *empty = rk_view_create(); rk__view_add(v, empty); rk_release(empty); }
+  s->rail = rk__view_create(&rail_class, s);
+  s->rail->passthrough = true;
+  rk__view_add(v, s->rail); rk_release(s->rail);
+  return v;
+}
+
+void rk_view_reveal(rk_view *v) { if (v) rk__reveal(v); }
+
 static void pano_scroll_to(rk_view *v, panorama *p, float to, double settle) {
   scroll_value(v, to, p->max_scroll, settle);
   strip_activate(p->strip, pano_active(p, v->value));
@@ -633,6 +764,15 @@ void rk__reveal(rk_view *v) {
       float max = RK_MAX(0.0f, content->frame.h + 2 * content->frame.y - view_h);
       if (top - off < 0) scroll_value(a, top - rk_metric_of(RK_SPACE_M), max, SETTLE_WHEEL);
       else if (bottom - off > view_h) scroll_value(a, bottom - view_h + rk_metric_of(RK_SPACE_M), max, SETTLE_WHEEL);
+    }
+    if (a->cls == &scroll_class && a->nkids) {
+      scroller *sc = a->state;
+      rk_view *content = a->kids[0];
+      float y = 0;
+      for (rk_view *x = v; x && x != content; x = x->parent) y += x->frame.y;
+      float top = y, bottom = top + v->frame.h, view_h = a->frame.h, off = a->value, m = rk_metric_of(RK_SPACE_S);
+      if (top - off < 0) scroller_to(sc, top - m, SETTLE_WHEEL);
+      else if (bottom - off > view_h) scroller_to(sc, bottom - view_h + m, SETTLE_WHEEL);
     }
     if (a->cls == &pano_class) {
       panorama *p = a->state;

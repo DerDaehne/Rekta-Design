@@ -766,6 +766,66 @@ static void test_controls(void) {
   done(w);
 }
 
+/* A scroll view: the wheel, the keys focus leaves, focus coming into sight, the bar. */
+static int scroll_taps;
+static void scroll_tap(rk_view *v, void *u) { (void)v; scroll_taps = (int)(intptr_t)u; }
+
+static void test_scroll(void) {
+  rk_window *w = window(360, 300);
+  rk_view *page = col(8, 16);
+  rk_view *list = rk_column();
+  rk_view *b[40];
+  for (int i = 0; i < 40; i++) { char t[16]; snprintf(t, sizeof t, "item %d", i); b[i] = rk_add(list, rk_button(t, scroll_tap, (void *)(intptr_t)i)); }
+  rk_view *sc = rk_add(page, rk_scroll(list));
+  rk_view_set_size(sc, 0, 200);
+  show(w, page, "scroll");
+  scroller *s = sc->state;
+  CHECK(s->max > 1000 && sc->value == 0, "taller than it is: it scrolls (%.0f)", s->max);
+  rk_rect r = rk__window_rect(sc);
+  rk_event wh = { sizeof wh, RK_EVENT_WHEEL, 0, { r.x + 40, r.y + 100 }, 0, 0, 0, 0, 0, NULL };
+  wh.wheel_y = 300; rk_window_inject(w, &wh);
+  rk_app_run_for(500);
+  CHECK(sc->pvalue == 300 && s->bar, "the wheel glides it, the bar shows (%.0f)", sc->pvalue);
+  shot(w, "scroll");
+  rk_app_run_for(1000);
+  CHECK(!s->bar && s->rail->passthrough, "a moment later the bar goes");
+  /* what shows is what a press reaches */
+  rk_view *hit = rk_window_view_at(w, (rk_point){ r.x + 30, r.y + 10 });
+  int expect = -1;
+  for (int i = 0; i < 40; i++) if (hit == b[i]) expect = i;
+  CHECK(expect > 0, "what a press reaches is what shows after scrolling (item %d)", expect);
+  rk_view_tap(b[expect]);
+  CHECK(scroll_taps == expect, "and it is pressed (%d)", scroll_taps);
+  wh.wheel_y = 99999; rk_window_inject(w, &wh);
+  rk_app_run_for(500);
+  CHECK(sc->value == s->max, "no further than the end");
+  /* focus: keys it leaves, and coming into sight */
+  rk_window_focus(w, b[0]);
+  rk_view_reveal(b[0]);
+  rk_app_run_for(500);
+  CHECK(sc->value == 0, "a view revealed comes into sight (%.0f)", sc->value);
+  key(w, RK_KEY_END, 0); rk_app_run_for(500);
+  CHECK(sc->value == s->max, "End, which a button leaves, goes to the end");
+  key(w, RK_KEY_HOME, 0); key(w, RK_KEY_PAGE_DOWN, 0); rk_app_run_for(500);
+  CHECK(sc->value == 200 - 40, "Home, then Page Down: a page (%.0f)", sc->value);
+  rk_window_focus(w, b[0]); key(w, RK_KEY_HOME, 0);
+  for (int i = 0; i < 25; i++) key(w, RK_KEY_TAB, 0);
+  rk_app_run_for(500);
+  rk_rect br = rk__window_rect(b[25]);
+  CHECK(rk_window_focused(w) == b[25] && br.y >= r.y && br.y + br.h <= r.y + r.h, "Tab brings what it focuses into sight (%.0f in %.0f..%.0f)", br.y, r.y, r.y + r.h);
+  /* the bar drags */
+  wh.wheel_y = -99999; rk_window_inject(w, &wh); rk_app_run_for(500);
+  wh.wheel_y = 10; rk_window_inject(w, &wh); rk_app_run_for(300);
+  float ty, th;
+  thumb_of(s, r.h, &ty, &th);
+  rk_event d = { sizeof d, RK_EVENT_POINTER_DOWN, 0, { r.x + r.w - 2, r.y + ty + th / 2 }, 0, 0, 0, 0, 0, NULL };
+  rk_window_inject(w, &d);
+  d.type = RK_EVENT_POINTER_MOVE; d.position.y += (r.h - th) / 2; rk_window_inject(w, &d);
+  d.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &d);
+  CHECK(fabsf(sc->value - (10 + s->max / 2)) < 2, "dragging the bar halfway down scrolls half the way (%.0f of %.0f)", sc->value, s->max);
+  done(w);
+}
+
 /* A select opens a menu of its options; a field with options suggests them as you type. */
 static void test_select(void) {
   rk_window *w = window(460, 420);
@@ -1303,6 +1363,7 @@ static void launch(void *user) {
   test_table();
   test_cell_edit();
   test_controls();
+  test_scroll();
   test_select();
   test_date();
   test_textarea();

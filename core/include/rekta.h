@@ -364,6 +364,11 @@ RK_API void rk_menu_open_at(rk_view *menu, rk_view *from, rk_point point);   /* 
 RK_API void rk_menu_close(rk_view *menu);
 RK_API rk_view *rk_menu_opener(rk_view *menu);                    /* what opened it, while open and in a handler */
 
+/* A view that scrolls its content up and down: the wheel, the keys a focused view inside leaves, and focus landing
+   inside move it, on the panorama's spring; a thin bar shows while it moves. Takes content. */
+RK_API rk_view *rk_scroll(rk_view *content);
+RK_API void rk_view_reveal(rk_view *view);                 /* every scroll it is in brings it in sight */
+
 /* Controls that hold a value, as the web's. Each holds a number - 0 or 1, the chosen index - that the app reads and
    sets; the change handler hears what the user changes, not what the app sets. */
 RK_API rk_view *rk_check(const char *label, bool on);       /* a checkbox: Space toggles */

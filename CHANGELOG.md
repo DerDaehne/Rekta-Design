@@ -32,6 +32,11 @@ it; each entry says how.
   cursor shapes, xkbcommon keys with the seat's repeat. X11 stays as the
   fallback (`RK_PLATFORM=x11`); its resize draws once per burst and keeps
   its shared memory while the window changes size.
+- rekta-core has a scroll view: `rk_scroll(content)` clips its content
+  and scrolls it on the panorama's spring - the wheel until an end, then
+  what holds it; the keys a focused view leaves; focus landing inside
+  brings it in sight (`rk_view_reveal` does so on request). A 4px bar
+  shows while it moves and drags.
 - rekta-core has a date field: `rk_date(year, month, day)` shows
   2026-10-13 and holds 20261013. Year, month and day from the keys (Up
   and Down keep the day in its month, digits type it), or a day from

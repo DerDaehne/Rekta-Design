@@ -229,6 +229,16 @@ Keys: Up and Down, Home and End, a letter, Enter or Space, Escape; Tab or
 a press outside closes it.
 .Fn rk_menu_opener
 tells a handler which view the menu was for.
+.It Fn rk_scroll "rk_view *content"
+Clips
+.Fa content
+and scrolls it up and down on the panorama's spring: the wheel until an
+end (then what holds it moves), the keys a focused view inside leaves
+(Up, Down, Page Up, Page Down, Home, End), and focus landing inside,
+which brings the view in sight.
+A 4px bar shows while it moves and a moment after; it drags.
+.Fn rk_view_reveal
+brings a view in sight in every scroll it is in.
 .It Fn rk_check "const char *label" "bool on" , Fn rk_toggle "const char *label" "bool on"
 A checkbox (Space toggles) and the Metro toggle, whose state word stands
 beside it; its thumb moves over duration-short.
