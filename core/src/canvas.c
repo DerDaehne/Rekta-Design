@@ -32,6 +32,22 @@ void rk_canvas_fill_round_rect(rk_canvas *c, rk_rect r, float radius, rk_color c
   rk__path_fill(c->target, rk__canvas_clip(c), &c->path, rk__pm(color, c->alpha));
 }
 
+/* A frame inside a rounded rect: the outer contour less the inner one, wound the other way, as one path. */
+void rk__canvas_ring(rk_canvas *c, rk_rect r, float radius, float width, rk_color color) {
+  rk__path_reset(&c->path);
+  rk__path_round_rect(&c->path, SX(c, r.x), SY(c, r.y), SX(c, r.x + r.w), SY(c, r.y + r.h), radius * c->scale);
+  rk_path inner = { 0 };
+  rk__path_round_rect(&inner, SX(c, r.x + width), SY(c, r.y + width), SX(c, r.x + r.w - width), SY(c, r.y + r.h - width),
+                      RK_MAX(0.0f, radius - width) * c->scale);
+  for (int i = inner.ends[0] - 1; i >= 0; i--) {
+    if (i == inner.ends[0] - 1) rk__path_move(&c->path, inner.pts[i * 2], inner.pts[i * 2 + 1]);
+    else rk__path_line(&c->path, inner.pts[i * 2], inner.pts[i * 2 + 1]);
+  }
+  rk__path_close(&c->path);
+  rk__path_free(&inner);
+  rk__path_fill(c->target, rk__canvas_clip(c), &c->path, rk__pm(color, c->alpha));
+}
+
 void rk_canvas_stroke_rect(rk_canvas *c, rk_rect r, float width, rk_color color) {
   rk_canvas_fill_rect(c, (rk_rect){ r.x, r.y, r.w, width }, color);
   rk_canvas_fill_rect(c, (rk_rect){ r.x, r.y + r.h - width, r.w, width }, color);

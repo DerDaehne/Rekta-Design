@@ -145,8 +145,10 @@ that sort, resize and edit, trees, splits, rows the user puts in order, files
 dragged in from the system and a place to drop them, the system's file chooser
 and notifications, pivots along the top or down the side; headless, Wayland and X11 tested here (Wayland is
 the default where a compositor answers; `RK_PLATFORM=x11` picks X11), Win32 and
-Cocoa built and tested in CI.
+Cocoa built and tested in CI. A reference gallery holds core to the web: the
+same specimens drawn by both (`make gallery`, then `node test/gallery.mjs
+core/build/gallery`), compared in size, extent, colour and shape in CI.
 
 Not there yet: screen readers (the accessibility tree is built, the bridges to
 UI Automation, NSAccessibility and AT-SPI are stage 3), several windows' focus
-between them, the reference gallery against the web in CI.
+between them.

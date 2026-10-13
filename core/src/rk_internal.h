@@ -120,6 +120,7 @@ struct rk_canvas {
   rk_path path;                                            /* scratch */
 };
 void rk__canvas_init(rk_canvas *c, rk_bitmap *target, float scale);
+void rk__canvas_ring(rk_canvas *c, rk_rect r, float radius, float width, rk_color color);   /* a frame inside a rounded rect */
 static inline rk_irect rk__canvas_clip(const rk_canvas *c) { return c->clips[c->nclip - 1]; }
 bool rk__icon_find(const char *name, int *first, int *count);
 

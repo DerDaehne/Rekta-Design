@@ -281,7 +281,7 @@ typedef struct segments { control c; char **labels; int n, down, from; float *x;
 static void segments_place(segments *s) {
   rk_textfmt f = strong_fmt();
   float pad = rk_metric_of(RK_CONTROL_PADDING), x = 0;
-  for (int i = 0; i < s->n; i++) { s->x[i] = x; x += ceilf(rk__text_width(s->labels[i], -1, &f) + 2 * pad) - 2; }   /* joined: the frames overlap */
+  for (int i = 0; i < s->n; i++) { s->x[i] = x; x += ceilf(rk__text_width(s->labels[i], -1, &f) + 2 * pad + 4) - 2; }   /* joined: the frames overlap */
   s->x[s->n] = x + 2;
 }
 
@@ -301,16 +301,30 @@ static void segments_draw(rk_view *v, rk_canvas *c, void *st) {
   float h = v->pframe.h, p = RK_CLAMP(v->pvalue, 0.0f, 1.0f);
   int to = (int)s->c.value;
   bool off = s->c.disabled;
-  rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
+  rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT), accent = off ? ink : rk_color_of(RK_ROLE_ACCENT);
+  float rad = rk_metric_of(RK_RADIUS_S);
+  rk_rect all = { 0, 0, s->x[s->n], h };                   /* one frame, rounded at its ends, with lines between */
+  if (s->down >= 0 && s->down != to && !off) { rk_canvas_push_clip(c, seg_rect(s, s->down, h)); rk_canvas_fill_round_rect(c, all, rad, rk_color_of(RK_ROLE_HOVER)); rk_canvas_pop_clip(c); }
   if (to >= 0) {                                           /* the accent block, sliding from where it was */
     rk_rect b = seg_rect(s, to, h), a = s->from >= 0 && s->from < s->n ? seg_rect(s, s->from, h) : b;
-    rk_rect m = { a.x + (b.x - a.x) * p, 0, a.w + (b.w - a.w) * p, h };
-    rk_canvas_fill_rect(c, m, off ? ink : rk_color_of(RK_ROLE_ACCENT));
+    float x0 = a.x + (b.x - a.x) * p, x1 = x0 + a.w + (b.w - a.w) * p, W = all.w;
+    float l = RK_MAX(x0, rad), r = RK_MIN(x1, W - rad);   /* the middle exact to the subpixel while it slides */
+    if (r > l) rk_canvas_fill_rect(c, (rk_rect){ l, 0, r - l, h }, accent);
+    if (x0 < rad) { rk_canvas_push_clip(c, (rk_rect){ x0, 0, RK_MIN(x1, rad) - x0, h }); rk_canvas_fill_round_rect(c, all, rad, accent); rk_canvas_pop_clip(c); }
+    if (x1 > W - rad) { float e = RK_MAX(x0, W - rad); rk_canvas_push_clip(c, (rk_rect){ e, 0, x1 - e, h }); rk_canvas_fill_round_rect(c, all, rad, accent); rk_canvas_pop_clip(c); }
+  }
+  rk__canvas_ring(c, all, rad, 2, ink);
+  for (int i = 1; i < s->n; i++) rk_canvas_fill_rect(c, (rk_rect){ s->x[i], 0, 2, h }, ink);
+  if (to >= 0) {                                           /* the chosen one's frame is the accent's, over its neighbours */
+    rk_rect b = seg_rect(s, to, h);
+    rk_canvas_push_clip(c, b);
+    rk__canvas_ring(c, all, rad, 2, accent);
+    rk_canvas_fill_rect(c, (rk_rect){ b.x, 0, 2, h }, accent);
+    rk_canvas_fill_rect(c, (rk_rect){ b.x + b.w - 2, 0, 2, h }, accent);
+    rk_canvas_pop_clip(c);
   }
   for (int i = 0; i < s->n; i++) {
     rk_rect b = seg_rect(s, i, h);
-    if (i == s->down && i != to && !off) rk_canvas_fill_rect(c, b, rk_color_of(RK_ROLE_HOVER));
-    rk_canvas_stroke_rect(c, b, 2, ink);
     rk_textfmt f = strong_fmt();
     bool lit = i == to && p >= 0.5f;
     float tw = rk__text_width(s->labels[i], -1, &f);

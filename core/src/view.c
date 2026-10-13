@@ -308,14 +308,21 @@ float rk__host_width(rk_view *v) {
 
 static bool in_flow(rk_view *k) { return !k->hidden && !k->leaving; }
 
-typedef struct grid { int cols, rows; float unit, gap; } grid;
+typedef struct grid { int cols, rows; float unit, colw, gap; } grid;   /* colw: a column's width, unit stretched when compact */
 
-/* Dense packing: each tile takes the first free cell that fits its span, row by row, as grid-auto-flow: dense. */
+/* Dense packing: each tile takes the first free cell that fits its span, row by row, as grid-auto-flow: dense.
+   Sideways the cells are tile-units; compact (a window under 760 px wide or 481 px high, as the web's place) there are
+   at least two columns, as many tile-units as fit, stretched to fill the row; rows stay a tile-unit high. */
 static grid tile_grid(rk_view *v, float width, rk_rect *out) {
   grid g;
   g.gap = v->gap > 0 ? v->gap : rk_metric_of(RK_SPACE_S);
-  g.unit = rk_metric_of(RK_TILE_UNIT);
+  g.unit = g.colw = rk_metric_of(RK_TILE_UNIT);
   g.cols = RK_MAX(1, (int)floorf((width + g.gap + 0.01f) / (g.unit + g.gap)));
+  rk_window *win = rk__view_window(v);
+  if (win && (win->size.w < 760 || win->size.h < 481) && isfinite(width)) {
+    g.cols = RK_MAX(2, g.cols);
+    g.colw = (width - (g.cols - 1) * g.gap) / g.cols;
+  }
   g.rows = 0;
   enum { MAXR = 256 };
   static unsigned char used[MAXR][64];
@@ -336,7 +343,7 @@ static grid tile_grid(rk_view *v, float width, rk_rect *out) {
     if (at_r < 0) continue;
     for (int y = at_r; y < at_r + sr; y++) for (int x = at_c; x < at_c + sc; x++) used[y][x] = 1;
     g.rows = RK_MAX(g.rows, at_r + sr);
-    if (out) out[n] = (rk_rect){ at_c * (g.unit + g.gap), at_r * (g.unit + g.gap), sc * g.unit + (sc - 1) * g.gap, sr * g.unit + (sr - 1) * g.gap };
+    if (out) out[n] = (rk_rect){ at_c * (g.colw + g.gap), at_r * (g.unit + g.gap), sc * g.colw + (sc - 1) * g.gap, sr * g.unit + (sr - 1) * g.gap };
     n++;
   }
   return g;
@@ -377,7 +384,7 @@ rk_size rk__measure(rk_view *v, rk_size avail) {
     case RK_LAYOUT_TILES: {
       float w = isfinite(iw) ? iw : 4 * rk_metric_of(RK_TILE_UNIT) + 3 * rk_metric_of(RK_SPACE_S);
       grid g = tile_grid(v, w, NULL);
-      s.w = RK_MIN(w, g.cols * g.unit + (g.cols - 1) * g.gap) + p.left + p.right;
+      s.w = RK_MIN(w, g.cols * g.colw + (g.cols - 1) * g.gap) + p.left + p.right;
       s.h = (g.rows ? g.rows * g.unit + (g.rows - 1) * g.gap : 0) + p.top + p.bottom;
       break;
     }

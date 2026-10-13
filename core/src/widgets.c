@@ -99,20 +99,7 @@ static void button_draw(rk_view *v, rk_canvas *c, void *st) {
   if (v->pressed && !off) rk_canvas_fill_round_rect(c, r, b->kind == BUTTON_TOAST ? 0 : rk_metric_of(RK_RADIUS_S), rk_color_of(RK_ROLE_HOVER));
   if (b->kind == RK_BUTTON_DEFAULT || b->kind == RK_BUTTON_PRIMARY) {
     rk_color border = b->kind == RK_BUTTON_PRIMARY && !off ? bg : ink;
-    rk_rect o = r;
-    float rad = rk_metric_of(RK_RADIUS_S);
-    /* a 2px ring: the outer rounded rect less the inner one, as one path */
-    rk__path_reset(&c->path);
-    rk__path_round_rect(&c->path, c->ox, c->oy, c->ox + o.w * c->scale, c->oy + o.h * c->scale, rad * c->scale);
-    rk_path inner = { 0 };
-    rk__path_round_rect(&inner, c->ox + 2 * c->scale, c->oy + 2 * c->scale, c->ox + (o.w - 2) * c->scale, c->oy + (o.h - 2) * c->scale, (rad - 2) * c->scale);
-    for (int i = inner.ends[0] - 1; i >= 0; i--) {             /* the inner contour wound the other way: a hole */
-      if (i == inner.ends[0] - 1) rk__path_move(&c->path, inner.pts[i * 2], inner.pts[i * 2 + 1]);
-      else rk__path_line(&c->path, inner.pts[i * 2], inner.pts[i * 2 + 1]);
-    }
-    rk__path_close(&c->path);
-    rk__path_free(&inner);
-    rk__path_fill(c->target, rk__canvas_clip(c), &c->path, rk__pm(border, c->alpha));
+    rk__canvas_ring(c, r, rk_metric_of(RK_RADIUS_S), 2, border);
   }
   if (b->kind == BUTTON_TOAST) rk_canvas_fill_rect(c, (rk_rect){ 0, 12, 1, r.h - 24 }, with_alpha(ink, 0.2f));
   rk_textfmt f = button_fmt(b);
@@ -333,10 +320,13 @@ typedef struct row { char *title, *meta; rk_status status; bool lifted; rk_view 
 static bool rows_last(rk_view *v);
 static void rows_added(rk_view *rows, rk_view *row);
 
+/* A row's rule above it is its own, outside the padding, and the last row has one below as well, as on the web. */
+static float row_rules(rk_view *v, float *above) { *above = 1; return rows_last(v) ? 2 : 1; }
 static rk_size row_measure(rk_view *v, rk_size avail, void *st) {
-  (void)v; (void)st;
+  (void)st;
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
-  return (rk_size){ isfinite(avail.w) ? avail.w : 320, RK_MAX(rk_metric_of(RK_ROW_HEIGHT), f.size * f.line + 2 * rk_metric_of(RK_SPACE_S)) };
+  float above, rules = row_rules(v, &above);
+  return (rk_size){ isfinite(avail.w) ? avail.w : 320, RK_MAX(rk_metric_of(RK_ROW_HEIGHT), f.size * f.line + 2 * rk_metric_of(RK_SPACE_S)) + rules };
 }
 static void row_draw(rk_view *v, rk_canvas *c, void *st) {
   row *r = st;
@@ -352,18 +342,20 @@ static void row_draw(rk_view *v, rk_canvas *c, void *st) {
   if (v->pressed) rk_canvas_fill_rect(c, (rk_rect){ 0, 1, W, H - 1 }, rk_color_of(RK_ROLE_HOVER));
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
   float x = r->grip ? 24 + rk_metric_of(RK_SPACE_S) : 0;   /* after the grip */
-  rk__text_draw(c, r->title, -1, x, (H - f.size * f.line) / 2, &f, rk_color_of(RK_ROLE_TEXT));
+  float above, inner = H - row_rules(v, &above), top = above + (inner - f.size * f.line) / 2;   /* between the rules */
+  float base = top + rk__text_ascent(&f);                  /* the meta and the word stand on the title's baseline */
+  rk__text_draw(c, r->title, -1, x, top, &f, rk_color_of(RK_ROLE_TEXT));
   float right = W;
   if (r->status != RK_STATUS_NONE) {
     rk_textfmt tf = rk__textfmt(RK_TEXT_LABEL, 0);
     const char *w = r->meta ? r->meta : status_word(r->status);
     float tw = rk__text_width(w, -1, &tf);
-    rk__text_draw(c, w, -1, right - tw, (H - tf.size * tf.line) / 2, &tf, rk_color_of(RK_ROLE_TEXT));
-    rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, H / 2 - 4, 8, 8 }, rk_color_of(status_full(r->status)));
+    rk__text_draw(c, w, -1, right - tw, base - rk__text_ascent(&tf), &tf, rk_color_of(RK_ROLE_TEXT));
+    rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, above + inner / 2 - 4, 8, 8 }, rk_color_of(status_full(r->status)));
   } else if (r->meta) {
     rk_textfmt mf = rk__textfmt(RK_TEXT_META, 0);
     float mw = rk__text_width(r->meta, -1, &mf);
-    rk__text_draw(c, r->meta, -1, right - mw, (H - mf.size * mf.line) / 2, &mf, rk_color_of(RK_ROLE_TEXT_HIGH));
+    rk__text_draw(c, r->meta, -1, right - mw, base - rk__text_ascent(&mf), &mf, rk_color_of(RK_ROLE_TEXT_HIGH));
   }
 }
 static void row_layout(rk_view *v, void *st) { row *r = st; if (r->grip) rk__set_frame(r->grip, (rk_rect){ 0, 0, 24, v->frame.h }); }

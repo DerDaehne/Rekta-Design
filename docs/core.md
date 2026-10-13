@@ -162,7 +162,8 @@ AddressSanitizer and UBSan clean); Win32 and Cocoa are built and tested in CI.
    selection, long lists, focus everywhere, live tiles, undo, Win32 and Cocoa
    complete.
 3. **Everyone.** Accessibility bridges, several windows, the
-   reference gallery against the web in CI.
+   reference gallery against the web in CI (running: thirteen specimens,
+   light and dark, in `test/gallery.mjs`).
 
 ## Building
 

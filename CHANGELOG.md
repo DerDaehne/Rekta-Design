@@ -9,6 +9,14 @@ it; each entry says how.
 
 ### Added
 
+- **The reference gallery**: `core/test/gallery.c` and `test/gallery.mjs`
+  draw the same thirteen specimens (button, checkboxes, toggles, segments,
+  fields, slider, progress, rows, a tile, a drop place) with rekta-core and with
+  rekta.css, light and dark, and CI holds them to each other: the frame's
+  size, where the ink lies, the solid colours, and the shape at a quarter of
+  the size. A report shows each pair side by side. The first run found four
+  places where core had drifted from the specification, fixed below; the one
+  difference left is the web's checkbox, which is the browser's own.
 - **rekta-core: packaging**: `make shared` builds `librekta.so.0.3`
   (`librekta.0.3.dylib`, `rekta.dll`; `build.bat shared` with MSVC), built with
   hidden visibility so it exports only the header's `RK_API` functions;
@@ -359,6 +367,13 @@ it; each entry says how.
   values glide.
 
 ### Changed
+
+- **rekta-core, as the web**: segments are 4 px wider each (the frame is
+  outside the padding) and their outer corners take `radius-s`, the chosen
+  one's frame in the accent; a row's rule is outside its padding, the last row
+  has one below as well, and the meta stands on the title's baseline; in a
+  compact window (under 760 × 481) tiles stretch to fill the row, at least two
+  columns, as they do in a compact place on the web.
 
 - **Reordering takes `duration-moderate`** everywhere, as motion.md
   says (a sortable list used `duration-short`).

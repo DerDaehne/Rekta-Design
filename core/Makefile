@@ -6,6 +6,7 @@
 #   make sanitize   the tests and the demo script under AddressSanitizer and UBSan
 #   make shared     the shared library: only the RK_API functions are seen from outside (make abi checks it)
 #   make install    both libraries, the header, rekta.pc for pkg-config and the man page under PREFIX (/usr/local)
+#   make gallery    the reference gallery's native half in build/gallery (node test/gallery.mjs holds the web to it)
 #   make perf       the loop under load (resize, a storm of presses, settling), measured at 1x and 2x
 # On Windows: build.bat (MSVC) or make with MinGW.
 
@@ -119,6 +120,13 @@ test: $(BUILD)/test$(EXE) $(BUILD)/hello-headless$(EXE)
 	$(BUILD)/hello-headless$(EXE)
 	sh test/examples.sh
 
+$(BUILD)/gallery-bin$(EXE): test/gallery.c $(SOURCES) | $(BUILD)
+	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY -Iinclude test/gallery.c src/rekta.c $(HEADLESS_LIBS) -o $@
+
+gallery: $(BUILD)/gallery-bin$(EXE)
+	mkdir -p $(BUILD)/gallery
+	$(BUILD)/gallery-bin$(EXE) $(BUILD)/gallery
+
 shots: $(BUILD)/demo-headless$(EXE)
 	mkdir -p $(BUILD)/shots
 	$(BUILD)/demo-headless$(EXE) --shots $(BUILD)/shots
@@ -151,4 +159,4 @@ endif
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all test shots perf sanitize shared abi install clean FORCE
+.PHONY: all test gallery shots perf sanitize shared abi install clean FORCE
