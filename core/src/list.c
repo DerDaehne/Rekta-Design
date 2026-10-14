@@ -525,7 +525,7 @@ static const rk_class list_class = { { sizeof(rk_view_class), "rk_list", list_dr
 static list *list_of(rk_view *v) { return v && v->cls == &list_class ? v->state : NULL; }
 
 void rk_list_set_count(rk_view *v, int count) {
-  list *l = list_of(v);
+  list *l = RK__EXPECT(list_of, v, "a list or a table");
   if (!l) return;
   count = RK_MAX(0, count);
   if (l->editor && l->edit_row >= count) edit_finish(v, l, true);     /* its row is gone */
@@ -552,8 +552,8 @@ rk_view *rk_list(int count, void (*item)(int index, rk_list_item *out, void *use
 
 void rk_list_on_show(rk_view *v, void (*fn)(rk_view *, int, void *), void *user) { list *l = list_of(v); if (l) { l->show = fn; l->show_user = user; } }
 void rk_list_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { list *l = list_of(v); if (l) { l->change = fn; l->change_user = user; } }
-bool rk_list_is_selected(rk_view *v, int index) { list *l = list_of(v); return l && is_selected(l, index); }
-int rk_list_selection_count(rk_view *v) { list *l = list_of(v); return l ? l->sel.n : 0; }
+bool rk_list_is_selected(rk_view *v, int index) { list *l = RK__EXPECT(list_of, v, "a list or a table"); return l && is_selected(l, index); }
+int rk_list_selection_count(rk_view *v) { list *l = RK__EXPECT(list_of, v, "a list or a table"); return l ? l->sel.n : 0; }
 
 void rk_list_set_key(rk_view *v, uint64_t (*key)(int index, void *user)) {
   list *l = list_of(v);
@@ -565,23 +565,23 @@ void rk_list_set_key(rk_view *v, uint64_t (*key)(int index, void *user)) {
 
 /* The app selects: drawn, not told (the change handler hears the user). */
 void rk_list_select(rk_view *v, int index, bool selected) {
-  list *l = list_of(v);
+  list *l = RK__EXPECT(list_of, v, "a list or a table");
   if (!l || index < 0 || index >= l->count) return;
   set_selected(l, index, selected);
   l->mode = l->mode && l->sel.n > 0;
   rk__view_dirty(v);
 }
-void rk_list_clear_selection(rk_view *v) { list *l = list_of(v); if (l) { clear_selection(l); l->mode = false; rk__view_dirty(v); } }
-int rk_list_active(rk_view *v) { list *l = list_of(v); return l && l->count ? l->active : -1; }
+void rk_list_clear_selection(rk_view *v) { list *l = RK__EXPECT(list_of, v, "a list or a table"); if (l) { clear_selection(l); l->mode = false; rk__view_dirty(v); } }
+int rk_list_active(rk_view *v) { list *l = RK__EXPECT(list_of, v, "a list or a table"); return l && l->count ? l->active : -1; }
 
 int rk_list_selection(rk_view *v, int *indices, int max) {
-  list *l = list_of(v);
+  list *l = RK__EXPECT(list_of, v, "a list or a table");
   if (!l || !l->sel.n) return 0;
   int n = 0;
   for (int i = 0; i < l->count && n < l->sel.n; i++) if (is_selected(l, i)) { if (indices && n < max) indices[n] = i; n++; }
   return n;
 }
-void rk_list_scroll_to(rk_view *v, int index) { list *l = list_of(v); if (l && l->count) { l->active = RK_CLAMP(index, 0, l->count - 1); list_remember(l); reveal_row(v, l, l->active); rk__view_dirty(v); } }
+void rk_list_scroll_to(rk_view *v, int index) { list *l = RK__EXPECT(list_of, v, "a list or a table"); if (l && l->count) { l->active = RK_CLAMP(index, 0, l->count - 1); list_remember(l); reveal_row(v, l, l->active); rk__view_dirty(v); } }
 
 /* A table: a list whose rows are cells. */
 static void table_item(int index, rk_list_item *out, void *user) { (void)index; (void)out; (void)user; }
@@ -596,7 +596,7 @@ rk_view *rk_table(int count, const char *(*cell)(int row, int column, void *user
 }
 
 int rk_table_add_column(rk_view *v, const char *title, float width, unsigned flags) {
-  list *l = list_of(v);
+  list *l = RK__EXPECT(list_of, v, "a list or a table");
   if (!l || !l->cell) return -1;
   l->cols = rk__grow(l->cols, &l->ccap, l->ncols + 1, sizeof *l->cols);
   struct column *c = &l->cols[l->ncols++];
@@ -607,19 +607,19 @@ int rk_table_add_column(rk_view *v, const char *title, float width, unsigned fla
 }
 
 void rk_table_on_sort(rk_view *v, void (*fn)(rk_view *, int, rk_sort, void *), void *user) { list *l = list_of(v); if (l) { l->sort = fn; l->sort_user = user; } }
-void rk_table_set_sort(rk_view *v, int column, rk_sort sort) { list *l = list_of(v); if (l) { l->sort_col = column; l->sort_dir = sort == RK_SORT_ASCENDING ? 1 : sort == RK_SORT_DESCENDING ? -1 : 0; rk__view_dirty(v); } }
+void rk_table_set_sort(rk_view *v, int column, rk_sort sort) { list *l = RK__EXPECT(list_of, v, "a list or a table"); if (l) { l->sort_col = column; l->sort_dir = sort == RK_SORT_ASCENDING ? 1 : sort == RK_SORT_DESCENDING ? -1 : 0; rk__view_dirty(v); } }
 
 void rk_table_set_column_width(rk_view *v, int column, float width) {
-  list *l = list_of(v);
+  list *l = RK__EXPECT(list_of, v, "a list or a table");
   if (l && column >= 0 && column < l->ncols) set_width(v, l, column, width);
 }
 
 float rk_table_column_width(rk_view *v, int column) {
-  list *l = list_of(v);
+  list *l = RK__EXPECT(list_of, v, "a list or a table");
   if (!l || column < 0 || column >= l->ncols) return 0;
   place_columns(l, v->frame.w);
   return l->cols[column].w;
 }
 
 void rk_table_on_edit(rk_view *v, const char *(*fn)(rk_view *, int, int, const char *, void *), void *user) { list *l = list_of(v); if (l) { l->commit = fn; l->commit_user = user; } }
-void rk_table_edit(rk_view *v, int row, int column) { list *l = list_of(v); if (l) edit_start(v, l, row, column); }
+void rk_table_edit(rk_view *v, int row, int column) { list *l = RK__EXPECT(list_of, v, "a list or a table"); if (l) edit_start(v, l, row, column); }

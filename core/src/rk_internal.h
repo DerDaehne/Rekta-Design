@@ -3,6 +3,7 @@
 #define RK_INTERNAL_H
 
 #include "../include/rekta.h"
+#include "../include/rekta_test.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -47,6 +48,13 @@ void rk__log(rk_log_level level, const char *fmt, ...);
 #define rk__error(...) rk__log(RK_LOG_ERROR, __VA_ARGS__)
 #define rk__warn(...) rk__log(RK_LOG_WARNING, __VA_ARGS__)
 bool rk__is_object(const void *p, const rk_type *type);   /* type NULL: any Rekta object */
+void rk__main_thread_only(const char *fn);                /* said once when called from another thread */
+/* A public call on the wrong kind of view says so through the log, then does nothing: state is what the view's kind
+   check found (NULL: not that kind). */
+void *rk__expect(void *state, const void *view, const char *fn, const char *kind);
+/* A descriptor that grows starts with its size: 0 means the app forgot it, which is said (and nothing is read). */
+#define RK__SIZED(d, fn, type) ((d) && ((d)->size ? true : (rk__error("%s: set .size = sizeof(%s)", fn, type), false)))
+#define RK__EXPECT(of, v, kind) rk__expect((void *)of(v), (v), __func__, (kind))
 
 /* Preferences and tokens (tokens.c) ------------------------------------------------------------------------------- */
 
@@ -232,6 +240,9 @@ enum { RK_PROP_FRAME, RK_PROP_OPACITY, RK_PROP_TRANSFORM, RK_PROP_FILL, RK_PROP_
 typedef struct rk_anim_ctx { rk_motion motion; int depth; void (*done)(void *); void *done_user; int pending; } rk_anim_ctx;
 bool rk__animating_block(void);
 rk_motion rk__current_motion(void);
+void rk__animate_transform(rk_view *v, const rk_transform *from, const rk_transform *to, double duration, double delay, const float *ease);
+void rk__animate_transform_cb(rk_view *v, const rk_transform *from, const rk_transform *to, double duration, double delay, const float *ease,
+                              void (*done)(rk_view *v, void *user), void *user);
 void rk__anim_close_blocks(void);                         /* at a frame: an open rk_animate_begin is closed */
 void rk__animate(rk_view *v, int prop, const float *from, const float *to, int n, double duration, double delay, const float *ease);
 void rk__animate_cb(rk_view *v, int prop, const float *from, const float *to, int n, double duration, double delay, const float *ease,
@@ -294,6 +305,7 @@ void rk__menus_close(rk_window *w);
 void rk__background(void (*fn)(void *user), void *user);   /* pool.c: a slow job away from the UI thread */
 typedef struct rk_history_entry rk_history_entry;
 void rk__history_free(rk_window *w);
+bool rk__icon_check(const char *name, const char *fn);   /* false, and said, when the icon set lacks it */
 const char *rk__controller_shown_title(rk_controller *c);
 void rk__stats(rk_stats *s, bool reset);                       /* undo.c */
 void rk__window_frame(rk_window *w, double now);           /* layout, draw and present if needed */

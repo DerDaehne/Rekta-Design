@@ -54,6 +54,15 @@ void rk__setstr(char **dst, const char *src) {
   *dst = n;
 }
 
+void *rk__expect(void *state, const void *view, const char *fn, const char *kind) {
+  if (state) return state;
+  const rk_view *v = view;
+  if (!v) rk__warn("%s: the view is NULL", fn);
+  else if (!rk__is_object(v, NULL)) rk__error("%s: not a Rekta object", fn);
+  else rk__warn("%s: a %s is not %s", fn, v->cls ? v->cls->pub.name : "plain view", kind);
+  return NULL;
+}
+
 bool rk__is_object(const void *p, const rk_type *type) {
   const rk_object *o = p;
   return o && o->magic == RK__MAGIC && o->refs > 0 && (!type || o->type == type);
@@ -71,6 +80,7 @@ void *rk_retain(void *object) {
 }
 
 void rk_release(void *object) {
+  rk__main_thread_only("rk_release");
   if (!object || !alive(object, "rk_release")) return;
   rk_object *o = object;
   if (--o->refs == 0) {

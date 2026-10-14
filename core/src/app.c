@@ -16,6 +16,24 @@ static pthread_mutex_t post_lock = PTHREAD_MUTEX_INITIALIZER;
 #define UNLOCK() pthread_mutex_unlock(&post_lock)
 #endif
 
+/* The main thread: the one rk_app_main runs on. Everything but rk_app_post is called there; a call from another
+   thread is said (once) instead of corrupting the tree quietly. */
+#if defined(_WIN32)
+static DWORD main_thread;
+static bool on_main(void) { return !main_thread || GetCurrentThreadId() == main_thread; }
+static void set_main(void) { main_thread = GetCurrentThreadId(); }
+#else
+static pthread_t main_thread; static bool have_main;
+static bool on_main(void) { return !have_main || pthread_equal(pthread_self(), main_thread); }
+static void set_main(void) { main_thread = pthread_self(); have_main = true; }
+#endif
+void rk__main_thread_only(const char *fn) {
+  static bool said;
+  if (on_main() || said) return;
+  said = true;
+  rk__error("%s called from another thread: only rk_app_post may be (the main thread runs everything else)", fn);
+}
+
 typedef struct timer { uint32_t id; double due, every; void (*fn)(void *); void *user; } timer;
 typedef struct post { void (*fn)(void *); void *user; } post;
 typedef struct listener { uint32_t id; void (*fn)(void *); void *user; } listener;
@@ -218,7 +236,7 @@ void rk__stats(rk_stats *s, bool reset) {
     o.frames = m->frames; o.animations = rk__anim_count(); o.views = (uint32_t)rk__live_views; o.glyphs = m->glyphs; o.slow = m->slow;
     o.draw_ms = m->draw_ms; o.last_ms = m->last_ms; o.max_ms = m->max_ms; o.pixels = m->pixels;
     o.latency_ms = m->latency_ms; o.max_latency_ms = m->max_latency_ms;
-    memcpy(s, &o, RK_MIN((size_t)s->size, sizeof o));
+    if (RK__SIZED(s, "rk_app_stats", "rk_stats")) memcpy(s, &o, RK_MIN((size_t)s->size, sizeof o));
   }
   if (reset) { double at = rk__meter.input_at; memset(&rk__meter, 0, sizeof rk__meter); rk__meter.input_at = at; }
 }
@@ -233,7 +251,9 @@ void rk_app_run_for(double ms) {
 
 int rk_app_main(const rk_app_desc *desc) {
   memset(&app, 0, sizeof app);
-  if (desc) memcpy(&app, desc, RK_MIN((size_t)desc->size, sizeof app));
+  if (!desc || !RK__SIZED(desc, "rk_app_main", "rk_app_desc")) return 2;   /* nothing to launch: said, not waited on */
+  set_main();
+  memcpy(&app, desc, RK_MIN((size_t)desc->size, sizeof app));
   const char *env = getenv("RK_HEADLESS");
   LOCK_INIT();
   if (app.headless || (env && *env && *env != '0')) {

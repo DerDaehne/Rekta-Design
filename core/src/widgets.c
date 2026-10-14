@@ -49,14 +49,14 @@ rk_view *rk_label(const char *text, rk_text_style style) {
   return v;
 }
 void rk_label_set_text(rk_view *v, const char *text) {
-  if (v->cls != &label_class) return;
+  if (!rk__expect(v && v->cls == &label_class ? v : NULL, v, __func__, "a label")) return;
   label *l = v->state;
   if (!strcmp(l->text, text ? text : "")) return;
   rk__setstr(&l->text, text ? text : "");
   rk__setstr(&v->access_label, l->text);
   rk__view_relayout_up(v);
 }
-void rk_label_set_color(rk_view *v, rk_role role) { if (v->cls == &label_class) { ((label *)v->state)->color = role; rk__view_dirty(v); } }
+void rk_label_set_color(rk_view *v, rk_role role) { if (rk__expect(v && v->cls == &label_class ? v : NULL, v, __func__, "a label")) { ((label *)v->state)->color = role; rk__view_dirty(v); } }
 
 /* Button ---------------------------------------------------------------------------------------------------------- */
 
@@ -120,14 +120,15 @@ rk_view *rk_button(const char *text, void (*on_press)(rk_view *button, void *use
 }
 
 void rk_button_set_kind(rk_view *v, rk_button_kind kind) {
-  if (v->cls != &button_class) return;
+  if (!rk__expect(v && v->cls == &button_class ? v : NULL, v, __func__, "a button")) return;
   ((button *)v->state)->kind = kind;
   rk__view_relayout_up(v);
 }
 
 void rk_button_set_icon(rk_view *v, const char *icon) {
-  if (v->cls != &button_class) return;
+  if (!rk__expect(v && v->cls == &button_class ? v : NULL, v, __func__, "a button")) return;
   button *b = v->state;
+  rk__icon_check(icon, __func__);
   rk__setstr(&b->icon, icon);
   if (!b->label || !*b->label) rk__setstr(&v->access_label, icon);   /* an icon alone is still named */
   rk__view_relayout_up(v);
@@ -249,7 +250,7 @@ rk_view *rk_hstack(void) {
 }
 
 void rk_tile_set_status(rk_view *v, rk_status status, const char *word) {
-  if (v->cls != &tile_class) return;
+  if (!rk__expect(v && v->cls == &tile_class ? v : NULL, v, __func__, "a tile")) return;
   tile *t = v->state;
   t->status = status;
   rk__setstr(&t->word, word);
@@ -259,7 +260,7 @@ void rk_tile_set_status(rk_view *v, rk_status status, const char *word) {
 }
 
 void rk_tile_set_stat(rk_view *v, const char *value, const char *lab) {
-  if (v->cls != &tile_class) return;
+  if (!rk__expect(v && v->cls == &tile_class ? v : NULL, v, __func__, "a tile")) return;
   tile *t = v->state;
   free(t->old_value); free(t->old_label);
   t->old_value = t->value; t->old_label = t->label;
@@ -269,13 +270,13 @@ void rk_tile_set_stat(rk_view *v, const char *value, const char *lab) {
 }
 
 void rk_tile_set_message(rk_view *v, const char *message) {
-  if (v->cls != &tile_class) return;
+  if (!rk__expect(v && v->cls == &tile_class ? v : NULL, v, __func__, "a tile")) return;
   rk__setstr(&((tile *)v->state)->message, message);
   rk__view_dirty(v);
 }
 
 void rk_tile_set_series(rk_view *v, const float *values, int count) {
-  if (v->cls != &tile_class) return;
+  if (!rk__expect(v && v->cls == &tile_class ? v : NULL, v, __func__, "a tile")) return;
   tile *t = v->state;
   free(t->series); t->series = NULL; t->nseries = 0;
   if (count > 0 && values) { t->series = rk__alloc((size_t)count * sizeof(float)); memcpy(t->series, values, (size_t)count * sizeof(float)); t->nseries = count; }
@@ -292,7 +293,7 @@ static void set_value(rk_view *v, float value) {
 }
 
 void rk_tile_set_progress(rk_view *v, float progress) {
-  if (v->cls != &tile_class) return;
+  if (!rk__expect(v && v->cls == &tile_class ? v : NULL, v, __func__, "a tile")) return;
   tile *t = v->state;
   bool had = t->progress >= 0;
   t->progress = progress;
@@ -369,7 +370,7 @@ rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_stat
 
 /* A row says something new: its title, meta and status at once, as rk_rows_add took them. */
 void rk_row_set(rk_view *v, const char *title, const char *meta, rk_status status) {
-  if (!v || v->cls != &row_class) { rk__warn("rk_row_set: not a row of rk_rows"); return; }
+  if (!rk__expect(v && v->cls == &row_class ? v : NULL, v, __func__, "a row of rk_rows")) return;
   row *r = v->state;
   rk__setstr(&r->title, title ? title : "");
   rk__setstr(&r->meta, meta);
@@ -391,6 +392,7 @@ static const rk_class icon_class = { { sizeof(rk_view_class), "rk_icon", icon_dr
 
 rk_view *rk_icon(const char *name, rk_role color) {
   icon *i = rk__alloc(sizeof *i);
+  rk__icon_check(name, __func__);
   i->name = rk__strdup(name); i->color = color;
   rk_view *v = rk__view_create(&icon_class, i);
   v->access = RK_ACCESS_IMAGE;
@@ -423,7 +425,7 @@ rk_view *rk_progress(float progress) {
   v->access = RK_ACCESS_PROGRESS;
   return v;
 }
-void rk_progress_set_value(rk_view *v, float progress) { if (v->cls == &progress_class) set_value(v, progress); }
+void rk_progress_set_value(rk_view *v, float progress) { if (rk__expect(v && v->cls == &progress_class ? v : NULL, v, __func__, "a progress bar")) set_value(v, progress); }
 
 /* Focus ----------------------------------------------------------------------------------------------------------- */
 

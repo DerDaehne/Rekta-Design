@@ -31,6 +31,7 @@ typedef struct field {
   bool stale;                                              /* the text changed since the lines were laid out */
   char *label, *placeholder, *hint; bool error;
   bool secret;                                             /* a password: dots drawn, nothing copied or read aloud */
+  bool quiet;                                              /* the app is setting the text: its change handler is not told */
   char *preedit;                                           /* what an input method is composing, shown at the caret */
   struct snap { char *text; int caret, anchor; } *undo, *redo; int nundo, ucap, nredo, rcap;   /* the field's own history */
   double typed_at; bool typing;                            /* typing runs together into one step, word by word */
@@ -208,7 +209,7 @@ static void blink(void *user) {
 
 static void field_changed(rk_view *v, field *f) {
   touched(v, f);
-  if (f->change) f->change(v, f->change_user);
+  if (f->change && !f->quiet) f->change(v, f->change_user);   /* the user's changes, as a control's */
 }
 
 /* The options: those that contain what is typed (all, when nothing is), the one it is marked. */
@@ -544,13 +545,15 @@ rk_view *rk_field(const char *label, const char *placeholder) {
   return v;
 }
 
-const char *rk_field_text(rk_view *v) { field *f = field_of(v); return f ? f->text : ""; }
+const char *rk_field_text(rk_view *v) { field *f = RK__EXPECT(field_of, v, "a field"); return f ? f->text : ""; }
 
 void rk_field_set_text(rk_view *v, const char *text) {
-  field *f = field_of(v);
+  field *f = RK__EXPECT(field_of, v, "a field");
   if (!f) return;
   f->anchor = 0; f->caret = f->len;
+  f->quiet = true;
   replace(v, f, text ? text : "", text ? (int)strlen(text) : 0);
+  f->quiet = false;
   snaps_drop(f->undo, &f->nundo); snaps_drop(f->redo, &f->nredo);   /* text from the app starts a new history */
 }
 
@@ -570,7 +573,7 @@ void rk_field_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) {
 void rk_field_on_submit(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->submit = fn; f->submit_user = user; } }
 
 void rk_field_set_secret(rk_view *v, bool secret) {
-  field *f = field_of(v);
+  field *f = RK__EXPECT(field_of, v, "a field");
   if (!f) return;
   f->secret = secret;
   if (secret) rk_field_set_lines(v, 1);                    /* a password is one line */
@@ -579,7 +582,7 @@ void rk_field_set_secret(rk_view *v, bool secret) {
 }
 
 void rk_field_set_lines(rk_view *v, int lines) {
-  field *f = field_of(v);
+  field *f = RK__EXPECT(field_of, v, "a field");
   if (!f) return;
   bool was = multi(f);
   f->rows = RK_MAX(1, lines);
@@ -600,7 +603,7 @@ void rk__field_set_box_height(rk_view *v, float h) {
 }
 
 void rk_field_set_options(rk_view *v, const char *const *options, int count) {
-  field *f = field_of(v);
+  field *f = RK__EXPECT(field_of, v, "a field");
   if (!f) return;
   if (f->suggest) rk_menu_close(f->suggest);
   for (int i = 0; i < f->noptions; i++) free(f->options[i]);

@@ -203,18 +203,18 @@ int rk_menu_add(rk_view *v, const char *label, const char *key, void (*fn)(rk_vi
   return m->n - 1;
 }
 
-void rk_menu_add_separator(rk_view *v) { menu *m = menu_of(v); if (m) { add_item(m, SEPARATOR, NULL); rk__view_relayout_up(v); } }
-void rk_menu_add_label(rk_view *v, const char *label) { menu *m = menu_of(v); if (m) { add_item(m, LABEL, label); rk__view_relayout_up(v); } }
+void rk_menu_add_separator(rk_view *v) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m) { add_item(m, SEPARATOR, NULL); rk__view_relayout_up(v); } }
+void rk_menu_add_label(rk_view *v, const char *label) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m) { add_item(m, LABEL, label); rk__view_relayout_up(v); } }
 
 void rk_menu_set_check(rk_view *v, int i, rk_checkmark check) {
-  menu *m = menu_of(v);
+  menu *m = RK__EXPECT(menu_of, v, "a menu");
   if (!m || i < 0 || i >= m->n) return;
   m->items[i].check = check == RK_CHECKMARK_ON ? 1 : check == RK_CHECKMARK_OFF ? 0 : -1;
   rk__view_relayout_up(v); rk__view_dirty(v);
 }
-rk_checkmark rk_menu_check(rk_view *v, int i) { menu *m = menu_of(v); int c = m && i >= 0 && i < m->n ? m->items[i].check : -1; return c < 0 ? RK_CHECKMARK_NONE : c ? RK_CHECKMARK_ON : RK_CHECKMARK_OFF; }
-void rk_menu_set_enabled(rk_view *v, int i, bool enabled) { menu *m = menu_of(v); if (m && i >= 0 && i < m->n) { m->items[i].disabled = !enabled; rk__view_dirty(v); } }
-rk_view *rk_menu_opener(rk_view *v) { menu *m = menu_of(v); return m ? m->from : NULL; }
+rk_checkmark rk_menu_check(rk_view *v, int i) { menu *m = RK__EXPECT(menu_of, v, "a menu"); int c = m && i >= 0 && i < m->n ? m->items[i].check : -1; return c < 0 ? RK_CHECKMARK_NONE : c ? RK_CHECKMARK_ON : RK_CHECKMARK_OFF; }
+void rk_menu_set_enabled(rk_view *v, int i, bool enabled) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m && i >= 0 && i < m->n) { m->items[i].disabled = !enabled; rk__view_dirty(v); } }
+rk_view *rk_menu_opener(rk_view *v) { menu *m = RK__EXPECT(menu_of, v, "a menu"); return m ? m->from : NULL; }
 
 /* Opens it in the window's top layer at a rect's bottom left (above it where there is no room below), on screen. */
 static void open_by(rk_view *v, rk_view *from, rk_rect at, bool keys, bool passive) {
@@ -246,7 +246,7 @@ static void open_by(rk_view *v, rk_view *from, rk_rect at, bool keys, bool passi
   t0.translate_y = above ? 4 : -4;
   double d = rk_duration_of(RK_DURATION_FLOAT);
   rk__animate(v, RK_PROP_OPACITY, &o0, &o1, 1, d, 0, rk__ease_in);
-  rk__animate(v, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_in);
+  rk__animate_transform(v, &t0, &t1, d, 0, rk__ease_in);
 }
 
 void rk_menu_open(rk_view *v, rk_view *from) {
@@ -299,7 +299,7 @@ void rk__menu_mark(rk_view *v, int chosen) {
 void rk__menu_shape(rk_view *v, float min_w, int prefer) { menu *m = menu_of(v); if (m) { m->min_w = min_w; m->prefer = prefer; } }
 
 void rk_menu_clear(rk_view *v) {
-  menu *m = menu_of(v);
+  menu *m = RK__EXPECT(menu_of, v, "a menu");
   if (!m) return;
   for (int i = 0; i < m->n; i++) { free(m->items[i].label); free(m->items[i].key); }
   m->n = 0; m->active = -1;

@@ -304,7 +304,7 @@ rk_view *rk_tree(void) {
 }
 
 int rk_tree_add(rk_view *v, int parent, const char *title) {
-  tree *t = tree_of(v);
+  tree *t = RK__EXPECT(tree_of, v, "a tree");
   if (!t || (parent >= 0 && !tree_has(t, parent))) return -1;
   t->nodes = rk__grow(t->nodes, &t->cap, t->n + 1, sizeof *t->nodes);
   int i = t->n++;
@@ -329,7 +329,7 @@ static void forget(tree *t, int i) {
 }
 
 void rk_tree_remove(rk_view *v, int item) {
-  tree *t = tree_of(v);
+  tree *t = RK__EXPECT(tree_of, v, "a tree");
   if (!tree_has(t, item)) return;
   int parent = t->nodes[item].parent;
   int *first = parent >= 0 ? &t->nodes[parent].first : &t->first, *last = parent >= 0 ? &t->nodes[parent].last : &t->last;
@@ -343,7 +343,7 @@ void rk_tree_remove(rk_view *v, int item) {
 }
 
 void rk_tree_clear(rk_view *v) {
-  tree *t = tree_of(v);
+  tree *t = RK__EXPECT(tree_of, v, "a tree");
   if (!t) return;
   for (int i = 0; i < t->n; i++) { free(t->nodes[i].title); free(t->nodes[i].meta); }
   t->n = 0; t->first = t->last = t->active = t->selected = t->pressed = t->down_item = -1;
@@ -351,16 +351,16 @@ void rk_tree_clear(rk_view *v) {
 }
 
 void rk_tree_set_title(rk_view *v, int item, const char *title) {
-  tree *t = tree_of(v);
+  tree *t = RK__EXPECT(tree_of, v, "a tree");
   if (!tree_has(t, item)) return;
   rk__setstr(&t->nodes[item].title, title ? title : "");
   rk__view_relayout_up(v);
 }
-void rk_tree_set_user(rk_view *v, int item, void *user) { tree *t = tree_of(v); if (tree_has(t, item)) t->nodes[item].user = user; }
-void *rk_tree_user(rk_view *v, int item) { tree *t = tree_of(v); return tree_has(t, item) ? t->nodes[item].user : NULL; }
+void rk_tree_set_user(rk_view *v, int item, void *user) { tree *t = RK__EXPECT(tree_of, v, "a tree"); if (tree_has(t, item)) t->nodes[item].user = user; }
+void *rk_tree_user(rk_view *v, int item) { tree *t = RK__EXPECT(tree_of, v, "a tree"); return tree_has(t, item) ? t->nodes[item].user : NULL; }
 
 void rk_tree_set_meta(rk_view *v, int item, const char *meta, rk_status status) {
-  tree *t = tree_of(v);
+  tree *t = RK__EXPECT(tree_of, v, "a tree");
   if (!tree_has(t, item)) return;
   free(t->nodes[item].meta);
   t->nodes[item].meta = meta ? rk__strdup(meta) : NULL;
@@ -368,13 +368,13 @@ void rk_tree_set_meta(rk_view *v, int item, const char *meta, rk_status status) 
   rk__view_dirty(v);
 }
 
-void rk_tree_set_open(rk_view *v, int item, bool open) { tree *t = tree_of(v); if (tree_has(t, item)) tree_open(v, t, item, open); }
-void rk_tree_set_all_open(rk_view *v, bool open) { tree *t = tree_of(v); if (t) for (int i = 0; i < t->n; i++) if (tree_has(t, i)) tree_open(v, t, i, open); }
+void rk_tree_set_open(rk_view *v, int item, bool open) { tree *t = RK__EXPECT(tree_of, v, "a tree"); if (tree_has(t, item)) tree_open(v, t, item, open); }
+void rk_tree_set_all_open(rk_view *v, bool open) { tree *t = RK__EXPECT(tree_of, v, "a tree"); if (t) for (int i = 0; i < t->n; i++) if (tree_has(t, i)) tree_open(v, t, i, open); }
 
-bool rk_tree_is_open(rk_view *v, int item) { tree *t = tree_of(v); return tree_has(t, item) && t->nodes[item].open; }
-void rk_tree_select(rk_view *v, int item) { tree *t = tree_of(v); if (t && (item < 0 || tree_has(t, item))) tree_select(v, t, item, false); }
-int rk_tree_selected(rk_view *v) { tree *t = tree_of(v); return t ? t->selected : -1; }
-int rk_tree_parent(rk_view *v, int item) { tree *t = tree_of(v); return tree_has(t, item) ? t->nodes[item].parent : -1; }
-const char *rk_tree_title(rk_view *v, int item) { tree *t = tree_of(v); return tree_has(t, item) ? t->nodes[item].title : NULL; }
+bool rk_tree_is_open(rk_view *v, int item) { tree *t = RK__EXPECT(tree_of, v, "a tree"); return tree_has(t, item) && t->nodes[item].open; }
+void rk_tree_select(rk_view *v, int item) { tree *t = RK__EXPECT(tree_of, v, "a tree"); if (t && (item < 0 || tree_has(t, item))) tree_select(v, t, item, false); }
+int rk_tree_selected(rk_view *v) { tree *t = RK__EXPECT(tree_of, v, "a tree"); return t ? t->selected : -1; }
+int rk_tree_parent(rk_view *v, int item) { tree *t = RK__EXPECT(tree_of, v, "a tree"); return tree_has(t, item) ? t->nodes[item].parent : -1; }
+const char *rk_tree_title(rk_view *v, int item) { tree *t = RK__EXPECT(tree_of, v, "a tree"); return tree_has(t, item) ? t->nodes[item].title : NULL; }
 void rk_tree_on_show(rk_view *v, void (*fn)(rk_view *, int, void *), void *user) { tree *t = tree_of(v); if (t) { t->show = fn; t->show_user = user; } }
 void rk_tree_on_toggle(rk_view *v, void (*fn)(rk_view *, int, bool, void *), void *user) { tree *t = tree_of(v); if (t) { t->toggle = fn; t->toggle_user = user; } }

@@ -45,7 +45,7 @@ static const rk_type window_type = { "rk_window", window_destroy };
 
 rk_window *rk_window_create(const rk_window_desc *desc) {
   rk_window_desc d = { sizeof d, "", 1280, 800, 0, 0, false };
-  if (desc) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
+  if (desc && RK__SIZED(desc, "rk_window_create", "rk_window_desc")) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
   if (d.width <= 0) d.width = 1280;
   if (d.height <= 0) d.height = 800;
   if (d.min_width <= 0) d.min_width = rk_metric_of(RK_PANE_MIN);
@@ -536,7 +536,7 @@ static void press_start(rk_window *w, rk_view *v, float px, float py) {
   v->press_x = RK_CLAMP(px, -1.0f, 1.0f); v->press_y = RK_CLAMP(py, -1.0f, 1.0f);
   v->press_since = rk_app_now();
   rk_transform from = v->ptransform, to = press_pose(v);
-  rk__animate(v, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, rk_duration_of(RK_DURATION_PRESS), 0, rk__ease_base);
+  rk__animate_transform(v, &from, &to, rk_duration_of(RK_DURATION_PRESS), 0, rk__ease_base);
 }
 
 static void press_end(rk_window *w, rk_view *v) {
@@ -545,7 +545,7 @@ static void press_end(rk_window *w, rk_view *v) {
   rk_transform from = v->ptransform, to = v->transform;
   /* a quick tap still shows the whole sink before it comes back */
   double left = rk_duration_of(RK_DURATION_PRESS) - (rk_app_now() - v->press_since);
-  rk__animate(v, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, rk_duration_of(RK_DURATION_SHORT), RK_MAX(0.0, left), rk__ease_base);
+  rk__animate_transform(v, &from, &to, rk_duration_of(RK_DURATION_SHORT), RK_MAX(0.0, left), rk__ease_base);
 }
 
 static void activate(rk_view *v) {

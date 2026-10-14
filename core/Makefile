@@ -17,7 +17,7 @@ WARN := -std=c99 -Wall -Wextra -Wpedantic
 CFLAGS += $(OPT) $(WARN) -ffp-contract=off
 BUILD := build
 UNAME := $(shell uname -s 2>/dev/null)
-SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h third_party/stb_truetype.h third_party/stb_image.h
+SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h include/rekta_test.h third_party/stb_truetype.h third_party/stb_image.h
 WAYLAND ?= 1
 VERSION := $(shell awk '/^.define RK_VERSION_(MAJOR|MINOR|PATCH) /{ v = v (v == "" ? "" : ".") $$3 } END { print v }' include/rekta.h)
 MAJOR := $(word 1,$(subst ., ,$(VERSION)))
@@ -153,7 +153,7 @@ ifeq ($(UNAME),Darwin)
 	codesign -f -s - $(DESTDIR)$(PREFIX)/lib/$(SHLIB)
 endif
 	cp $(BUILD)/rekta.pc $(DESTDIR)$(PREFIX)/lib/pkgconfig/
-	cp include/rekta.h $(DESTDIR)$(PREFIX)/include/
+	cp include/rekta.h include/rekta_test.h $(DESTDIR)$(PREFIX)/include/
 	cp man/rekta.3 $(DESTDIR)$(PREFIX)/share/man/man3/
 
 clean:

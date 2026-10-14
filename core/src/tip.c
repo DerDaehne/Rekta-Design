@@ -72,7 +72,7 @@ static void tip_show(rk_window *w, rk_view *owner) {
   t0.translate_y = above ? 4 : -4;
   double d = rk_duration_of(RK_DURATION_FLOAT);
   rk__animate(t, RK_PROP_OPACITY, &o0, &o1, 1, d, 0, rk__ease_in);
-  rk__animate(t, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_in);
+  rk__animate_transform(t, &t0, &t1, d, 0, rk__ease_in);
 }
 
 typedef struct tip_wait { rk_window *w; rk_view *owner; } tip_wait;

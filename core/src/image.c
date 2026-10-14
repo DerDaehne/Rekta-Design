@@ -284,10 +284,10 @@ rk_view *rk_image_from_memory(const void *data, size_t size) {
 
 static image *image_of(rk_view *v) { return v && v->cls == &image_class ? v->state : NULL; }
 
-void rk_image_set_fit(rk_view *v, rk_fit fit) { image *img = image_of(v); if (img && img->fit != fit) { img->fit = fit; rk__view_dirty(v); } }
+void rk_image_set_fit(rk_view *v, rk_fit fit) { image *img = RK__EXPECT(image_of, v, "an image"); if (img && img->fit != fit) { img->fit = fit; rk__view_dirty(v); } }
 
 bool rk_image_size(rk_view *v, int *width, int *height) {
-  image *img = image_of(v);
+  image *img = RK__EXPECT(image_of, v, "an image");
   if (width) *width = img ? img->w : 0;
   if (height) *height = img ? img->h : 0;
   return img && !img->failed;

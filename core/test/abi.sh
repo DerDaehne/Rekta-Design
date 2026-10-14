@@ -1,10 +1,10 @@
 #!/bin/sh
-# abi.sh: the shared library shows exactly the header's RK_API functions (nothing internal leaks into the ABI), and a
+# abi.sh: the shared library shows exactly the headers' RK_API functions (rekta.h and rekta_test.h) (nothing internal leaks into the ABI), and a
 # program links against it and runs. Run by make abi: sh test/abi.sh BUILD LIBRARY
 set -e
 build=$1 lib=$2
 want=$build/abi-header.txt got=$build/abi-library.txt
-grep 'RK_API' include/rekta.h | grep -v '#' | sed 's,/\*.*,,' | sed -n 's/.*[ *]\(rk_[a-z0-9_]*\)(.*/\1/p' | sort -u > "$want"
+cat include/rekta.h include/rekta_test.h | grep 'RK_API' | grep -v '#' | sed 's,/\*.*,,' | sed -n 's/.*[ *]\(rk_[a-z0-9_]*\)(.*/\1/p' | sort -u > "$want"
 case $(uname -s) in
   Darwin) nm -gU "$build/$lib" | awk '{ print $3 }' | sed 's/^_//' ;;
   *) nm -D --defined-only "$build/$lib" | awk '$2 ~ /^[TDRB]$/ { print $3 }' ;;

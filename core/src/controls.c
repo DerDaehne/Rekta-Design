@@ -369,7 +369,7 @@ static bool segments_event(rk_view *v, const rk_event *e, void *st) {
   }
 }
 
-static bool segments_valid(rk_view *v, double value) { segments *s = v->state; return value == floor(value) && value >= 0 && value < s->n; }
+static bool segments_valid(rk_view *v, double value) { segments *s = v->state; return value == floor(value) && value >= -1 && value < s->n; }   /* -1: none yet, as choices and select */
 static void segments_destroy(void *st) { segments *s = st; for (int i = 0; i < s->n; i++) free(s->labels[i]); free(s->labels); free(s->x); free(s); }
 static const rk_class segments_class = { { sizeof(rk_view_class), "rk_segments", segments_draw, segments_measure, NULL, segments_event, segments_destroy }, NULL, NULL };
 
@@ -377,7 +377,7 @@ rk_view *rk_segments(const char *const *options, int count, int chosen) {
   segments *s = rk__alloc(sizeof *s);
   s->n = RK_CLAMP(count, 0, 5); s->labels = copy_labels(options, s->n); s->down = -1;
   s->x = rk__alloc((size_t)(s->n + 1) * sizeof *s->x);
-  s->c.value = chosen >= 0 && chosen < s->n ? chosen : 0; s->from = (int)s->c.value;
+  s->c.value = chosen >= 0 && chosen < s->n ? chosen : -1; s->from = (int)s->c.value;   /* -1: none yet */
   s->c.apply = segments_apply; s->c.valid = segments_valid;
   rk_view *v = rk__view_create(&segments_class, s);
   v->value = v->pvalue = 1;
@@ -1027,6 +1027,7 @@ static void date_destroy(void *st) {
   free(b);
 }
 static const rk_class date_class = { { sizeof(rk_view_class), "rk_date", date_draw, date_measure, NULL, date_event, date_destroy }, NULL, NULL };
+static date_box *date_of(rk_view *v) { return v && v->cls == &date_class ? v->state : NULL; }
 
 rk_view *rk_date(int year, int month, int day) {
   date_box *b = rk__alloc(sizeof *b);
@@ -1040,6 +1041,20 @@ rk_view *rk_date(int year, int month, int day) {
   return v;
 }
 
+/* A date as its parts: false when none is set yet. */
+bool rk_date_value(rk_view *v, int *year, int *month, int *day) {
+  date_box *b = RK__EXPECT(date_of, v, "a date");
+  int n = b ? (int)b->c.value : 0;
+  if (year) *year = n / 10000;
+  if (month) *month = n / 100 % 100;
+  if (day) *day = n % 100;
+  return n != 0;
+}
+void rk_date_set_value(rk_view *v, int year, int month, int day) {
+  if (!RK__EXPECT(date_of, v, "a date")) return;
+  rk_control_set_value(v, year ? year * 10000 + month * 100 + day : 0);
+}
+
 /* The value, for every control ------------------------------------------------------------------------------------ */
 
 static control *control_of(rk_view *v) {
@@ -1049,10 +1064,10 @@ static control *control_of(rk_view *v) {
   return NULL;
 }
 
-double rk_control_value(rk_view *v) { control *c = control_of(v); return c ? c->value : 0; }
+double rk_control_value(rk_view *v) { control *c = RK__EXPECT(control_of, v, "a control (check, choices, toggle, segments, slider, stepper, select or date)"); return c ? c->value : 0; }
 
 void rk_control_set_value(rk_view *v, double value) {
-  control *c = control_of(v);
+  control *c = RK__EXPECT(control_of, v, "a control (check, choices, toggle, segments, slider, stepper, select or date)");
   if (c && c->fit) value = c->fit(v, value);
   if (!c || value == c->value || (c->valid && !c->valid(v, value))) return;
   double was = c->value;

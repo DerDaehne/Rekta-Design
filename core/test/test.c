@@ -280,7 +280,7 @@ static void test_spring(void) {
 /* The API's one rule: what is added belongs to the tree. Nothing to release, nothing left over. */
 static int logged;                                             /* misuse the library reported (rk_app_set_log) */
 static char logged_last[256];
-static void test_log(rk_log_level level, const char *message, void *user) { (void)level; (void)user; logged++; snprintf(logged_last, sizeof logged_last, "%s", message); }
+static void test_log(rk_log_level level, const char *message, void *user) { (void)level; (void)user; logged++; snprintf(logged_last, sizeof logged_last, "%s", message); if (getenv("RK_TEST_LOG")) fprintf(stderr, "log: %s\n", message); }
 static int pressed_count;
 static void count_press(rk_view *v, void *u) { (void)v; (void)u; pressed_count++; }
 
@@ -1608,6 +1608,82 @@ static void test_confirm_secret(void) {
   done(w);
 }
 
+/* The calls say what they do and say when they are misused: a timer once or again, listeners that end, a history per
+   window, a date by its parts, a field told only of the user, segments with none yet, a custom view's value moving
+   with the motion; a wrong kind, a missing size, an unknown icon or another thread reported. */
+static int ticks, changes;
+static void tick(void *u) { (void)u; ticks++; }
+static void changed_look(void *u) { (void)u; changes++; }
+static void field_told(rk_view *f, void *u) { (void)f; (void)u; changes++; }
+static void act_up(void *u) { (*(int *)u)++; }
+static void act_down(void *u) { (*(int *)u)--; }
+static void *off_thread(void *u) { (void)u; rk_release(rk_label("from elsewhere", RK_TEXT_BODY)); return NULL; }
+
+static void test_api_rules(void) {
+  ticks = 0;
+  rk_app_after(10, tick, NULL);
+  uint32_t every = rk_app_every(10, tick, NULL);
+  rk_app_run_for(55);
+  rk_app_cancel(every);
+  int t1 = ticks;
+  rk_app_run_for(50);
+  CHECK(t1 >= 5 && ticks == t1, "after runs once, every again and again until cancelled (%d)", t1);
+  changes = 0;
+  uint32_t l = rk_app_on_change(changed_look, NULL);
+  rk_app_set_theme(RK_THEME_DARK);
+  rk_app_cancel(l);
+  rk_app_set_theme(RK_THEME_LIGHT);
+  CHECK(changes == 1, "a change listener ends with rk_app_cancel (%d)", changes);
+  rk_window *a = window(400, 300), *b = window(400, 300);
+  show(a, col(8, 8), "a"); show(b, col(8, 8), "b");
+  int na = 0, nb = 0;
+  rk_window_do(a, &(rk_action){ .size = sizeof(rk_action), .label = "a", .run = act_up, .undo = act_down, .user = &na });
+  rk_window_do(b, &(rk_action){ .size = sizeof(rk_action), .label = "b", .run = act_up, .undo = act_down, .user = &nb });
+  CHECK(rk_window_undo(a) && na == 0 && nb == 1 && !rk_window_undo(a), "undo in one window takes back only what was done there");
+  int was = logged;
+  rk_window_do(a, &(rk_action){ .label = "no size", .run = act_up, .user = &na });
+  CHECK(na == 0 && logged == was + 1, "an action without its size: not run, and said");
+  done(b);
+  rk_view *page = col(8, 8);
+  rk_view *date = rk_add(page, rk_date(2026, 10, 14));
+  rk_view *f = rk_add(page, rk_field("name", NULL));
+  rk_view *seg = rk_add(page, rk_segments((const char *const[]){ "a", "b" }, 2, -1));
+  show(a, page, "rules");
+  int y, m, d;
+  CHECK(rk_date_value(date, &y, &m, &d) && y == 2026 && m == 10 && d == 14, "a date by its parts");
+  rk_date_set_value(date, 0, 0, 0);
+  CHECK(!rk_date_value(date, NULL, NULL, NULL), "cleared: none");
+  changes = 0;
+  rk_field_on_change(f, field_told, NULL);
+  rk_field_set_text(f, "set by the app");
+  rk_window_focus(a, f); type_text(a, "!");
+  CHECK(changes == 1, "a field's handler hears the user, not the app (%d)", changes);
+  CHECK(rk_control_value(seg) == -1, "segments may have none chosen yet");
+  was = logged;
+  rk_label_set_text(seg, "x");
+  rk_tree_add(f, -1, "x");
+  CHECK(logged == was + 2 && strstr(logged_last, "rk_tree_add") && strstr(logged_last, "not a tree"), "a call on the wrong kind of view is said: %s", logged_last);
+  was = logged;
+  rk_release(rk_icon("no-such-icon", RK_ROLE_TEXT));
+  CHECK(logged == was + 1 && strstr(logged_last, "no-such-icon"), "an unknown icon is said");
+  rk_view *custom = rk_add(page, rk_view_create());
+  rk_animate_begin(RK_MOTION_MORPH);
+  rk_view_animate_value(custom, 1);
+  rk_animate_commit();
+  rk_app_run_for(rk_duration_of(RK_DURATION_LONG) / 2);
+  float mid = rk_view_value(custom);
+  rk_app_run_for(rk_duration_of(RK_DURATION_LONG));
+  CHECK(mid > 0.1f && mid < 0.99f && rk_view_value(custom) == 1, "a custom view's value moves with the morph motion (%.2f half way)", mid);
+#if !defined(_WIN32)
+  was = logged;
+  pthread_t th;
+  pthread_create(&th, NULL, off_thread, NULL);
+  pthread_join(th, NULL);
+  CHECK(logged > was && strstr(logged_last, "another thread"), "a call from another thread is said");
+#endif
+  done(a);
+}
+
 static void test_tree(void) {
   rk_window *w = window(560, 420);
   rk_view *root = col(16, 24);
@@ -2097,6 +2173,7 @@ static void launch(void *user) {
   test_collections();
   test_embed();
   test_confirm_secret();
+  test_api_rules();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

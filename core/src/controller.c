@@ -33,7 +33,7 @@ static const rk_type controller_type = { "rk_controller", controller_destroy };
 
 rk_controller *rk_controller_create(const rk_controller_class *cls, void *state) {
   rk_controller *c = rk__new(&controller_type, sizeof *c);
-  if (cls) memcpy(&c->cls, cls, RK_MIN((size_t)cls->size, sizeof c->cls));
+  if (cls && RK__SIZED(cls, "rk_controller_create", "rk_controller_class")) memcpy(&c->cls, cls, RK_MIN((size_t)cls->size, sizeof c->cls));
   c->cls.size = sizeof c->cls;
   c->state = state;
   return c;
@@ -312,7 +312,7 @@ static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
     to.rotate_y = angle; to.rotate_x = 0; to.scale_x = to.scale_y = 1;
     if (u != pressed) { from = u->transform; from.origin_x = to.origin_x; from.origin_y = to.origin_y; from.perspective = to.perspective; }
     float o0 = u->popacity, o1 = 0;
-    rk__animate(u, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, d, at, turn_ease_out);
+    rk__animate_transform(u, &from, &to, d, at, turn_ease_out);
     rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, 0.6 * d, at + 0.4 * d, rk__ease_base);
     u->pressed = 0;
     end = RK_MAX(end, at + 0.75 * d);
@@ -349,7 +349,7 @@ static void turn_in(rk_view *place, bool back) {
     to.origin_x = from.origin_x; to.origin_y = from.origin_y; to.perspective = from.perspective;
     from.rotate_y = back ? -TURN_IN_ANGLE : TURN_IN_ANGLE;
     float o0 = 0, o1 = u->opacity;
-    rk__animate(u, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, d, at, turn_ease_in);
+    rk__animate_transform(u, &from, &to, d, at, turn_ease_in);
     rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, 0.35 * d, at, rk__ease_base);
   }
   plan_free(&pl);
@@ -1118,7 +1118,7 @@ void rk_pivot_select(rk_controller *c, int index) {
   else t0.translate_x += dir * RK_TOK_SLIDE_DISTANCE;
   double d = 0.75 * rk_duration_of(RK_DURATION_MODERATE);
   float a0 = 0, a1 = nv->opacity;
-  rk__animate(nv, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_out);
+  rk__animate_transform(nv, &t0, &t1, d, 0, rk__ease_out);
   rk__animate(nv, RK_PROP_OPACITY, &a0, &a1, 1, d, 0, rk__ease_out);
   if (c->appeared) rk__controller_appear(to, true);
 }
@@ -1183,7 +1183,7 @@ void rk_controller_present(rk_controller *presenter, rk_controller *sheet) {
   rk__animate(box, RK_PROP_OPACITY, &a0, &a1, 1, d, 0, rk__ease_in);
   rk_transform t0 = box->transform, t1 = box->transform;
   t0.translate_y -= 16;
-  rk__animate(box, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_in);
+  rk__animate_transform(box, &t0, &t1, d, 0, rk__ease_in);
   sheet->focus_before = w->focus ? rk_retain(w->focus) : NULL;
   rk_view *f = rk__first_focusable(box);
   w->focus = NULL;
@@ -1222,7 +1222,7 @@ void rk_controller_dismiss(rk_controller *sheet) {
   rk__animate(box, RK_PROP_OPACITY, &a0, &a1, 1, d, 0, rk__ease_out);
   if (shade) shade->leaving = true;
   box->leaving = true;
-  rk__animate_cb(box, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_out, sheet_gone, sheet);
+  rk__animate_transform_cb(box, &t0, &t1, d, 0, rk__ease_out, sheet_gone, sheet);
 }
 
 /* A short question, as the web's confirm(): a kicker, the question as a group heading, a line, cancel and ok. The
@@ -1236,8 +1236,7 @@ static void ask_free(void *st) { free(st); }
 
 void rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user) {
   rk_confirm_desc d = { sizeof d, "", NULL, NULL, "ok", "cancel", false };
-  if (desc) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
-  if (!desc || !desc->size) rk__error("rk_confirm: the descriptor needs its size (sizeof(rk_confirm_desc))");
+  if (RK__SIZED(desc, "rk_confirm", "rk_confirm_desc")) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
   if (!presenter || !presenter->window) { rk__error("rk_confirm: the presenter is in no window"); if (answered) answered(false, user); return; }
   asking *a = rk__alloc(sizeof *a);
   a->answered = answered; a->user = user;

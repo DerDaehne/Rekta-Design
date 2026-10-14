@@ -279,6 +279,8 @@ RK_API bool rk_view_is_enabled(rk_view *view);        /* false when it or a view
    completes what the view says, never the only way to learn it. */
 RK_API void rk_view_set_tooltip(rk_view *view, const char *text);
 RK_API void rk_view_on_activate(rk_view *view, void (*fn)(rk_view *view, void *user), void *user);
+/* The one place for data a view owns: free_user lets it go with the view. Callback user pointers elsewhere are
+   borrowed - keep what they point to here, or on a controller's state, so it lives exactly as long. */
 RK_API void rk_view_set_user(rk_view *view, void *user, void (*free_user)(void *user));
 RK_API void *rk_view_user(rk_view *view);
 
@@ -338,6 +340,12 @@ typedef struct rk_view_class {
 
 RK_API rk_view *rk_view_create_custom(const rk_view_class *cls, void *state);
 RK_API void *rk_view_state(rk_view *view);
+/* For a custom view: a number that moves with the design's motion - set inside rk_animate_begin(RK_MOTION_MORPH) it
+   takes duration-long, outside a block duration-short - and the value to draw with while it does. */
+RK_API void rk_view_animate_value(rk_view *view, float target);
+RK_API float rk_view_value(rk_view *view);
+typedef enum rk_cursor { RK_CURSOR_DEFAULT, RK_CURSOR_TEXT, RK_CURSOR_RESIZE_COLUMN, RK_CURSOR_FORCE32 = 0x7fffffff } rk_cursor;
+RK_API void rk_view_set_cursor(rk_view *view, rk_cursor cursor);   /* the pointer's shape over it; DEFAULT: its parent's */
 
 /* Built-in views -------------------------------------------------------------------------------------------------- */
 
@@ -424,8 +432,9 @@ RK_API rk_view *rk_image_from_memory(const void *data, size_t size);
 RK_API void rk_image_set_fit(rk_view *image, rk_fit fit);
 RK_API bool rk_image_size(rk_view *image, int *width, int *height);   /* its pixels; false when it cannot be read */
 
-/* Controls that hold a value, as the web's. Each holds a number - 0 or 1, the chosen index - that the app reads and
-   sets; the change handler hears what the user changes, not what the app sets. */
+/* Controls that hold a value, as the web's. Each holds a number - 0 or 1, the chosen index (-1: none yet), the
+   number, a date as yyyymmdd - that the app reads and sets; the change handler hears what the user changes, never what
+   the app sets (a field's handler too). */
 RK_API rk_view *rk_check(const char *label, bool on);       /* a checkbox: Space toggles */
 RK_API rk_view *rk_choices(const char *const *options, int count, int chosen);   /* options, one chosen (-1: none yet) */
 RK_API rk_view *rk_toggle(const char *label, bool on);      /* the Metro switch, "on" or "off" beside it */
@@ -433,7 +442,9 @@ RK_API rk_view *rk_segments(const char *const *options, int count, int chosen); 
 RK_API rk_view *rk_slider(double min, double max, double step, double value);   /* step 0: continuous */
 RK_API rk_view *rk_stepper(double min, double max, double step, double value);  /* minus, the number, plus */
 RK_API rk_view *rk_select(const char *const *options, int count, int chosen);    /* one of a list, from a menu below */
-RK_API rk_view *rk_date(int year, int month, int day);    /* its value: 20261013; 0, 0, 0: none yet */
+RK_API rk_view *rk_date(int year, int month, int day);    /* 0, 0, 0: none yet */
+RK_API bool rk_date_value(rk_view *date, int *year, int *month, int *day);   /* false: none yet */
+RK_API void rk_date_set_value(rk_view *date, int year, int month, int day);   /* 0, 0, 0 clears it */
 RK_API double rk_control_value(rk_view *control);
 RK_API void rk_control_set_value(rk_view *control, double value);   /* a number snaps to the range and step; an index it lacks is ignored */
 RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, void *user), void *user);
@@ -446,7 +457,7 @@ RK_API const char *rk_field_text(rk_view *field);          /* UTF-8; valid until
 RK_API void rk_field_set_text(rk_view *field, const char *text);
 RK_API void rk_field_set_hint(rk_view *field, const char *hint);     /* below the input; NULL removes it */
 RK_API void rk_field_set_error(rk_view *field, const char *error);   /* the cause and remedy, marked, in the hint's place */
-RK_API void rk_field_on_change(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);
+RK_API void rk_field_on_change(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);   /* what the user types, not rk_field_set_text */
 RK_API void rk_field_on_submit(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);   /* Enter */
 RK_API void rk_field_set_lines(rk_view *field, int lines);   /* the lines it shows; 1, the default, is one line */
 RK_API void rk_field_set_secret(rk_view *field, bool secret);   /* a password: dots shown, never copied or read aloud */
@@ -619,31 +630,6 @@ RK_API float rk_canvas_text(rk_canvas *canvas, const char *text, rk_point origin
 RK_API void rk_canvas_push_clip(rk_canvas *canvas, rk_rect rect);
 RK_API void rk_canvas_pop_clip(rk_canvas *canvas);
 RK_API rk_size rk_text_measure(const char *text, rk_text_style style, float max_width);   /* max_width 0: one line */
-
-/* Testing --------------------------------------------------------------------------------------------------------- */
-
-RK_API void rk_window_inject(rk_window *window, const rk_event *event);   /* as if it came from the system */
-RK_API void rk_view_tap(rk_view *view);            /* a press and release in its middle */
-RK_API void rk_window_key(rk_window *window, uint32_t key);   /* a key pressed and released: an rk_key or a letter */
-RK_API rk_view *rk_window_view_at(rk_window *window, rk_point point);   /* what a press there reaches, or NULL */
-RK_API bool rk_window_snapshot(rk_window *window, const char *png_path);  /* the window's pixels as a PNG */
-RK_API void rk_app_run_for(double ms);             /* headless: advance the virtual clock, running every frame */
-
-/* What the loop did, to measure an app by. RK_HUD=1 shows it in the window's corner; RK_TRACE=1 prints each frame. */
-typedef struct rk_stats {
-  uint32_t size;                                   /* set by the caller: sizeof(rk_stats) */
-  uint32_t frames;                                 /* frames drawn */
-  uint32_t animations;                             /* running now */
-  uint32_t views;                                  /* alive now */
-  uint32_t glyphs;                                 /* glyphs rasterized (each a cache miss) */
-  uint32_t slow;                                   /* frames that took longer than 8 ms to draw */
-  double draw_ms;                                  /* time spent drawing all frames */
-  double last_ms, max_ms;                          /* the last frame, the slowest */
-  double pixels;                                   /* device pixels drawn */
-  double latency_ms, max_latency_ms;               /* from an input event to the end of the frame that showed it */
-} rk_stats;
-RK_API void rk_app_stats(rk_stats *stats);
-RK_API void rk_app_stats_reset(void);              /* the counts start again from zero */
 
 #ifdef __cplusplus
 }

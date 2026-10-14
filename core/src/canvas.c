@@ -76,6 +76,15 @@ void rk_canvas_polyline(rk_canvas *c, const rk_point *pts, int n, float width, r
   rk__path_fill(c->target, rk__canvas_clip(c), &c->path, rk__pm(color, c->alpha));
 }
 
+/* A name not in the icon set is said once - the same one again, every frame, would only be noise. */
+bool rk__icon_check(const char *name, const char *fn) {
+  int first, count;
+  static char said[64];
+  if (!name || rk__icon_find(name, &first, &count)) return true;
+  if (strncmp(said, name, sizeof said - 1)) { snprintf(said, sizeof said, "%s", name); rk__warn("%s: no icon is called \"%s\" (rekta(3) lists them)", fn, name); }
+  return false;
+}
+
 bool rk__icon_find(const char *name, int *first, int *count) {
   int lo = 0, hi = RK_ICON_COUNT - 1;
   while (lo <= hi) {
@@ -89,7 +98,8 @@ bool rk__icon_find(const char *name, int *first, int *count) {
 /* An icon: its shapes from the 20-unit grid, scaled to the rect, stroked 1.6 units (mitred, butt ends) or filled. */
 void rk_canvas_icon(rk_canvas *c, const char *name, rk_rect r, rk_color color) {
   int first, count;
-  if (!name || !rk__icon_find(name, &first, &count)) return;
+  if (!name) return;
+  if (!rk__icon_find(name, &first, &count)) { rk__icon_check(name, "rk_canvas_icon"); return; }
   float k = RK_MIN(r.w, r.h) / RK_ICON_GRID, ox = r.x + (r.w - RK_ICON_GRID * k) / 2, oy = r.y + (r.h - RK_ICON_GRID * k) / 2;
   uint32_t pm = rk__pm(color, c->alpha);
   rk_irect clip = rk__canvas_clip(c);

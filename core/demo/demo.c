@@ -13,7 +13,7 @@
  * `demo --shots DIR` runs a tour without a screen and writes what it sees as PNGs.
  * `demo --perf` puts the loop under load and measures it (resizing, a storm of presses, settling), without a screen;
  * `demo --perf --screen` does it in a real window. RK_HUD=1 shows the numbers in any run, RK_TRACE=1 prints frames. */
-#include "../include/rekta.h"
+#include "../include/rekta_test.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -331,15 +331,15 @@ static rk_view *motion_section(void) {
 
 /* controls: buttons, progress, rows, a custom view --------------------------------------------------------------- */
 
-/* A custom view: a bar chart drawn with the canvas. New figures travel to their place over duration-long. */
-typedef struct chart { float from[7], to[7]; double start; } chart;
+/* A custom view: a bar chart drawn with the canvas. New figures travel to their place with the morph motion: the
+   view's own value glides one further (from base to base + 1), and draw reads how far it has come. */
+typedef struct chart { float from[7], to[7], base; } chart;
 
 static void chart_draw(rk_view *v, rk_canvas *c, void *state) {
   chart *ch = state;
   rk_rect b = rk_view_bounds(v);
-  double d = rk_duration_of(RK_DURATION_LONG), t = d > 0 ? (rk_app_now() - ch->start) / d : 1;
-  if (t > 1) t = 1;
-  float k = (float)(1 - pow(1 - t, 3));                        /* eased toward the end */
+  float k = rk_view_value(v) - ch->base;                       /* 0 at the old figures, 1 at the new */
+  k = k < 0 ? 0 : k > 1 ? 1 : k;
   float base = b.h - 18, w = (b.w - 6 * 8) / 7;
   static const char *const days[7] = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
   rk_canvas_fill_rect(c, (rk_rect){ 0, base, b.w, 1 }, rk_color_of(RK_ROLE_TEXT_LOW));
@@ -348,7 +348,6 @@ static void chart_draw(rk_view *v, rk_canvas *c, void *state) {
     rk_canvas_fill_rect(c, (rk_rect){ i * (w + 8), base - h, w, h }, rk_color_of(i == 3 ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM));
     rk_canvas_text(c, days[i], (rk_point){ i * (w + 8), base + 2 }, RK_TEXT_META, rk_color_of(RK_ROLE_TEXT_HIGH));
   }
-  if (t < 1) rk_view_redraw(v);                                /* the next frame, while it moves */
 }
 
 static rk_size chart_measure(rk_view *v, rk_size available, void *state) {
@@ -362,12 +361,16 @@ static const rk_view_class chart_class = { sizeof(rk_view_class), "demo_chart", 
 static void new_figures(rk_view *v, void *u) {
   (void)v; (void)u;
   chart *ch = rk_view_state(D.chart);
+  float now = rk_view_value(D.chart), k = now - ch->base;
+  k = k < 0 ? 0 : k > 1 ? 1 : k;
   for (int i = 0; i < 7; i++) {
-    ch->from[i] = ch->to[i];
+    ch->from[i] += (ch->to[i] - ch->from[i]) * k;              /* from where they stand now, even mid-way */
     ch->to[i] = 0.2f + 0.8f * (float)((i * 37 + D.ticks * 53 + D.fades * 29 + D.npresses * 17) % 100) / 100;
   }
-  ch->start = rk_app_now();
-  rk_view_redraw(D.chart);
+  ch->base = now;                                              /* on from here: no pause, no jump */
+  rk_animate_begin(RK_MOTION_MORPH);
+  rk_view_animate_value(D.chart, now + 1);
+  rk_animate_commit();
 }
 
 static void slide_bar(rk_view *v, void *u) { (void)u; rk_progress_set_value(D.bar, (float)(rk_control_value(v) / 100)); }

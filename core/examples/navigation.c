@@ -7,7 +7,7 @@
 
    The pivot picks the place, so a change turns it: the place in sight turns away and the next one turns in, each
    part in a time that follows its size. */
-#include "rekta.h"
+#include "rekta_test.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

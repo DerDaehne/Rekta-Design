@@ -79,7 +79,7 @@ static void glide_y(rk_view *v, float from, float to, double dur) {
   rk_transform a = v->ptransform, b = v->transform;
   a.translate_y = from; b.translate_y = to;
   v->transform.translate_y = to;
-  rk__animate(v, RK_PROP_TRANSFORM, &a.translate_x, &b.translate_x, 10, dur, 0, rk__ease_base);
+  rk__animate_transform(v, &a, &b, dur, 0, rk__ease_base);
 }
 
 /* Put the row at from into place to, and let every row that moved glide there from where it was drawn. */

@@ -19,6 +19,7 @@ const rk_type rk__view_type = { "rk_view", view_destroy };
 int rk__live_views;
 
 rk_view *rk__view_create(const rk_class *cls, void *state) {
+  rk__main_thread_only("a view's constructor");
   rk_view *v = rk__new(&rk__view_type, sizeof *v);
   rk__live_views++;
   v->opacity = v->popacity = 1;
@@ -36,7 +37,7 @@ rk_view *rk_view_create(void) { return rk__view_create(NULL, NULL); }
 rk_view *rk_view_create_custom(const rk_view_class *pub, void *state) {
   /* the class may be a shorter, older struct: copy what it has */
   rk_class *cls = rk__alloc(sizeof *cls);
-  memcpy(&cls->pub, pub, RK_MIN((size_t)pub->size, sizeof cls->pub));
+  if (RK__SIZED(pub, "rk_view_create_custom", "rk_view_class")) memcpy(&cls->pub, pub, RK_MIN((size_t)pub->size, sizeof cls->pub));
   cls->pub.size = sizeof cls->pub;
   rk_view *v = rk__view_create(cls, state);
   v->own_cls = cls;
@@ -173,7 +174,7 @@ void rk_view_remove(rk_view *child) {
     rk__animate(child, RK_PROP_OPACITY, &from, &to, 1, d, 0, rk__ease_out);
     rk_transform t0 = child->ptransform, t1 = t0;
     if (rk__is_tile(child)) { t1.scale_x = t1.scale_y = 0.9f; } else t1.translate_x += 12;
-    rk__animate_cb(child, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_out, left_done, NULL);
+    rk__animate_transform_cb(child, &t0, &t1, d, 0, rk__ease_out, left_done, NULL);
     rk__view_relayout_up(child->parent);
     return;
   }
@@ -271,7 +272,7 @@ void rk_view_set_transform(rk_view *v, rk_transform t) {
   if (rk__animating_block() && rk__view_visible(v)) {
     rk_motion m = rk__current_motion();
     rk_transform from = v->ptransform;
-    rk__animate(v, RK_PROP_TRANSFORM, &from.translate_x, &t.translate_x, 10, rk__motion_duration(m, false), 0, rk__motion_ease(m));
+    rk__animate_transform(v, &from, &t, rk__motion_duration(m, false), 0, rk__motion_ease(m));
   } else { rk__anim_cancel(v, RK_PROP_TRANSFORM); v->ptransform = t; }
   rk__view_dirty(v);
 }
@@ -307,6 +308,21 @@ void rk_view_on_activate(rk_view *v, void (*fn)(rk_view *, void *), void *user) 
   if (fn) v->focusable = true;
   else if (!v->cls) { v->press = RK_PRESS_NONE; v->focusable = false; }   /* a plain view no longer acts */
 }
+
+void rk_view_set_cursor(rk_view *v, rk_cursor cursor) { if (v) v->cursor = (uint8_t)cursor; }   /* the same numbers as RK__CURSOR_ */
+
+/* A custom view's own number in motion: it glides to target with the motion of the block it is set in (state's,
+   outside one), and draw reads where it is. */
+void rk_view_animate_value(rk_view *v, float target) {
+  if (!v) return;
+  rk_motion m = rk__animating_block() ? rk__current_motion() : RK_MOTION_STATE;
+  double d = rk__reduced() ? 0 : rk__motion_duration(m, false);
+  float from = v->pvalue;
+  v->value = target;
+  if (d <= 0 || !rk__view_window(v)) { rk__anim_cancel(v, RK_PROP_VALUE); v->pvalue = target; rk__view_dirty(v); return; }
+  rk__animate(v, RK_PROP_VALUE, &from, &target, 1, d, 0, rk__ease_base);
+}
+float rk_view_value(rk_view *v) { return v ? v->pvalue : 0; }
 
 bool rk__view_disabled(const rk_view *v) {
   for (; v; v = v->parent) if (v->disabled) return true;

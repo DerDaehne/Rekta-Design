@@ -19,8 +19,8 @@ static void redo_toast(void *user) { rk_window_redo(user); }
 void rk_window_do(rk_window *w, const rk_action *action) {
   if (!w || !action) return;
   rk_action a = { sizeof a, NULL, NULL, NULL, NULL, NULL };
+  if (!RK__SIZED(action, "rk_window_do", "rk_action")) return;
   memcpy(&a, action, RK_MIN((size_t)action->size, sizeof a));
-  if (!action->size) rk__error("rk_window_do: the action needs its size (sizeof(rk_action))");
   while (w->nhistory > w->ndone) drop(&w->history[--w->nhistory]);   /* a new action: what was undone cannot come back */
   if (w->nhistory == HISTORY) {                            /* full: the oldest goes */
     drop(&w->history[0]);

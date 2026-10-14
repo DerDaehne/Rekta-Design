@@ -2,7 +2,7 @@
    around it, in light and in dark; test/gallery.mjs draws the same specimens with rekta.css and holds the two to each
    other. Writes OUT/<name>-<theme>.png (the whole window) and OUT/frames.txt (where each frame lies in it).
      build/gallery OUT */
-#include "rekta.h"
+#include "rekta_test.h"
 #include <stdio.h>
 #include <string.h>
 

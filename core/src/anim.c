@@ -38,6 +38,16 @@ const float *rk__motion_ease(rk_motion m) {
   return m == RK_MOTION_ENTER ? rk__ease_in : m == RK_MOTION_LEAVE ? rk__ease_out : rk__ease_base;
 }
 
+/* A transform as the ten numbers the animator moves, by name: the public struct's layout is not the animator's. */
+static void xf_pack(const rk_transform *t, float x[10]) {
+  x[0] = t->translate_x; x[1] = t->translate_y; x[2] = t->scale_x; x[3] = t->scale_y; x[4] = t->rotate_x;
+  x[5] = t->rotate_y; x[6] = t->rotate_z; x[7] = t->origin_x; x[8] = t->origin_y; x[9] = t->perspective;
+}
+static rk_transform xf_unpack(const float x[10]) {
+  rk_transform t = { x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9] };
+  return t;
+}
+
 static void apply(anim *a, float t) {
   rk_view *v = a->view;
   float k = a->prop == RK_PROP_CONTENT || a->prop == RK_PROP_TRANSITION ? t : rk__ease(a->ease, t), x[10];
@@ -46,7 +56,7 @@ static void apply(anim *a, float t) {
   switch (a->prop) {
     case RK_PROP_FRAME: v->pframe = (rk_rect){ x[0], x[1], x[2], x[3] }; break;
     case RK_PROP_OPACITY: v->popacity = x[0]; break;
-    case RK_PROP_TRANSFORM: memcpy(&v->ptransform, x, sizeof v->ptransform); break;
+    case RK_PROP_TRANSFORM: v->ptransform = xf_unpack(x); break;
     case RK_PROP_FILL: {
       rk_color c = 0;
       for (int i = 0; i < 4; i++) c |= (rk_color)RK_CLAMP((int)(x[i] + 0.5f), 0, 255) << (24 - 8 * i);
@@ -226,6 +236,16 @@ void rk_animate_commit(void) {
 
 static void entered(rk_view *v, void *user) { (void)user; v->entering = false; }
 
+void rk__animate_transform_cb(rk_view *v, const rk_transform *from, const rk_transform *to, double duration, double delay, const float *ease,
+                              void (*done)(rk_view *v, void *user), void *user) {
+  float a[10], b[10];
+  xf_pack(from, a); xf_pack(to, b);
+  rk__animate_cb(v, RK_PROP_TRANSFORM, a, b, 10, duration, delay, ease, done, user);
+}
+void rk__animate_transform(rk_view *v, const rk_transform *from, const rk_transform *to, double duration, double delay, const float *ease) {
+  rk__animate_transform_cb(v, from, to, duration, delay, ease, NULL, NULL);
+}
+
 void rk__set_frame(rk_view *v, rk_rect f) {
   bool first = !v->placed;
   v->frame = f;
@@ -241,7 +261,7 @@ void rk__set_frame(rk_view *v, rk_rect f) {
     rk__animate(v, RK_PROP_OPACITY, &o0, &o1, 1, d, 0, rk__ease_in);
     rk_transform t0 = v->transform, t1 = v->transform;
     if (tile) { t0.translate_y += 6; t0.scale_x *= 0.96f; t0.scale_y *= 0.96f; } else t0.translate_y -= 6;
-    rk__animate_cb(v, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_in, entered, NULL);
+    rk__animate_transform_cb(v, &t0, &t1, d, 0, rk__ease_in, entered, NULL);
     return;
   }
   rk_rect p = v->pframe;
@@ -257,7 +277,8 @@ void rk__set_frame(rk_view *v, rk_rect f) {
   rk_motion m = rk__current_motion();
   double d = rk__motion_duration(RK_MOTION_REFLOW, false);
   double delay = m == RK_MOTION_LEAVE ? rk__motion_duration(RK_MOTION_LEAVE, false) : 0;
-  rk__animate(v, RK_PROP_FRAME, &p.x, &f.x, 4, d, delay, rk__ease_base);
+  float p4[4] = { p.x, p.y, p.w, p.h }, f4[4] = { f.x, f.y, f.w, f.h };
+  rk__animate(v, RK_PROP_FRAME, p4, f4, 4, d, delay, rk__ease_base);
   /* a box that changes size fades its content back in near the end, so text is never seen stretched; a container
      only makes room, its children move on their own */
   if (v->cls && (fabsf(p.w - f.w) > 1 || fabsf(p.h - f.h) > 1)) {
