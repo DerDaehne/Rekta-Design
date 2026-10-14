@@ -26,7 +26,7 @@ static void show(rk_window *w, rk_view *content, const char *title) {
   rk_app_run_for(50);
 }
 
-static void done(rk_window *w) { rk_window_close(w); rk_release(w); }
+static void done(rk_window *w) { rk_window_close(w); }
 
 /* a column with the gap and padding a test measures against */
 static rk_view *col(float gap, float pad) {
@@ -101,10 +101,14 @@ static void test_text(void) {
   rk_textfmt s = rk__textfmt(RK_TEXT_STAT, 1280);
   CHECK(CLOSE_TO(rk__text_width("1", -1, &s), rk__text_width("8", -1, &s), 1e-3), "tabular figures in a stat");
   CHECK(CLOSE_TO(s.size, RK_CLAMP(0.026f * 1280, 30.0f, 44.0f), 1e-3), "fluid stat size: %f", s.size);
-  rk_line lines[8];
-  int n = rk__text_wrap("A tile's whole area is one fill, and the fill is its status.", &f, 160, lines, 8);
+  int n;
+  rk_line *lines = rk__text_lines("A tile's whole area is one fill, and the fill is its status.", &f, 160, &n);
   CHECK(n >= 3, "wraps: %d lines", n);
   for (int i = 0; i < n; i++) CHECK(lines[i].width <= 160.5f, "line %d fits: %f", i, lines[i].width);
+  free(lines);
+  char many[4000] = "";
+  for (int i = 0; i < 300; i++) strcat(many, "line\n");
+  CHECK(rk__text_wrap_size(many, &f, 0, NULL) == 300, "300 lines, every one of them");
   rk_size m = rk_text_measure("one line", RK_TEXT_SMALL, 0);
   CHECK(CLOSE_TO(m.h, 13 * 1.35, 1e-3), "one line's height: %f", m.h);
 }
@@ -274,6 +278,9 @@ static void test_spring(void) {
 }
 
 /* The API's one rule: what is added belongs to the tree. Nothing to release, nothing left over. */
+static int logged;                                             /* misuse the library reported (rk_app_set_log) */
+static char logged_last[256];
+static void test_log(rk_log_level level, const char *message, void *user) { (void)level; (void)user; logged++; snprintf(logged_last, sizeof logged_last, "%s", message); }
 static int pressed_count;
 static void count_press(rk_view *v, void *u) { (void)v; (void)u; pressed_count++; }
 
@@ -296,13 +303,13 @@ static void test_fonts(void) {
   CHECK(n == 3 && at[0] == 6 && at[1] == 9 && at[2] == 12, "Latin, then Hangul (%d: %d %d %d)", n, at[0], at[1], at[2]);
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
   const char *jp = "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e\xe3\x81\xae\xe6\x96\x87\xe7\xab\xa0\xe3\x81\xaf\xe7\xa9\xba\xe7\x99\xbd\xe3\x81\xaa\xe3\x81\x97\xe3\x81\xa7\xe6\x8a\x98\xe3\x82\x8a\xe8\xbf\x94\xe3\x81\x99\xe3\x80\x82";
-  rk_line lines[16];
   float one = rk__text_width("\xe6\x97\xa5", -1, &f);
-  n = rk__text_wrap(jp, &f, one * 5.5f, lines, 16);
+  rk_line *lines = rk__text_lines(jp, &f, one * 5.5f, &n);
   bool fit = n > 2;
   for (int i = 0; i < n; i++) fit = fit && lines[i].width <= one * 5.5f + 0.5f && lines[i].len % 3 == 0;
   CHECK(fit, "Japanese without spaces wraps at the width, a character at a time (%d lines)", n);
   CHECK(!memcmp(jp + lines[n - 1].start + lines[n - 1].len - 3, "\xe3\x80\x82", 3) && lines[n - 1].len > 3, "and 。 never starts a line");
+  free(lines);
 
   /* a face for what Barlow lacks: any font this system has that has one of these */
   static const char *const files[] = { "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf", "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
@@ -337,6 +344,98 @@ static void test_fonts(void) {
   done(w);
 }
 
+/* Disabled means it: no press, no Enter, no value; Tab passes it by unless it has a tooltip, its reason, which then
+   shows on focus; a disabled column disables what it holds. A tooltip comes after tip-delay under the pointer. */
+static void test_enabled(void) {
+  rk_window *w = window(600, 400);
+  rk_view *page = col(16, 16);
+  rk_view *b = rk_add(page, rk_button("send", count_press, NULL));
+  rk_view *plain = rk_add(page, rk_button("plain", count_press, NULL));
+  rk_view *group = rk_add(page, rk_column());
+  rk_view *chk = rk_add(group, rk_check("done", false));
+  show(w, page, "enabled");
+  int before = pressed_count;
+  rk_view_set_enabled(b, false);
+  CHECK(!rk_view_is_enabled(b) && rk_view_is_enabled(plain), "rk_view_is_enabled");
+  rk_view_tap(b);
+  rk_window_focus(w, b);
+  rk_window_key(w, RK_KEY_ENTER);
+  rk_app_run_for(200);
+  CHECK(pressed_count == before, "a disabled button fires neither on a click nor on Enter (%d)", pressed_count - before);
+  CHECK(rk_window_focused(w) != b, "nor takes focus without a reason");
+  rk_view_set_tooltip(b, "add a recipient first");
+  CHECK(rk_window_focus(w, b), "with a reason it takes focus");
+  rk_window_key(w, RK_KEY_ENTER);
+  rk_app_run_for(200);
+  CHECK(pressed_count == before, "and still does not fire");
+  w->focus_visible = true;
+  rk_window_focus(w, NULL);
+  rk_window_key(w, RK_KEY_TAB);
+  CHECK(rk_window_focused(w) == b && w->tip && w->tip_for == b, "Tab reaches it and its reason shows at once");
+  rk_window_key(w, RK_KEY_ESCAPE);
+  CHECK(!w->tip, "Escape takes the tooltip away");
+  rk_view_set_enabled(group, false);
+  CHECK(!rk_view_is_enabled(chk), "a disabled column disables what it holds");
+  rk_view_tap(chk);
+  CHECK(rk_control_value(chk) == 0, "its checkbox does not toggle");
+  rk_view_set_enabled(group, true);
+  rk_view_tap(chk);
+  CHECK(rk_control_value(chk) == 1, "enabled again, it does");
+  /* under the pointer: after tip-delay, not before; leaving hides it */
+  rk_view_set_tooltip(plain, "a plain button");
+  rk_rect r = rk__window_rect(plain);
+  rk_event e = { sizeof e, RK_EVENT_POINTER_MOVE, rk_app_now(), { r.x + 4, r.y + 4 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
+  rk__tip_hide(w, false); w->tip_hid = -1e9;
+  rk_window_inject(w, &e);
+  rk_app_run_for(rk_duration_of(RK_TIMING_TIP_DELAY) / 2);
+  CHECK(!w->tip, "no tooltip before tip-delay");
+  rk_app_run_for(rk_duration_of(RK_TIMING_TIP_DELAY));
+  CHECK(w->tip && w->tip_for == plain, "the tooltip after tip-delay");
+  shot(w, "tooltip");
+  e.position = (rk_point){ 590, 390 };
+  rk_window_inject(w, &e);
+  CHECK(!w->tip, "leaving hides it");
+  done(w);
+}
+
+/* No fixed limits: ten thousand tiles each get their own cell, six hundred children each a frame; a long list with no
+   height of its own fills what its column leaves and scrolls, as a flex: 1 list does on the web. */
+static void list_item(int i, rk_list_item *out, void *u);
+static void test_limits(void) {
+  rk_window *w = window(800, 600);
+  rk_view *page = col(8, 0);
+  rk_view *grid = rk_add(page, rk_tile_grid());
+  for (int i = 0; i < 10000; i++) rk_add(grid, rk_tile("1", "x"));
+  rk_view_set_span(rk_view_child(grid, 9999), 2, 2);
+  rk_view *stack = rk_add(page, rk_column());
+  for (int i = 0; i < 600; i++) rk_add(stack, rk_label("line", RK_TEXT_BODY));
+  show(w, rk_scroll(page), "limits");
+  rk__layout_pending();
+  bool distinct = true;
+  rk_rect a = rk_view_frame(rk_view_child(grid, 0)), z = rk_view_frame(rk_view_child(grid, 9998)), big = rk_view_frame(rk_view_child(grid, 9999));
+  for (int i = 1; i < 10000 && distinct; i++) {
+    rk_rect f = rk_view_frame(rk_view_child(grid, i)), e = rk_view_frame(rk_view_child(grid, i - 1));
+    if (f.w <= 0 || (f.x == e.x && f.y == e.y)) distinct = false;
+  }
+  CHECK(distinct && z.y > a.y && big.w > z.w && big.y >= z.y, "10000 tiles, each in a cell of its own, the last one 2 x 2");
+  rk_rect last = rk_view_frame(rk_view_child(stack, 599)), before = rk_view_frame(rk_view_child(stack, 598));
+  CHECK(last.h > 0 && last.y > before.y, "the 600th child of a column has its frame (%.0f)", last.y);
+  done(w);
+  w = window(600, 400);
+  page = col(8, 16);
+  rk_add(page, rk_label("above", RK_TEXT_BODY));
+  rk_view *list = rk_add(page, rk_list(100000, list_item, NULL));
+  rk_add(page, rk_button("below", NULL, NULL));
+  show(w, page, "fill");
+  rk_rect lf = rk_view_frame(list), pf = rk_view_frame(page);
+  CHECK(lf.h > 100 && lf.y + lf.h < pf.h, "a list with no height fills what its column leaves (%.0f of %.0f)", lf.h, pf.h);
+  rk_window_focus(w, list);
+  key(w, RK_KEY_END, 0);
+  rk_app_run_for(1200);
+  CHECK(list->pvalue > 1000, "and scrolls (%.0f)", list->pvalue);
+  done(w);
+}
+
 static void test_api(void) {
   int before = rk__live_views;
   rk_window *w = window(600, 400);
@@ -355,8 +454,14 @@ static void test_api(void) {
   rk_window_key(w, RK_KEY_ENTER);
   rk_app_run_for(200);
   CHECK(pressed_count == 2, "rk_window_key: Enter presses the focused button (%d)", pressed_count);
-  rk_view *moved = rk_insert(page, rk_retain(t), 0);           /* moving a view: pass rk_retain() */
-  CHECK(moved == t && rk_view_parent(t) == page && rk_view_count(grid) == 0, "rk_insert moves a retained view");
+  rk_view *moved = rk_insert(page, t, 0);                      /* a view in the tree moves: nothing to retain */
+  CHECK(moved == t && rk_view_parent(t) == page && rk_view_count(grid) == 0, "rk_insert moves a view already in the tree");
+  rk_view *label = rk_add(grid, rk_label("one", RK_TEXT_BODY));
+  rk_add(page, label);                                         /* moved, then changed: still alive */
+  rk_label_set_text(label, "two");
+  CHECK(rk_view_parent(label) == page, "a label added again moves and stays alive");
+  int was_logged = logged;
+  CHECK(!rk_insert(label, page, 0) && logged == was_logged + 1, "a view cannot hold its own parent, and it is reported");
   rk_view_remove(t);
   rk_app_run_for(50);
   done(w);
@@ -529,7 +634,7 @@ static void test_menu(void) {
   int delete_i = rk_menu_add(m, "delete (needs rights)", "Del", on_menu, NULL);
   rk_menu_set_check(m, done_i, 1);
   rk_menu_set_check(m, failed_i, 0);
-  rk_menu_set_disabled(m, delete_i, true);
+  rk_menu_set_enabled(m, delete_i, false);
   rk_view_set_menu(more, m);
   rk_view *tile = rk_add(rk_add(page, rk_tile_grid()), rk_tile("12", "builds"));
   rk_view *ctx = rk_menu();
@@ -753,9 +858,9 @@ static void test_controls(void) {
   CHECK(rk_control_value(stp) == 12, "Escape puts the number back");
   key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_HOME, 0); key(w, RK_KEY_DOWN, 0);
   CHECK(rk_control_value(stp) == 1, "Down, Home, and no lower than the start (%g)", rk_control_value(stp));
-  rk_control_set_disabled(chk, true);
+  rk_view_set_enabled(chk, false);
   rk_view_tap(chk);
-  CHECK(rk_control_value(chk) == 0 && !chk->focusable, "disabled: no change, no focus");
+  CHECK(rk_control_value(chk) == 0 && rk_window_focused(w) != chk, "disabled: no change, no focus");
   rk_control_set_value(chk, 1);
   rk_control_set_value(stp, 3);
   rk_window_focus(w, seg);
@@ -1686,7 +1791,9 @@ static void scene_controls(const char *name) {
   rk_button_set_kind(rk_add(row, rk_button("primary", NULL, NULL)), RK_BUTTON_PRIMARY);
   rk_add(row, rk_button("default", NULL, NULL));
   rk_button_set_kind(rk_add(row, rk_button("quiet", NULL, NULL)), RK_BUTTON_QUIET);
-  rk_button_set_disabled(rk_add(row, rk_button("disabled", NULL, NULL)), "nothing to do yet");
+  rk_view *off = rk_add(row, rk_button("disabled", NULL, NULL));
+  rk_view_set_enabled(off, false);
+  rk_view_set_tooltip(off, "nothing to do yet");
   rk_view *bar = rk_add(row, rk_button("archive", NULL, NULL));
   rk_button_set_kind(bar, RK_BUTTON_BAR);
   rk_button_set_icon(bar, "archive");
@@ -1749,6 +1856,8 @@ static void launch(void *user) {
   test_sort();
   test_drop();
   test_notify();
+  test_enabled();
+  test_limits();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */
@@ -1776,6 +1885,7 @@ int main(int argc, char **argv) {
   snprintf(cmd, sizeof cmd, "mkdir -p '%s'", out);
   if (system(cmd)) return 2;
 #endif
+  rk_app_set_log(test_log, NULL);
   rk_app_desc d = { sizeof d, "test", "de.rekta.test", launch, NULL, NULL, true };
   rk_app_main(&d);
   printf("%d checks passed, %d failed\n", passes, fails);

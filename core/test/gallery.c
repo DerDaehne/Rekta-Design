@@ -66,7 +66,6 @@ static void draw(int i, bool dark) {
   rk_rect r = in_window(frame);
   fprintf(frames, "%s-%s %g %g %g %g %g\n", specimens[i].name, dark ? "dark" : "light", r.x, r.y, r.w, r.h, rk_window_scale(w));
   rk_window_close(w);
-  rk_release(w);
 }
 
 static void launch(void *user) {

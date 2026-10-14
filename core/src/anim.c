@@ -16,8 +16,8 @@ typedef struct anim {
 } anim;
 
 static anim *anims; static int nanims, acap;
-static rk_anim_ctx ctx[16]; static int depth;
-static group *ctx_group[16];
+static rk_anim_ctx *ctx; static int depth, ctx_cap;      /* the open blocks, innermost last; as deep as the app nests */
+static group **ctx_group; static int group_cap;
 
 bool rk__animating_block(void) { return depth > 0; }
 rk_motion rk__current_motion(void) { return depth ? ctx[depth - 1].motion : RK_MOTION_STATE; }
@@ -158,6 +158,13 @@ void rk__animate_spring(rk_view *v, int prop, float target, double settle) {
   rk__app_request_frame();
 }
 
+/* A frame starts: a block the app left open is closed, and said so - its changes would wait forever. */
+void rk__anim_close_blocks(void) {
+  if (!depth) return;
+  rk__warn("rk_animate_begin without rk_animate_commit (%d left open): closed at the frame", depth);
+  while (depth) rk_animate_commit();
+}
+
 bool rk__anim_tick(double now) {
   static anim *finished; static int fcap;
   int nf = 0;
@@ -193,7 +200,8 @@ bool rk__anim_tick(double now) {
 /* Blocks ---------------------------------------------------------------------------------------------------------- */
 
 void rk_animate_begin(rk_motion motion) {
-  if (depth >= RK_COUNT(ctx)) return;
+  ctx = rk__grow(ctx, &ctx_cap, depth + 1, sizeof *ctx);
+  ctx_group = rk__grow(ctx_group, &group_cap, depth + 1, sizeof *ctx_group);
   ctx[depth].motion = motion;
   ctx_group[depth] = NULL;
   depth++;
@@ -207,7 +215,7 @@ void rk_animate_on_done(void (*fn)(void *), void *user) {
 }
 
 void rk_animate_commit(void) {
-  if (!depth) return;
+  if (!depth) { rk__warn("rk_animate_commit without rk_animate_begin"); return; }
   if (depth == 1) rk__layout_pending();                    /* the layout runs inside the block, so it animates */
   group *g = ctx_group[depth - 1];
   depth--;

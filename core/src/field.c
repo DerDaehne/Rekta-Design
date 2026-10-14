@@ -442,7 +442,8 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
   if (f->label) { rk_textfmt l = label_fmt(); rk__text_draw(c, f->label, -1, 0, 0, &l, rk_color_of(RK_ROLE_TEXT_HIGH)); }
   /* the input: 1px border in text-medium, the text colour while focused, 2px in error-full for an error */
   float bw = f->error ? 2 : 1, r = rk_metric_of(RK_RADIUS_S);
-  rk_color border = rk_color_of(f->error ? RK_ROLE_ERROR_FULL : focused ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
+  bool off = rk__view_disabled(v);
+  rk_color border = rk_color_of(off ? RK_ROLE_DISABLED : f->error ? RK_ROLE_ERROR_FULL : focused ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
   rk_canvas_fill_round_rect(c, box, r, border);
   rk_canvas_fill_round_rect(c, (rk_rect){ box.x + bw, box.y + bw, box.w - 2 * bw, box.h - 2 * bw }, RK_MAX(0.0f, r - bw), rk_color_of(RK_ROLE_BG));
   if (focused) rk_canvas_stroke_rect(c, (rk_rect){ box.x - 4, box.y - 4, box.w + 8, box.h + 8 }, 2, rk_color_of(RK_ROLE_FOCUS));
@@ -450,7 +451,7 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
   if (f->wrap_w != f->drawn_w) { f->drawn_w = f->wrap_w; keep_caret_in_sight(v, f); }   /* a new width: the caret in sight of it */
   rk_textfmt t = input_fmt(f);
   float lh = line_h(f), x0 = box.x + PAD - f->scroll, y0 = box.y + input_pad_y(f) - f->scroll_y;
-  rk_color ink = rk_color_of(RK_ROLE_TEXT);
+  rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
   rk_canvas_push_clip(c, multi(f) ? (rk_rect){ box.x + bw, box.y + bw, box.w - 2 * bw, box.h - 2 * bw } : (rk_rect){ box.x + bw, box.y, box.w - 2 * bw, box.h });
   if (!f->len && f->placeholder) rk__text_draw(c, f->placeholder, -1, box.x + PAD, y0, &t, rk_color_of(RK_ROLE_TEXT_MEDIUM));
   int lo = sel_lo(f), hi = sel_hi(f), ck = line_of(f, f->caret);
@@ -560,6 +561,8 @@ void rk_field_set_lines(rk_view *v, int lines) {
 }
 
 /* A table's cell editor: the input as tall as a row. */
+void rk__field_select_all(rk_view *v) { field *f = field_of(v); if (f) { f->anchor = 0; f->caret = f->len; touched(v, f); } }
+
 void rk__field_set_box_height(rk_view *v, float h) {
   field *f = field_of(v);
   if (!f) return;

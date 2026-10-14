@@ -4,14 +4,15 @@
  *   - C99. Functions rk_noun_verb, types rk_noun, constants RK_NOUN.
  *   - Value types cross by value and never change layout. Units are logical pixels.
  *   - Objects are opaque and reference counted. One rule for who owns what:
- *       - a constructor returns a reference you own: rk_label(), rk_tile(), rk_column(), rk_window_create(), ...
- *         (it is named after the thing; where the thing is a type of its own - window, view, controller - it is
- *         *_create);
- *       - adding, showing and presenting take that reference over: rk_add(), rk_insert(), rk_panorama_add(),
- *         rk_pivot_add(), rk_places(), rk_places_go(), rk_controller_present(), rk_view_set_menu(), rk_window_show() and
- *         rk_controller_create_with_view(). What you put into the tree belongs to the tree; you never release it.
- *         To move a view that is already in a tree, pass rk_retain(view);
- *       - every other pointer you get is borrowed. A view stays valid while it is in the tree.
+ *       - a view or controller constructor returns a reference you own (rk_label(), rk_column(), rk_pivot(), ...);
+ *       - every call that puts a view or controller somewhere takes that reference over: adding it to a view, a
+ *         panorama, a pivot, places, a scroll, a split or a menu slot, showing it in a window, presenting it, giving
+ *         it to rk_controller_create_with_view(). What is in the tree belongs to the tree; you never release it;
+ *       - a view that is already in a tree moves when you add it elsewhere - nothing to retain;
+ *       - a window belongs to the app from rk_window_create() until it closes: the pointer you get is borrowed;
+ *       - every other pointer you get is borrowed, valid while what it points to is in the tree or open.
+ *     rk_retain() keeps one beyond that; rk_release() lets it go. Both report a pointer that is no Rekta object, or
+ *     one already freed, through rk_app_set_log().
  *   - Descriptors that may grow start with `uint32_t size`; set it to sizeof the struct.
  *   - Callbacks are a function pointer plus a `void *user`.
  *   - Strings are UTF-8 and NUL-terminated; the library copies what it keeps.
@@ -147,6 +148,10 @@ RK_API void rk_app_set_accent(rk_color light, rk_color dark);    /* 0, 0: the in
    system's: an app that writes Japanese may bring its own. False when it cannot be read or drawn with. */
 RK_API bool rk_app_add_font(const char *path);
 RK_API void rk_app_on_change(void (*fn)(void *user), void *user);   /* theme, motion, density or accent changed */
+/* Misuse - a descriptor without its size, a call on the wrong kind of view, an icon that does not exist - is reported
+   here, never passed over in silence; stderr until an app sets its own. */
+typedef enum rk_log_level { RK_LOG_ERROR, RK_LOG_WARNING, RK_LOG_LEVEL_FORCE32 = 0x7fffffff } rk_log_level;
+RK_API void rk_app_set_log(void (*fn)(rk_log_level level, const char *message, void *user), void *user);
 
 /* Window ---------------------------------------------------------------------------------------------------------- */
 
@@ -247,7 +252,9 @@ RK_API void rk_view_set_layout(rk_view *view, rk_layout layout);
 RK_API void rk_view_set_padding(rk_view *view, rk_insets padding);
 RK_API void rk_view_set_gap(rk_view *view, float gap);
 RK_API void rk_view_set_align(rk_view *view, rk_align main, rk_align cross);
-RK_API void rk_view_set_grow(rk_view *view, float grow);        /* share of the free space in a stack */
+/* A weight, as CSS flex: 1 or Compose's weight - views with grow share what the others leave in a stack, never less
+   than their content; a list or a scroll view may shrink and then scrolls (they have grow 1 from the start). */
+RK_API void rk_view_set_grow(rk_view *view, float grow);
 RK_API void rk_view_set_size(rk_view *view, float width, float height);   /* fixed; 0: natural */
 RK_API void rk_view_set_min_size(rk_view *view, float width, float height);
 RK_API void rk_view_set_span(rk_view *view, int columns, int rows);       /* in a TILES parent */
@@ -257,6 +264,13 @@ RK_API void rk_view_redraw(rk_view *view);
 /* interaction */
 RK_API void rk_view_set_press(rk_view *view, rk_press press);   /* nudges where pressed; activates on release */
 RK_API void rk_view_set_focusable(rk_view *view, bool focusable);
+/* Disabled, a view and everything in it take no presses, keys or values, built-in views draw greyed, and Tab passes it
+   by - unless it has a tooltip, which then says why it is off and Tab still reaches it. */
+RK_API void rk_view_set_enabled(rk_view *view, bool enabled);
+RK_API bool rk_view_is_enabled(rk_view *view);        /* false when it or a view holding it is disabled */
+/* A short ink label after tip-delay under the pointer, at once on keyboard focus; NULL removes it. It repeats or
+   completes what the view says, never the only way to learn it. */
+RK_API void rk_view_set_tooltip(rk_view *view, const char *text);
 RK_API void rk_view_on_activate(rk_view *view, void (*fn)(rk_view *view, void *user), void *user);
 RK_API void rk_view_set_user(rk_view *view, void *user, void (*free_user)(void *user));
 RK_API void *rk_view_user(rk_view *view);
@@ -347,7 +361,6 @@ typedef enum rk_button_kind { RK_BUTTON_DEFAULT, RK_BUTTON_PRIMARY, RK_BUTTON_QU
 RK_API rk_view *rk_button(const char *label, void (*on_press)(rk_view *button, void *user), void *user);   /* on_press may be NULL */
 RK_API void rk_button_set_kind(rk_view *button, rk_button_kind kind);   /* RK_BUTTON_DEFAULT until set */
 RK_API void rk_button_set_icon(rk_view *button, const char *icon);      /* from the icon set; NULL removes it */
-RK_API void rk_button_set_disabled(rk_view *button, const char *reason);  /* NULL enables; the reason is its tooltip */
 
 /* A tile: one status fill, one idea - a value and what it counts. Sizes are spans in a tile grid
    (rk_view_set_span). A tile with an activate handler presses and opens something; without one it only informs. */
@@ -376,7 +389,7 @@ RK_API void rk_menu_add_separator(rk_view *menu);
 RK_API void rk_menu_add_label(rk_view *menu, const char *label);   /* a group's name */
 RK_API void rk_menu_set_check(rk_view *menu, int item, int check); /* -1: none (the default), 0: empty, 1: filled */
 RK_API int rk_menu_check(rk_view *menu, int item);
-RK_API void rk_menu_set_disabled(rk_view *menu, int item, bool disabled);
+RK_API void rk_menu_set_enabled(rk_view *menu, int item, bool enabled);
 RK_API void rk_menu_open(rk_view *menu, rk_view *from);            /* below from; focus goes back to it */
 RK_API void rk_menu_open_at(rk_view *menu, rk_view *from, rk_point point);   /* at a point in from: a context menu */
 RK_API void rk_menu_close(rk_view *menu);
@@ -409,7 +422,6 @@ RK_API rk_view *rk_date(int year, int month, int day);    /* its value: 20261013
 RK_API double rk_control_value(rk_view *control);
 RK_API void rk_control_set_value(rk_view *control, double value);   /* a number snaps to the range and step; an index it lacks is ignored */
 RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, void *user), void *user);
-RK_API void rk_control_set_disabled(rk_view *control, bool disabled);
 
 /* A text field, as the web's: a label above, the input, a hint below - or an error, its cause and remedy, marked.
    One line, edited with the desktop's keys and the pointer; Enter submits. With more lines it is a text area: the

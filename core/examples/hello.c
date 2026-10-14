@@ -39,7 +39,6 @@ static void launch(void *user) {
   rk_controller *home = rk_panorama();
   rk_panorama_add(home, "today", today(), 0);
   rk_window_show(window, home);
-  rk_release(window);                              /* an open window lives until it is closed */
 }
 
 int main(void) {

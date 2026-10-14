@@ -205,7 +205,7 @@ static void push_event(void) {
   int i = D.events_n++ % 7;
   rk_animate_begin(RK_MOTION_ENTER);
   rk_view *row = rk_rows_add(D.events, EVENTS[i][0], NULL, event_status(i));
-  rk_insert(D.events, rk_retain(row), 0);                      /* added last; moved to the top */
+  rk_insert(D.events, row, 0);                                 /* added last; moved to the top */
   rk_animate_commit();
   if (rk_view_count(D.events) > 4) {
     rk_animate_begin(RK_MOTION_LEAVE);
@@ -412,7 +412,7 @@ static rk_view *more_menu(void) {
   rk_menu_set_check(m, sort_by_time, 0);
   rk_menu_add_separator(m);
   rk_menu_add(m, "export", "Ctrl+E", export_all, NULL);
-  rk_menu_set_disabled(m, rk_menu_add(m, "print (needs a printer)", "Ctrl+P", NULL, NULL), true);
+  rk_menu_set_enabled(m, rk_menu_add(m, "print (needs a printer)", "Ctrl+P", NULL, NULL), false);
   return m;
 }
 
@@ -440,7 +440,9 @@ static rk_view *controls_section(void) {
   rk_button_set_kind(rk_add(kinds, rk_button("primary", NULL, NULL)), RK_BUTTON_PRIMARY);
   rk_add(kinds, rk_button("default", NULL, NULL));
   rk_button_set_kind(rk_add(kinds, rk_button("quiet", NULL, NULL)), RK_BUTTON_QUIET);
-  rk_button_set_disabled(rk_add(kinds, rk_button("disabled", NULL, NULL)), "nothing to do yet");
+  rk_view *off = rk_add(kinds, rk_button("disabled", NULL, NULL));
+  rk_view_set_enabled(off, false);
+  rk_view_set_tooltip(off, "nothing to do yet");
 
   static const char *const bar[][2] = { { "edit", "edit" }, { "share", "link" }, { "delete", "trash" }, { NULL, "more" } };
   rk_view *app_bar = rk_add(s, rk_row());
@@ -935,7 +937,6 @@ static void launch(void *user) {
   rk_panorama_add(D.home, "settings", settings_section(), 0);
   D.places = rk_places(D.home);                                /* places keep home, the window keeps places */
   rk_window_show(D.window, D.places);
-  rk_release(D.window);                                        /* an open window lives until it is closed */
 
   D.feed = true;
   if (D.shots) { tour(); return; }

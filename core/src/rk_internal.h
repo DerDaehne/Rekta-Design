@@ -22,13 +22,26 @@
 /* Objects --------------------------------------------------------------------------------------------------------- */
 
 typedef struct rk_type { const char *name; void (*destroy)(void *self); } rk_type;
-typedef struct rk_object { const rk_type *type; int refs; } rk_object;
+/* magic first: rk_retain and rk_release can tell a Rekta object from any other pointer, and a freed one */
+typedef struct rk_object { uint32_t magic; int refs; const rk_type *type; } rk_object;
+#define RK__MAGIC 0x524b4f62u                              /* "RKOb" */
+#define RK__DEAD 0x64656164u                               /* "dead": freed */
 
 void *rk__new(const rk_type *type, size_t size);          /* zeroed, one reference */
 void *rk__alloc(size_t size);                              /* zeroed; aborts when memory runs out */
 void *rk__grow(void *p, int *cap, int need, size_t item);  /* a growable array */
 char *rk__strdup(const char *s);
 void rk__setstr(char **dst, const char *src);
+
+/* Misuse is reported, never silent: through the app's log (rk_app_set_log), stderr until one is set. */
+#if defined(__GNUC__)
+void rk__log(rk_log_level level, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+#else
+void rk__log(rk_log_level level, const char *fmt, ...);
+#endif
+#define rk__error(...) rk__log(RK_LOG_ERROR, __VA_ARGS__)
+#define rk__warn(...) rk__log(RK_LOG_WARNING, __VA_ARGS__)
+bool rk__is_object(const void *p, const rk_type *type);   /* type NULL: any Rekta object */
 
 /* Preferences and tokens (tokens.c) ------------------------------------------------------------------------------- */
 
@@ -98,7 +111,9 @@ rk_textfmt rk__textfmt(rk_text_style style, float host_width);
 float rk__text_width(const char *s, int len, const rk_textfmt *f);
 float rk__text_ascent(const rk_textfmt *f);                /* from the top of the line box to the baseline */
 typedef struct rk_line { int start, len; float width; } rk_line;
-int rk__text_wrap(const char *s, const rk_textfmt *f, float max_width, rk_line *lines, int max);
+rk_line *rk__text_lines(const char *s, const rk_textfmt *f, float max_width, int *count);   /* all of them, malloc'd */
+int rk__text_wrap_size(const char *s, const rk_textfmt *f, float max_width, float *widest);  /* the line count */
+float rk__text_draw_lines(rk_canvas *c, const char *s, const rk_textfmt *f, float x, float y, float width, float align, rk_color color);
 void rk__text_draw(rk_canvas *c, const char *s, int len, float x, float top, const rk_textfmt *f, rk_color color);
 void rk__text_shutdown(void);
 void rk__text_forget(void);
@@ -152,7 +167,10 @@ struct rk_view {
   bool rule_top, rule_bottom, hidden, clip, focusable, leaving, entering, placed, fill_anim;
   bool passthrough;                                        /* a layer: only its children take the pointer */
   bool hug;                                                /* keeps its own width across a stack, as a button */
+  bool scrolls;                                            /* scrolls its content: may shrink below it in a stack */
   bool draws_focus;                                        /* draws its own focus ring (a field: around its input) */
+  bool disabled;                                           /* it and what it holds take no input (rk_view_set_enabled) */
+  char *tooltip;
   uint8_t cursor;                                          /* the pointer's shape over it, as its last move left it */
   rk_view *menu;                                           /* a button opens it; any other view on a right click */
   /* layout */
@@ -162,7 +180,9 @@ struct rk_view {
   /* behaviour */
   rk_press press;
   void (*on_activate)(rk_view *view, void *user); void *activate_user;
-  void *user; void (*free_user)(void *user);
+  void *user; void (*free_user)(void *user);              /* the app's alone: built-in views never touch it */
+  void (*own_activate)(rk_view *view, void *data); void *own_data;   /* a built-in view's own action, before the app's */
+  void *owner;                                             /* a built-in's mark: a sheet box's sheet (borrowed) */
   rk_access_role access; char *access_label, *access_value;
   const rk_class *cls; void *state;
   rk_class *own_cls;                                       /* a copy of a custom view's class */
@@ -205,6 +225,7 @@ enum { RK_PROP_FRAME, RK_PROP_OPACITY, RK_PROP_TRANSFORM, RK_PROP_FILL, RK_PROP_
 typedef struct rk_anim_ctx { rk_motion motion; int depth; void (*done)(void *); void *done_user; int pending; } rk_anim_ctx;
 bool rk__animating_block(void);
 rk_motion rk__current_motion(void);
+void rk__anim_close_blocks(void);                         /* at a frame: an open rk_animate_begin is closed */
 void rk__animate(rk_view *v, int prop, const float *from, const float *to, int n, double duration, double delay, const float *ease);
 void rk__animate_cb(rk_view *v, int prop, const float *from, const float *to, int n, double duration, double delay, const float *ease,
                     void (*done)(rk_view *v, void *user), void *user);
@@ -247,6 +268,7 @@ struct rk_window {
   rk_view *activated;                                      /* the view whose activate handler is running */
   bool focus_visible;                                      /* focus came from the keyboard */
   rk_point pointer;
+  rk_view *tip, *tip_for; uint32_t tip_timer; double tip_hid;   /* the tooltip shown, whose, its wait, when one went */
   bool (*should_close)(rk_window *w, void *user); void *close_user;
   rk_window *next;                                         /* the app's list of open windows */
 };
@@ -300,8 +322,15 @@ rk_view *rk__titlebar_create(rk_window *w);
 void rk__titlebar_update(rk_view *bar);
 rk_view *rk__toast_create(const char *message, const char *action, void (*on_action)(void *), void *user);
 bool rk__view_within(const rk_view *v, const rk_view *ancestor);
+extern const rk_class rk__sheets_class;                    /* controller.c: the window's sheet layer */
+bool rk__view_disabled(const rk_view *v);                  /* it or a view holding it is disabled */
+rk_view *rk__tip_owner(rk_view *v);                        /* tip.c */
+void rk__tip_hover(rk_window *w, rk_view *v);
+void rk__tip_focus(rk_window *w, rk_view *v);
+void rk__tip_hide(rk_window *w, bool remember);
 void rk__toast_leaving(rk_view *toast);
 void rk__field_set_box_height(rk_view *field, float h);
+void rk__field_select_all(rk_view *field);
 /* menu.c, for the controls built on a menu */
 void rk__menu_mark(rk_view *menu, int chosen);              /* a mark on the chosen item, none on the others */
 void rk__menu_shape(rk_view *menu, float min_w, int prefer);

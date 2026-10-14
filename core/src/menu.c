@@ -213,7 +213,7 @@ void rk_menu_set_check(rk_view *v, int i, int check) {
   rk__view_relayout_up(v); rk__view_dirty(v);
 }
 int rk_menu_check(rk_view *v, int i) { menu *m = menu_of(v); return m && i >= 0 && i < m->n ? m->items[i].check : -1; }
-void rk_menu_set_disabled(rk_view *v, int i, bool disabled) { menu *m = menu_of(v); if (m && i >= 0 && i < m->n) { m->items[i].disabled = disabled; rk__view_dirty(v); } }
+void rk_menu_set_enabled(rk_view *v, int i, bool enabled) { menu *m = menu_of(v); if (m && i >= 0 && i < m->n) { m->items[i].disabled = !enabled; rk__view_dirty(v); } }
 rk_view *rk_menu_opener(rk_view *v) { menu *m = menu_of(v); return m ? m->from : NULL; }
 
 /* Opens it in the window's top layer at a rect's bottom left (above it where there is no room below), on screen. */

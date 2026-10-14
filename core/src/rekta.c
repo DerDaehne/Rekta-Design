@@ -32,6 +32,7 @@
 #include "anim.c"
 #include "window.c"
 #include "widgets.c"
+#include "tip.c"
 #include "sort.c"
 #include "drop.c"
 #include "controls.c"

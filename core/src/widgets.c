@@ -16,16 +16,10 @@ static rk_color with_alpha(rk_color c, float a) { return (c & 0xffffff00u) | (rk
 
 /* Wrapped text in a box, as a paragraph: the lines from the top. */
 static float draw_lines(rk_canvas *c, const char *s, const rk_textfmt *f, float x, float y, float width, rk_color color) {
-  rk_line lines[128];
-  int n = rk__text_wrap(s, f, width, lines, 128);
-  for (int i = 0; i < n; i++) rk__text_draw(c, s + lines[i].start, lines[i].len, x, y + i * f->size * f->line, f, color);
-  return n * f->size * f->line;
+  return rk__text_draw_lines(c, s, f, x, y, width, 0, color);
 }
 
-static float text_height(const char *s, const rk_textfmt *f, float width) {
-  rk_line lines[128];
-  return rk__text_wrap(s, f, width, lines, 128) * f->size * f->line;
-}
+static float text_height(const char *s, const rk_textfmt *f, float width) { return rk__text_wrap_size(s, f, width, NULL) * f->size * f->line; }
 
 /* Label ----------------------------------------------------------------------------------------------------------- */
 
@@ -34,10 +28,8 @@ typedef struct label { char *text; rk_text_style style; rk_role color; } label;
 static rk_size label_measure(rk_view *v, rk_size avail, void *st) {
   label *l = st;
   rk_textfmt f = rk__textfmt(l->style, rk__host_width(v));
-  rk_line lines[128];
-  int n = rk__text_wrap(l->text, &f, isfinite(avail.w) ? avail.w : 0, lines, 128);
-  float w = 0;
-  for (int i = 0; i < n; i++) w = RK_MAX(w, lines[i].width);
+  float w;
+  int n = rk__text_wrap_size(l->text, &f, isfinite(avail.w) ? avail.w : 0, &w);
   return (rk_size){ ceilf(w), RK_MAX(n, 1) * f.size * f.line };
 }
 static void label_draw(rk_view *v, rk_canvas *c, void *st) {
@@ -69,7 +61,7 @@ void rk_label_set_color(rk_view *v, rk_role role) { if (v->cls == &label_class) 
 /* Button ---------------------------------------------------------------------------------------------------------- */
 
 enum { BUTTON_TOAST = 100 };
-typedef struct button { char *label, *icon, *reason; int kind; } button;
+typedef struct button { char *label, *icon; int kind; } button;
 
 static rk_textfmt button_fmt(button *b) {
   rk_textfmt f = rk__textfmt(b->kind == RK_BUTTON_BAR ? RK_TEXT_LABEL : RK_TEXT_STRONG, 0);
@@ -89,7 +81,7 @@ static rk_size button_measure(rk_view *v, rk_size avail, void *st) {
 static void button_draw(rk_view *v, rk_canvas *c, void *st) {
   button *b = st;
   rk_rect r = { 0, 0, v->pframe.w, v->pframe.h };
-  bool off = b->reason != NULL;
+  bool off = rk__view_disabled(v);
   rk_color ink = rk_color_of(RK_ROLE_TEXT), bg = 0;
   if (b->kind == RK_BUTTON_PRIMARY && !off) { bg = rk_color_of(RK_ROLE_ACCENT); ink = rk_color_of(RK_ROLE_ON_ACCENT); }
   if (b->kind == RK_BUTTON_QUIET) ink = rk_color_of(RK_ROLE_TEXT_HIGH);
@@ -108,7 +100,7 @@ static void button_draw(rk_view *v, rk_canvas *c, void *st) {
   if (b->icon) rk_canvas_icon(c, b->icon, (rk_rect){ x, (r.h - 20) / 2, 20, 20 }, ink);
   if (tw) rk__text_draw(c, b->label, -1, x + iw + gap, (r.h - f.size) / 2, &f, ink);
 }
-static void button_destroy(void *st) { button *b = st; free(b->label); free(b->icon); free(b->reason); free(b); }
+static void button_destroy(void *st) { button *b = st; free(b->label); free(b->icon); free(b); }
 static const rk_class button_class = { { sizeof(rk_view_class), "rk_button", button_draw, button_measure, NULL, NULL, button_destroy }, NULL, NULL };
 
 static rk_view *button_make(const char *text, const char *icon, int kind) {
@@ -138,13 +130,6 @@ void rk_button_set_icon(rk_view *v, const char *icon) {
   rk__setstr(&b->icon, icon);
   if (!b->label || !*b->label) rk__setstr(&v->access_label, icon);   /* an icon alone is still named */
   rk__view_relayout_up(v);
-}
-void rk_button_set_disabled(rk_view *v, const char *reason) {
-  if (v->cls != &button_class) return;
-  button *b = v->state;
-  rk__setstr(&b->reason, reason);
-  v->press = reason ? RK_PRESS_NONE : RK_PRESS_FLAT;
-  rk__view_dirty(v);
 }
 
 /* Tile ------------------------------------------------------------------------------------------------------------ */

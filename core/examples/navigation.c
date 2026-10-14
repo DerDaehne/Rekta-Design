@@ -111,7 +111,6 @@ static void launch(void *user) {
     rk_app_after(3600, false, go, (void *)(intptr_t)1);
     rk_app_after(20, true, take_frame, NULL);
   }
-  rk_release(window);
 }
 
 int main(int argc, char **argv) {

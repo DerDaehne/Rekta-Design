@@ -22,7 +22,7 @@
 typedef struct list {
   int count, active, anchor, pressed, nsel;
   bool mode;                                               /* the selection mode: every click toggles */
-  uint8_t *sel; size_t selcap;                             /* a bit for each item */
+  uint8_t *sel; int selcap;                                /* a bit for each item */
   void (*item)(int index, rk_list_item *out, void *user); void *user;
   void (*show)(rk_view *list, int index, void *user); void *show_user;
   void (*change)(rk_view *list, void *user); void *change_user;
@@ -47,7 +47,7 @@ static void set_selected(list *l, int i, bool on) {
   l->nsel += on ? 1 : -1;
 }
 
-static void clear_selection(list *l) { memset(l->sel, 0, l->selcap); l->nsel = 0; }
+static void clear_selection(list *l) { if (l->sel) memset(l->sel, 0, (size_t)l->selcap); l->nsel = 0; }
 
 static float head_height(const list *l) {
   if (!l->ncols) return 0;
@@ -140,8 +140,7 @@ static void edit_start(rk_view *v, list *l, int row, int col) {
   l->editor = ed;
   rk__view_add(v, ed); rk_release(ed);
   place_editor(v, l);
-  rk_event all = { sizeof all, RK_EVENT_KEY_DOWN, rk_app_now(), { 0, 0 }, 0, 0, 0, 'A', RK_MOD_CTRL, NULL, NULL, 0 };
-  ed->cls->pub.event(ed, &all, ed->state);                  /* the old value, selected: typing replaces it */
+  rk__field_select_all(ed);                                /* the old value, selected: typing replaces it */
   rk_window *w = rk__view_window(v);
   if (w) rk_window_focus(w, ed);
   rk__view_dirty(v);
@@ -454,7 +453,7 @@ void rk_list_set_count(rk_view *v, int count) {
   if (!l) return;
   count = RK_MAX(0, count);
   size_t need = ((size_t)count + 7) / 8;
-  if (need > l->selcap) { l->sel = realloc(l->sel, need); memset(l->sel + l->selcap, 0, need - l->selcap); l->selcap = need; }
+  if (need > (size_t)l->selcap) l->sel = rk__grow(l->sel, &l->selcap, (int)need, 1);
   for (int i = count; i < l->count; i++) set_selected(l, i, false);   /* what is gone is no longer selected */
   if (l->editor && l->edit_row >= count) edit_finish(v, l, true);     /* its row is gone */
   l->count = count;
@@ -473,6 +472,7 @@ rk_view *rk_list(int count, void (*item)(int index, rk_list_item *out, void *use
   l->item = item; l->user = user; l->pressed = -1; l->head = l->resizing = l->edge_col = l->down_row = -1;
   rk_view *v = rk__view_create(&list_class, l);
   v->clip = true; v->focusable = true; v->draws_focus = true;   /* the active row (or head column) shows focus */
+  v->scrolls = true; v->grow = 1;                          /* in a stack it fills what is left and scrolls */
   v->access = RK_ACCESS_LIST;
   rk_list_set_count(v, count);
   return v;

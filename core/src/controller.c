@@ -38,8 +38,8 @@ rk_controller *rk_controller_create(const rk_controller_class *cls, void *state)
 
 rk_controller *rk_controller_create_with_view(rk_view *view, const char *title) {
   rk_controller *c = rk_controller_create(NULL, NULL);
-  c->view = view;                                              /* takes the caller's reference */
-  view->controller = c;
+  c->view = view ? view : rk_view_create();                   /* takes the caller's reference */
+  c->view->controller = c;
   rk__setstr(&c->title, title);
   return c;
 }
@@ -91,7 +91,7 @@ static void turn_release(turn *t) { for (int i = 0; i < t->n; i++) rk_release(t-
 typedef struct places {
   rk_controller *self;
   rk_controller **stack; int n, cap;
-  rk_view *focus_return[64];
+  rk_view **focus_return; int fcap;                        /* where focus was on each place, for coming back to it */
   turn out;                                                /* the units of the place leaving */
   rk_controller *leaving;                                  /* owned while it turns away after back */
   bool leaving_owned;
@@ -104,7 +104,8 @@ static void places_free(void *p) {
   if (pl->timer) rk_app_cancel(pl->timer);
   free(pl->pending);
   if (pl->leaving_owned) rk_release(pl->leaving);
-  for (int i = 0; i < 64; i++) rk_release(pl->focus_return[i]);
+  for (int i = 0; i < pl->fcap; i++) rk_release(pl->focus_return[i]);
+  free(pl->focus_return);
   for (int i = 0; i < pl->n; i++) rk_release(pl->stack[i]);
   turn_release(&pl->out);
   free(pl->stack); free(pl->out.units); free(pl);
@@ -205,9 +206,12 @@ static void turn_starts(turn *t, int n, rk_view *pressed, double *hs, double *at
 }
 static const float turn_ease_out[4] = { 0.35f, 0.0f, 0.65f, 0.6f }, turn_ease_in[4] = { 0.22f, 0.9f, 0.6f, 0.98f };
 
-/* The units of a place in turning order, the pressed one last; each one's row, and how far each row reaches from
-   its clip box's leading edge (the farther, the flatter the perspective). */
-static int turn_gather(turn *t, rk_view *place, rk_view *pressed, int *slots, float *reach) {
+/* The units of a place in turning order, the pressed one last, and for each its row slot, how far that row reaches
+   from its clip box's leading edge (the farther, the flatter the perspective), its heft and when it starts. */
+typedef struct plan { int n; int *slots; float *reach; double *hs, *starts; } plan;
+static void plan_free(plan *p) { free(p->slots); free(p->reach); free(p->hs); free(p->starts); }
+
+static plan turn_gather(turn *t, rk_view *place, rk_view *pressed) {
   turn_release(t);
   collect_units(place, t);
   qsort(t->units, (size_t)t->n, sizeof *t->units, unit_order);
@@ -216,16 +220,19 @@ static int turn_gather(turn *t, rk_view *place, rk_view *pressed, int *slots, fl
     t->units[t->n - 1] = pressed;
     break;
   }
-  int slot = -1, key = INT32_MIN, n = RK_MIN(t->n, 1024);
+  int slot = -1, key = INT32_MIN, n = t->n;
+  size_t m = (size_t)RK_MAX(n, 1);
+  plan p = { n, rk__alloc(m * sizeof(int)), rk__alloc(m * sizeof(float)), rk__alloc(m * sizeof(double)), rk__alloc(m * sizeof(double)) };
   for (int i = 0; i < n; i++) {
     rk_view *u = t->units[i];
     rk_rect r = rk__window_rect(u), cr = rk__window_rect(clip_box(u, place));
     int k = u == pressed ? INT32_MAX : (int)lroundf(r.y / 8);
-    if (k != key) { slot++; key = k; if (slot < 256) reach[slot] = 0; }
-    slots[i] = slot;
-    if (slot < 256) reach[slot] = RK_MAX(reach[slot], r.x + r.w - cr.x);
+    if (k != key) { slot++; key = k; p.reach[slot] = 0; }
+    p.slots[i] = slot;
+    p.reach[slot] = RK_MAX(p.reach[slot], r.x + r.w - cr.x);
   }
-  return n;
+  turn_starts(t, n, pressed, p.hs, p.starts);
+  return p;
 }
 
 /* where a unit turns from: the leading edge of its clip box, at its own middle, or its top when flush with the box's */
@@ -240,20 +247,19 @@ static void turn_pivot(rk_transform *t, rk_view *u, rk_view *place, float reach)
    duration-short by its heft; the pressed tile keeps its press and goes last. Returns when the place can go: its last
    unit 75% through, fading, so the next swings in without a gap. */
 static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
-  static int slots[1024]; static float reach[256];
-  int n = turn_gather(t, place, pressed, slots, reach);
+  plan pl = turn_gather(t, place, pressed);
+  int n = pl.n;
+  double *hs = pl.hs, *starts = pl.starts;
   double out = rk_duration_of(RK_DURATION_SHORT), end = 0;
   float angle = back ? TURN_OUT_ANGLE : -TURN_OUT_ANGLE;
-  static double hs[1024], starts[1024];
   double last = 0;                                         /* the pressed tile goes when the last other does */
-  turn_starts(t, n, pressed, hs, starts);
   for (int i = 0; i < n; i++) if (t->units[i] != pressed) last = RK_MAX(last, starts[i]);
   for (int i = 0; i < n; i++) {
     rk_view *u = t->units[i];
     double h = hs[i], at = u == pressed ? last : starts[i], d = out * h;
     if (u == pressed) at = RK_MAX(at, rk_duration_of(RK_DURATION_PRESS) - (rk_app_now() - u->press_since));
     rk_transform from = u->ptransform, to = u->transform;
-    turn_pivot(&to, u, place, slots[i] < 256 ? reach[slots[i]] : rk__window_rect(u).w);
+    turn_pivot(&to, u, place, pl.reach[pl.slots[i]]);
     to.rotate_y = angle; to.rotate_x = 0; to.scale_x = to.scale_y = 1;
     if (u != pressed) { from = u->transform; from.origin_x = to.origin_x; from.origin_y = to.origin_y; from.perspective = to.perspective; }
     float o0 = u->popacity, o1 = 0;
@@ -262,6 +268,7 @@ static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
     u->pressed = 0;
     end = RK_MAX(end, at + 0.75 * d);
   }
+  plan_free(&pl);
   return end;
 }
 
@@ -279,24 +286,24 @@ static void turn_reset(turn *t) {
    duration-moderate by its heft. The place assembles itself; nothing builds in after it. Back runs it the other
    way round. */
 static void turn_in(rk_view *place, bool back) {
-  static int slots[1024]; static float reach[256];
   turn t = { 0 };
   rk__layout_pending();
-  int n = turn_gather(&t, place, NULL, slots, reach);
+  plan pl = turn_gather(&t, place, NULL);
+  int n = pl.n;
+  double *hs = pl.hs, *starts = pl.starts;
   double in = rk_duration_of(RK_DURATION_MODERATE);
-  static double hs[1024], starts[1024];
-  turn_starts(&t, n, NULL, hs, starts);
   for (int i = 0; i < n; i++) {
     rk_view *u = t.units[i];
     double h = hs[i], at = starts[i], d = in * h;
     rk_transform from = u->transform, to = u->transform;
-    turn_pivot(&from, u, place, slots[i] < 256 ? reach[slots[i]] : rk__window_rect(u).w);
+    turn_pivot(&from, u, place, pl.reach[pl.slots[i]]);
     to.origin_x = from.origin_x; to.origin_y = from.origin_y; to.perspective = from.perspective;
     from.rotate_y = back ? -TURN_IN_ANGLE : TURN_IN_ANGLE;
     float o0 = 0, o1 = u->opacity;
     rk__animate(u, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, d, at, turn_ease_in);
     rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, 0.35 * d, at, rk__ease_base);
   }
+  plan_free(&pl);
   turn_release(&t);
   free(t.units);
 }
@@ -330,7 +337,7 @@ static void swap_now(void *user) {
   rk_window *w = c->window;
   if (w) {
     int at = pl->n - 1;
-    rk_view *f = s->back && at >= 0 && at < 64 ? pl->focus_return[at] : NULL;
+    rk_view *f = s->back && at >= 0 && at < pl->fcap ? pl->focus_return[at] : NULL;
     if (f && rk__view_window(f) == w) rk_window_focus(w, f); else rk_window_focus(w, NULL);
     if (w->titlebar) rk__titlebar_update(w->titlebar);
   }
@@ -357,6 +364,7 @@ void rk_places_go(rk_controller *c, rk_controller *place) {
   if (old == place) { rk_release(place); return; }
   rk_window *w = c->window;
   if (pl->n - 1 >= 0 && pl->n - 1 < 64) {                  /* back will put focus here again */
+    pl->focus_return = rk__grow(pl->focus_return, &pl->fcap, pl->n, sizeof *pl->focus_return);
     rk_release(pl->focus_return[pl->n - 1]);
     pl->focus_return[pl->n - 1] = w && w->focus ? rk_retain(w->focus) : NULL;
   }
@@ -531,10 +539,11 @@ static rk_view *strip_create(bool nav, void (*select)(void *, int), void *owner)
 
 static void strip_add(rk_view *v, const char *title) {
   strip *s = v->state;
-  s->titles = realloc(s->titles, (size_t)(s->n + 1) * sizeof *s->titles);
+  int cap = s->n;                                          /* the three grow together */
+  s->titles = rk__grow(s->titles, &cap, s->n + 1, sizeof *s->titles); cap = s->n;
+  s->scale = rk__grow(s->scale, &cap, s->n + 1, sizeof *s->scale); cap = s->n;
+  s->in = rk__grow(s->in, &cap, s->n + 1, sizeof *s->in);
   s->titles[s->n++] = rk__strdup(title ? title : "");
-  s->scale = realloc(s->scale, (size_t)s->n * sizeof *s->scale);
-  s->in = realloc(s->in, (size_t)s->n * sizeof *s->in);
   rk__glide_set(&s->scale[s->n - 1], strip_rest(s, s->n - 1));
   rk__glide_set(&s->in[s->n - 1], s->n - 1 == s->active);
   rk__view_relayout_up(v);
@@ -749,6 +758,7 @@ rk_view *rk_scroll(rk_view *content) {
   rk_view *v = rk__view_create(&scroll_class, s);
   s->view = v;
   v->clip = true;
+  v->scrolls = true; v->grow = 1;                          /* in a stack it fills what is left and scrolls */
   v->access = RK_ACCESS_GROUP;
   if (content) { rk__view_add(v, content); rk_release(content); }
   else { rk_view *empty = rk_view_create(); rk__view_add(v, empty); rk_release(empty); }
@@ -1052,14 +1062,14 @@ static void sheets_layout(rk_view *v, void *st) {
   float W = v->frame.w, H = v->frame.h, r = rk_metric_of(RK_RADIUS_M);
   for (int i = 0; i < v->nkids; i++) {
     rk_view *k = v->kids[i];
-    if (k->user) {                                          /* a sheet box */
+    if (k->owner) {                                         /* a sheet box */
       float w = RK_MIN(512.0f, W);
       rk_size s = rk__measure(k, (rk_size){ w, INFINITY });
       rk__set_frame(k, (rk_rect){ (W - w) / 2, -r, w, RK_MIN(s.h, H - rk_metric_of(RK_SPACE_XL) + r) });
     } else rk__set_frame(k, (rk_rect){ 0, 0, W, H });
   }
 }
-static const rk_class sheets_class = { { sizeof(rk_view_class), "rk_sheets", NULL, NULL, sheets_layout, NULL, NULL }, NULL, NULL };
+const rk_class rk__sheets_class = { { sizeof(rk_view_class), "rk_sheets", NULL, NULL, sheets_layout, NULL, NULL }, NULL, NULL };
 
 static void shade_tap(rk_view *v, void *user) { (void)v; rk_controller_dismiss(user); }
 
@@ -1074,7 +1084,6 @@ void rk_controller_present(rk_controller *presenter, rk_controller *sheet) {
   rk_window *w = presenter->window;
   if (!w || !sheet) { rk_release(sheet); return; }
   if (presenter->sheet) rk_controller_dismiss(presenter->sheet);
-  if (w->sheets->cls != &sheets_class) w->sheets->cls = &sheets_class;
   presenter->sheet = sheet;                                    /* takes the caller's reference */
   sheet->presenter = presenter;
   sheet->window = w;
@@ -1088,7 +1097,7 @@ void rk_controller_present(rk_controller *presenter, rk_controller *sheet) {
   rk_view_set_padding(box, (rk_insets){ l + r, w->size.w > 560 ? rk_metric_of(RK_SPACE_XL) : m, l, w->size.w > 560 ? rk_metric_of(RK_SPACE_XL) : m });
   rk_view_set_fill(box, RK_ROLE_BG);
   box->radius = r;
-  box->user = sheet;                                        /* marks it as a box; borrowed */
+  box->owner = sheet;                                       /* marks it as a box; borrowed */
   box->access = RK_ACCESS_DIALOG;
   rk__setstr(&box->access_label, sheet->title);
   rk__view_add(box, rk_controller_view(sheet));
@@ -1164,7 +1173,7 @@ bool rk__window_key(rk_window *w, const rk_event *e) {
   if (e->key == RK_KEY_ESCAPE) {
     for (int i = w->sheets->nkids - 1; i >= 0; i--) {
       rk_view *k = w->sheets->kids[i];
-      if (k->user && !k->leaving) { rk_controller_dismiss(k->user); return true; }
+      if (k->owner && !k->leaving) { rk_controller_dismiss(k->owner); return true; }
     }
     back = true;
   }

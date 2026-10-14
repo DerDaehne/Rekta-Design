@@ -21,22 +21,24 @@ static const rk_class sorter_class = { { sizeof(rk_view_class), "rk_rows_sortabl
 static sorter *sorter_of(rk_view *rows) { return rows && rows->cls == &sorter_class ? rows->state : NULL; }
 
 /* The rows in their order. While a row is lifted it is drawn last, so it is the last child; its place is from. */
-static int logical(rk_view *v, rk_view **out, int max) {
+static rk_view **logical(rk_view *v, int *count) {
   sorter *s = v->state;
+  rk_view **out = rk__alloc((size_t)RK_MAX(v->nkids, 1) * sizeof *out);
   int n = 0;
-  for (int i = 0; i < v->nkids && n < max; i++) if (!(s->dragging && v->kids[i] == s->drag)) out[n++] = v->kids[i];
-  if (s->dragging && n < max) {
+  for (int i = 0; i < v->nkids; i++) if (!(s->dragging && v->kids[i] == s->drag)) out[n++] = v->kids[i];
+  if (s->dragging) {
     int at = RK_CLAMP(s->from, 0, n);
     memmove(out + at + 1, out + at, (size_t)(n - at) * sizeof *out);
     out[at] = s->drag; n++;
   }
-  return n;
+  *count = n;
+  return out;
 }
 
 static void sorter_layout(rk_view *v, void *st) {
   (void)st;
-  rk_view *rows[1024];
-  int n = logical(v, rows, 1024);
+  int n;
+  rk_view **rows = logical(v, &n);
   rk_insets p = v->padding;
   float w = RK_MAX(0.0f, v->frame.w - p.left - p.right), y = p.top;
   for (int i = 0; i < n; i++) {
@@ -45,22 +47,26 @@ static void sorter_layout(rk_view *v, void *st) {
     rk__set_frame(rows[i], (rk_rect){ p.left, y, w, h });
     y += h + v->gap;
   }
+  free(rows);
 }
 
 static bool rows_last(rk_view *v) {
   rk_view *p = v->parent;
   if (!p || !p->nkids) return false;
-  if (!sorter_of(p)) return p->kids[p->nkids - 1] == v;
-  rk_view *rows[1024];
-  int n = logical(p, rows, 1024);
-  return n && rows[n - 1] == v;
+  sorter *s = sorter_of(p);
+  if (!s || !s->dragging) return p->kids[p->nkids - 1] == v;
+  /* while a row is lifted it is the last child; in the order it stands at from */
+  if (s->from >= p->nkids - 1) return v == s->drag;
+  rk_view *last = p->kids[p->nkids - 1] == s->drag ? p->kids[p->nkids - 2] : p->kids[p->nkids - 1];
+  return v == last;
 }
 
 static int place_of(rk_view *rows, rk_view *row) {
-  rk_view *list[1024];
-  int n = logical(rows, list, 1024);
-  for (int i = 0; i < n; i++) if (list[i] == row) return i;
-  return -1;
+  int n, at = -1;
+  rk_view **list = logical(rows, &n);
+  for (int i = 0; i < n && at < 0; i++) if (list[i] == row) at = i;
+  free(list);
+  return at;
 }
 
 static void set_y(rk_view *v, float y) {
@@ -125,8 +131,8 @@ static void lift(rk_view *rowv, bool on) { ((row *)rowv->state)->lifted = on; rk
 /* While dragging: the lifted row follows, the others between where it was and where it would land step aside. */
 static void drag_to(rk_view *v, float dy) {
   sorter *s = v->state;
-  rk_view *list[1024];
-  int n = logical(v, list, 1024);
+  int n;
+  rk_view **list = logical(v, &n);
   set_y(s->drag, dy);
   float mid = s->drag->frame.y + s->drag->frame.h / 2 + dy;
   int to = s->from;
@@ -145,6 +151,7 @@ static void drag_to(rk_view *v, float dy) {
     s->shift[i] = want;
     glide_y(list[i], list[i]->ptransform.translate_y, want, rk_duration_of(RK_DURATION_SHORT));
   }
+  free(list);
 }
 
 static void drag_end(rk_view *v, bool keep) {

@@ -19,7 +19,6 @@ static void launch(void *user) {
   rk_view *zone = rk_add(page, rk_drop("Drop pictures here", NULL, "image/*", dropped, NULL));
   rk_view_set_grow(zone, 1);
   rk_window_show(w, rk_controller_create_with_view(page, "drop"));
-  rk_release(w);
   printf("ready\n");
   fflush(stdout);
 }

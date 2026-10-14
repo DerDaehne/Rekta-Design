@@ -244,10 +244,14 @@ int rk__text_next_break(const char *s, int from, int end) {
 }
 
 /* Breaks where rk__text_next_break allows to fit max_width; a word longer than the line stands on its own. */
-int rk__text_wrap(const char *s, const rk_textfmt *f, float max_width, rk_line *lines, int max) {
-  int len = (int)strlen(s), n = 0, start = 0;
-  if (!len) return 0;
-  while (start < len && n < max) {
+/* Every line of s wrapped at max_width (0: only at newlines), as a malloc'd array the caller frees; NULL for none. */
+rk_line *rk__text_lines(const char *s, const rk_textfmt *f, float max_width, int *count) {
+  int len = s ? (int)strlen(s) : 0, n = 0, start = 0, cap = 0;
+  rk_line *lines = NULL;
+  *count = 0;
+  if (!len) return NULL;
+  while (start < len) {
+    lines = rk__grow(lines, &cap, n + 1, sizeof *lines);
     int nl = start;
     while (nl < len && s[nl] != '\n') nl++;
     if (max_width <= 0 || rk__text_width(s + start, nl - start, f) <= max_width) {
@@ -269,7 +273,28 @@ int rk__text_wrap(const char *s, const rk_textfmt *f, float max_width, rk_line *
     start = brk;
     while (start < len && s[start] == ' ') start++;
   }
+  *count = n;
+  return lines;
+}
+
+/* How many lines s takes, and the widest. */
+int rk__text_wrap_size(const char *s, const rk_textfmt *f, float max_width, float *widest) {
+  int n;
+  rk_line *lines = rk__text_lines(s, f, max_width, &n);
+  float w = 0;
+  for (int i = 0; i < n; i++) w = RK_MAX(w, lines[i].width);
+  free(lines);
+  if (widest) *widest = w;
   return n;
+}
+
+/* s wrapped, each line drawn from top; align 0 left, 0.5 centred in width. Returns the height. */
+float rk__text_draw_lines(rk_canvas *c, const char *s, const rk_textfmt *f, float x, float y, float width, float align, rk_color color) {
+  int n;
+  rk_line *lines = rk__text_lines(s, f, width, &n);
+  for (int i = 0; i < n; i++) rk__text_draw(c, s + lines[i].start, lines[i].len, x + (width - lines[i].width) * align, y + i * f->size * f->line, f, color);
+  free(lines);
+  return n * f->size * f->line;
 }
 
 /* Glyph cache ----------------------------------------------------------------------------------------------------- */
@@ -352,10 +377,8 @@ void rk__text_draw(rk_canvas *c, const char *s, int len, float x, float top, con
 
 rk_size rk_text_measure(const char *text, rk_text_style style, float max_width) {
   rk_textfmt f = rk__textfmt(style, 0);
-  rk_line lines[256];
-  int n = rk__text_wrap(text ? text : "", &f, max_width, lines, 256);
-  float w = 0;
-  for (int i = 0; i < n; i++) w = RK_MAX(w, lines[i].width);
+  float w;
+  int n = rk__text_wrap_size(text, &f, max_width, &w);
   rk_size s = { w, RK_MAX(n, 1) * f.size * f.line };
   return s;
 }

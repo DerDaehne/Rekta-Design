@@ -164,6 +164,7 @@ static void step(double max_wait) {
   double now = rk_app_now();
   run_posts();
   run_timers(now);
+  rk__anim_close_blocks();
   bool paced = rk__platform()->ready != NULL, any_ready = false;
   for (rk_window *w = rk__windows(); w; w = w->next) any_ready |= ready(w);
   /* paced: when a window can take a frame (or none could for a while: motion still moves on, unseen) */

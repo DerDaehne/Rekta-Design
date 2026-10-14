@@ -9,7 +9,7 @@ static void view_destroy(void *self) {
   free(v->kids);
   if (v->cls && v->cls->pub.destroy) v->cls->pub.destroy(v->state);
   if (v->free_user) v->free_user(v->user);
-  free(v->name); free(v->access_label); free(v->access_value);
+  free(v->name); free(v->access_label); free(v->access_value); free(v->tooltip);
   rk_release(v->menu);
   rk__bitmap_free(v->layer); rk__bitmap_free(v->snapshot);
   free(v->own_cls);
@@ -134,11 +134,19 @@ void rk__view_insert(rk_view *parent, rk_view *child, int index) {
 
 void rk__view_add(rk_view *parent, rk_view *child) { rk__view_insert(parent, child, parent->nkids); }
 
-/* The public add takes the caller's reference: a new view goes into the tree and belongs to it. */
+/* The public add takes the caller's reference: a new view goes into the tree and belongs to it. A view already in a
+   tree is moved: the pointer to it was borrowed, so there is nothing to take over. */
 rk_view *rk_insert(rk_view *parent, rk_view *child, int index) {
-  if (!parent || !child || parent == child) { rk_release(child); return NULL; }
+  if (!child) return NULL;
+  if (!rk__is_object(parent, &rk__view_type) || !rk__is_object(child, &rk__view_type) || parent == child) {
+    rk__error("rk_insert: %s", parent == child ? "a view cannot hold itself" : "not a view");
+    if (rk__is_object(child, &rk__view_type) && !child->parent) rk_release(child);
+    return NULL;
+  }
+  for (rk_view *a = parent; a; a = a->parent) if (a == child) { rk__error("rk_insert: a view cannot hold its own parent"); return NULL; }
+  bool moved = child->parent != NULL;
   rk__view_insert(parent, child, index);
-  rk_release(child);
+  if (!moved) rk_release(child);
   return child;
 }
 
@@ -290,7 +298,25 @@ void rk_view_on_activate(rk_view *v, void (*fn)(rk_view *, void *), void *user) 
   v->on_activate = fn; v->activate_user = user;
   if (fn && v->press == RK_PRESS_NONE) v->press = rk__is_tile(v) ? RK_PRESS_TILE : RK_PRESS_FLAT;
   if (fn) v->focusable = true;
+  else if (!v->cls) { v->press = RK_PRESS_NONE; v->focusable = false; }   /* a plain view no longer acts */
 }
+
+bool rk__view_disabled(const rk_view *v) {
+  for (; v; v = v->parent) if (v->disabled) return true;
+  return false;
+}
+
+/* Disabled, a view and what it holds take no presses, keys or values and are passed over by Tab - unless it has a
+   tooltip, its reason: then Tab still reaches it, so the keyboard finds out why. Built-in views draw it greyed. */
+void rk_view_set_enabled(rk_view *v, bool enabled) {
+  if (!v || v->disabled == !enabled) return;
+  v->disabled = !enabled;
+  rk_window *w = rk__view_window(v);
+  if (w && !enabled && rk__view_within(w->focus, v) && !rk__tip_owner(w->focus)) rk_window_focus(w, NULL);
+  if (w && !enabled && rk__view_within(w->pressed, v)) rk__window_pointer_cancel(w);
+  rk__view_dirty(v);
+}
+bool rk_view_is_enabled(rk_view *v) { return v && !rk__view_disabled(v); }
 void rk_view_set_user(rk_view *v, void *user, void (*free_user)(void *)) {
   if (v->free_user && v->user != user) v->free_user(v->user);
   v->user = user; v->free_user = free_user;
@@ -324,28 +350,27 @@ static grid tile_grid(rk_view *v, float width, rk_rect *out) {
     g.colw = (width - (g.cols - 1) * g.gap) / g.cols;
   }
   g.rows = 0;
-  enum { MAXR = 256 };
-  static unsigned char used[MAXR][64];
-  int cols = RK_MIN(g.cols, 64);
-  memset(used, 0, sizeof used);
-  int n = 0;
+  int cols = g.cols, bcap = 0, rcap = 0, low = 0, n = 0;     /* low: no free cell above this row; rcap rows in bcap bytes */
+  unsigned char *used = NULL;                              /* rows of cols cells, grown as the tiles need */
   for (int i = 0; i < v->nkids; i++) {
     rk_view *k = v->kids[i];
     if (!in_flow(k)) continue;
-    int sc = RK_MIN(k->span_c, cols), sr = k->span_r;
-    int at_r = -1, at_c = -1;
-    for (int r = 0; r < MAXR - sr && at_r < 0; r++)
+    int sc = RK_CLAMP(k->span_c, 1, cols), sr = RK_MAX(k->span_r, 1), at_r = -1, at_c = -1;
+    for (int r = low; at_r < 0; r++) {
+      if (r + sr > rcap) { used = rk__grow(used, &bcap, (r + sr) * cols, 1); rcap = bcap / cols; }
       for (int c = 0; c + sc <= cols && at_r < 0; c++) {
         bool free_ = true;
-        for (int y = r; y < r + sr && free_; y++) for (int x = c; x < c + sc; x++) if (used[y][x]) { free_ = false; break; }
+        for (int y = r; y < r + sr && free_; y++) for (int x = c; x < c + sc; x++) if (used[y * cols + x]) { free_ = false; break; }
         if (free_) { at_r = r; at_c = c; }
       }
-    if (at_r < 0) continue;
-    for (int y = at_r; y < at_r + sr; y++) for (int x = at_c; x < at_c + sc; x++) used[y][x] = 1;
+    }
+    for (int y = at_r; y < at_r + sr; y++) memset(used + y * cols + at_c, 1, (size_t)sc);
+    while (low < rcap && memchr(used + low * cols, 0, (size_t)cols) == NULL) low++;
     g.rows = RK_MAX(g.rows, at_r + sr);
     if (out) out[n] = (rk_rect){ at_c * (g.colw + g.gap), at_r * (g.unit + g.gap), sc * g.colw + (sc - 1) * g.gap, sr * g.unit + (sr - 1) * g.gap };
     n++;
   }
+  free(used);
   return g;
 }
 
@@ -415,25 +440,51 @@ rk_size rk_view_measure(rk_view *v, rk_size avail) { return rk__measure(v, avail
 
 /* Layout ---------------------------------------------------------------------------------------------------------- */
 
+/* A stack, as CSS flex: the views without grow take their natural size; those with grow share what is left by their
+   weights (flex: 1 1 0), never less than their content - except a view that scrolls (a list, a table, a tree, a
+   scroll view), which may shrink to its minimum and so scrolls instead of growing past the window. */
+static bool weighted(const rk_view *k, bool column) { return k->grow > 0 && (column ? k->fixed_h : k->fixed_w) <= 0; }   /* a fixed size wins */
+
 static void stack(rk_view *v, bool column) {
   rk_insets p = v->padding;
   float W = v->frame.w - p.left - p.right, H = v->frame.h - p.top - p.bottom;
   float main_len = column ? H : W, cross_len = column ? W : H;
-  float sizes[512], cross[512], used = 0, grow = 0;
-  int n = 0, idx[512];
-  for (int i = 0; i < v->nkids && n < 512; i++) {
+  enum { LOCAL = 32 };
+  float sbuf[LOCAL * 3]; int ibuf[LOCAL];
+  int cap = 0;
+  for (int i = 0; i < v->nkids; i++) if (in_flow(v->kids[i])) cap++;
+  float *sizes = cap > LOCAL ? rk__alloc((size_t)cap * 3 * sizeof *sizes) : sbuf, *cross = sizes + cap, *floor_ = cross + cap;
+  int *idx = cap > LOCAL ? rk__alloc((size_t)cap * sizeof *idx) : ibuf;
+  float fixed = 0, weights = 0;
+  int n = 0;
+  for (int i = 0; i < v->nkids; i++) {
     rk_view *k = v->kids[i];
     if (!in_flow(k)) continue;
     rk_size ks = rk__measure(k, column ? (rk_size){ W, INFINITY } : (rk_size){ INFINITY, H });
     sizes[n] = column ? ks.h : ks.w; cross[n] = column ? ks.w : ks.h;
-    used += sizes[n]; grow += k->grow; idx[n++] = i;
+    if (weighted(k, column)) { weights += k->grow; floor_[n] = k->scrolls ? (column ? k->min_h : k->min_w) : sizes[n]; }
+    else fixed += sizes[n];
+    idx[n++] = i;
   }
-  used += RK_MAX(0, n - 1) * v->gap;
+  fixed += RK_MAX(0, n - 1) * v->gap;
+  if (weights > 0 && isfinite(main_len)) {
+    /* share what is left by weight; a view held at its floor leaves the share to the others (the freeze of CSS) */
+    float left = main_len - fixed, w = weights;
+    bool again = true;
+    for (int j = 0; j < n; j++) if (weighted(v->kids[idx[j]], column)) sizes[j] = -1;   /* not frozen yet */
+    while (again) {
+      again = false;
+      for (int j = 0; j < n; j++) {
+        rk_view *k = v->kids[idx[j]];
+        if (!weighted(k, column) || sizes[j] >= 0) continue;
+        if (RK_MAX(left, 0.0f) * k->grow / w < floor_[j]) { sizes[j] = floor_[j]; left -= floor_[j]; w -= k->grow; again = true; }
+      }
+    }
+    for (int j = 0; j < n; j++) if (sizes[j] < 0) sizes[j] = w > 0 ? RK_MAX(left, 0.0f) * v->kids[idx[j]]->grow / w : 0;
+  }
+  float used = RK_MAX(0, n - 1) * v->gap;
+  for (int j = 0; j < n; j++) used += sizes[j];
   float free_ = main_len - used, pos = 0, extra_gap = 0;
-  if (free_ > 0 && grow > 0) {
-    for (int j = 0; j < n; j++) sizes[j] += free_ * v->kids[idx[j]]->grow / grow;
-    free_ = 0;
-  }
   if (free_ > 0) {
     if (v->main == RK_ALIGN_CENTER) pos = free_ / 2;
     else if (v->main == RK_ALIGN_END) pos = free_;
@@ -442,8 +493,8 @@ static void stack(rk_view *v, bool column) {
   for (int j = 0; j < n; j++) {
     rk_view *k = v->kids[idx[j]];
     float cs = cross_len, co = 0;
-    float fixed = column ? k->fixed_w : k->fixed_h;
-    if (v->cross != RK_ALIGN_STRETCH || fixed > 0 || k->hug) {         /* a fixed size, or a button, is not stretched */
+    float fixed_cross = column ? k->fixed_w : k->fixed_h;
+    if (v->cross != RK_ALIGN_STRETCH || fixed_cross > 0 || k->hug) {   /* a fixed size, or a button, is not stretched */
       cs = RK_MIN(cross[j], cross_len);
       if (v->cross == RK_ALIGN_CENTER) co = (cross_len - cs) / 2;
       else if (v->cross == RK_ALIGN_END) co = cross_len - cs;
@@ -452,6 +503,8 @@ static void stack(rk_view *v, bool column) {
     rk__set_frame(k, f);
     pos += sizes[j] + v->gap + extra_gap;
   }
+  if (sizes != sbuf) free(sizes);
+  if (idx != ibuf) free(idx);
 }
 
 void rk__stack(rk_view *v, bool column) { stack(v, column); }
@@ -462,11 +515,11 @@ void rk__layout(rk_view *v) {
     case RK_LAYOUT_COLUMN: stack(v, true); break;
     case RK_LAYOUT_ROW: stack(v, false); break;
     case RK_LAYOUT_TILES: {
-      rk_rect rects[512];
+      rk_rect *rects = rk__alloc((size_t)RK_MAX(v->nkids, 1) * sizeof *rects);
       rk_insets p = v->padding;
       tile_grid(v, v->frame.w - p.left - p.right, rects);
       int n = 0;
-      for (int i = 0; i < v->nkids && n < 512; i++) {
+      for (int i = 0; i < v->nkids; i++) {
         rk_view *k = v->kids[i];
         if (!in_flow(k)) continue;
         rk_rect r = rects[n++];
@@ -474,6 +527,7 @@ void rk__layout(rk_view *v) {
         k->index_hint = n - 1;
         rk__set_frame(k, r);
       }
+      free(rects);
       break;
     }
     case RK_LAYOUT_OVERLAY: {

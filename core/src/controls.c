@@ -28,7 +28,6 @@
 
 typedef struct control {
   double value;
-  bool disabled;
   void (*change)(rk_view *control, void *user); void *change_user;
   void (*apply)(rk_view *v, double from, double to);       /* the control takes a value: the motion, if any */
   bool (*valid)(rk_view *v, double value);                 /* NULL: any */
@@ -45,7 +44,7 @@ static double short_motion(void) { return rk__reduced() ? 0 : rk_duration_of(RK_
 /* A value the user chose: drawn (with its motion) and told. */
 static void user_set(rk_view *v, control *c, double value) {
   if (c->fit) value = c->fit(v, value);
-  if (c->disabled || value == c->value || (c->valid && !c->valid(v, value))) return;
+  if (rk__view_disabled(v) || value == c->value || (c->valid && !c->valid(v, value))) return;
   double was = c->value;
   c->value = value;
   if (c->apply) c->apply(v, was, value);
@@ -78,11 +77,11 @@ static void check_draw(rk_view *v, rk_canvas *c, void *st) {
   check *k = st;
   float s = box_size(), h = v->pframe.h;
   rk_rect b = { 0, (h - s) / 2, s, s };
-  if (k->down && !k->c.disabled) rk_canvas_fill_rect(c, (rk_rect){ b.x - 4, b.y - 4, s + 8, s + 8 }, rk_color_of(RK_ROLE_HOVER));
-  draw_box(c, b, k->c.value != 0, k->c.disabled);
+  if (k->down && !rk__view_disabled(v)) rk_canvas_fill_rect(c, (rk_rect){ b.x - 4, b.y - 4, s + 8, s + 8 }, rk_color_of(RK_ROLE_HOVER));
+  draw_box(c, b, k->c.value != 0, rk__view_disabled(v));
   if (k->label && *k->label) {
     rk_textfmt f = strong_fmt();
-    rk__text_draw(c, k->label, -1, s + rk_metric_of(RK_SPACE_S), (h - f.size) / 2, &f, rk_color_of(k->c.disabled ? RK_ROLE_DISABLED : RK_ROLE_TEXT));
+    rk__text_draw(c, k->label, -1, s + rk_metric_of(RK_SPACE_S), (h - f.size) / 2, &f, rk_color_of(rk__view_disabled(v) ? RK_ROLE_DISABLED : RK_ROLE_TEXT));
   }
   if (shows_focus(v)) focus_ring(c, b);
 }
@@ -138,11 +137,11 @@ static void choices_draw(rk_view *v, rk_canvas *c, void *st) {
   choices *o = st;
   float s = box_size(), H = row_h();
   rk_textfmt f = strong_fmt();
-  rk_color ink = rk_color_of(o->c.disabled ? RK_ROLE_DISABLED : RK_ROLE_TEXT), accent = o->c.disabled ? ink : rk_color_of(RK_ROLE_ACCENT);
+  rk_color ink = rk_color_of(rk__view_disabled(v) ? RK_ROLE_DISABLED : RK_ROLE_TEXT), accent = rk__view_disabled(v) ? ink : rk_color_of(RK_ROLE_ACCENT);
   for (int i = 0; i < o->n; i++) {
     rk_rect b = { 0, i * H + (H - s) / 2, s, s };
     bool on = i == (int)o->c.value;
-    if (i == o->down && !o->c.disabled) rk_canvas_fill_round_rect(c, (rk_rect){ b.x - 4, b.y - 4, s + 8, s + 8 }, s / 2 + 4, rk_color_of(RK_ROLE_HOVER));
+    if (i == o->down && !rk__view_disabled(v)) rk_canvas_fill_round_rect(c, (rk_rect){ b.x - 4, b.y - 4, s + 8, s + 8 }, s / 2 + 4, rk_color_of(RK_ROLE_HOVER));
     rk_canvas_fill_round_rect(c, b, s / 2, on ? accent : ink);
     rk_canvas_fill_round_rect(c, (rk_rect){ b.x + 2, b.y + 2, s - 4, s - 4 }, s / 2 - 2, rk_color_of(RK_ROLE_BG));
     if (on) rk_canvas_fill_round_rect(c, (rk_rect){ b.x + 5, b.y + 5, s - 10, s - 10 }, s / 2 - 5, accent);
@@ -222,7 +221,7 @@ static rk_size toggle_measure(rk_view *v, rk_size avail, void *st) {
 static void toggle_draw(rk_view *v, rk_canvas *c, void *st) {
   toggle *t = st;
   float h = v->pframe.h, x = toggle_track_x(t), y = (h - TRACK_H) / 2, p = RK_CLAMP(v->pvalue, 0.0f, 1.0f);
-  bool off = t->c.disabled;
+  bool off = rk__view_disabled(v);
   rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
   rk_textfmt f = strong_fmt(), wf = word_fmt();
   if (t->label && *t->label) rk__text_draw(c, t->label, -1, 0, (h - f.size) / 2, &f, ink);
@@ -300,7 +299,7 @@ static void segments_draw(rk_view *v, rk_canvas *c, void *st) {
   segments_place(s);
   float h = v->pframe.h, p = RK_CLAMP(v->pvalue, 0.0f, 1.0f);
   int to = (int)s->c.value;
-  bool off = s->c.disabled;
+  bool off = rk__view_disabled(v);
   rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT), accent = off ? ink : rk_color_of(RK_ROLE_ACCENT);
   float rad = rk_metric_of(RK_RADIUS_S);
   rk_rect all = { 0, 0, s->x[s->n], h };                   /* one frame, rounded at its ends, with lines between */
@@ -453,7 +452,7 @@ static void slider_draw(rk_view *v, rk_canvas *c, void *st) {
   slider *s = st;
   float x0, x1, h = v->pframe.h, cy = h / 2, vx = slider_x(v, s, s->c.value);
   slider_track(v, s, &x0, &x1);
-  bool off = s->c.disabled;
+  bool off = rk__view_disabled(v);
   rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
   rk_canvas_fill_rect(c, (rk_rect){ x0 - 5, cy - 3, x1 - x0 + 10, 6 }, rk_color_of(RK_ROLE_TEXT_LOW));
   rk_canvas_fill_rect(c, (rk_rect){ x0 - 5, cy - 3, vx - x0 + 5, 6 }, off ? ink : rk_color_of(RK_ROLE_ACCENT));
@@ -511,7 +510,7 @@ static rk_size stepper_measure(rk_view *v, rk_size avail, void *st) { (void)v; (
 static void stepper_draw(rk_view *v, rk_canvas *c, void *st) {
   stepper *s = st;
   float bw = stepper_bw(), fw = stepper_fw(), h = v->pframe.h, rad = rk_metric_of(RK_RADIUS_S);
-  bool off = s->c.disabled;
+  bool off = rk__view_disabled(v);
   rk_color line = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT_MEDIUM), ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
   rk_rect all = { 0, 0, 2 * bw + fw, h };
   rk_canvas_fill_round_rect(c, all, rad, line);
@@ -578,7 +577,7 @@ static bool stepper_event(rk_view *v, const rk_event *e, void *st) {
       rk__view_dirty(v);
       return true;
     case RK_EVENT_TEXT: {
-      if (!e->text || s->c.disabled) return false;
+      if (!e->text || rk__view_disabled(v)) return false;
       for (const char *p = e->text; *p; p++) {
         bool ok = (*p >= '0' && *p <= '9') || *p == '.' || *p == ',' || (*p == '-' && !s->ntyped && s->r.min < 0);
         if (ok && s->ntyped < (int)sizeof s->typed - 1) { s->typed[s->ntyped++] = *p; s->typed[s->ntyped] = 0; }
@@ -636,7 +635,7 @@ static rk_size select_measure(rk_view *v, rk_size avail, void *st) {
 static void select_draw(rk_view *v, rk_canvas *c, void *st) {
   select_box *s = st;
   rk_window *w = rk__view_window(v);
-  bool focused = w && w->focus == v, off = s->c.disabled, open = rk__menu_open(s->menu);
+  bool focused = w && w->focus == v, off = rk__view_disabled(v), open = rk__menu_open(s->menu);
   float W = v->pframe.w, h = v->pframe.h, r = rk_metric_of(RK_RADIUS_S);
   rk_color edge = rk_color_of(off ? RK_ROLE_DISABLED : focused || open ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
   rk_canvas_fill_round_rect(c, (rk_rect){ 0, 0, W, h }, r, edge);
@@ -658,7 +657,7 @@ static void select_draw(rk_view *v, rk_canvas *c, void *st) {
 static void select_chosen(rk_view *menu, int item, void *user) { (void)menu; select_box *s = user; user_set(s->view, &s->c, item); }
 
 static void select_open(rk_view *v, select_box *s) {
-  if (s->c.disabled || !s->n) return;
+  if (rk__view_disabled(v) || !s->n) return;
   rk__menu_mark(s->menu, (int)s->c.value);
   rk__menu_shape(s->menu, v->pframe.w, (int)s->c.value);
   rk_menu_open(s->menu, v);
@@ -776,7 +775,7 @@ static rk_size date_measure(rk_view *v, rk_size avail, void *st) {
 static void date_draw(rk_view *v, rk_canvas *c, void *st) {
   date_box *b = st;
   rk_window *w = rk__view_window(v);
-  bool focused = w && w->focus == v, off = b->c.disabled, open = b->sheet && b->sheet->parent;
+  bool focused = w && w->focus == v, off = rk__view_disabled(v), open = b->sheet && b->sheet->parent;
   float W = v->pframe.w, h = v->pframe.h, r = rk_metric_of(RK_RADIUS_S);
   rk_canvas_fill_round_rect(c, (rk_rect){ 0, 0, W, h }, r, rk_color_of(off ? RK_ROLE_DISABLED : focused || open ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM));
   rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, h - 2 }, r - 1, rk_color_of(RK_ROLE_BG));
@@ -831,7 +830,7 @@ static bool date_event(rk_view *v, const rk_event *e, void *st) {
   date_box *b = st;
   switch (e->type) {
     case RK_EVENT_POINTER_DOWN: {
-      if (e->button || b->c.disabled) return false;
+      if (e->button || rk__view_disabled(v)) return false;
       date_take_typed(b);
       if (e->position.x >= v->pframe.w - DATE_ICON) { b->down = true; return true; }
       float x0[3], x1[3];
@@ -845,7 +844,7 @@ static bool date_event(rk_view *v, const rk_event *e, void *st) {
       b->down = false;
       return true;
     case RK_EVENT_TEXT: {
-      if (!e->text || b->c.disabled) return false;
+      if (!e->text || rk__view_disabled(v)) return false;
       for (const char *p = e->text; *p; p++) {
         if (*p == '-' || *p == '/' || *p == '.') { date_take_typed(b); b->seg = RK_MIN(b->seg + 1, 2); continue; }
         if (*p < '0' || *p > '9') continue;
@@ -859,7 +858,7 @@ static bool date_event(rk_view *v, const rk_event *e, void *st) {
       return true;
     }
     case RK_EVENT_KEY_DOWN: {
-      if (b->c.disabled) return false;
+      if (rk__view_disabled(v)) return false;
       if (b->ntyped) {
         if (e->key == RK_KEY_BACKSPACE) { b->typed[--b->ntyped] = 0; rk__view_dirty(v); return true; }
         if (e->key == RK_KEY_ESCAPE) { b->ntyped = 0; b->typed[0] = 0; rk__view_dirty(v); return true; }
@@ -991,7 +990,7 @@ static const rk_class sheet_class = { { sizeof(rk_view_class), "rk_date_month", 
 /* It opens below the box (above where there is no room), in the window's top layer, with the keys on the chosen day. */
 static void date_open(date_box *b) {
   rk_window *w = rk__view_window(b->view);
-  if (!w || b->c.disabled) return;
+  if (!w || rk__view_disabled(b->view)) return;
   if (!b->sheet) {
     date_sheet *s = rk__alloc(sizeof *s);
     s->box = b;
@@ -1064,12 +1063,3 @@ void rk_control_set_value(rk_view *v, double value) {
 
 void rk_control_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { control *c = control_of(v); if (c) { c->change = fn; c->change_user = user; } }
 
-void rk_control_set_disabled(rk_view *v, bool disabled) {
-  control *c = control_of(v);
-  if (!c) return;
-  c->disabled = disabled;
-  v->focusable = !disabled;
-  rk_window *w = rk__view_window(v);
-  if (disabled && w && w->focus == v) rk_window_focus(w, NULL);
-  rk__view_dirty(v);
-}

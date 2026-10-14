@@ -127,17 +127,9 @@ static void edge_rect(rk_canvas *c, rk_rect r, float rad, float width, rk_color 
 }
 
 /* the hint, wrapped and each line centred */
-static float hint_height(const char *s, float w, const rk_textfmt *f) {
-  rk_line lines[16];
-  return rk__text_wrap(s, f, w, lines, 16) * f->size * f->line;
-}
+static float hint_height(const char *s, float w, const rk_textfmt *f) { return rk__text_wrap_size(s, f, w, NULL) * f->size * f->line; }
 static void hint_draw(rk_canvas *c, const char *s, float x, float w, float y, const rk_textfmt *f, rk_color ink) {
-  rk_line lines[16];
-  int n = rk__text_wrap(s, f, w, lines, 16);
-  for (int i = 0; i < n; i++) {
-    float lw = rk__text_width(s + lines[i].start, lines[i].len, f);
-    rk__text_draw(c, s + lines[i].start, lines[i].len, x + (w - lw) / 2, y + i * f->size * f->line, f, ink);
-  }
+  rk__text_draw_lines(c, s, f, x, y, w, 0.5f, ink);
 }
 
 static void drop_draw(rk_view *v, rk_canvas *c, void *st) {
@@ -230,6 +222,6 @@ rk_view *rk_drop(const char *title, const char *hint, const char *accept,
   v->focusable = true;
   v->access = RK_ACCESS_BUTTON;
   rk__setstr(&v->access_label, title ? title : "files");
-  rk_view_on_activate(v, drop_activate, NULL);
+  v->own_activate = drop_activate; v->press = RK_PRESS_FLAT;   /* its own: an app's handler may come too */
   return v;
 }

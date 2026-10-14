@@ -34,6 +34,7 @@ static const rk_class toasts_class = { { sizeof(rk_view_class), "rk_toasts", NUL
 
 static void window_destroy(void *self) {
   rk_window *w = self;
+  rk__tip_hide(w, false);
   if (w->controller) { rk__controller_appear(w->controller, false); rk_release(w->controller); }
   if (w->root) { w->root->window = NULL; rk_release(w->root); }
   rk__bitmap_free(w->own_fb);
@@ -61,12 +62,11 @@ rk_window *rk_window_create(const rk_window_desc *desc) {
   rk__view_add(w->root, w->content); rk_release(w->content);
   /* a toast says something happened; a sheet asks, above everything (the web's dialogs are in the top layer) */
   w->toasts = rk__view_create(&toasts_class, NULL); w->toasts->passthrough = true; rk__view_add(w->root, w->toasts); rk_release(w->toasts);
-  w->sheets = rk_view_create(); w->sheets->passthrough = true; rk__view_add(w->root, w->sheets); rk_release(w->sheets);
+  w->sheets = rk__view_create(&rk__sheets_class, NULL); w->sheets->passthrough = true; rk__view_add(w->root, w->sheets); rk_release(w->sheets);
   w->floats = rk_view_create(); w->floats->passthrough = true; rk__view_add(w->root, w->floats); rk_release(w->floats);   /* menus, on top */
   w->native = rk__platform()->open(w, &d);
   if (!w->native && !rk__headless()) { rk_release(w); return NULL; }
-  w->next = open_windows; open_windows = w;
-  rk_retain(w);                                            /* the app keeps an open window alive */
+  w->next = open_windows; open_windows = w;              /* the app holds an open window: the caller's pointer is borrowed */
   w->needs_layout = w->needs_draw = true;
   return w;
 }
@@ -90,9 +90,10 @@ static void set_root(rk_window *w, rk_controller *c) {
 
 rk_controller *rk_window_root(rk_window *w) { return w->controller; }
 
-/* Shows the window with root as what it shows (takes the caller's reference); a later call puts another root in. */
+/* Shows the window with root as what it shows (takes the caller's reference); a later call puts another root in. The
+   root it already shows is left as it is: that pointer was borrowed. */
 void rk_window_show(rk_window *w, rk_controller *root) {
-  if (root) { set_root(w, root); rk_release(root); }
+  if (root && root != w->controller) { set_root(w, root); rk_release(root); }
   if (w->shown) return;
   w->shown = true;
   rk__platform()->show(w->native);
@@ -103,6 +104,7 @@ void rk_window_show(rk_window *w, rk_controller *root) {
 void rk_window_close(rk_window *w) {
   if (w->closed) return;
   w->closed = true;
+  rk__tip_hide(w, false);
   rk__platform()->close(w->native);
   w->native = NULL;
   rk_window **p = &open_windows;
@@ -489,7 +491,9 @@ static rk_view *hit_window(rk_window *w, float x, float y) {
 
 static bool dispatch(rk_window *w, rk_view *from, const rk_event *e) {
   rk_event local = *e;
+  bool input = e->type != RK_EVENT_FOCUS && e->type != RK_EVENT_BLUR && e->type != RK_EVENT_POINTER_LEAVE;
   for (rk_view *v = from; v; v = v->parent) {
+    if (input && rk__view_disabled(v)) continue;             /* a disabled view hears no input; what holds it may */
     if (v->cls && v->cls->pub.event) {
       rk_rect r = rk__window_rect(v);
       local.position = (rk_point){ e->position.x - r.x, e->position.y - r.y };
@@ -501,12 +505,15 @@ static bool dispatch(rk_window *w, rk_view *from, const rk_event *e) {
 }
 
 static rk_view *pressable(rk_view *v) {
-  for (; v; v = v->parent) if (v->press != RK_PRESS_NONE || v->on_activate || (v->menu && v->access == RK_ACCESS_BUTTON)) return v;
+  for (; v; v = v->parent) if (v->press != RK_PRESS_NONE || v->on_activate || v->own_activate || (v->menu && v->access == RK_ACCESS_BUTTON)) return rk__view_disabled(v) ? NULL : v;
   return NULL;
 }
 
+/* Focus may land on it: focusable, and enabled - or disabled with a tooltip, its reason. */
+static bool takes_focus(const rk_view *v) { return v->focusable && (!rk__view_disabled(v) || v->tooltip); }
+
 static rk_view *focusable_up(rk_view *v) {
-  for (; v; v = v->parent) if (v->focusable) return v;
+  for (; v; v = v->parent) if (takes_focus(v)) return v;
   return NULL;
 }
 
@@ -541,13 +548,15 @@ static void press_end(rk_window *w, rk_view *v) {
 }
 
 static void activate(rk_view *v) {
+  if (rk__view_disabled(v)) return;
   if (v->menu && v->access == RK_ACCESS_BUTTON) { rk_menu_open(v->menu, v); return; }   /* a menu button */
-  if (!v->on_activate) return;
+  if (!v->on_activate && !v->own_activate) return;
   rk_window *w = rk__view_window(v);
   rk_view *was = w ? w->activated : NULL;
   if (w) w->activated = v;
   rk_retain(v);
-  v->on_activate(v, v->activate_user);
+  if (v->own_activate) v->own_activate(v, v->own_data);
+  if (v->on_activate && (v->parent || v->window)) v->on_activate(v, v->activate_user);
   if (w && !w->closed) w->activated = was;
   rk_release(v);
 }
@@ -560,14 +569,15 @@ static void key_release(void *user) {
   free(kp);
 }
 
-static void collect_focus(rk_view *v, rk_view **list, int *n, int max) {
+typedef struct focus_list { rk_view **v; int n, cap; } focus_list;
+static void collect_focus(rk_view *v, focus_list *l) {
   if (v->hidden || v->leaving) return;
-  if (v->focusable && *n < max) list[(*n)++] = v;
-  for (int i = 0; i < v->nkids; i++) collect_focus(v->kids[i], list, n, max);
+  if (takes_focus(v)) { l->v = rk__grow(l->v, &l->cap, l->n + 1, sizeof *l->v); l->v[l->n++] = v; }
+  for (int i = 0; i < v->nkids; i++) collect_focus(v->kids[i], l);
 }
 
 bool rk_window_focus(rk_window *w, rk_view *v) {
-  if (v && !v->focusable) return false;
+  if (v && !takes_focus(v)) return false;
   if (w->focus == v) return true;
   if (v && rk__view_within(v, w->toasts) && !rk__view_within(w->focus, w->toasts)) w->focus_back = w->focus;
   rk_event e = { sizeof e, RK_EVENT_BLUR, rk_app_now(), { 0, 0 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
@@ -575,6 +585,7 @@ bool rk_window_focus(rk_window *w, rk_view *v) {
   w->focus = v;
   e.type = RK_EVENT_FOCUS;
   if (v) dispatch(w, v, &e);
+  rk__tip_focus(w, v);
   rk__window_invalidate(w);
   return true;
 }
@@ -582,17 +593,20 @@ bool rk_window_focus(rk_window *w, rk_view *v) {
 rk_view *rk_window_focused(rk_window *w) { return w->focus; }
 
 static void focus_step(rk_window *w, int dir) {
-  rk_view *list[1024];
-  int n = 0;
-  collect_focus(w->sheets->nkids ? w->sheets : w->root, list, &n, 1024);   /* the root holds the toasts, last */
-  if (w->sheets->nkids) collect_focus(w->toasts, list, &n, 1024);           /* over a sheet, a toast's action still comes last */
-  if (!n) return;
+  focus_list l = { NULL, 0, 0 };
+  collect_focus(w->sheets->nkids ? w->sheets : w->root, &l);   /* the root holds the toasts, last */
+  if (w->sheets->nkids) collect_focus(w->toasts, &l);           /* over a sheet, a toast's action still comes last */
+  rk_view **list = l.v;
+  int n = l.n;
+  if (!n) { free(list); return; }
   int at = -1;
   for (int i = 0; i < n; i++) if (list[i] == w->focus) at = i;
   int next = at < 0 ? (dir > 0 ? 0 : n - 1) : (at + dir + n) % n;
+  rk_view *to = list[next];
+  free(list);
   w->focus_visible = true;
-  rk_window_focus(w, list[next]);
-  rk__reveal(list[next]);
+  rk_window_focus(w, to);
+  rk__reveal(to);
 }
 
 void rk__window_event(rk_window *w, const rk_event *e) {
@@ -644,6 +658,7 @@ static void event(rk_window *w, const rk_event *e) {
       w->pointer = e->position;
       rk_view *h = w->capture ? w->capture : hit_window(w, e->position.x, e->position.y);
       w->hover = h;                                            /* nothing is drawn differently under the pointer */
+      if (!w->capture) rk__tip_hover(w, h);                    /* but a tooltip may come */
       dispatch(w, h, e);
       int shape = RK__CURSOR_ARROW;                            /* the move has told the views what lies under it */
       for (rk_view *v = h; v; v = v->parent) if (v->cursor) { shape = v->cursor; break; }
@@ -652,6 +667,7 @@ static void event(rk_window *w, const rk_event *e) {
     }
     case RK_EVENT_POINTER_DOWN: {
       w->pointer = e->position;
+      rk__tip_hide(w, true);
       rk_view *h = hit_window(w, e->position.x, e->position.y);
       if (w->floats->nkids && (!h || h->parent != w->floats)) {    /* a press outside a menu closes it, and goes on */
         rk__menus_close(w);
@@ -702,6 +718,7 @@ static void event(rk_window *w, const rk_event *e) {
         break;
       }
       rk_view *f = w->focus;
+      if (e->key == RK_KEY_ESCAPE && w->tip) { rk__tip_hide(w, true); break; }   /* Escape first takes the tooltip away */
       if (e->key == RK_KEY_F10 && (e->mods & RK_MOD_SHIFT)) {        /* Shift+F10: the focused view's context menu, below it */
         rk_view *t = f;
         while (t && !(t->menu && t->access != RK_ACCESS_BUTTON)) t = t->parent;
@@ -721,7 +738,7 @@ static void event(rk_window *w, const rk_event *e) {
       dispatch(w, to ? to : w->root, e);
       break;
     }
-    case RK_EVENT_WHEEL: dispatch(w, hit_window(w, e->position.x, e->position.y), e); break;
+    case RK_EVENT_WHEEL: rk__tip_hide(w, true); dispatch(w, hit_window(w, e->position.x, e->position.y), e); break;
     case RK_EVENT_DRAG_ENTER: case RK_EVENT_DRAG_MOVE: case RK_EVENT_DRAG_LEAVE: case RK_EVENT_DROP: rk__window_drag(w, e); break;
     default: dispatch(w, w->focus ? w->focus : w->root, e); break;
   }
