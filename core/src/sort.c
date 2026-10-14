@@ -50,7 +50,7 @@ static void sorter_layout(rk_view *v, void *st) {
   free(rows);
 }
 
-static bool rows_last(rk_view *v) {
+bool rk__rows_last(rk_view *v) {
   rk_view *p = v->parent;
   if (!p || !p->nkids) return false;
   sorter *s = sorter_of(p);
@@ -115,18 +115,17 @@ static void sorter_move(rk_view *v, int from, int to, bool tell) {
 
 static void grip_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_view *rowv = st;
-  row *r = rowv->state;
-  rk_window *w = rk__view_window(v);
+  rk__row *r = rowv->state;
   bool held = r->lifted;
   rk_color ink = rk_color_of(held ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
   float oy = (v->pframe.h - 20) / 2, ox = (v->pframe.w - 20) / 2;
   for (int col = 0; col < 2; col++)
     for (int line = 0; line < 3; line++)
       rk_canvas_fill_rect(c, (rk_rect){ ox + 7 + col * 4, oy + 4 + line * 5, 2, 2 }, ink);
-  if (w && w->focus == v && w->focus_visible) rk_canvas_stroke_rect(c, (rk_rect){ 0, 0, v->pframe.w, v->pframe.h }, 2, rk_color_of(RK_ROLE_FOCUS));
+  if (rk__shows_focus(v)) rk__focus_ring(c, (rk_rect){ 0, 0, v->pframe.w, v->pframe.h }, 0);
 }
 
-static void lift(rk_view *rowv, bool on) { ((row *)rowv->state)->lifted = on; rk__view_dirty(rowv); if (((row *)rowv->state)->grip) rk__view_dirty(((row *)rowv->state)->grip); }
+static void lift(rk_view *rowv, bool on) { ((rk__row *)rowv->state)->lifted = on; rk__view_dirty(rowv); if (((rk__row *)rowv->state)->grip) rk__view_dirty(((rk__row *)rowv->state)->grip); }
 
 /* While dragging: the lifted row follows, the others between where it was and where it would land step aside. */
 static void drag_to(rk_view *v, float dy) {
@@ -232,7 +231,7 @@ static bool grip_event(rk_view *g, const rk_event *e, void *st) {
 static const rk_class grip_class = { { sizeof(rk_view_class), "rk_rows_grip", grip_draw, NULL, NULL, grip_event, NULL }, NULL, NULL };
 
 static void give_grip(rk_view *rowv) {
-  row *r = rowv->state;
+  rk__row *r = rowv->state;
   if (r->grip) return;
   rk_view *g = rk__view_create(&grip_class, rowv);
   g->focusable = true; g->draws_focus = true;
@@ -247,14 +246,14 @@ static void give_grip(rk_view *rowv) {
   rk__view_relayout_up(rowv);
 }
 
-static void rows_added(rk_view *rows, rk_view *rowv) { if (sorter_of(rows)) give_grip(rowv); }
+void rk__rows_added(rk_view *rows, rk_view *rowv) { if (sorter_of(rows)) give_grip(rowv); }
 
 void rk_rows_set_sortable(rk_view *rows, void (*moved)(rk_view *rows, int from, int to, void *user), void *user) {
   if (!rows || (rows->cls && rows->cls != &sorter_class)) return;
   if (!rows->cls) { rows->cls = &sorter_class; rows->state = rk__alloc(sizeof(sorter)); }
   sorter *s = rows->state;
   s->moved = moved; s->user = user;
-  for (int i = 0; i < rows->nkids; i++) if (rows->kids[i]->cls == &row_class) give_grip(rows->kids[i]);
+  for (int i = 0; i < rows->nkids; i++) if (rows->kids[i]->cls == &rk__row_class) give_grip(rows->kids[i]);
   rk__view_relayout_up(rows);
 }
 

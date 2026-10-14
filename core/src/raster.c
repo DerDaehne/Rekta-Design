@@ -47,23 +47,11 @@ rk_irect rk__irect_meet(rk_irect a, rk_irect b) {
   return r;
 }
 
-/* s over d, s scaled by cov (0..256). */
-static inline uint32_t over(uint32_t d, uint32_t s, uint32_t cov) {
-  if (cov >= 256) {
-    if ((s >> 24) == 255) return s;
-  } else {
-    uint32_t rb = ((s & 0x00ff00ffu) * cov >> 8) & 0x00ff00ffu, ag = (((s >> 8) & 0x00ff00ffu) * cov >> 8) & 0x00ff00ffu;
-    s = rb | (ag << 8);
-  }
-  uint32_t inv = 256 - (s >> 24);
-  uint32_t rb = ((d & 0x00ff00ffu) * inv >> 8) & 0x00ff00ffu, ag = (((d >> 8) & 0x00ff00ffu) * inv >> 8) & 0x00ff00ffu;
-  return s + (rb | (ag << 8));
-}
 
 static void span(rk_bitmap *b, int y, int x0, int x1, uint32_t pm, uint32_t cov) {
   uint32_t *row = b->px + (size_t)y * b->stride;
   if (cov >= 256 && (pm >> 24) == 255) { for (int x = x0; x < x1; x++) row[x] = pm; return; }
-  for (int x = x0; x < x1; x++) row[x] = over(row[x], pm, cov);
+  for (int x = x0; x < x1; x++) row[x] = rk__over(row[x], pm, cov);
 }
 
 /* Rectangles: solid inside, the fraction of each edge pixel covered at the border. */
@@ -285,7 +273,7 @@ void rk__path_fill(rk_bitmap *b, rk_irect clip, const rk_path *p, uint32_t pm) {
       sum += row[x];
       float cov = fabsf(sum);
       if (cov < 0.002f) continue;
-      out[x] = over(out[x], pm, cov >= 1 ? 256u : (uint32_t)(cov * 256.0f + 0.5f));
+      out[x] = rk__over(out[x], pm, cov >= 1 ? 256u : (uint32_t)(cov * 256.0f + 0.5f));
     }
   }
 }
@@ -297,7 +285,7 @@ void rk__blit_mask(rk_bitmap *b, rk_irect clip, int x, int y, const uint8_t *mas
   for (int py = r.y0; py < r.y1; py++) {
     const uint8_t *m = mask + (size_t)(py - y) * stride - x;
     uint32_t *row = b->px + (size_t)py * b->stride;
-    for (int px = r.x0; px < r.x1; px++) if (m[px]) row[px] = over(row[px], pm, m[px] + (m[px] >> 7));
+    for (int px = r.x0; px < r.x1; px++) if (m[px]) row[px] = rk__over(row[px], pm, m[px] + (m[px] >> 7));
   }
 }
 
@@ -310,7 +298,7 @@ void rk__composite_at(rk_bitmap *dst, rk_irect clip, const rk_bitmap *src, int x
   for (int py = r.y0; py < r.y1; py++) {
     const uint32_t *s = src->px + (size_t)(py - y) * src->stride - x;
     uint32_t *d = dst->px + (size_t)py * dst->stride;
-    for (int px = r.x0; px < r.x1; px++) if (s[px]) d[px] = over(d[px], s[px], a);
+    for (int px = r.x0; px < r.x1; px++) if (s[px]) d[px] = rk__over(d[px], s[px], a);
   }
 }
 
@@ -449,7 +437,7 @@ static void comp_rows(void *ctx, int row0, int row1) {
           s = lerp_px(lerp_px(PX(sx, sy), PX(sx + 1, sy), fx), lerp_px(PX(sx, sy + 1), PX(sx + 1, sy + 1), fx), fy);
           #undef PX
         }
-        if (s) d[x] = over(d[x], s, cov * alpha >> 8);
+        if (s) d[x] = rk__over(d[x], s, cov * alpha >> 8);
       }
     }
   }

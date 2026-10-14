@@ -8,6 +8,7 @@
 #   make install    both libraries, the header, rekta.pc for pkg-config and the man page under PREFIX (/usr/local)
 #   make gallery    the reference gallery's native half in build/gallery (node test/gallery.mjs holds the web to it)
 #   make perf       the loop under load (resize, a storm of presses, settling), measured at 1x and 2x
+#   make modules    each source compiled on its own: a module says what it uses, the unity build only joins them
 # On Windows: build.bat (MSVC) or make with MinGW.
 
 CC ?= cc
@@ -52,6 +53,14 @@ else
   else
     CFLAGS += -DRK_NO_WAYLAND
   endif
+endif
+# the modules this platform compiles (the others are another system's)
+MODULES := $(filter-out src/rekta.c src/platform_win32.c src/platform_x11.c src/platform_wayland.c src/desktop_linux.c,$(wildcard src/*.c))
+ifeq ($(UNAME),Darwin)
+else ifneq (,$(findstring MINGW,$(UNAME))$(findstring MSYS,$(UNAME))$(OS))
+  MODULES += src/platform_win32.c
+else
+  MODULES += src/platform_x11.c src/desktop_linux.c $(if $(WAYLAND_PC),src/platform_wayland.c)
 endif
 # what rekta.pc names itself; the packages it requires bring the rest
 PC_LIBS ?= $(LIBS)
@@ -123,6 +132,10 @@ test: $(BUILD)/test$(EXE) $(BUILD)/hello-headless$(EXE)
 $(BUILD)/gallery-bin$(EXE): test/gallery.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY -Iinclude test/gallery.c src/rekta.c $(HEADLESS_LIBS) -o $@
 
+modules:
+	@for f in $(MODULES); do $(CC) $(CFLAGS) -Werror -fsyntax-only $$f || exit 1; done
+	@echo "$(words $(MODULES)) modules compile on their own"
+
 gallery: $(BUILD)/gallery-bin$(EXE)
 	mkdir -p $(BUILD)/gallery
 	$(BUILD)/gallery-bin$(EXE) $(BUILD)/gallery
@@ -159,4 +172,4 @@ endif
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all test gallery shots perf sanitize shared abi install clean FORCE
+.PHONY: all test modules gallery shots perf sanitize shared abi install clean FORCE

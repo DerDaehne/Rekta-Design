@@ -2,6 +2,28 @@
 #ifndef RK_INTERNAL_H
 #define RK_INTERNAL_H
 
+/* before any system header: what each platform needs declared */
+#if defined(_WIN32)
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  ifndef UNICODE
+#    define UNICODE
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  ifndef _USE_MATH_DEFINES
+#    define _USE_MATH_DEFINES
+#  endif
+#endif
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L   /* clock_gettime, poll and pipe under -std=c99 */
+#endif
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(RK_HEADLESS_ONLY) && !defined(RK_NO_WAYLAND)
+#define RK_WAYLAND 1
+#endif
+
 #include "../include/rekta.h"
 #include "../include/rekta_test.h"
 #include <assert.h>
@@ -80,6 +102,18 @@ typedef struct rk_bitmap {
 } rk_bitmap;
 void rk__bitmap_changed(rk_bitmap *b);                     /* drawn into: the block map is out of date */
 typedef struct rk_irect { int x0, y0, x1, y1; } rk_irect;
+/* s over d, s scaled by cov (0..256). */
+static inline uint32_t rk__over(uint32_t d, uint32_t s, uint32_t cov) {
+  if (cov >= 256) {
+    if ((s >> 24) == 255) return s;
+  } else {
+    uint32_t rb = ((s & 0x00ff00ffu) * cov >> 8) & 0x00ff00ffu, ag = (((s >> 8) & 0x00ff00ffu) * cov >> 8) & 0x00ff00ffu;
+    s = rb | (ag << 8);
+  }
+  uint32_t inv = 256 - (s >> 24);
+  uint32_t rb = ((d & 0x00ff00ffu) * inv >> 8) & 0x00ff00ffu, ag = (((d >> 8) & 0x00ff00ffu) * inv >> 8) & 0x00ff00ffu;
+  return s + (rb | (ag << 8));
+}
 #define RK_DAMAGE_MAX 8                                    /* separate parts a frame draws and presents */
 
 rk_bitmap *rk__bitmap_create(int w, int h);
@@ -364,6 +398,16 @@ int rk__menu_active(rk_view *menu);
 void rk__menu_choose(rk_view *menu, int item);                    /* focus inside it goes back to where it came from */
 bool rk__is_tile(rk_view *v);
 void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r);
+void rk__focus_ring(rk_canvas *c, rk_rect r, float out);  /* 2px in the focus colour, out px outside r */
+bool rk__shows_focus(rk_view *v);                         /* v has focus and the keyboard is in use */
+const char *rk__status_word(rk_status s);                 /* "active", "done", ... as the web says it */
+rk_role rk__status_full(rk_status s);                     /* the status in its full colour */
+
+/* A row of rk_rows (widgets.c); sort.c gives it a grip. */
+typedef struct rk__row { char *title, *meta; rk_status status; bool lifted; rk_view *grip; } rk__row;
+extern const rk_class rk__row_class;
+bool rk__rows_last(rk_view *row);                         /* the last row in its order: a rule below as well */
+void rk__rows_added(rk_view *rows, rk_view *row);
 
 /* App and platform (app.c, platform_*.c) -------------------------------------------------------------------------- */
 

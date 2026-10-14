@@ -52,8 +52,7 @@ static void handle_draw(rk_view *v, rk_canvas *c, void *st) {
   float k = rk__tween_at(&s->strong, now), lw = 1 + k, H = v->pframe.h;
   rk_color ink = rk__mix(rk_color_of(RK_ROLE_TEXT_LOW), rk_color_of(RK_ROLE_TEXT_MEDIUM), k);
   rk_canvas_fill_rect(c, (rk_rect){ v->pframe.w / 2 - lw / 2, 0, lw, H }, ink);
-  rk_window *w = rk__view_window(v);
-  if (w && w->focus == v && w->focus_visible) rk_canvas_stroke_rect(c, (rk_rect){ 0, 0, v->pframe.w, H }, 2, rk_color_of(RK_ROLE_FOCUS));
+  if (rk__shows_focus(v)) rk__focus_ring(c, (rk_rect){ 0, 0, v->pframe.w, H }, 0);
   if (rk__tween_moving(&s->strong, now)) { rk__view_dirty(v); rk__app_request_frame(); }
 }
 

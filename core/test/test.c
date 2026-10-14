@@ -1620,6 +1620,13 @@ static void act_down(void *u) { (*(int *)u)--; }
 static void *off_thread(void *u) { (void)u; rk_release(rk_label("from elsewhere", RK_TEXT_BODY)); return NULL; }
 
 static void test_api_rules(void) {
+  rk_view *bar = rk_hstack();
+  rk_view *more = rk_add(bar, rk_button(NULL, NULL, NULL));
+  rk_button_set_icon(more, "more");
+  rk_view *edit = rk_add(bar, rk_button("edit", NULL, NULL));
+  rk_button_set_icon(edit, "edit");
+  CHECK(rk_view_find(bar, "more") == more && rk_view_find(bar, "edit") == edit, "a button is found by its label, or its icon alone");
+  rk_release(bar);
   ticks = 0;
   rk_app_after(10, tick, NULL);
   uint32_t every = rk_app_every(10, tick, NULL);

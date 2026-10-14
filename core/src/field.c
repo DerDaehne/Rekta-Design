@@ -464,7 +464,7 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_color border = rk_color_of(off ? RK_ROLE_DISABLED : f->error ? RK_ROLE_ERROR_FULL : focused ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
   rk_canvas_fill_round_rect(c, box, r, border);
   rk_canvas_fill_round_rect(c, (rk_rect){ box.x + bw, box.y + bw, box.w - 2 * bw, box.h - 2 * bw }, RK_MAX(0.0f, r - bw), rk_color_of(RK_ROLE_BG));
-  if (focused) rk_canvas_stroke_rect(c, (rk_rect){ box.x - 4, box.y - 4, box.w + 8, box.h + 8 }, 2, rk_color_of(RK_ROLE_FOCUS));
+  if (focused) rk__focus_ring(c, box, 4);
   wrap(v, f);
   if (f->wrap_w != f->drawn_w) { f->drawn_w = f->wrap_w; keep_caret_in_sight(v, f); }   /* a new width: the caret in sight of it */
   rk_textfmt t = input_fmt(f);

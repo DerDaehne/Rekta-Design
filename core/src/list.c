@@ -298,17 +298,17 @@ static void draw_row(rk_view *v, rk_canvas *c, list *l, int i, float y, bool rin
       rk__text_draw(c, s, -1, col->flags & RK_COLUMN_NUMERIC ? cx + cw - tw : cx, y + (H - f.size * f.line) / 2, &f, ink);
       rk_canvas_pop_clip(c);
     }
-    if (ring) rk_canvas_stroke_rect(c, (rk_rect){ 0, y, W, H }, 2, rk_color_of(RK_ROLE_FOCUS));
+    if (ring) rk__focus_ring(c, (rk_rect){ 0, y, W, H }, 0);
     return;
   }
   /* the meta or status on the right, then the title in what is left */
   float right = W - pad;
   if (it.status != RK_STATUS_NONE) {
     rk_textfmt tf = rk__textfmt(RK_TEXT_LABEL, 0);
-    const char *word = it.meta ? it.meta : status_word(it.status);
+    const char *word = it.meta ? it.meta : rk__status_word(it.status);
     float tw = rk__text_width(word, -1, &tf);
     rk__text_draw(c, word, -1, right - tw, y + (H - tf.size * tf.line) / 2, &tf, ink);
-    rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, y + H / 2 - 4, 8, 8 }, on ? ink : rk_color_of(status_full(it.status)));
+    rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, y + H / 2 - 4, 8, 8 }, on ? ink : rk_color_of(rk__status_full(it.status)));
     right -= tw + 14 + rk_metric_of(RK_SPACE_M);
   } else if (it.meta) {
     rk_textfmt mf = rk__textfmt(RK_TEXT_META, 0);
@@ -322,7 +322,7 @@ static void draw_row(rk_view *v, rk_canvas *c, list *l, int i, float y, bool rin
     rk__text_draw(c, it.title, -1, left, y + (H - f.size * f.line) / 2, &f, ink);
     rk_canvas_pop_clip(c);
   }
-  if (ring) rk_canvas_stroke_rect(c, (rk_rect){ 0, y, W, H }, 2, rk_color_of(RK_ROLE_FOCUS));
+  if (ring) rk__focus_ring(c, (rk_rect){ 0, y, W, H }, 0);
 }
 
 /* Only the rows the frame draws: those between the top and the bottom of the canvas's clip. */
@@ -347,7 +347,7 @@ static void draw_head(rk_view *v, rk_canvas *c, list *l, bool focused) {
     }
   }
   if (focused && l->head >= 0 && l->head < l->ncols)        /* the keyboard is in the head: its column, ringed */
-    rk_canvas_stroke_rect(c, (rk_rect){ l->cols[l->head].x, 0, l->cols[l->head].w, hh }, 2, rk_color_of(RK_ROLE_FOCUS));
+    rk__focus_ring(c, (rk_rect){ l->cols[l->head].x, 0, l->cols[l->head].w, hh }, 0);
 }
 
 static void list_draw(rk_view *v, rk_canvas *c, void *st) {

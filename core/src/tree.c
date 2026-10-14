@@ -169,10 +169,10 @@ static void tree_draw(rk_view *v, rk_canvas *c, void *st) {
     float right = W - pad;
     if (n->status != RK_STATUS_NONE) {
       rk_textfmt tf = rk__textfmt(RK_TEXT_LABEL, 0);
-      const char *word = n->meta ? n->meta : status_word(n->status);
+      const char *word = n->meta ? n->meta : rk__status_word(n->status);
       float tw = rk__text_width(word, -1, &tf);
       rk__text_draw(c, word, -1, right - tw, r->y + (H - tf.size * tf.line) / 2, &tf, ink);
-      rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, r->y + H / 2 - 4, 8, 8 }, on ? ink : rk_color_of(status_full(n->status)));
+      rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, r->y + H / 2 - 4, 8, 8 }, on ? ink : rk_color_of(rk__status_full(n->status)));
       right -= tw + 14 + rk_metric_of(RK_SPACE_M);
     } else if (n->meta) {
       rk_textfmt mf = rk__textfmt(RK_TEXT_META, 0);

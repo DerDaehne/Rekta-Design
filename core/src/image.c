@@ -202,7 +202,7 @@ static void stretch_at(rk_bitmap *dst, rk_irect clip, const rk_bitmap *src, int 
   for (int py = r.y0; py < r.y1; py++) {
     const uint32_t *s = src->px + (size_t)((long)(py - y) * src->h / h) * src->stride;
     uint32_t *d = dst->px + (size_t)py * dst->stride;
-    for (int px = r.x0; px < r.x1; px++) { uint32_t p = s[(long)(px - x) * src->w / w]; if (p) d[px] = over(d[px], p, a); }
+    for (int px = r.x0; px < r.x1; px++) { uint32_t p = s[(long)(px - x) * src->w / w]; if (p) d[px] = rk__over(d[px], p, a); }
   }
 }
 

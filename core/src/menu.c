@@ -76,7 +76,7 @@ static void menu_draw(rk_view *v, rk_canvas *c, void *st) {
     else if (it->kind == LABEL) rk__text_draw(c, it->label, -1, side, y + rk_metric_of(RK_SPACE_S), &l, rk_color_of(RK_ROLE_TEXT_HIGH));
     else {
       if (i == m->active && (m->hover || keys) && !it->disabled) rk_canvas_fill_rect(c, (rk_rect){ 1, y, W - 2, h }, rk_color_of(RK_ROLE_HOVER));
-      if (i == m->active && keys) rk_canvas_stroke_rect(c, (rk_rect){ 1, y, W - 2, h }, 2, rk_color_of(RK_ROLE_FOCUS));
+      if (i == m->active && keys) rk__focus_ring(c, (rk_rect){ 1, y, W - 2, h }, 0);
       rk_color ink = rk_color_of(it->disabled ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
       float x = side;
       if (squares) {

@@ -3,13 +3,13 @@
 #include "rk_internal.h"
 #include "rk_tokens.h"
 
-static const char *status_word(rk_status s) {
+const char *rk__status_word(rk_status s) {
   switch (s) { case RK_STATUS_INFO: return "active"; case RK_STATUS_SUCCESS: return "done"; case RK_STATUS_WARNING: return "waiting"; case RK_STATUS_ERROR: return "failed"; default: return "idle"; }
 }
 static rk_role status_tile(rk_status s) {
   switch (s) { case RK_STATUS_INFO: return RK_ROLE_INFO_TILE; case RK_STATUS_SUCCESS: return RK_ROLE_SUCCESS_TILE; case RK_STATUS_WARNING: return RK_ROLE_WARNING_TILE; case RK_STATUS_ERROR: return RK_ROLE_ERROR_TILE; default: return RK_ROLE_SURFACE; }
 }
-static rk_role status_full(rk_status s) {
+rk_role rk__status_full(rk_status s) {
   switch (s) { case RK_STATUS_INFO: return RK_ROLE_INFO_FULL; case RK_STATUS_SUCCESS: return RK_ROLE_SUCCESS_FULL; case RK_STATUS_WARNING: return RK_ROLE_WARNING_FULL; case RK_STATUS_ERROR: return RK_ROLE_ERROR_FULL; default: return RK_ROLE_TEXT_MEDIUM; }
 }
 static rk_color with_alpha(rk_color c, float a) { return (c & 0xffffff00u) | (rk_color)((c & 255) * a + 0.5f); }
@@ -130,7 +130,10 @@ void rk_button_set_icon(rk_view *v, const char *icon) {
   button *b = v->state;
   rk__icon_check(icon, __func__);
   rk__setstr(&b->icon, icon);
-  if (!b->label || !*b->label) rk__setstr(&v->access_label, icon);   /* an icon alone is still named */
+  if (!b->label || !*b->label) {                             /* an icon alone is still named, and found by it */
+    rk__setstr(&v->access_label, icon);
+    if (!v->name) rk__setstr(&v->name, icon);
+  }
   rk__view_relayout_up(v);
 }
 
@@ -158,7 +161,7 @@ static void tile_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_color ink = rk_color_of(RK_ROLE_TEXT);
   rk_textfmt word = rk__textfmt(RK_TEXT_LABEL, 0);
   word.color = RK_ROLE_TEXT;
-  const char *wd = t->word ? t->word : status_word(t->status);
+  const char *wd = t->word ? t->word : rk__status_word(t->status);
   rk__text_draw(c, wd, -1, W - 12 - rk__text_width(wd, -1, &word), 10 - (word.size * word.line - word.size) / 2, &word, ink);
   /* from the bottom up: progress, sparkline, message, stat (a column justified to the end) */
   float y = H - pad;
@@ -217,7 +220,7 @@ bool rk__is_tile(rk_view *v) { return v && v->cls == &tile_class; }
 static void tile_access(rk_view *v) {
   tile *t = v->state;
   char buf[512];
-  snprintf(buf, sizeof buf, "%s%s%s%s%s", t->value ? t->value : "", t->value && t->label ? " " : "", t->label ? t->label : "", ", ", t->word ? t->word : status_word(t->status));
+  snprintf(buf, sizeof buf, "%s%s%s%s%s", t->value ? t->value : "", t->value && t->label ? " " : "", t->label ? t->label : "", ", ", t->word ? t->word : rk__status_word(t->status));
   rk__setstr(&v->access_label, buf);
 }
 
@@ -303,12 +306,10 @@ void rk_tile_set_progress(rk_view *v, float progress) {
 
 /* Rows ------------------------------------------------------------------------------------------------------------ */
 
-typedef struct row { char *title, *meta; rk_status status; bool lifted; rk_view *grip; } row;   /* grip: sortable (sort.c) */
-static bool rows_last(rk_view *v);
-static void rows_added(rk_view *rows, rk_view *row);
+typedef rk__row row;
 
 /* A row's rule above it is its own, outside the padding, and the last row has one below as well, as on the web. */
-static float row_rules(rk_view *v, float *above) { *above = 1; return rows_last(v) ? 2 : 1; }
+static float row_rules(rk_view *v, float *above) { *above = 1; return rk__rows_last(v) ? 2 : 1; }
 static rk_size row_measure(rk_view *v, rk_size avail, void *st) {
   (void)st;
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
@@ -324,7 +325,7 @@ static void row_draw(rk_view *v, rk_canvas *c, void *st) {
     rk_canvas_stroke_rect(c, (rk_rect){ 0, 0, W, H }, 1, rk_color_of(RK_ROLE_TEXT_MEDIUM));
   } else {
     rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, 1 }, rule);
-    if (rows_last(v)) rk_canvas_fill_rect(c, (rk_rect){ 0, H - 1, W, 1 }, rule);
+    if (rk__rows_last(v)) rk_canvas_fill_rect(c, (rk_rect){ 0, H - 1, W, 1 }, rule);
   }
   if (v->pressed) rk_canvas_fill_rect(c, (rk_rect){ 0, 1, W, H - 1 }, rk_color_of(RK_ROLE_HOVER));
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
@@ -335,10 +336,10 @@ static void row_draw(rk_view *v, rk_canvas *c, void *st) {
   float right = W;
   if (r->status != RK_STATUS_NONE) {
     rk_textfmt tf = rk__textfmt(RK_TEXT_LABEL, 0);
-    const char *w = r->meta ? r->meta : status_word(r->status);
+    const char *w = r->meta ? r->meta : rk__status_word(r->status);
     float tw = rk__text_width(w, -1, &tf);
     rk__text_draw(c, w, -1, right - tw, base - rk__text_ascent(&tf), &tf, rk_color_of(RK_ROLE_TEXT));
-    rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, above + inner / 2 - 4, 8, 8 }, rk_color_of(status_full(r->status)));
+    rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, above + inner / 2 - 4, 8, 8 }, rk_color_of(rk__status_full(r->status)));
   } else if (r->meta) {
     rk_textfmt mf = rk__textfmt(RK_TEXT_META, 0);
     float mw = rk__text_width(r->meta, -1, &mf);
@@ -347,7 +348,7 @@ static void row_draw(rk_view *v, rk_canvas *c, void *st) {
 }
 static void row_layout(rk_view *v, void *st) { row *r = st; if (r->grip) rk__set_frame(r->grip, (rk_rect){ 0, 0, 24, v->frame.h }); }
 static void row_destroy(void *st) { row *r = st; free(r->title); free(r->meta); free(r); }
-static const rk_class row_class = { { sizeof(rk_view_class), "rk_rows_row", row_draw, row_measure, row_layout, NULL, row_destroy }, NULL, NULL };
+const rk_class rk__row_class = { { sizeof(rk_view_class), "rk_rows_row", row_draw, row_measure, row_layout, NULL, row_destroy }, NULL, NULL };
 
 rk_view *rk_rows(void) {
   rk_view *v = rk_view_create();
@@ -359,18 +360,18 @@ rk_view *rk_rows(void) {
 rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_status status) {
   row *r = rk__alloc(sizeof *r);
   r->title = rk__strdup(title ? title : ""); r->meta = rk__strdup(meta); r->status = status;
-  rk_view *v = rk__view_create(&row_class, r);
+  rk_view *v = rk__view_create(&rk__row_class, r);
   v->access = RK_ACCESS_LIST_ITEM;
   rk__setstr(&v->access_label, r->title);
   rk__view_add(rows, v);
   rk_release(v);
-  rows_added(rows, v);
+  rk__rows_added(rows, v);
   return v;
 }
 
 /* A row says something new: its title, meta and status at once, as rk_rows_add took them. */
 void rk_row_set(rk_view *v, const char *title, const char *meta, rk_status status) {
-  if (!rk__expect(v && v->cls == &row_class ? v : NULL, v, __func__, "a row of rk_rows")) return;
+  if (!rk__expect(v && v->cls == &rk__row_class ? v : NULL, v, __func__, "a row of rk_rows")) return;
   row *r = v->state;
   rk__setstr(&r->title, title ? title : "");
   rk__setstr(&r->meta, meta);
@@ -432,8 +433,15 @@ void rk_progress_set_value(rk_view *v, float progress) { if (rk__expect(v && v->
 /* Keyboard focus: a 2px ring in the focus colour 2px outside; on a tile, inset in the tile's own text colour. */
 void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r) {
   if (rk__is_tile(v)) { rk_canvas_stroke_rect(c, (rk_rect){ r.x + 5, r.y + 5, r.w - 10, r.h - 10 }, 2, rk_color_of(RK_ROLE_TEXT)); return; }
-  rk_canvas_stroke_rect(c, (rk_rect){ r.x - 4, r.y - 4, r.w + 8, r.h + 8 }, 2, rk_color_of(RK_ROLE_FOCUS));
+  rk__focus_ring(c, r, 4);
 }
+
+/* The ring alone: 2px in the focus colour, out px outside r (0: on its edge). */
+void rk__focus_ring(rk_canvas *c, rk_rect r, float out) {
+  rk_canvas_stroke_rect(c, (rk_rect){ r.x - out, r.y - out, r.w + 2 * out, r.h + 2 * out }, 2, rk_color_of(RK_ROLE_FOCUS));
+}
+
+bool rk__shows_focus(rk_view *v) { rk_window *w = rk__view_window(v); return w && w->focus == v && w->focus_visible; }
 
 /* Toast ----------------------------------------------------------------------------------------------------------- */
 

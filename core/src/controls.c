@@ -25,6 +25,7 @@
    chosen day in the accent; the arrows go by day and week, Page Up and Page Down by month (with Shift, by year),
    Home and End to the month's ends, Enter or a click takes a day, Escape closes. Included after widgets.c. */
 #include "rk_internal.h"
+#include "rk_tokens.h"
 
 typedef struct control {
   double value;
@@ -37,8 +38,6 @@ typedef struct control {
 static float box_size(void) { return 20; }
 static rk_textfmt strong_fmt(void) { rk_textfmt f = rk__textfmt(RK_TEXT_STRONG, 0); f.line = 1; return f; }
 static rk_textfmt word_fmt(void) { rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0); f.line = 1; return f; }
-static bool shows_focus(rk_view *v) { rk_window *w = rk__view_window(v); return w && w->focus == v && w->focus_visible; }
-static void focus_ring(rk_canvas *c, rk_rect r) { rk_canvas_stroke_rect(c, (rk_rect){ r.x - 4, r.y - 4, r.w + 8, r.h + 8 }, 2, rk_color_of(RK_ROLE_FOCUS)); }
 static double short_motion(void) { return rk__reduced() ? 0 : rk_duration_of(RK_DURATION_SHORT); }
 
 /* A value the user chose: drawn (with its motion) and told. */
@@ -83,7 +82,7 @@ static void check_draw(rk_view *v, rk_canvas *c, void *st) {
     rk_textfmt f = strong_fmt();
     rk__text_draw(c, k->label, -1, s + rk_metric_of(RK_SPACE_S), (h - f.size) / 2, &f, rk_color_of(rk__view_disabled(v) ? RK_ROLE_DISABLED : RK_ROLE_TEXT));
   }
-  if (shows_focus(v)) focus_ring(c, b);
+  if (rk__shows_focus(v)) rk__focus_ring(c, b, 4);
 }
 
 static bool check_event(rk_view *v, const rk_event *e, void *st) {
@@ -147,9 +146,9 @@ static void choices_draw(rk_view *v, rk_canvas *c, void *st) {
     if (on) rk_canvas_fill_round_rect(c, (rk_rect){ b.x + 5, b.y + 5, s - 10, s - 10 }, s / 2 - 5, accent);
     rk__text_draw(c, o->labels[i], -1, s + rk_metric_of(RK_SPACE_S), i * H + (H - f.size) / 2, &f, ink);
   }
-  if (shows_focus(v)) {
+  if (rk__shows_focus(v)) {
     int at = o->c.value >= 0 ? (int)o->c.value : 0;
-    focus_ring(c, (rk_rect){ 0, at * H + (H - s) / 2, s, s });
+    rk__focus_ring(c, (rk_rect){ 0, at * H + (H - s) / 2, s, s }, 4);
   }
 }
 
@@ -231,7 +230,7 @@ static void toggle_draw(rk_view *v, rk_canvas *c, void *st) {
   if (p > 0 && !off) rk_canvas_fill_rect(c, (rk_rect){ x + 4, y + 4, p * (TRACK_W - 8 - 14), TRACK_H - 8 }, rk_color_of(RK_ROLE_ACCENT));
   rk_canvas_fill_rect(c, (rk_rect){ x + p * (TRACK_W - 12), y, 12, TRACK_H }, ink);
   rk__text_draw(c, t->c.value ? "on" : "off", -1, x + TRACK_W + rk_metric_of(RK_SPACE_S), (h - wf.size) / 2, &wf, rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT_HIGH));
-  if (shows_focus(v)) rk_canvas_stroke_rect(c, (rk_rect){ x - 4, y - 4, TRACK_W + 8, TRACK_H + 8 }, 2, rk_color_of(RK_ROLE_FOCUS));
+  if (rk__shows_focus(v)) rk__focus_ring(c, (rk_rect){ x, y, TRACK_W, TRACK_H }, 4);
 }
 
 static void toggle_apply(rk_view *v, double from, double to) {
@@ -329,7 +328,7 @@ static void segments_draw(rk_view *v, rk_canvas *c, void *st) {
     float tw = rk__text_width(s->labels[i], -1, &f);
     rk__text_draw(c, s->labels[i], -1, b.x + (b.w - tw) / 2, (h - f.size) / 2, &f, lit ? rk_color_of(RK_ROLE_ON_ACCENT) : ink);
   }
-  if (shows_focus(v)) focus_ring(c, seg_rect(s, to >= 0 ? to : 0, h));
+  if (rk__shows_focus(v)) rk__focus_ring(c, seg_rect(s, to >= 0 ? to : 0, h), 4);
 }
 
 static void segments_apply(rk_view *v, double from, double to) {
@@ -462,7 +461,7 @@ static void slider_draw(rk_view *v, rk_canvas *c, void *st) {
   range_format(&s->r, s->c.value, text, sizeof text);
   rk_textfmt f = value_fmt();
   rk__text_draw(c, text, -1, v->pframe.w - rk__text_width(text, -1, &f), (h - f.size) / 2, &f, ink);
-  if (shows_focus(v)) focus_ring(c, thumb);
+  if (rk__shows_focus(v)) rk__focus_ring(c, thumb, 4);
 }
 
 static bool slider_event(rk_view *v, const rk_event *e, void *st) {
@@ -531,8 +530,8 @@ static void stepper_draw(rk_view *v, rk_canvas *c, void *st) {
   f.tabular = true; f.line = 1;
   float tw = rk__text_width(text, -1, &f);
   rk__text_draw(c, text, -1, bw + (fw - tw) / 2, (h - f.size) / 2, &f, ink);
-  if (s->ntyped && shows_focus(v)) rk_canvas_fill_rect(c, (rk_rect){ bw + (fw + tw) / 2 + 1, (h - f.size) / 2 - 2, 1, f.size + 4 }, ink);   /* typing: the caret */
-  if (shows_focus(v)) focus_ring(c, all);
+  if (s->ntyped && rk__shows_focus(v)) rk_canvas_fill_rect(c, (rk_rect){ bw + (fw + tw) / 2 + 1, (h - f.size) / 2 - 2, 1, f.size + 4 }, ink);   /* typing: the caret */
+  if (rk__shows_focus(v)) rk__focus_ring(c, all, 4);
 }
 
 static void stepper_step(stepper *s, int dir) { user_set(s->view, &s->c, s->c.value + dir * (s->r.step > 0 ? s->r.step : 1)); }
@@ -651,7 +650,7 @@ static void select_draw(rk_view *v, rk_canvas *c, void *st) {
   float cx = W - SELECT_CHEVRON / 2, cy = h / 2 + (open ? 2 : -2), d = open ? -4 : 4;   /* the chevron: down, up while open */
   rk_point chev[3] = { { cx - 4, cy - d / 2 }, { cx, cy + d / 2 }, { cx + 4, cy - d / 2 } };
   rk_canvas_polyline(c, chev, 3, 1.6f, rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT));
-  if (shows_focus(v)) focus_ring(c, (rk_rect){ 0, 0, W, h });
+  if (rk__shows_focus(v)) rk__focus_ring(c, (rk_rect){ 0, 0, W, h }, 4);
 }
 
 static void select_chosen(rk_view *menu, int item, void *user) { (void)menu; select_box *s = user; user_set(s->view, &s->c, item); }
@@ -798,7 +797,7 @@ static void date_draw(rk_view *v, rk_canvas *c, void *st) {
     if (i < 2) rk__text_draw(c, "-", -1, x1[i], ty, &f, rk_color_of(off ? RK_ROLE_DISABLED : value ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM));
   }
   rk_canvas_icon(c, "calendar", (rk_rect){ W - DATE_ICON + 10, (h - 20) / 2, 20, 20 }, rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT));
-  if (shows_focus(v)) focus_ring(c, (rk_rect){ 0, 0, W, h });
+  if (rk__shows_focus(v)) rk__focus_ring(c, (rk_rect){ 0, 0, W, h }, 4);
 }
 
 /* What is typed into the segment in focus, taken. */
@@ -928,7 +927,7 @@ static void sheet_draw(rk_view *v, rk_canvas *c, void *st) {
     rk_color k = ink;
     if (value == chosen) { rk_canvas_fill_rect(c, in, rk_color_of(RK_ROLE_ACCENT)); k = rk_color_of(RK_ROLE_ON_ACCENT); }
     else if (value == now) rk_canvas_stroke_rect(c, in, 1, ink);
-    if (value == s->cur && keys) rk_canvas_stroke_rect(c, (rk_rect){ cell.x, cell.y, cell.w, cell.h }, 2, rk_color_of(RK_ROLE_FOCUS));
+    if (value == s->cur && keys) rk__focus_ring(c, cell, 0);
     char text[12];
     snprintf(text, sizeof text, "%d", d);
     rk__text_draw(c, text, -1, cell.x + (cell.w - rk__text_width(text, -1, &f)) / 2, cell.y + (cell.h - f.size) / 2, &f, k);

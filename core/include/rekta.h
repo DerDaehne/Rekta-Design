@@ -230,7 +230,7 @@ RK_API int rk_view_count(rk_view *view);
 RK_API rk_view *rk_view_child(rk_view *view, int index);
 RK_API rk_window *rk_view_window(rk_view *view);
 RK_API void rk_view_set_name(rk_view *view, const char *name);  /* for finding it: tests, the gallery */
-RK_API rk_view *rk_view_find(rk_view *root, const char *name);   /* by name; a button's name is its label until set */
+RK_API rk_view *rk_view_find(rk_view *root, const char *name);   /* by name; a button's is its label (or icon) until set */
 RK_API void rk_view_set_menu(rk_view *view, rk_view *menu);   /* takes menu: a button opens it; another view on a right click or Shift+F10 */
 
 /* geometry */
