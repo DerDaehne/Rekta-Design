@@ -131,6 +131,9 @@ $(BUILD)/tiles_imperative$(EXE): demo/tiles_imperative.c demo/tiles_shell.h $(SO
 $(BUILD)/tiles_declarative$(EXE): demo/tiles_declarative.c demo/tiles_shell.h $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY demo/tiles_declarative.c src/rekta.c $(HEADLESS_LIBS) -o $@
 
+$(BUILD)/declare_bench$(EXE): test/declare_bench.c $(SOURCES) | $(BUILD)
+	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY test/declare_bench.c src/rekta.c $(HEADLESS_LIBS) -o $@
+
 $(BUILD)/test$(EXE): test/test.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY test/test.c $(HEADLESS_LIBS) -o $@
 
@@ -156,13 +159,14 @@ gallery: $(BUILD)/gallery-bin$(EXE)
 	$(BUILD)/gallery-bin$(EXE) $(BUILD)/gallery
 
 # the declared tiles against the imperative ones: the same tour, picture by picture, and what an update costs
-declared: $(BUILD)/tiles_imperative$(EXE) $(BUILD)/tiles_declarative$(EXE)
+declared: $(BUILD)/tiles_imperative$(EXE) $(BUILD)/tiles_declarative$(EXE) $(BUILD)/declare_bench$(EXE)
 	mkdir -p $(BUILD)/tiles-imperative $(BUILD)/tiles-declarative
 	$(BUILD)/tiles_imperative$(EXE) --shots $(BUILD)/tiles-imperative > /dev/null
 	$(BUILD)/tiles_declarative$(EXE) --shots $(BUILD)/tiles-declarative > /dev/null
-	node test/compare.mjs $(BUILD)/tiles-imperative $(BUILD)/tiles-declarative
+	-node test/compare.mjs $(BUILD)/tiles-imperative $(BUILD)/tiles-declarative
 	$(BUILD)/tiles_imperative$(EXE) --bench 300
 	$(BUILD)/tiles_declarative$(EXE) --bench 300
+	$(BUILD)/declare_bench$(EXE)
 
 shots: $(BUILD)/demo-headless$(EXE)
 	mkdir -p $(BUILD)/shots

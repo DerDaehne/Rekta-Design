@@ -50,8 +50,8 @@ typedef enum rk_ui_kind {
   RK_UI_KIND_FORCE32 = 0x7fffffff
 } rk_ui_kind;
 
-/* What a change of content shows. AUTO: a tile's new value or label peeks in and a new status flips it; other views
-   change in place. */
+/* What a change of text shows. AUTO: a tile's new value or label peeks in; other views change in place. A tile's new
+   status always flips it. */
 typedef enum rk_ui_change { RK_UI_AUTO, RK_UI_IN_PLACE, RK_UI_PEEK, RK_UI_FLIP, RK_UI_CROSSFADE, RK_UI_CHANGE_FORCE32 = 0x7fffffff } rk_ui_change;
 
 typedef struct rk_ui {

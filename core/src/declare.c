@@ -26,7 +26,7 @@ struct ui_node {
   void (*on_press)(rk_view *, void *), (*on_change)(rk_view *, void *), (*on_submit)(rk_view *, void *);
   void *user;
   rk_view *(*menu)(void *); rk_view *(*make)(void *);
-  /* its view and what it ui_holds */
+  /* its view and what it holds */
   rk_view *view;                                   /* a reference of its own; the top's is the declared view, borrowed */
   ui_root *root;
   ui_node **kids; int nkids, kcap;                 /* as they stand */
@@ -41,7 +41,7 @@ enum { OP_REPLACE, OP_REMOVE, OP_PLACE };
 typedef struct ui_op { int kind; ui_node *parent, *node, *prev; } ui_op;
 
 struct ui_root {
-  ui_node top;                                     /* ui_holds what the build declares */
+  ui_node top;                                     /* holds what the build declares */
   void (*build)(void *user); void *user;
   ui_node **stack; int depth, scap;                /* the open nodes; NULL where a description was refused */
   ui_op *ops; int nops, ocap;
@@ -82,7 +82,7 @@ static void ui_node_free(ui_node *n) {
 
 static bool ui_same(const char *a, const char *b) { return a == b || (a && b && !strcmp(a, b)); }
 
-static bool ui_take(char **slot, const char *s) {     /* true when it ui_changed */
+static bool ui_take(char **slot, const char *s) {     /* true when it changed */
   if (ui_same(*slot, s)) return false;
   free(*slot);
   *slot = rk__strdup(s);
@@ -107,7 +107,7 @@ static bool ui_take_series(ui_node *n, const float *s, int count) {
   return true;
 }
 
-/* The ui_transition a change of content takes, before the setter: the node's own, or what the kind does by itself. */
+/* The transition a change of content takes, before the setter: the node's own, or what the kind does by itself. */
 static void ui_transition(ui_node *n, rk_ui_change automatic, bool fresh) {
   rk_ui_change c = n->change == RK_UI_AUTO ? automatic : n->change;
   if (fresh || c == RK_UI_IN_PLACE || c == RK_UI_AUTO) return;
@@ -144,7 +144,8 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
       bool stat = ui_take(&n->text, d->text);
       stat |= ui_take(&n->label, d->label);
       bool status = n->status != d->status;
-      if (stat || status) ui_transition(n, status ? RK_UI_FLIP : RK_UI_PEEK, fresh);
+      if (status && !fresh) rk_view_transition(v, RK_TRANSITION_FLIP);   /* a new status turns it over, always */
+      else if (stat) ui_transition(n, RK_UI_PEEK, fresh);
       if (status) { n->status = d->status; rk_tile_set_status(v, d->status, NULL); }
       if (stat) rk_tile_set_stat(v, n->text, n->label);
       if (ui_take(&n->message, d->message)) rk_tile_set_message(v, n->message);
@@ -163,7 +164,7 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
       bool h = ui_take(&n->hint, d->hint);
       h |= ui_take(&n->error, d->error);
       if (h) { if (n->error) rk_field_set_error(v, n->error); else rk_field_set_hint(v, n->hint); }
-      /* the app's text, when it ui_changed: never over what the user typed since */
+      /* the app's text, when it changed: never over what the user typed since */
       if (ui_take(&n->input, d->input) && n->input && strcmp(rk_field_text(v), n->input)) rk_field_set_text(v, n->input);
       if (n->lines != d->lines) { n->lines = d->lines; rk_field_set_lines(v, d->lines > 0 ? d->lines : 1); layout = true; }
       if (n->secret != d->secret) { n->secret = d->secret; rk_field_set_secret(v, d->secret); }
@@ -256,7 +257,7 @@ static ui_node *ui_find(ui_node *p, const rk_ui *d) {
     ui_node *k = p->kids[j];
     if (!ui_same_one(k, d) || (!keyed && k->kind != d->kind)) continue;
     if (k->seen) {
-      if (keyed) rk__warn("rk_ui: two views are %s%s%s among the ui_same siblings: each needs its own key", d->key ? d->key : "",
+      if (keyed) rk__warn("rk_ui: two views are %s%s%s among the same siblings: each needs its own key", d->key ? d->key : "",
                           d->key && d->id ? " " : "", d->id ? "with one id" : "");
       continue;
     }
@@ -280,7 +281,7 @@ static void ui_record(ui_root *r, int kind, ui_node *parent, ui_node *node, ui_n
   if (kind == OP_PLACE && node->at < 0) r->entering = true;
 }
 
-/* The kids that keep their places: the longest ui_run of them already in order (what moves least), the rest are moved. */
+/* The kids that keep their places: the longest run of them already in order (what moves least), the rest are moved. */
 static void ui_stable(ui_node *n) {
   int m = n->nnext, len = 0;
   int *tail = rk__alloc((size_t)(m + 1) * 2 * sizeof *tail), *prev = tail + m + 1;
@@ -333,8 +334,8 @@ void rk_ui_open(const rk_ui *in) {
     memset(&d, 0, sizeof d);
     memcpy(&d, in, RK_MIN((size_t)in->size, sizeof d));
     if (d.kind <= RK_UI_NONE || d.kind > RK_UI_HOST) rk__error("rk_ui_open: no kind of view is %d", (int)d.kind);
-    else if (!ui_holds(p->kind)) rk__error("rk_ui_open: %s ui_holds no views (%s inside it)", ui_kind_name(p->kind), ui_kind_name(d.kind));
-    else if ((d.kind == RK_UI_ROW) != (p->kind == RK_UI_ROWS)) rk__error("rk_ui_open: an RK_ROW goes in RK_ROWS, and RK_ROWS ui_holds only rows (%s in %s)", ui_kind_name(d.kind), ui_kind_name(p->kind));
+    else if (!ui_holds(p->kind)) rk__error("rk_ui_open: %s holds no views (%s inside it)", ui_kind_name(p->kind), ui_kind_name(d.kind));
+    else if ((d.kind == RK_UI_ROW) != (p->kind == RK_UI_ROWS)) rk__error("rk_ui_open: an RK_ROW goes in RK_ROWS, and RK_ROWS holds only rows (%s in %s)", ui_kind_name(d.kind), ui_kind_name(p->kind));
     else {
       ui_node *old = ui_find(p, &d);
       if (old && ui_made_with(old, &d)) { n = old; ui_update(n, &d, false); }

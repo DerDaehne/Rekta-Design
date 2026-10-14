@@ -2143,8 +2143,9 @@ static void scene_flip(void) {
 /* Declared views (rekta_ui.h) ------------------------------------------------------------------------------------- */
 
 typedef struct decl {
-  int count, ids[8], nids, builds, makes, updates, style;
-  bool done, big, host, pressable, controlled;
+  int count, ids[8], nids, builds, makes, updates, style, menus;
+  bool done, big, host, pressable, controlled, sounds;
+  float progress;
   const char *button;
   char typed[64];
 } decl;
@@ -2155,6 +2156,9 @@ static void decl_item(int i, rk_list_item *out, void *user) { (void)user; static
 static rk_view *decl_make(void *user) { ((decl *)user)->makes++; return rk_list(1000000, decl_item, NULL); }
 static void decl_refresh(rk_view *list, void *user) { ((decl *)user)->updates++; rk_list_set_count(list, 1000000 - ((decl *)user)->count); }
 
+static void decl_sounds(rk_view *v, void *user) { ((decl *)user)->sounds = rk_control_value(v) != 0; }
+static rk_view *decl_menu(void *user) { ((decl *)user)->menus++; rk_view *m = rk_menu(); rk_menu_add(m, "resize", NULL, NULL, NULL); return m; }
+
 static void decl_build(void *user) {
   decl *s = user;
   char n[16];
@@ -2164,8 +2168,14 @@ static void decl_build(void *user) {
     RK_LABEL("Today", .key = "title", .style = (rk_text_style)s->style);
     RK_TILES() {
       RK_TILE(n, .key = "count", .label = "pressed", .status = s->done ? RK_STATUS_SUCCESS : RK_STATUS_INFO, .span = { s->big ? 2 : 1, 1 }, .on_press = decl_count);
-      RK_TILE("51", .label = "icons");
+      RK_TILE("51", .label = "icons", .menu = decl_menu);
     }
+    RK_HSTACK(.key = "controls") {
+      RK_TOGGLE("Sounds", .key = "sounds", .value = s->sounds, .on_change = decl_sounds);   /* the app keeps it */
+      RK_CHECK("Mine", .key = "mine");                                                      /* the user keeps it */
+      RK_ICON("bell", .key = "bell");
+    }
+    RK_PROGRESS(.key = "bar", .progress = &s->progress);
     RK_ROWS(.key = "rows") {
       for (int i = 0; i < s->nids; i++) {
         snprintf(n, sizeof n, "row %d", s->ids[i]);                /* a local buffer, again and again: copied */
@@ -2308,6 +2318,17 @@ static void test_declare(void) {
   rk_ui_update(page);
   rk_app_run_for(600);
   CHECK(rk__live_views == views && !rk_view_find(page, "list"), "it goes as any view (%d)", rk__live_views - views);
+
+  /* controls: the app's value reaches the view; the user's stays when the app keeps none */
+  rk_view *sounds = rk_view_find(page, "sounds"), *mine = rk_view_find(page, "mine"), *bar = rk_view_find(page, "bar");
+  rk_view_tap(sounds); rk_view_tap(mine);
+  rk_app_run_for(50);
+  CHECK(s.sounds && rk_control_value(sounds) == 1 && rk_control_value(mine) == 1, "a toggle's change reaches the state; a check keeps the user's");
+  s.sounds = false; s.progress = 0.5f;
+  rk_ui_update(page);
+  CHECK(rk_control_value(sounds) == 0 && rk_control_value(mine) == 1 && bar->value == 0.5f, "the app's value reaches its toggle, the progress bar glides to its own");
+  CHECK(s.menus == 1 && kid(rk_view_parent(t), 1)->menu && rk__is_object(rk_view_find(page, "bell"), &rk__view_type), "a menu is made once, for its tile; an icon is declared too");
+  rk_app_run_for(400);
 
   /* misuse is said */
   int was = logged;
