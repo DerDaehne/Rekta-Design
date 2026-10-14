@@ -224,7 +224,7 @@ static void test_input(void) {
 static rk_controller *places_for_test;
 static void go_place(rk_view *v, void *u) {
   (void)v; (void)u;
-  rk_view *p = col(16, 32);
+  rk_view *p = col(16, 0);                                     /* the place sets it in */
   rk_add(p, rk_label("A place", RK_TEXT_TITLE));
   rk_view *rows = rk_add(p, rk_rows());
   rk_rows_add(rows, "Nightly import", NULL, RK_STATUS_ERROR);
@@ -1523,6 +1523,87 @@ static void test_collections(void) {
   done(w);
 }
 
+/* A pivot inside a page is held by the page's controller: its facets hear appear, know their window, present a
+   sheet; nested, it picks a facet (it slides) rather than the place. Pivot facets are views, as panorama sections;
+   a facet controller's title changes in the strip. */
+static int appeared_count;
+static void facet_appear(rk_controller *c, void *st) { (void)c; (void)st; appeared_count++; }
+
+static void test_embed(void) {
+  rk_window *w = window(800, 500);
+  rk_view *page = rk_vstack();
+  rk_controller *place = rk_controller_create_with_view(page, "notes");
+  rk_controller *pivot = rk_pivot();
+  rk_pivot_add(pivot, "summary", rk_label("the summary", RK_TEXT_BODY));
+  rk_controller_class cls = { sizeof cls, "files", NULL, facet_appear, NULL, NULL, NULL };
+  rk_controller *files = rk_controller_create(&cls, NULL);
+  rk_controller_set_title(files, "files");
+  rk_pivot_add_controller(pivot, files);
+  rk_add(page, rk_label("Notes", RK_TEXT_TITLE));
+  rk_view *pv = rk_add(page, rk_controller_embed(place, pivot));
+  rk_view_set_grow(pv, 1);
+  rk_window_show(w, rk_places(place));
+  rk_app_run_for(400);
+  CHECK(rk_controller_parent(pivot) == place && rk_controller_window(pivot) == w, "embedded: the pivot has its owner and the window");
+  CHECK(!((struct strip *)((struct pivot *)pivot->impl)->strip->state)->nav, "nested, the pivot picks a facet, not the place");
+  appeared_count = 0;
+  rk_pivot_select(pivot, 1);
+  rk_app_run_for(800);
+  CHECK(appeared_count == 1 && rk_controller_window(files) == w, "the facet controller appears and knows its window");
+  rk_controller_present(files, rk_controller_create_with_view(rk_label("a question", RK_TEXT_BODY), "ask"));
+  rk_app_run_for(600);
+  CHECK(w->sheets->nkids > 0, "and its sheet is shown");
+  rk_controller_dismiss(files->sheet);
+  rk_app_run_for(600);
+  rk_controller_set_title(files, "attachments");
+  CHECK(!strcmp(((struct strip *)((struct pivot *)pivot->impl)->strip->state)->titles[1], "attachments"), "a facet's new title shows in the strip");
+  int was = logged;
+  CHECK(!rk_controller_embed(place, pivot) && logged == was + 1, "a controller with a parent is not embedded twice, and it is said");
+  done(w);
+}
+
+/* A short question answers once: ok, cancel, or Escape as cancel; the safe answer has focus. A secret field shows
+   dots, keeps the text for the app, and gives nothing to the clipboard or a screen reader. */
+static int answers, answer_ok;
+static void answered(bool ok, void *u) { (void)u; answers++; answer_ok = ok; }
+
+static void test_confirm_secret(void) {
+  rk_window *w = window(700, 460);
+  rk_view *page = col(12, 16);
+  rk_view *pw = rk_add(page, rk_field("password", NULL));
+  rk_field_set_secret(pw, true);
+  show(w, page, "confirm");
+  rk_controller *home = rk_window_root(w);
+  rk_window_focus(w, pw);
+  type_text(w, "hunter2");
+  CHECK(!strcmp(rk_field_text(pw), "hunter2") && !strcmp(pw->access_value, ""), "a secret field keeps the text for the app, none for a screen reader");
+  key(w, 'A', RK_MOD_CTRL); key(w, 'C', RK_MOD_CTRL);
+  char *clip = rk__platform()->clip_get ? rk__platform()->clip_get() : NULL;
+  CHECK(!clip || !strstr(clip, "hunter2"), "nor for the clipboard");
+  free(clip);
+  rk_confirm_desc d = { .size = sizeof d, .title = "Delete 3 builds?", .text = "This cannot be undone.", .ok = "delete", .cancel_is_safe = true };
+  answers = 0;
+  rk_confirm(home, &d, answered, NULL);
+  rk_app_run_for(500);
+  rk_view *focused = rk_window_focused(w);
+  CHECK(focused && focused->cls == &button_class && !strcmp(((button *)focused->state)->label, "cancel"), "the safe answer has focus");
+  shot(w, "confirm");
+  rk_window_key(w, RK_KEY_ENTER);
+  rk_app_run_for(600);
+  CHECK(answers == 1 && !answer_ok && !w->sheets->nkids, "Enter on cancel: answered no, once, and gone");
+  rk_confirm(home, &d, answered, NULL);
+  rk_app_run_for(500);
+  rk_view_tap(rk_view_find(w->sheets, "delete"));
+  rk_app_run_for(600);
+  CHECK(answers == 2 && answer_ok, "delete: answered yes");
+  rk_confirm(home, &d, answered, NULL);
+  rk_app_run_for(500);
+  rk_window_key(w, RK_KEY_ESCAPE);
+  rk_app_run_for(600);
+  CHECK(answers == 3 && !answer_ok, "Escape answers cancel");
+  done(w);
+}
+
 static void test_tree(void) {
   rk_window *w = window(560, 420);
   rk_view *root = col(16, 24);
@@ -1789,7 +1870,7 @@ static void test_side_pivot(void) {
     rk_view *rows = rk_add(pages[i], rk_rows());
     rk_rows_add(rows, "Nightly import", "failed", RK_STATUS_ERROR);
     rk_rows_add(rows, "schema.sql", "4 kB", RK_STATUS_NONE);
-    rk_pivot_add(nav, rk_controller_create_with_view(pages[i], names[i]));
+    rk_pivot_add(nav, names[i], pages[i]);
   }
   rk_pivot_set_layout(nav, RK_PIVOT_SIDE);
   rk_window_show(w, nav);
@@ -2010,6 +2091,8 @@ static void launch(void *user) {
   test_damage();
   test_list_keys();
   test_collections();
+  test_embed();
+  test_confirm_secret();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

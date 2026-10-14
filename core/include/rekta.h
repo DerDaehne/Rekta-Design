@@ -436,6 +436,7 @@ RK_API void rk_field_set_hint(rk_view *field, const char *hint, bool error);   /
 RK_API void rk_field_on_change(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);
 RK_API void rk_field_on_submit(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);   /* Enter */
 RK_API void rk_field_set_lines(rk_view *field, int lines);   /* the lines it shows; 1, the default, is one line */
+RK_API void rk_field_set_secret(rk_view *field, bool secret);   /* a password: dots shown, never copied or read aloud */
 RK_API void rk_field_set_options(rk_view *field, const char *const *options, int count);   /* a combobox: suggestions as you type */
 
 /* A long list: only the rows in sight are drawn and nothing is kept for each item - item() fills a row while it is
@@ -535,6 +536,9 @@ RK_API rk_view *rk_controller_view(rk_controller *controller);    /* loads it on
 RK_API void rk_controller_set_title(rk_controller *controller, const char *title);
 RK_API const char *rk_controller_title(rk_controller *controller);
 RK_API rk_controller *rk_controller_parent(rk_controller *controller);
+/* A controller inside another's views (a pivot in a page): the owner takes child, gives it its window, tells it when
+   it appears and goes, and shows the sheets it presents. Returns child's view as a reference: add it where it goes. */
+RK_API rk_view *rk_controller_embed(rk_controller *owner, rk_controller *child);
 RK_API rk_window *rk_controller_window(rk_controller *controller);
 
 /* Places: a navigation stack. Going to a place turns the old one away and the new one in; back (Escape, the back
@@ -550,7 +554,8 @@ RK_API void rk_panorama_add(rk_controller *panorama, const char *title, rk_view 
 
 /* Pivot: facets of one place in a fixed order; the active title is large; a change slides from its side. */
 RK_API rk_controller *rk_pivot(void);
-RK_API void rk_pivot_add(rk_controller *pivot, rk_controller *facet);   /* takes facet */
+RK_API void rk_pivot_add(rk_controller *pivot, const char *title, rk_view *page);   /* takes page, as rk_panorama_add */
+RK_API void rk_pivot_add_controller(rk_controller *pivot, rk_controller *facet);  /* takes facet; its title, live */
 RK_API void rk_pivot_select(rk_controller *pivot, int index);
 RK_API int rk_pivot_selected(rk_controller *pivot);
 typedef enum rk_pivot_layout { RK_PIVOT_TOP, RK_PIVOT_SIDE, RK_PIVOT_LAYOUT_FORCE32 = 0x7fffffff } rk_pivot_layout;
@@ -559,6 +564,15 @@ RK_API void rk_pivot_set_layout(rk_controller *pivot, rk_pivot_layout layout);  
 /* Sheets: a short question from the top edge over a shaded backdrop. Escape or a click on the shading dismisses. */
 RK_API void rk_controller_present(rk_controller *presenter, rk_controller *sheet);   /* takes sheet */
 RK_API void rk_controller_dismiss(rk_controller *sheet);
+/* A short question in a sheet, as the web's confirm(): the safe answer is the primary button and has focus (cancel,
+   for what cannot be undone); Escape and the shading answer cancel. answered() hears it once. */
+typedef struct rk_confirm_desc {
+  uint32_t size;                                   /* sizeof(rk_confirm_desc) */
+  const char *title, *text, *kicker;               /* the question; a line under it; a word above it */
+  const char *ok, *cancel;                         /* NULL: "ok", "cancel" */
+  bool cancel_is_safe;
+} rk_confirm_desc;
+RK_API void rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user);
 
 /* Motion ---------------------------------------------------------------------------------------------------------- */
 

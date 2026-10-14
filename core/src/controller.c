@@ -15,12 +15,15 @@ struct rk_controller {
   rk_window *window;
   rk_controller *sheet, *presenter;                        /* what it presents, what presented it */
   rk_view *sheet_shade, *sheet_box, *focus_before;
+  rk_controller **embedded; int nembedded, embed_cap;      /* what it holds in its own views (rk_controller_embed) */
   bool appeared;
 };
 
 static void controller_destroy(void *self) {
   rk_controller *c = self;
   if (c->sheet) rk_release(c->sheet);
+  for (int i = 0; i < c->nembedded; i++) rk_release(c->embedded[i]);
+  free(c->embedded);
   if (c->impl_free) c->impl_free(c->impl);
   if (c->view) { c->view->controller = NULL; rk_release(c->view); }
   if (c->cls.destroy) c->cls.destroy(c->state);
@@ -45,7 +48,12 @@ rk_controller *rk_controller_create_with_view(rk_view *view, const char *title) 
 }
 
 void *rk_controller_state(rk_controller *c) { return c->state; }
-void rk_controller_set_title(rk_controller *c, const char *t) { rk__setstr(&c->title, t); if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar); }
+static void pivot_title_changed(rk_controller *pivot, rk_controller *facet);
+void rk_controller_set_title(rk_controller *c, const char *t) {
+  rk__setstr(&c->title, t);
+  if (c->parent && c->parent->kind == K_PIVOT) pivot_title_changed(c->parent, c);   /* its title in the strip, live */
+  if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar);
+}
 rk_controller *rk_controller_parent(rk_controller *c) { return c->parent; }
 rk_window *rk_controller_window(rk_controller *c) { return c->window; }
 
@@ -71,16 +79,38 @@ void rk__controller_attach(rk_controller *c, rk_window *w) {
   c->window = w;
   rk_controller *v = visible_child(c);
   if (v && v != c) rk__controller_attach(v, w);
+  for (int i = 0; i < c->nembedded; i++) rk__controller_attach(c->embedded[i], w);
 }
 
 void rk__controller_appear(rk_controller *c, bool appear) {
   if (c->appeared == appear) return;
   c->appeared = appear;
   rk_controller *v = visible_child(c);
+  if (!appear) for (int i = 0; i < c->nembedded; i++) rk__controller_appear(c->embedded[i], false);
   if (!appear && v && v != c) rk__controller_appear(v, false);
   if (appear && c->cls.appear) c->cls.appear(c, c->state);
   if (!appear && c->cls.disappear) c->cls.disappear(c, c->state);
   if (appear && v && v != c) rk__controller_appear(v, true);
+  if (appear) for (int i = 0; i < c->nembedded; i++) rk__controller_appear(c->embedded[i], true);
+}
+
+static void strip_relevel(rk_controller *c);
+/* A controller inside another's views, as UIKit's child view controllers: the owner holds it, gives it its window and
+   tells it when it appears and goes; a sheet it presents is shown. Returns the child's view, a reference to add where
+   it goes in the owner's views. */
+rk_view *rk_controller_embed(rk_controller *owner, rk_controller *child) {
+  if (!owner || !child || child->parent || child == owner) {
+    rk__error("rk_controller_embed: %s", !owner || !child ? "NULL" : child == owner ? "a controller cannot hold itself" : "the child already has a parent");
+    if (child && !child->parent && child != owner) rk_release(child);
+    return NULL;
+  }
+  owner->embedded = rk__grow(owner->embedded, &owner->embed_cap, owner->nembedded + 1, sizeof *owner->embedded);
+  owner->embedded[owner->nembedded++] = child;            /* takes the caller's reference */
+  child->parent = owner;
+  strip_relevel(child);
+  if (owner->window) rk__controller_attach(child, owner->window);
+  if (owner->appeared) rk__controller_appear(child, true);
+  return rk_retain(rk_controller_view(child));
 }
 
 /* Places ---------------------------------------------------------------------------------------------------------- */
@@ -118,6 +148,22 @@ static void fill_layout(rk_view *v, void *st) {
 }
 static const rk_class fill_class = { { sizeof(rk_view_class), "rk_fill", NULL, NULL, fill_layout, NULL, NULL }, NULL, NULL };
 
+/* A place shows a page of its own set in from the window's edges, as a pivot sets its facets in: space-xl at the
+   sides (space-m in a compact window), space-l above and below. A panorama, a pivot or places inside set themselves. */
+static void places_layout(rk_view *v, void *st) {
+  (void)st;
+  rk_window *w = rk__view_window(v);
+  bool compact = w && (w->size.w < 760 || w->size.h < 481);
+  float side = rk_metric_of(compact ? RK_SPACE_M : RK_SPACE_XL), l = rk_metric_of(RK_SPACE_L);
+  for (int i = 0; i < v->nkids; i++) {
+    rk_view *k = v->kids[i];
+    bool page = k->controller && k->controller->kind == K_PLAIN;
+    rk_insets in = page ? (rk_insets){ l, side, l, side } : (rk_insets){ 0, 0, 0, 0 };
+    rk__set_frame(k, (rk_rect){ in.left, in.top, RK_MAX(0.0f, v->frame.w - in.left - in.right), RK_MAX(0.0f, v->frame.h - in.top - in.bottom) });
+  }
+}
+static const rk_class places_class = { { sizeof(rk_view_class), "rk_places", NULL, NULL, places_layout, NULL, NULL }, NULL, NULL };
+
 static rk_controller *visible_child(rk_controller *c) {
   if (c->kind == K_PLACES) { places *p = c->impl; return p->n ? p->stack[p->n - 1] : NULL; }
   if (c->kind == K_PIVOT) return pivot_visible(c);
@@ -129,7 +175,7 @@ rk_controller *rk_places(rk_controller *home) {
   places *p = rk__alloc(sizeof *p);
   p->self = c;
   c->kind = K_PLACES; c->impl = p; c->impl_free = places_free;
-  c->view = rk__view_create(&fill_class, NULL);
+  c->view = rk__view_create(&places_class, NULL);
   c->view->controller = c;
   if (home) {
     p->stack = rk__grow(p->stack, &p->cap, 1, sizeof *p->stack);
@@ -919,12 +965,14 @@ static void pivot_free(void *st) {
 
 static rk_controller *pivot_visible(rk_controller *c) { pivot *p = c->impl; return p->n ? p->facets[p->sel] : NULL; }
 
-/* A pivot nothing else holds picks the place (navigation.md): its strip takes the nav level, as the panorama's does,
-   and its facets start where the strip's first title does. Inside a panorama or another pivot it picks a facet. */
+/* A pivot that is the place - the window's root, or a place among places - picks the place (navigation.md): its strip
+   takes the nav level, as the panorama's does, and its facets start where the strip's first title does. Held in a
+   page, a panorama or another pivot it picks a facet. */
 static void strip_level(strip *s) {
   if (!s->pivot) return;
-  bool top = true;
-  for (rk_controller *a = s->pivot->parent; a; a = a->parent) if (a->kind == K_PIVOT || a->kind == K_PANORAMA) top = false;
+  rk_controller *up = s->pivot->parent;
+  bool top = !up || up->kind == K_PLACES;                  /* it is the place; held in a page it picks a facet */
+  for (rk_controller *a = up; a && top; a = a->parent) if (a->kind == K_PIVOT || a->kind == K_PANORAMA) top = false;
   if (top == s->nav && s->level_set) return;
   s->nav = top; s->level_set = true;
   pivot *p = s->pivot->impl;
@@ -987,8 +1035,29 @@ rk_controller *rk_pivot(void) {
   return c;
 }
 
-void rk_pivot_add(rk_controller *c, rk_controller *facet) {
-  if (c->kind != K_PIVOT || !facet) { rk_release(facet); return; }
+/* Held somewhere new: a pivot asks again whether it picks the place or a facet. */
+static void strip_relevel(rk_controller *c) {
+  if (c->kind != K_PIVOT) return;
+  pivot *p = c->impl;
+  ((strip *)p->strip->state)->level_set = false;
+  strip_level(p->strip->state);
+  rk__view_relayout_up(c->view);
+}
+
+static void pivot_title_changed(rk_controller *c, rk_controller *facet) {
+  pivot *p = c->impl;
+  strip *s = p->strip->state;
+  for (int i = 0; i < p->n && i < s->n; i++) if (p->facets[i] == facet) { rk__setstr(&s->titles[i], facet->title ? facet->title : ""); rk__view_relayout_up(p->strip); }
+}
+
+/* A facet that is a view, as a panorama's section is; or a controller, loaded when it is first shown. */
+void rk_pivot_add(rk_controller *c, const char *title, rk_view *page) {
+  if (c->kind != K_PIVOT || !page) { if (c->kind != K_PIVOT) rk__error("rk_pivot_add: not a pivot"); rk_release(page); return; }
+  rk_pivot_add_controller(c, rk_controller_create_with_view(page, title));
+}
+
+void rk_pivot_add_controller(rk_controller *c, rk_controller *facet) {
+  if (c->kind != K_PIVOT || !facet) { if (c->kind != K_PIVOT) rk__error("rk_pivot_add_controller: not a pivot"); rk_release(facet); return; }
   pivot *p = c->impl;
   p->facets = rk__grow(p->facets, &p->cap, p->n + 1, sizeof *p->facets);
   p->facets[p->n++] = facet;                                   /* takes the caller's reference */
@@ -1151,6 +1220,42 @@ void rk_controller_dismiss(rk_controller *sheet) {
   if (shade) shade->leaving = true;
   box->leaving = true;
   rk__animate_cb(box, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_out, sheet_gone, sheet);
+}
+
+/* A short question, as the web's confirm(): a kicker, the question as a group heading, a line, cancel and ok. The
+   safe answer is the primary button and has focus; Escape and the shading answer cancel. answered() hears it once. */
+typedef struct asking { void (*answered)(bool ok, void *user); void *user; bool told; rk_controller *sheet; } asking;
+static void ask_tell(asking *a, bool ok) { if (a->told) return; a->told = true; if (a->answered) a->answered(ok, a->user); }
+static void ask_ok(rk_view *b, void *user) { (void)b; asking *a = user; ask_tell(a, true); rk_controller_dismiss(a->sheet); }
+static void ask_cancel(rk_view *b, void *user) { (void)b; asking *a = user; ask_tell(a, false); rk_controller_dismiss(a->sheet); }
+static void ask_gone(rk_controller *c, void *st) { (void)c; ask_tell(st, false); }   /* Escape, the shading */
+static void ask_free(void *st) { free(st); }
+
+void rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user) {
+  rk_confirm_desc d = { sizeof d, "", NULL, NULL, "ok", "cancel", false };
+  if (desc) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
+  if (!desc || !desc->size) rk__error("rk_confirm: the descriptor needs its size (sizeof(rk_confirm_desc))");
+  if (!presenter || !presenter->window) { rk__error("rk_confirm: the presenter is in no window"); if (answered) answered(false, user); return; }
+  asking *a = rk__alloc(sizeof *a);
+  a->answered = answered; a->user = user;
+  rk_view *page = rk_vstack();
+  if (d.kicker && *d.kicker) rk_add(page, rk_label(d.kicker, RK_TEXT_KICKER));
+  rk_add(page, rk_label(d.title ? d.title : "", RK_TEXT_GROUP));
+  if (d.text && *d.text) rk_add(page, rk_label(d.text, RK_TEXT_BODY));
+  rk_view *row = rk_add(page, rk_hstack());
+  rk_view *cancel = rk_add(row, rk_button(d.cancel ? d.cancel : "cancel", ask_cancel, a));
+  rk_view *ok = rk_add(row, rk_button(d.ok ? d.ok : "ok", ask_ok, a));
+  rk_view *safe = d.cancel_is_safe ? cancel : ok;
+  rk_button_set_kind(safe, RK_BUTTON_PRIMARY);
+  rk_controller_class cls = { sizeof cls, "rk_confirm", NULL, NULL, ask_gone, NULL, ask_free };
+  rk_controller *sheet = rk_controller_create(&cls, a);
+  sheet->view = page; page->controller = sheet;
+  rk__setstr(&sheet->title, d.title);
+  a->sheet = sheet;
+  rk_controller_present(presenter, sheet);
+  rk_window *w = presenter->window;
+  w->focus_visible = true;
+  rk_window_focus(w, safe);
 }
 
 /* Window keys and the chain --------------------------------------------------------------------------------------- */

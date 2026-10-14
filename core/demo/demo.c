@@ -43,13 +43,13 @@ static rk_status status_named(const char *s) {
 }
 
 /* A facet of the release notes: hairline rows, a status tag where the meta says one. */
-static rk_controller *facet(const char *title, const char *const rows[][2], int n) {
+static rk_view *facet(const char *const rows[][2], int n) {
   rk_view *list = rk_rows();
   for (int i = 0; i < n; i++) {
     rk_status st = status_named(rows[i][1]);
     rk_rows_add(list, rows[i][0], st ? NULL : rows[i][1], st);
   }
-  return rk_controller_create_with_view(list, title);
+  return list;
 }
 
 /* A place of its own: a title, a line, and a pivot of three facets. */
@@ -59,19 +59,17 @@ static rk_controller *notes_place(void) {
   static const char *const files[][2] = { { "schema.sql", "4 kB" }, { "import.log", "18 kB" } };
 
   rk_controller *pivot = rk_pivot();
-  rk_pivot_add(pivot, facet("summary", summary, 3));
-  rk_pivot_add(pivot, facet("activity", activity, 3));
-  rk_pivot_add(pivot, facet("files", files, 2));
+  rk_pivot_add(pivot, "summary", facet(summary, 3));
+  rk_pivot_add(pivot, "activity", facet(activity, 3));
+  rk_pivot_add(pivot, "files", facet(files, 2));
 
-  float l = rk_metric_of(RK_SPACE_L), xl = rk_metric_of(RK_SPACE_XL);
-  rk_view *page = rk_vstack();
-  rk_view_set_padding(page, (rk_insets){ l, xl, l, xl });
+  rk_view *page = rk_vstack();                                 /* the place sets it in from the edges */
+  rk_controller *place = rk_controller_create_with_view(page, "release notes");
   rk_add(page, rk_label("Release notes", RK_TEXT_TITLE));
   rk_add(page, rk_label("A place of its own. The facets slide from their side; Escape, the back button or Alt+Left turn back home.", RK_TEXT_BODY));
-  rk_view *facets = rk_add(page, rk_retain(rk_controller_view(pivot)));
+  rk_view *facets = rk_add(page, rk_controller_embed(place, pivot));   /* the place holds its pivot */
   rk_view_set_grow(facets, 1);
-  rk_view_set_user(page, pivot, rk_release);                   /* the page keeps its pivot */
-  return rk_controller_create_with_view(page, "release notes");
+  return place;
 }
 
 static void open_notes(rk_view *v, void *u) {

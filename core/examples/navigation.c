@@ -72,7 +72,7 @@ static rk_controller *places(bool side) {
   for (int i = 0; i < NPLACES; i++) {
     rk_view *page = place_view(i);
     rk_view_set_padding(page, (rk_insets){ side ? 0 : rk_metric_of(RK_SPACE_L), 0, 0, 0 });
-    rk_pivot_add(nav, rk_controller_create_with_view(page, PLACES[i]));
+    rk_pivot_add(nav, PLACES[i], page);
   }
   if (side) rk_pivot_set_layout(nav, RK_PIVOT_SIDE);
   rk_pivot_select(nav, 1);

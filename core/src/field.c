@@ -30,6 +30,7 @@ typedef struct field {
   float wrap_w, goal, drawn_w;                             /* the width laid out for (and last drawn at); Up and Down keep to the goal's x */
   bool stale;                                              /* the text changed since the lines were laid out */
   char *label, *placeholder, *hint; bool error;
+  bool secret;                                             /* a password: dots drawn, nothing copied or read aloud */
   char *preedit;                                           /* what an input method is composing, shown at the caret */
   struct snap { char *text; int caret, anchor; } *undo, *redo; int nundo, ucap, nredo, rcap;   /* the field's own history */
   double typed_at; bool typing;                            /* typing runs together into one step, word by word */
@@ -74,7 +75,23 @@ static bool word_char(char c) { return ((unsigned char)c & 0x80) || (c >= '0' &&
 static int next_word(const field *f, int i) { while (i < f->len && !word_char(f->text[i])) i++; while (i < f->len && word_char(f->text[i])) i++; return i; }
 static int prev_word(const field *f, int i) { while (i > 0 && !word_char(f->text[i - 1])) i--; while (i > 0 && word_char(f->text[i - 1])) i--; return i; }
 
-static float width(const field *f, int a, int b) { rk_textfmt t = input_fmt(f); return rk__text_width(f->text + a, b - a, &t); }
+#define DOT "\xe2\x80\xa2"                                 /* what a secret field shows for each character */
+static int chars_in(const field *f, int a, int b) { int n = 0; for (int i = a; i < b; i++) n += ((unsigned char)f->text[i] & 0xc0) != 0x80; return n; }
+static float width(const field *f, int a, int b) {
+  rk_textfmt t = input_fmt(f);
+  if (f->secret) return chars_in(f, a, b) * rk__text_width(DOT, -1, &t);
+  return rk__text_width(f->text + a, b - a, &t);
+}
+/* The text from a to b, or as many dots */
+static void draw_run(rk_canvas *c, const field *f, int a, int b, float x, float y, const rk_textfmt *t, rk_color ink) {
+  if (!f->secret) { rk__text_draw(c, f->text + a, b - a, x, y, t, ink); return; }
+  int n = chars_in(f, a, b);
+  char *dots = rk__alloc((size_t)n * 3 + 1);
+  for (int i = 0; i < n; i++) memcpy(dots + i * 3, DOT, 3);
+  rk__text_draw(c, dots, n * 3, x, y, t, ink);
+  free(dots);
+}
+static void tell_access(rk_view *v, const field *f) { rk__setstr(&v->access_value, f->secret ? "" : f->text); }
 
 static void add_line(field *f, int start) { f->starts = rk__grow(f->starts, &f->lcap, f->nlines + 1, sizeof *f->starts); f->starts[f->nlines++] = start; }
 
@@ -252,7 +269,7 @@ static void restore(rk_view *v, field *f, struct snap *from, int *nfrom, struct 
   f->text = s.text; f->len = (int)strlen(s.text); f->cap = f->len + 1;
   f->caret = RK_MIN(s.caret, f->len); f->anchor = RK_MIN(s.anchor, f->len);
   f->typing = false; f->stale = true;
-  rk__setstr(&v->access_value, f->text);
+  tell_access(v, f);
   field_changed(v, f);
 }
 
@@ -289,7 +306,7 @@ static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing) 
   f->text[f->len] = 0;
   f->caret = f->anchor = lo + m;
   f->stale = true; f->goal = -1;
-  rk__setstr(&v->access_value, f->text);
+  tell_access(v, f);
   field_changed(v, f);
 }
 
@@ -311,7 +328,7 @@ static void move_lines(rk_view *v, field *f, int dk, bool extend) {
 
 static void copy_selection(const field *f) {
   int lo = sel_lo(f), hi = sel_hi(f);
-  if (lo == hi) return;
+  if (lo == hi || f->secret) return;                       /* a password never reaches the clipboard */
   char *s = rk__alloc((size_t)(hi - lo) + 1);
   memcpy(s, f->text + lo, (size_t)(hi - lo));
   clip_set(s);
@@ -462,14 +479,14 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
     float y = y0 + k * lh;
     if (composing && k == ck) {                              /* composing: the text so far, underlined, at the caret */
       float cx = x0 + width(f, a, f->caret), pw = rk__text_width(f->preedit, -1, &t), ty = y + (lh - t.size) / 2;
-      rk__text_draw(c, f->text + a, f->caret - a, x0, y, &t, ink);
+      draw_run(c, f, a, f->caret, x0, y, &t, ink);
       rk__text_draw(c, f->preedit, -1, cx, y, &t, ink);
       rk_canvas_fill_rect(c, (rk_rect){ cx, ty + t.size + 1, pw, 1 }, ink);
-      rk__text_draw(c, f->text + f->caret, z - f->caret, cx + pw, y, &t, ink);
+      draw_run(c, f, f->caret, z, cx + pw, y, &t, ink);
       rk_canvas_fill_rect(c, (rk_rect){ cx + pw, ty - 2, 1, t.size + 4 }, ink);
       continue;
     }
-    rk__text_draw(c, f->text + a, z - a, x0, y, &t, ink);
+    draw_run(c, f, a, z, x0, y, &t, ink);
     int s0 = RK_MAX(lo, a), s1 = RK_MIN(hi, z);
     bool through = hi > z && z < f->len && f->text[z] == '\n';   /* the selection takes the break: a space's width shows it */
     if (focused && !composing && lo != hi && lo <= z && hi >= a && (s0 < s1 || through)) {
@@ -477,7 +494,7 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
       rk_rect band = multi(f) ? (rk_rect){ xa, y, xb - xa, lh } : (rk_rect){ xa, box.y + 4, xb - xa, box.h - 8 };
       rk_canvas_push_clip(c, band);
       rk_canvas_fill_rect(c, band, rk_color_of(RK_ROLE_ACCENT));
-      rk__text_draw(c, f->text + a, z - a, x0, y, &t, rk_color_of(RK_ROLE_ON_ACCENT));
+      draw_run(c, f, a, z, x0, y, &t, rk_color_of(RK_ROLE_ON_ACCENT));
       rk_canvas_pop_clip(c);
     }
   }
@@ -548,6 +565,15 @@ void rk_field_set_hint(rk_view *v, const char *hint, bool error) {
 
 void rk_field_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->change = fn; f->change_user = user; } }
 void rk_field_on_submit(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->submit = fn; f->submit_user = user; } }
+
+void rk_field_set_secret(rk_view *v, bool secret) {
+  field *f = field_of(v);
+  if (!f) return;
+  f->secret = secret;
+  if (secret) rk_field_set_lines(v, 1);                    /* a password is one line */
+  tell_access(v, f);
+  rk__view_relayout_up(v);
+}
 
 void rk_field_set_lines(rk_view *v, int lines) {
   field *f = field_of(v);
