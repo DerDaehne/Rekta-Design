@@ -104,6 +104,7 @@ static void *ui_node_user(ui_node *n) { return ui_root_user(n, &n->last); }
 #define F(field) offsetof(rk_ui, field)
 static const size_t ui_strings[] = { F(key), F(text), F(label), F(meta), F(message), F(hint), F(error), F(placeholder), F(icon),
                                   F(shortcut), F(tooltip), F(accept), F(ok), F(cancel), F(input) };
+#undef F
 #define STR(u, off) (*(const char **)((char *)(u) + (off)))
 
 static bool ui_same(const char *a, const char *b) { return a == b || (a && b && !strcmp(a, b)); }

@@ -2687,6 +2687,71 @@ static void test_declared_skip(void) {
   done(w);
 }
 
+typedef struct dmore { bool detail; int order[3], moves, tab, closes; } dmore;
+static void dmore_moved(rk_view *v, int from, int to, void *u) {
+  (void)v;
+  dmore *m = u;
+  int x = m->order[from];
+  if (from < to) memmove(m->order + from, m->order + from + 1, (size_t)(to - from) * sizeof *m->order);
+  else memmove(m->order + to + 1, m->order + to, (size_t)(from - to) * sizeof *m->order);
+  m->order[to] = x; m->moves++;
+}
+static void dmore_closed(rk_view *v, void *u) { (void)v; ((dmore *)u)->closes++; }
+static void dmore_build(void *user) {
+  dmore *m = user;
+  static const char *const names[] = { "one", "two", "three" };
+  RK_SPLIT("list", .key = "split", .open = &m->detail, .on_close = dmore_closed) {
+    RK_SCROLL(.key = "scroll") for (int i = 0; i < 40; i++) RK_LABEL("a line among many", .id = (uint64_t)i + 1);
+    RK_ROWS(.key = "rows", .on_move = dmore_moved) for (int i = 0; i < 3; i++) RK_ROW(names[m->order[i]], .id = (uint64_t)m->order[i] + 1);
+  }
+}
+static void dtop_build(void *user) {
+  RK_PIVOT(.key = "pivot", .chosen = &((dmore *)user)->tab) {
+    RK_PAGE("one") RK_LABEL("first");
+    RK_PAGE("two") RK_LABEL("second");
+  }
+}
+static void dview_build(void *user) { (void)user; RK_PIVOT() RK_PAGE("nowhere") RK_LABEL("no"); }
+
+static void test_declared_more(void) {
+  dmore m = { .order = { 0, 1, 2 } };
+  rk_window_desc d = { .size = sizeof d, .title = "more", .width = 500, .height = 400, .build = dmore_build, .user = &m };   /* compact */
+  rk_window *w = rk_window_create(&d);
+  rk_app_run_for(400);
+  rk_view *split = in_window(w, "split"), *rows = in_window(w, "rows"), *scroll = in_window(w, "scroll");
+  CHECK(split && rows && scroll && !rk_split_is_sideways(split) && !rk_split_is_detail_shown(split), "a declared split, compact: its list first");
+  m.detail = true;
+  rk_ui_update(NULL);
+  rk_app_run_for(1500);
+  CHECK(rk_split_is_detail_shown(split), "a bound detail turns in");
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_app_run_for(1500);
+  CHECK(!m.detail && m.closes == 1 && !rk_split_is_detail_shown(split), "Escape back to the list writes the binding and tells on_close");
+  m.detail = true;
+  rk_ui_update(NULL);
+  rk_app_run_for(1500);
+  rk_view *first = rk_view_child(rows, 0);
+  rk_window_focus(w, ((rk__row *)first->state)->grip);
+  key(w, RK_KEY_DOWN, RK_MOD_ALT);
+  rk_app_run_for(800);
+  CHECK(m.moves == 1 && m.order[1] == 0 && rk_view_child(rows, 1) == first && rk_view_count(rows) == 3, "a row the user moves: the app's order follows, the same views (%d: %d %d %d, grip %p)", m.moves, m.order[0], m.order[1], m.order[2], (void *)((rk__row *)first->state)->grip);
+  done(w);
+  rk_app_run_for(50);
+
+  dmore t = { 0 };
+  rk_window_desc d2 = { .size = sizeof d2, .title = "top", .width = 900, .height = 600, .build = dtop_build, .user = &t };
+  w = rk_window_create(&d2);
+  rk_app_run_for(400);
+  rk_view *pv = in_window(w, "pivot");
+  CHECK(pv && ((strip *)((pivot *)pv->controller->impl)->strip->state)->nav && rk_window_root(w)->transparent, "a pivot alone at a window's top is the place");
+  done(w);
+  rk_app_run_for(50);
+  int was = logged;
+  rk_view *v = rk_ui_view(dview_build, NULL);
+  CHECK(logged > was && rk_view_count(v) == 0, "navigation in rk_ui_view is said, not built (%s)", logged_last);
+  rk_release(v);
+}
+
 /* Main ------------------------------------------------------------------------------------------------------------ */
 
 static void launch(void *user) {
@@ -2735,6 +2800,7 @@ static void launch(void *user) {
   { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_navigation(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_navigation: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_collections(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_collections: %d views more\n", rk__live_views - lv); }
+  { int lv = rk__live_views; test_declared_more(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "more: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_skip(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_skip: %d views more\n", rk__live_views - lv); }
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

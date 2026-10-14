@@ -14,11 +14,14 @@
 #include <string.h>
 
 static const char *const PLACES[] = { "home", "builds", "people", "settings" };
-#define NPLACES 4
 static const char *style = "top", *shot_path, *film_dir;
 static float width = 1100, height = 680;
 
 /* The places ------------------------------------------------------------------------------------------------------ */
+
+static int place = 1;                                      /* the place in sight: the pivot shows it, picking writes it */
+static bool sounds;
+static int theme;
 
 static const char *build_cell(int row, int column, void *user) {
   static char text[32];
@@ -30,53 +33,53 @@ static const char *build_cell(int row, int column, void *user) {
   return text;
 }
 
-static rk_view *place_view(int i) {
-  rk_view *page = rk_vstack();
-  if (i == 0) {
-    rk_add(page, rk_label("Good morning.", RK_TEXT_GROUP));
-    rk_view *grid = rk_add(page, rk_tile_grid());
-    rk_view *t = rk_add(grid, rk_tile("312", "finished today"));
-    rk_tile_set_status(t, RK_STATUS_SUCCESS, NULL);
-    rk_view_set_span(t, 2, 1);
-    rk_tile_set_status(rk_add(grid, rk_tile("2", "failed")), RK_STATUS_ERROR, NULL);
-    rk_add(grid, rk_tile("0.3", "release notes"));
-  } else if (i == 1) {
-    rk_add(page, rk_label("The last builds.", RK_TEXT_GROUP));
-    rk_view *table = rk_add(page, rk_table(40, build_cell, NULL));
-    rk_table_add_column(table, "build", 0, RK_COLUMN_SORTABLE);
-    rk_table_add_column(table, "status", 120, 0);
-    rk_table_add_column(table, "time", 90, RK_COLUMN_NUMERIC);
-    rk_view_set_size(table, 0, 360);
-  } else if (i == 2) {
-    rk_add(page, rk_label("Who works on it.", RK_TEXT_GROUP));
-    rk_view *rows = rk_add(page, rk_rows());
-    rk_rows_add(rows, "Ada Lovelace", "owner", RK_STATUS_NONE);
-    rk_rows_add(rows, "Grace Hopper", "reviewer", RK_STATUS_NONE);
-    rk_rows_add(rows, "Alan Kay", "away until Monday", RK_STATUS_WARNING);
-  } else {
-    static const char *const theme[] = { "system", "light", "dark" };
-    rk_add(page, rk_label("Yours to choose.", RK_TEXT_GROUP));
-    rk_add(page, rk_label("theme", RK_TEXT_KICKER));
-    rk_add(rk_add(page, rk_hstack()), rk_segments(theme, 3, 0));
-    rk_add(page, rk_toggle("Sounds", false));
+static void home(void) {
+  RK_LABEL("Good morning.", .style = RK_TEXT_GROUP);
+  RK_TILES() {
+    RK_TILE("312", .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
+    RK_TILE("2", .label = "failed", .status = RK_STATUS_ERROR);
+    RK_TILE("0.3", .label = "release notes");
   }
-  return page;
+}
+
+static void builds(void) {
+  RK_LABEL("The last builds.", .style = RK_TEXT_GROUP);
+  RK_TABLE(.count = 40, .cell = build_cell, .height = 360) {
+    RK_COLUMN("build", .flags = RK_COLUMN_SORTABLE);
+    RK_COLUMN("status", .width = 120);
+    RK_COLUMN("time", .width = 90, .flags = RK_COLUMN_NUMERIC);
+  }
+}
+
+static void people(void) {
+  RK_LABEL("Who works on it.", .style = RK_TEXT_GROUP);
+  RK_ROWS() {
+    RK_ROW("Ada Lovelace", .meta = "owner");
+    RK_ROW("Grace Hopper", .meta = "reviewer");
+    RK_ROW("Alan Kay", .meta = "away until Monday", .status = RK_STATUS_WARNING);
+  }
+}
+
+static void settings(void) {
+  static const char *const themes[] = { "system", "light", "dark" };
+  RK_LABEL("Yours to choose.", .style = RK_TEXT_GROUP);
+  RK_LABEL("theme", .style = RK_TEXT_KICKER);
+  RK_HSTACK() RK_SEGMENTS(.options = themes, .count = 3, .chosen = &theme);
+  RK_TOGGLE("Sounds", .on = &sounds);
 }
 
 /* The pivot, along the top or down the side ----------------------------------------------------------------------- */
 
-static rk_controller *nav;
-
-static rk_controller *places(bool side) {
-  nav = rk_pivot();
-  for (int i = 0; i < NPLACES; i++) {
-    rk_view *page = place_view(i);
-    rk_view_set_padding(page, (rk_insets){ side ? 0 : rk_metric_of(RK_SPACE_L), 0, 0, 0 });
-    rk_pivot_add(nav, PLACES[i], page);
+static void app(void *user) {
+  bool side = !strcmp(style, "side");
+  rk_insets pad = { side ? 0 : rk_metric_of(RK_SPACE_L), 0, 0, 0 };
+  (void)user;
+  RK_PIVOT(.chosen = &place, .side = side) {
+    RK_PAGE(PLACES[0], .padding = pad) home();
+    RK_PAGE(PLACES[1], .padding = pad) builds();
+    RK_PAGE(PLACES[2], .padding = pad) people();
+    RK_PAGE(PLACES[3], .padding = pad) settings();
   }
-  if (side) rk_pivot_set_layout(nav, RK_PIVOT_SIDE);
-  rk_pivot_select(nav, 1);
-  return nav;
 }
 
 /* The app ---------------------------------------------------------------------------------------------------------- */
@@ -97,13 +100,12 @@ static void take_frame(void *user) {
   if (!rk_window_snapshot(window, path)) { fprintf(stderr, "could not write %s\n", path); rk_app_quit(1); }
   if (frame == 250) rk_app_quit(0);
 }
-static void go(void *user) { rk_pivot_select(nav, (int)(intptr_t)user); }
+static void go(void *user) { place = (int)(intptr_t)user; }   /* the state changes; the pivot follows */
 
 static void launch(void *user) {
   (void)user;
-  rk_window_desc d = { .size = sizeof d, .title = "Navigation", .width = width, .height = height };
+  rk_window_desc d = { .size = sizeof d, .title = "Navigation", .width = width, .height = height, .build = app };
   window = rk_window_create(&d);
-  rk_window_show(window, places(!strcmp(style, "side")));
   if (shot_path) rk_app_after(1500, take_shot, NULL);
   if (film_dir) {
     rk_app_after(400, go, (void *)(intptr_t)2);
