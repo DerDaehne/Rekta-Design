@@ -526,7 +526,8 @@ static uint32_t wkey_of(xkb_keysym_t s) {
     case XKB_KEY_XF86Back: return RK_KEY_BACK;
     default: break;
   }
-  if (s >= XKB_KEY_F1 && s <= XKB_KEY_F10) return RK_KEY_F1 + (s - XKB_KEY_F1);
+  if (s >= XKB_KEY_F1 && s <= XKB_KEY_F24) return (rk_key)(RK_KEY_F1 + (s - XKB_KEY_F1));
+  if (s == XKB_KEY_Insert) return RK_KEY_INSERT;
   if (s >= XKB_KEY_a && s <= XKB_KEY_z) return 'A' + (s - XKB_KEY_a);
   if ((s >= XKB_KEY_A && s <= XKB_KEY_Z) || (s >= XKB_KEY_0 && s <= XKB_KEY_9)) return s;
   if (s > 0x20 && s < 0x7f) return s;

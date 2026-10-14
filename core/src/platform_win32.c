@@ -87,7 +87,8 @@ static uint32_t key_of(WPARAM vk) {
     case VK_BACK: return RK_KEY_BACKSPACE; case VK_DELETE: return RK_KEY_DELETE; case VK_BROWSER_BACK: return RK_KEY_BACK;
     default: break;
   }
-  if (vk >= VK_F1 && vk <= VK_F10) return RK_KEY_F1 + (uint32_t)(vk - VK_F1);
+  if (vk >= VK_F1 && vk <= VK_F24) return (rk_key)(RK_KEY_F1 + (vk - VK_F1));
+  if (vk == VK_INSERT) return RK_KEY_INSERT;
   if ((vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9')) return (uint32_t)vk;
   return RK_KEY_NONE;
 }
@@ -594,7 +595,7 @@ static bool w_choose(void *n, const char *accept, bool multiple, void (*done)(vo
     }
   }
   free(filter); free(buf);
-  rk_app_after(0, false, chooser_answer, c);
+  rk_app_after(0, chooser_answer, c);
   return true;
 }
 

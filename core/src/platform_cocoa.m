@@ -30,7 +30,8 @@ static uint32_t key_of(NSEvent *e) {
     case 0x33: return RK_KEY_BACKSPACE; case 0x75: return RK_KEY_DELETE;
     case 0x7A: return RK_KEY_F1; case 0x78: return RK_KEY_F1 + 1; case 0x63: return RK_KEY_F1 + 2; case 0x76: return RK_KEY_F1 + 3;
     case 0x60: return RK_KEY_F1 + 4; case 0x61: return RK_KEY_F1 + 5; case 0x62: return RK_KEY_F1 + 6; case 0x64: return RK_KEY_F1 + 7;
-    case 0x65: return RK_KEY_F1 + 8; case 0x6D: return RK_KEY_F1 + 9;
+    case 0x65: return RK_KEY_F1 + 8; case 0x6D: return RK_KEY_F1 + 9; case 0x67: return RK_KEY_F11; case 0x6F: return RK_KEY_F12;
+    case 0x72: return RK_KEY_INSERT;                          /* Help, where Insert is on a PC keyboard */
     default: break;
   }
   NSString *s = e.charactersIgnoringModifiers.uppercaseString;

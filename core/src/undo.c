@@ -1,20 +1,14 @@
-/* undo.c: the app's history, as the web's undoStack(). An action runs and is remembered (up to 50); its toast offers
+/* undo.c: a window's history, as the web's undoStack(). An action runs and is remembered (up to 50); its toast offers
    undo, an undo's toast offers redo. Ctrl (Cmd) and Z undoes, with Shift (or Ctrl+Y) redoes - outside text fields,
-   which keep a history of their own. */
+   which keep a history of their own. Each window has its own: undo in one never takes back what another did. */
 #include "rk_internal.h"
 
 #define HISTORY 50
 
-typedef struct entry {
-  char *label;
-  void (*run)(void *user); void (*undo)(void *user); void *user; void (*free_user)(void *user);
-} entry;
+struct rk_history_entry { rk_action a; char *label; };
 
-static entry history[HISTORY];
-static int nhistory, ndone;                                /* [0, ndone) are done; [ndone, nhistory) can be redone */
-
-static void drop(entry *e) {
-  if (e->free_user) e->free_user(e->user);
+static void drop(rk_history_entry *e) {
+  if (e->a.free_user) e->a.free_user(e->a.user);
   free(e->label);
   memset(e, 0, sizeof *e);
 }
@@ -22,38 +16,44 @@ static void drop(entry *e) {
 static void undo_toast(void *user) { rk_window_undo(user); }
 static void redo_toast(void *user) { rk_window_redo(user); }
 
-void rk_window_do(rk_window *w, const char *label, void (*run)(void *), void (*undo)(void *), void *user, void (*free_user)(void *)) {
-  while (nhistory > ndone) drop(&history[--nhistory]);     /* a new action: what was undone cannot come back */
-  if (nhistory == HISTORY) {                               /* full: the oldest goes */
-    drop(&history[0]);
-    memmove(history, history + 1, (HISTORY - 1) * sizeof *history);
-    nhistory--; ndone--;
+void rk_window_do(rk_window *w, const rk_action *action) {
+  if (!w || !action) return;
+  rk_action a = { sizeof a, NULL, NULL, NULL, NULL, NULL };
+  memcpy(&a, action, RK_MIN((size_t)action->size, sizeof a));
+  if (!action->size) rk__error("rk_window_do: the action needs its size (sizeof(rk_action))");
+  while (w->nhistory > w->ndone) drop(&w->history[--w->nhistory]);   /* a new action: what was undone cannot come back */
+  if (w->nhistory == HISTORY) {                            /* full: the oldest goes */
+    drop(&w->history[0]);
+    memmove(w->history, w->history + 1, (HISTORY - 1) * sizeof *w->history);
+    w->nhistory--; w->ndone--;
   }
-  entry *e = &history[nhistory++];
-  e->label = rk__strdup(label ? label : ""); e->run = run; e->undo = undo; e->user = user; e->free_user = free_user;
-  ndone = nhistory;
-  if (run) run(user);
-  if (w) rk_window_toast(w, e->label, "undo", undo_toast, w);
+  w->history = rk__grow(w->history, &w->hcap, w->nhistory + 1, sizeof *w->history);
+  rk_history_entry *e = &w->history[w->nhistory++];
+  e->a = a; e->label = rk__strdup(a.label ? a.label : "");
+  w->ndone = w->nhistory;
+  if (a.run) a.run(a.user);
+  rk_window_toast(w, e->label, "undo", undo_toast, w);
 }
 
 bool rk_window_undo(rk_window *w) {
-  if (!ndone) return false;
-  entry *e = &history[--ndone];
-  if (e->undo) e->undo(e->user);
-  if (w) {
-    char text[256];
-    snprintf(text, sizeof text, "Undone: %s", e->label);
-    rk_window_toast(w, text, "redo", redo_toast, w);
-  }
+  if (!w || !w->ndone) return false;
+  rk_history_entry *e = &w->history[--w->ndone];
+  if (e->a.undo) e->a.undo(e->a.user);
+  char text[256];
+  snprintf(text, sizeof text, "Undone: %s", e->label);
+  rk_window_toast(w, text, "redo", redo_toast, w);
   return true;
 }
 
 bool rk_window_redo(rk_window *w) {
-  if (ndone == nhistory) return false;
-  entry *e = &history[ndone++];
-  if (e->run) e->run(e->user);
-  if (w) rk_window_toast(w, e->label, "undo", undo_toast, w);
+  if (!w || w->ndone == w->nhistory) return false;
+  rk_history_entry *e = &w->history[w->ndone++];
+  if (e->a.run) e->a.run(e->a.user);
+  rk_window_toast(w, e->label, "undo", undo_toast, w);
   return true;
 }
 
-void rk__undo_clear(void) { while (nhistory) drop(&history[--nhistory]); ndone = 0; }
+void rk__history_free(rk_window *w) {
+  while (w->nhistory) drop(&w->history[--w->nhistory]);
+  free(w->history); w->history = NULL; w->ndone = w->hcap = 0;
+}

@@ -177,7 +177,7 @@ static bool split_event(rk_view *v, const rk_event *e, void *st) {
   (void)v;
   split *s = st;
   if (e->type == RK_EVENT_KEY_DOWN && e->key == RK_KEY_ESCAPE && !e->mods && !s->sideways && s->going) {
-    rk_split_show(s->self, false);                          /* compact, in the detail: back to the list */
+    rk_split_set_detail_shown(s->self, false);                          /* compact, in the detail: back to the list */
     return true;
   }
   return false;
@@ -194,7 +194,7 @@ static const rk_class split_class = { { sizeof(rk_view_class), "rk_split", NULL,
 
 static split *split_of(rk_view *v) { return v && v->cls == &split_class ? v->state : NULL; }
 
-static void crumb_back(rk_view *crumb, void *user) { (void)crumb; rk_split_show(user, false); }
+static void crumb_back(rk_view *crumb, void *user) { (void)crumb; rk_split_set_detail_shown(user, false); }
 
 rk_view *rk_split(rk_view *list, rk_view *detail, const char *title) {
   split *s = rk__alloc(sizeof *s);
@@ -221,7 +221,7 @@ rk_view *rk_split(rk_view *list, rk_view *detail, const char *title) {
 
 /* Sideways a new item's detail slides in from the trailing side, slide-distance, with a fade, over 0.75 x
    duration-moderate; compact the panes turn. */
-void rk_split_show(rk_view *v, bool detail) {
+void rk_split_set_detail_shown(rk_view *v, bool detail) {
   split *s = split_of(v);
   if (!s) return;
   if (!s->laid || s->sideways) {
@@ -240,11 +240,11 @@ void rk_split_show(rk_view *v, bool detail) {
   if (detail == s->detail_shown) return;
   s->going = detail;
   double wait = rk__turn_away(s->turn, v, !detail);
-  if (wait > 0) s->timer = rk_app_after(wait, false, split_arrive, s); else split_arrive(s);
+  if (wait > 0) s->timer = rk_app_after(wait, split_arrive, s); else split_arrive(s);
 }
 
-bool rk_split_sideways(rk_view *v) { split *s = split_of(v); return s && s->sideways; }
-bool rk_split_detail_shown(rk_view *v) { split *s = split_of(v); return s && s->detail_shown; }
+bool rk_split_is_sideways(rk_view *v) { split *s = split_of(v); return s && s->sideways; }
+bool rk_split_is_detail_shown(rk_view *v) { split *s = split_of(v); return s && s->detail_shown; }
 void rk_split_set_width(rk_view *v, float width) { split *s = split_of(v); if (s) split_set(s, width, false); }
 float rk_split_width(rk_view *v) { split *s = split_of(v); return s ? split_list_w(s) : 0; }
 void rk_split_on_resize(rk_view *v, void (*fn)(rk_view *, float, void *), void *user) { split *s = split_of(v); if (s) { s->resize = fn; s->resize_user = user; } }

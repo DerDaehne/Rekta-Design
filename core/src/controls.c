@@ -544,7 +544,7 @@ static void stepper_repeat(void *user) {
 }
 static void stepper_hold(void *user) {                     /* held: from now on it repeats */
   stepper *s = user;
-  s->repeat = s->down >= 0 ? rk_app_after(80, true, stepper_repeat, s) : 0;
+  s->repeat = s->down >= 0 ? rk_app_every(80, stepper_repeat, s) : 0;
 }
 
 static void stepper_take_typed(stepper *s) {
@@ -567,7 +567,7 @@ static bool stepper_event(rk_view *v, const rk_event *e, void *st) {
       if (e->button) return false;
       stepper_take_typed(s);
       s->down = e->position.x < bw ? 0 : e->position.x >= bw + fw ? 1 : -1;
-      if (s->down >= 0) { stepper_step(s, s->down ? 1 : -1); s->repeat = rk_app_after(400, false, stepper_hold, s); }
+      if (s->down >= 0) { stepper_step(s, s->down ? 1 : -1); s->repeat = rk_app_after(400, stepper_hold, s); }
       rk__view_dirty(v);
       return true;
     }
@@ -864,7 +864,7 @@ static bool date_event(rk_view *v, const rk_event *e, void *st) {
         if (e->key == RK_KEY_ESCAPE) { b->ntyped = 0; b->typed[0] = 0; rk__view_dirty(v); return true; }
         date_take_typed(b);
       }
-      if ((e->key == RK_KEY_DOWN && (e->mods & RK_MOD_ALT)) || e->key == RK_KEY_ENTER || e->key == RK_KEY_F1 + 3) { date_open(b); return true; }
+      if ((e->key == RK_KEY_DOWN && (e->mods & RK_MOD_ALT)) || e->key == RK_KEY_ENTER || e->key == RK_KEY_F4) { date_open(b); return true; }
       if (e->key == RK_KEY_LEFT && b->seg > 0) { b->seg--; rk__view_dirty(v); return true; }
       if (e->key == RK_KEY_RIGHT && b->seg < 2) { b->seg++; rk__view_dirty(v); return true; }
       if (e->key == RK_KEY_UP || e->key == RK_KEY_DOWN) {

@@ -61,10 +61,10 @@ export function coreTokens(json) {
   defs.push(`#define RK_TOK_TILE_UNIT_ULTRAWIDE ${f(json.size['tile-unit-ultrawide'])}`);
   const out = HEAD(`Rekta Design ${json.version} tokens for rekta-core`)
     + `#ifndef RK_TOKENS_H\n#define RK_TOKENS_H\n\n#define RK_TOKENS_VERSION "${json.version}"\n\n`
-    + `/* [theme: light, dark][rk_role], 0xRRGGBBAA */\nstatic const rk_color rk_tok_colors[2][RK_ROLE_COUNT] = {\n${themes.join(',\n')}\n};\n\n`
-    + `/* [density: comfortable, compact][rk_metric], logical px */\nstatic const float rk_tok_metrics[2][RK_METRIC_COUNT] = {\n${densities.join(',\n')}\n};\n\n`
+    + `/* [theme: light, dark][rk_role], 0xRRGGBBAA */\nstatic const rk_color rk_tok_colors[2][RK__ROLE_COUNT] = {\n${themes.join(',\n')}\n};\n\n`
+    + `/* [density: comfortable, compact][rk_metric], logical px */\nstatic const float rk_tok_metrics[2][RK__METRIC_COUNT] = {\n${densities.join(',\n')}\n};\n\n`
     + `/* [rk_duration], ms; the first RK_TOK_MOTION_COUNT are motion (0 under reduced motion), the rest wall-clock timings */\n`
-    + `#define RK_TOK_MOTION_COUNT ${MOTION_COUNT}\nstatic const float rk_tok_durations[RK_DURATION_COUNT] = { ${durations} };\n\n`
+    + `#define RK_TOK_MOTION_COUNT ${MOTION_COUNT}\nstatic const float rk_tok_durations[RK__DURATION_COUNT] = { ${durations} };\n\n`
     + `/* Type sizes as min, max and the share of the hosting width that moves between them (_VW); fixed sizes have _VW 0. */\n`
     + `${defs.join('\n')}\n\n#endif\n`;
   return { out, problems };

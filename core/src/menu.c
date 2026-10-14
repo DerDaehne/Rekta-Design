@@ -206,13 +206,13 @@ int rk_menu_add(rk_view *v, const char *label, const char *key, void (*fn)(rk_vi
 void rk_menu_add_separator(rk_view *v) { menu *m = menu_of(v); if (m) { add_item(m, SEPARATOR, NULL); rk__view_relayout_up(v); } }
 void rk_menu_add_label(rk_view *v, const char *label) { menu *m = menu_of(v); if (m) { add_item(m, LABEL, label); rk__view_relayout_up(v); } }
 
-void rk_menu_set_check(rk_view *v, int i, int check) {
+void rk_menu_set_check(rk_view *v, int i, rk_checkmark check) {
   menu *m = menu_of(v);
   if (!m || i < 0 || i >= m->n) return;
-  m->items[i].check = check < 0 ? -1 : check ? 1 : 0;
+  m->items[i].check = check == RK_CHECKMARK_ON ? 1 : check == RK_CHECKMARK_OFF ? 0 : -1;
   rk__view_relayout_up(v); rk__view_dirty(v);
 }
-int rk_menu_check(rk_view *v, int i) { menu *m = menu_of(v); return m && i >= 0 && i < m->n ? m->items[i].check : -1; }
+rk_checkmark rk_menu_check(rk_view *v, int i) { menu *m = menu_of(v); int c = m && i >= 0 && i < m->n ? m->items[i].check : -1; return c < 0 ? RK_CHECKMARK_NONE : c ? RK_CHECKMARK_ON : RK_CHECKMARK_OFF; }
 void rk_menu_set_enabled(rk_view *v, int i, bool enabled) { menu *m = menu_of(v); if (m && i >= 0 && i < m->n) { m->items[i].disabled = !enabled; rk__view_dirty(v); } }
 rk_view *rk_menu_opener(rk_view *v) { menu *m = menu_of(v); return m ? m->from : NULL; }
 

@@ -18,6 +18,11 @@
 #define RK_MAX(a, b) ((a) > (b) ? (a) : (b))
 #define RK_CLAMP(v, lo, hi) ((v) < (lo) ? (lo) : (v) > (hi) ? (hi) : (v))
 #define RK_COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
+/* how many there are of each token kind: ours, not the ABI's, so a new one breaks no app */
+#define RK__ROLE_COUNT (RK_ROLE_GLASS + 1)
+#define RK__METRIC_COUNT (RK_CONTROL_PADDING + 1)
+#define RK__DURATION_COUNT (RK_TIMING_TIP_DELAY + 1)
+#define RK__TEXT_STYLE_COUNT (RK_TEXT_NAV + 1)
 
 /* Objects --------------------------------------------------------------------------------------------------------- */
 
@@ -271,6 +276,7 @@ struct rk_window {
   bool focus_visible;                                      /* focus came from the keyboard */
   rk_point pointer;
   rk_view *tip, *tip_for; uint32_t tip_timer; double tip_hid;   /* the tooltip shown, whose, its wait, when one went */
+  struct rk_history_entry *history; int nhistory, ndone, hcap;   /* its undo history: [0, ndone) done, the rest redoable */
   bool (*should_close)(rk_window *w, void *user); void *close_user;
   rk_window *next;                                         /* the app's list of open windows */
 };
@@ -286,7 +292,10 @@ void rk__window_close_request(rk_window *w);
 void rk__window_pointer_cancel(rk_window *w);
 void rk__menus_close(rk_window *w);
 void rk__background(void (*fn)(void *user), void *user);   /* pool.c: a slow job away from the UI thread */
-void rk__undo_clear(void);
+typedef struct rk_history_entry rk_history_entry;
+void rk__history_free(rk_window *w);
+const char *rk__controller_shown_title(rk_controller *c);
+void rk__stats(rk_stats *s, bool reset);                       /* undo.c */
 void rk__window_frame(rk_window *w, double now);           /* layout, draw and present if needed */
 void rk__window_invalidate(rk_window *w);                 /* everything */
 void rk__window_damage(rk_window *w, rk_rect r);          /* a part, in logical window coordinates */

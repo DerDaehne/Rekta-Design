@@ -190,7 +190,7 @@ static void touched(rk_view *v, field *f) {
   f->lit = true;
   f->edited = rk_app_now();
   rk_window *w = rk__view_window(v);
-  if (!f->blink && w && w->focus == v && !rk__reduced()) f->blink = rk_app_after(BLINK_MS, true, blink, f);
+  if (!f->blink && w && w->focus == v && !rk__reduced()) f->blink = rk_app_every(BLINK_MS, blink, f);
   keep_caret_in_sight(v, f);
   if (w && w->focus == v) tell_input_method(v, f, true);
   rk__view_dirty(v);
@@ -554,7 +554,7 @@ void rk_field_set_text(rk_view *v, const char *text) {
   snaps_drop(f->undo, &f->nundo); snaps_drop(f->redo, &f->nredo);   /* text from the app starts a new history */
 }
 
-void rk_field_set_hint(rk_view *v, const char *hint, bool error) {
+static void set_hint(rk_view *v, const char *hint, bool error) {
   field *f = field_of(v);
   if (!f) return;
   rk__setstr(&f->hint, hint);
@@ -562,6 +562,9 @@ void rk_field_set_hint(rk_view *v, const char *hint, bool error) {
   rk__view_relayout_up(v);
   rk__view_dirty(v);
 }
+/* A hint, or an error - its cause and remedy, marked; NULL takes either away. */
+void rk_field_set_hint(rk_view *v, const char *hint) { set_hint(v, hint, false); }
+void rk_field_set_error(rk_view *v, const char *error) { set_hint(v, error, true); }
 
 void rk_field_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->change = fn; f->change_user = user; } }
 void rk_field_on_submit(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->submit = fn; f->submit_user = user; } }

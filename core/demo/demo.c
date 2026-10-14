@@ -299,7 +299,7 @@ static void unarchive_one(void *u) { (void)u; D.inbox++; show_inbox(); }
 static void toast_undo(rk_view *v, void *u) {
   (void)v; (void)u;
   if (!D.inbox) { rk_window_toast(D.window, "The inbox is empty.", NULL, NULL, NULL); return; }
-  rk_window_do(D.window, "One letter archived.", archive_one, unarchive_one, NULL, NULL);
+  rk_window_do(D.window, &(rk_action){ .size = sizeof(rk_action), .label = "One letter archived.", .run = archive_one, .undo = unarchive_one });
 }
 static void toast_plain(rk_view *v, void *u) { (void)v; (void)u; rk_window_toast(D.window, "Something happened. A toast says so, once.", NULL, NULL, NULL); }
 
@@ -370,7 +370,7 @@ static void new_figures(rk_view *v, void *u) {
   rk_view_redraw(D.chart);
 }
 
-static void slide_bar(rk_view *v, void *u) { (void)u; rk_progress_set(D.bar, (float)(rk_control_value(v) / 100)); }
+static void slide_bar(rk_view *v, void *u) { (void)u; rk_progress_set_value(D.bar, (float)(rk_control_value(v) / 100)); }
 static void count_copies(rk_view *v, void *u) {
   char text[48];
   int n = (int)rk_control_value(v);
@@ -383,7 +383,7 @@ static void advance(rk_view *v, void *u) {
   (void)v; (void)u;
   static float p = 0.25f;
   p = p >= 1 ? 0 : p + 0.25f;
-  rk_progress_set(D.bar, p);                                   /* the value glides */
+  rk_progress_set_value(D.bar, p);                             /* the value glides */
 }
 
 /* A menu: two options that sort (one is chosen), a command, and one that cannot run yet and says why. */
@@ -391,8 +391,8 @@ static int sort_by_name, sort_by_time;
 
 static void sort_by(rk_view *menu, int item, void *user) {
   (void)user;
-  rk_menu_set_check(menu, sort_by_name, item == sort_by_name);
-  rk_menu_set_check(menu, sort_by_time, item == sort_by_time);
+  rk_menu_set_check(menu, sort_by_name, item == sort_by_name ? RK_CHECKMARK_ON : RK_CHECKMARK_OFF);
+  rk_menu_set_check(menu, sort_by_time, item == sort_by_time ? RK_CHECKMARK_ON : RK_CHECKMARK_OFF);
   rk_window_toast(rk_view_window(rk_menu_opener(menu)), item == sort_by_name ? "Sorted by name." : "Sorted by time.", NULL, NULL, NULL);
 }
 
@@ -406,8 +406,8 @@ static rk_view *more_menu(void) {
   rk_menu_add_label(m, "sort by");
   sort_by_name = rk_menu_add(m, "name", NULL, sort_by, NULL);
   sort_by_time = rk_menu_add(m, "time", NULL, sort_by, NULL);
-  rk_menu_set_check(m, sort_by_name, 1);
-  rk_menu_set_check(m, sort_by_time, 0);
+  rk_menu_set_check(m, sort_by_name, RK_CHECKMARK_ON);
+  rk_menu_set_check(m, sort_by_time, RK_CHECKMARK_OFF);
   rk_menu_add_separator(m);
   rk_menu_add(m, "export", "Ctrl+E", export_all, NULL);
   rk_menu_set_enabled(m, rk_menu_add(m, "print (needs a printer)", "Ctrl+P", NULL, NULL), false);
@@ -423,12 +423,12 @@ static void save_notes(rk_view *notes, void *u) {
 static void check_mail(rk_view *field, void *user) {
   (void)user;
   const char *at = strchr(rk_field_text(field), '@');
-  if (!at || !strchr(at, '.')) { rk_field_set_hint(field, "Add the part after @, such as example.com.", true); return; }
-  rk_field_set_hint(field, "We write once a week.", false);
+  if (!at || !strchr(at, '.')) { rk_field_set_error(field, "Add the part after @, such as example.com."); return; }
+  rk_field_set_hint(field, "We write once a week.");
   rk_window_toast(rk_view_window(field), "Saved. The next letter goes out on Monday.", NULL, NULL, NULL);
 }
 
-static void mail_typed(rk_view *field, void *user) { (void)user; rk_field_set_hint(field, "Enter saves it.", false); }
+static void mail_typed(rk_view *field, void *user) { (void)user; rk_field_set_hint(field, "Enter saves it."); }
 
 static rk_view *controls_section(void) {
   rk_view *s = rk_vstack();
@@ -454,7 +454,7 @@ static rk_view *controls_section(void) {
 
   rk_add(s, rk_label("a field", RK_TEXT_KICKER));
   rk_view *mail = rk_add(s, rk_field("Mail", "name@example.com"));
-  rk_field_set_hint(mail, "Enter saves it.", false);
+  rk_field_set_hint(mail, "Enter saves it.");
   rk_field_on_submit(mail, check_mail, NULL);
   rk_field_on_change(mail, mail_typed, NULL);
   rk_view *notes = rk_add(s, rk_field("Notes", "Several lines: Enter breaks one, Ctrl+Enter saves them."));
@@ -558,7 +558,7 @@ static const char *note_commit(rk_view *table, int row, int column, const char *
   n->build = order[row];
   memcpy(n->before, notes[n->build], sizeof n->before);
   snprintf(n->after, sizeof n->after, "%s", value);
-  rk_window_do(rk_view_window(table), "Note saved.", note_run, note_undo, n, free);
+  rk_window_do(rk_view_window(table), &(rk_action){ .size = sizeof(rk_action), .label = "Note saved.", .run = note_run, .undo = note_undo, .user = n, .free_user = free });
   return NULL;
 }
 
@@ -577,9 +577,9 @@ static void table_show(rk_view *table, int row, void *user) {
   rk_window_toast(rk_view_window(table), text, NULL, NULL, NULL);
 }
 
-static void sort_builds(rk_view *table, int column, int dir, void *user) {
+static void sort_builds(rk_view *table, int column, rk_sort sort, void *user) {
   (void)user;
-  sort_column = column; sort_dir = dir;
+  sort_column = column; sort_dir = sort == RK_SORT_ASCENDING ? 1 : -1;
   qsort(order, NBUILDS, sizeof *order, by_column);
   rk_view_redraw(table);
 }
@@ -615,7 +615,7 @@ static rk_view *desk_split, *desk_title, *desk_steps;
 static void desk_show(rk_view *tree, int item, void *user) {
   (void)user;
   rk_label_set_text(desk_title, rk_tree_title(tree, item));
-  rk_split_show(desk_split, true);
+  rk_split_set_detail_shown(desk_split, true);
 }
 static void steps_moved(rk_view *rows, int from, int to, void *user) {
   (void)user;
@@ -642,7 +642,7 @@ static rk_view *desk_section(void) {
   int docs = rk_tree_add(tree, -1, "docs");
   rk_tree_add(tree, docs, "motion.md"); rk_tree_add(tree, docs, "navigation.md");
   rk_tree_set_meta(tree, rk_tree_add(tree, -1, "README.md"), "2 kB", RK_STATUS_NONE);
-  rk_tree_open(tree, src, true); rk_tree_open(tree, ui, true);
+  rk_tree_set_open(tree, src, true); rk_tree_set_open(tree, ui, true);
   rk_tree_select(tree, split_c);
   rk_tree_on_show(tree, desk_show, NULL);
   rk_view *detail = rk_vstack();
@@ -695,7 +695,7 @@ static void paint_now(void *u) {
   (void)u;
   char buf[160];
   snprintf(buf, sizeof buf, "Now: %s, %s density, motion %s.", rk_app_is_dark() ? "dark" : "light",
-           rk_metric_of(RK_CONTROL_HEIGHT) < 40 ? "compact" : "comfortable", rk_app_reduced_motion() ? "reduced" : "on");
+           rk_metric_of(RK_CONTROL_HEIGHT) < 40 ? "compact" : "comfortable", rk_app_is_reduced_motion() ? "reduced" : "on");
   rk_label_set_text(D.now, buf);
 }
 
@@ -831,7 +831,7 @@ static void tour(void) {
 
 static int perf_fails;
 
-static rk_stats stats(bool reset) { rk_stats s = { .size = sizeof s }; rk_app_stats(&s, reset); return s; }
+static rk_stats stats(bool reset) { rk_stats s = { .size = sizeof s }; rk_app_stats(&s); if (reset) rk_app_stats_reset(); return s; }
 
 static void phase(const char *name) {
   rk_stats s = stats(true);
@@ -939,7 +939,7 @@ static void launch(void *user) {
   D.feed = true;
   if (D.shots) { tour(); return; }
   if (D.perf) { perf(); return; }
-  rk_app_after(2000, true, live_tick, NULL);
+  rk_app_every(2000, live_tick, NULL);
 }
 
 int main(int argc, char **argv) {

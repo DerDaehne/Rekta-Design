@@ -368,12 +368,8 @@ void rk_tree_set_meta(rk_view *v, int item, const char *meta, rk_status status) 
   rk__view_dirty(v);
 }
 
-void rk_tree_open(rk_view *v, int item, bool open) {
-  tree *t = tree_of(v);
-  if (!t) return;
-  if (item < 0) { for (int i = 0; i < t->n; i++) tree_open(v, t, i, open); return; }   /* -1: every branch */
-  if (tree_has(t, item)) tree_open(v, t, item, open);
-}
+void rk_tree_set_open(rk_view *v, int item, bool open) { tree *t = tree_of(v); if (tree_has(t, item)) tree_open(v, t, item, open); }
+void rk_tree_set_all_open(rk_view *v, bool open) { tree *t = tree_of(v); if (t) for (int i = 0; i < t->n; i++) if (tree_has(t, i)) tree_open(v, t, i, open); }
 
 bool rk_tree_is_open(rk_view *v, int item) { tree *t = tree_of(v); return tree_has(t, item) && t->nodes[item].open; }
 void rk_tree_select(rk_view *v, int item) { tree *t = tree_of(v); if (t && (item < 0 || tree_has(t, item))) tree_select(v, t, item, false); }

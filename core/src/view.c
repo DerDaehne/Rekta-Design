@@ -191,11 +191,10 @@ rk_view *rk_view_child(rk_view *v, int i) { return i >= 0 && i < v->nkids ? v->k
 void rk_view_set_name(rk_view *v, const char *name) { rk__setstr(&v->name, name); }
 void rk_view_set_menu(rk_view *v, rk_view *menu) { rk_release(v->menu); v->menu = menu; }   /* takes menu */
 
-/* By name, or a button by what it says: tests and tours find "pin a tile" without naming it. */
+/* By name; a button is named by its label until it is given another. */
 rk_view *rk_view_find(rk_view *root, const char *name) {
   if (!root || !name) return NULL;
   if (root->name && !strcmp(root->name, name)) return root;
-  if (root->access == RK_ACCESS_BUTTON && root->access_label && !strcmp(root->access_label, name)) return root;
   for (int i = 0; i < root->nkids; i++) { rk_view *f = rk_view_find(root->kids[i], name); if (f) return f; }
   return NULL;
 }
@@ -250,11 +249,11 @@ static void set_fill_now(rk_view *v) {
 void rk_view_set_fill(rk_view *v, rk_role role) { v->fill_role = role; set_fill_now(v); }
 void rk_view_set_fill_color(rk_view *v, rk_color light, rk_color dark) { v->fill_role = RK_ROLE_NONE; v->fill[0] = light; v->fill[1] = dark ? dark : light; set_fill_now(v); }
 void rk_view_set_radius(rk_view *v, float r) { v->radius = r; rk__view_dirty(v); }
-void rk_view_set_rule(rk_view *v, bool top, bool bottom) { v->rule_top = top; v->rule_bottom = bottom; rk__view_dirty(v); }
+void rk_view_set_rules(rk_view *v, uint32_t rules) { v->rule_top = (rules & RK_RULE_TOP) != 0; v->rule_bottom = (rules & RK_RULE_BOTTOM) != 0; rk__view_dirty(v); }
 void rk_view_set_clip(rk_view *v, bool clip) { v->clip = clip; rk__view_dirty(v); }
 float rk_view_opacity(rk_view *v) { return v->opacity; }
 rk_transform rk_view_transform(rk_view *v) { return v->transform; }
-bool rk_view_hidden(rk_view *v) { return v->hidden; }
+bool rk_view_is_hidden(rk_view *v) { return v->hidden; }
 
 void rk_view_set_opacity(rk_view *v, float o) {
   o = RK_CLAMP(o, 0.0f, 1.0f);

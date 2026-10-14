@@ -472,10 +472,10 @@ static void test_damage(void) {
   CHECK(damage_lies(w) == 0, "at rest: nothing stale");
   rk_stats st;
   memset(&st, 0, sizeof st); st.size = sizeof st;
-  rk_app_stats(&st, true);
+  rk_app_stats_reset();
   rk_label_set_text(note, "a longer note now");
   rk_app_run_for(100);
-  rk_app_stats(&st, false);
+  rk_app_stats(&st);
   CHECK(st.pixels < 800.0 * 500 / 10, "a label's new text draws about the label (%.0f of %d pixels)", st.pixels, 800 * 500);
   CHECK(damage_lies(w) == 0, "a label's new text: nothing stale (%d)", damage_lies(w));
   rk_label_set_text(title, "Builds and releases");
@@ -669,7 +669,7 @@ static void test_field(void) {
   rk_field_set_text(name, "<badge tag");
   /* a field that wants something else says why, and how */
   rk_field_set_text(mail, "ada@");
-  rk_field_set_hint(mail, "Add the part after @, such as example.com.", true);
+  rk_field_set_error(mail, "Add the part after @, such as example.com.");
   key(w, RK_KEY_HOME, RK_MOD_SHIFT);
   rk_app_run_for(200);
   shot(w, "field");
@@ -696,8 +696,8 @@ static void test_menu(void) {
   int done_i = rk_menu_add(m, "done", NULL, on_menu, NULL);
   int failed_i = rk_menu_add(m, "failed", NULL, on_menu, NULL);
   int delete_i = rk_menu_add(m, "delete (needs rights)", "Del", on_menu, NULL);
-  rk_menu_set_check(m, done_i, 1);
-  rk_menu_set_check(m, failed_i, 0);
+  rk_menu_set_check(m, done_i, RK_CHECKMARK_ON);
+  rk_menu_set_check(m, failed_i, RK_CHECKMARK_OFF);
   rk_menu_set_enabled(m, delete_i, false);
   rk_view_set_menu(more, m);
   rk_view *tile = rk_add(rk_add(page, rk_tile_grid()), rk_tile("12", "builds"));
@@ -725,7 +725,7 @@ static void test_menu(void) {
   key(w, RK_KEY_ENTER, 0);
   CHECK(menu_calls == 0 && w->floats->nkids == 1, "a disabled item does nothing");
   key(w, RK_KEY_UP, 0); key(w, RK_KEY_SPACE, 0);
-  CHECK(rk_menu_check(m, failed_i) == 1 && w->floats->nkids == 1 && menu_chosen == failed_i, "a check toggles and the menu stays");
+  CHECK(rk_menu_check(m, failed_i) == RK_CHECKMARK_ON && w->floats->nkids == 1 && menu_chosen == failed_i, "a check toggles and the menu stays");
   rk_app_run_for(100);
   shot(w, "menu");
   key(w, RK_KEY_ESCAPE, 0);
@@ -763,7 +763,7 @@ static const char *table_cell(int row, int col, void *u) {
   snprintf(buf, sizeof buf, "%d min", 3 + (row * 7) % 40);
   return buf;
 }
-static void table_sort(rk_view *t, int col, int dir, void *u) { (void)t; (void)u; sorted_col = col; sorted_dir = dir; }
+static void table_sort(rk_view *t, int col, rk_sort sort, void *u) { (void)t; (void)u; sorted_col = col; sorted_dir = sort == RK_SORT_ASCENDING ? 1 : -1; }
 
 /* The selection follows the items, not the rows they stand on: with keys a sort or new items above keep the same
    builds selected and the keyboard on the same one; without keys a sort lets the selection go rather than mark the
@@ -771,7 +771,8 @@ static void table_sort(rk_view *t, int col, int dir, void *u) { (void)t; (void)u
 static int order[8], norder;                                   /* the app's rows: build ids in the order shown */
 static uint64_t build_key(int index, void *u) { (void)u; return (uint64_t)order[index]; }
 static const char *build_cell(int row, int col, void *u) { static char buf[16]; (void)u; (void)col; snprintf(buf, sizeof buf, "#%d", order[row]); return buf; }
-static void build_sort(rk_view *t, int col, int dir, void *u) {
+static void build_sort(rk_view *t, int col, rk_sort sort, void *u) {
+  int dir = sort == RK_SORT_ASCENDING ? 1 : -1;
   (void)t; (void)col; (void)u;
   for (int i = 0; i < norder; i++) for (int j = i + 1; j < norder; j++) if ((order[j] < order[i]) == (dir > 0)) { int x = order[i]; order[i] = order[j]; order[j] = x; }
 }
@@ -1467,8 +1468,10 @@ static void count_down(void *u) { (void)u; counter--; }
 static void test_undo(void) {
   rk_window *w = window(480, 300);
   show(w, col(8, 16), "undo");
-  rk_window_do(w, "Archived one.", count_up, count_down, NULL, NULL);
-  rk_window_do(w, "Archived another.", count_up, count_down, NULL, NULL);
+  rk_action act = { .size = sizeof act, .label = "Archived one.", .run = count_up, .undo = count_down };
+  rk_window_do(w, &act);
+  act.label = "Archived another.";
+  rk_window_do(w, &act);
   rk_app_run_for(300);
   CHECK(counter == 2 && w->toasts->nkids >= 1, "actions run, a toast offers undo");
   key(w, 'Z', RK_MOD_CTRL);
@@ -1477,7 +1480,8 @@ static void test_undo(void) {
   CHECK(counter == 0 && !rk_window_undo(w), "back to the start, and no further (%d)", counter);
   key(w, 'Z', RK_MOD_CTRL | RK_MOD_SHIFT);
   CHECK(counter == 1, "Ctrl+Shift+Z redoes (%d)", counter);
-  rk_window_do(w, "Something new.", count_up, count_down, NULL, NULL);
+  act.label = "Something new.";
+  rk_window_do(w, &act);
   CHECK(counter == 2 && !rk_window_redo(w), "a new action: what was undone cannot come back");
   rk_app_run_for(6000);
   done(w);
@@ -1692,7 +1696,7 @@ static void test_split(void) {
   rk_window_show(w, rk_controller_create_with_view(sp, "runs"));
   rk_app_run_for(100);
   float own = 4 * rk_metric_of(RK_TILE_UNIT) + 3 * rk_metric_of(RK_SPACE_S), min = rk_metric_of(RK_PANE_MIN);
-  CHECK(rk_split_sideways(sp) && CLOSE_TO(rk_split_width(sp), own, 0.5f), "sideways, the list four tiles wide: %g", rk_split_width(sp));
+  CHECK(rk_split_is_sideways(sp) && CLOSE_TO(rk_split_width(sp), own, 0.5f), "sideways, the list four tiles wide: %g", rk_split_width(sp));
   rk_view *handle = rk_view_child(sp, 3);
   rk_rect hr = rk__window_rect(handle);
   CHECK(CLOSE_TO(hr.w, 9, 0.1f) && CLOSE_TO(hr.x + hr.w / 2 - rk__window_rect(sp).x, own + 0.5f, 0.6f), "the handle lies over the hairline");
@@ -1723,26 +1727,26 @@ static void test_split(void) {
   rk_app_run_for(60);
   click(w, (rk_point){ hr.x + 4, hr.y + 100 }, 20);
   CHECK(CLOSE_TO(rk_split_width(sp), own, 0.5f) && split_told == 0, "a double click: its own width again");
-  rk_split_show(sp, true);
+  rk_split_set_detail_shown(sp, true);
   rk_window_focus(w, NULL);                                    /* the handle lets go of the focus: a hairline again */
   rk_app_run_for(600);
   shot(w, "split");
   /* compact: one pane, a turn each way, the crumb and Escape go back */
   rk__window_resized(w, 560, 560, 1);
   rk_app_run_for(100);
-  CHECK(!rk_split_sideways(sp) && rk_split_detail_shown(sp) && rk_view_child(sp, 0)->hidden, "compact: the detail shown before stays");
+  CHECK(!rk_split_is_sideways(sp) && rk_split_is_detail_shown(sp) && rk_view_child(sp, 0)->hidden, "compact: the detail shown before stays");
   key(w, RK_KEY_ESCAPE, 0);
   rk_app_run_for(1200);
-  CHECK(!rk_split_detail_shown(sp) && rk_view_child(sp, 1)->hidden, "nothing focused, Escape still turns back to the list");
-  rk_split_show(sp, true);
+  CHECK(!rk_split_is_detail_shown(sp) && rk_view_child(sp, 1)->hidden, "nothing focused, Escape still turns back to the list");
+  rk_split_set_detail_shown(sp, true);
   rk_app_run_for(120);
-  CHECK(!rk_split_detail_shown(sp) && !rk_view_child(sp, 0)->hidden, "the list turns away first");
+  CHECK(!rk_split_is_detail_shown(sp) && !rk_view_child(sp, 0)->hidden, "the list turns away first");
   rk_app_run_for(1200);
-  CHECK(rk_split_detail_shown(sp) && rk_window_focused(w) == rk_view_child(sp, 2), "then the detail, the crumb focused");
+  CHECK(rk_split_is_detail_shown(sp) && rk_window_focused(w) == rk_view_child(sp, 2), "then the detail, the crumb focused");
   shot(w, "split-compact");
   key(w, RK_KEY_ESCAPE, 0);
   rk_app_run_for(1200);
-  CHECK(!rk_split_detail_shown(sp), "Escape turns back to the list");
+  CHECK(!rk_split_is_detail_shown(sp), "Escape turns back to the list");
   done(w);
 }
 
@@ -1932,7 +1936,7 @@ static void test_navigation(void) {
   rk_app_run_for(400);
   shot(w, "motion-turn-in");
   rk_app_run_for(800);
-  const char *title = rk_controller_title(places_for_test);
+  const char *title = rk__controller_shown_title(places_for_test);   /* what the title bar names */
   CHECK(title && !strcmp(title, "a place"), "title of the place: %s", title ? title : "(none)");
   shot(w, "place");
   key(w, RK_KEY_ESCAPE, 0);

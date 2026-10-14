@@ -40,7 +40,7 @@ static void change(void *user) {
   const char *res = "Xft.dpi:\t192\nXft.antialias:\t1\n";
   XChangeProperty(dpy, DefaultRootWindow(dpy), XA_RESOURCE_MANAGER, XA_STRING, 8, PropModeReplace, (const unsigned char *)res, (int)strlen(res));
   XSync(dpy, False);
-  rk_app_after(800, false, quit, NULL);
+  rk_app_after(800, quit, NULL);
 }
 
 static void launch(void *user) {
@@ -48,7 +48,7 @@ static void launch(void *user) {
   rk_window_desc d = { .size = sizeof d, .title = "scale-test", .width = 300, .height = 200 };
   win = rk_window_create(&d);
   rk_window_show(win, rk_controller_create_with_view(rk_vstack(), "scale"));
-  rk_app_after(300, false, change, NULL);
+  rk_app_after(300, change, NULL);
 }
 
 int main(void) {

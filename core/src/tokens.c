@@ -16,7 +16,7 @@ int rk__density_index(void) {
 }
 
 rk_color rk_color_of(rk_role role) {
-  if (role <= RK_ROLE_NONE || role >= RK_ROLE_COUNT) return 0;
+  if (role <= RK_ROLE_NONE || role >= RK__ROLE_COUNT) return 0;
   int t = rk__dark() ? 1 : 0;
   if (role == RK_ROLE_ACCENT && rk__prefs.accent[t]) return rk__prefs.accent[t];
   if (role == RK_ROLE_ON_ACCENT && rk__prefs.accent[t]) {
@@ -29,12 +29,12 @@ rk_color rk_color_of(rk_role role) {
 }
 
 float rk_metric_of(rk_metric metric) {
-  if (metric < 0 || metric >= RK_METRIC_COUNT) return 0;
+  if (metric < 0 || metric >= RK__METRIC_COUNT) return 0;
   return rk_tok_metrics[rk__density_index()][metric];
 }
 
 double rk_duration_of(rk_duration d) {
-  if (d < 0 || d >= RK_DURATION_COUNT) return 0;
+  if (d < 0 || d >= RK__DURATION_COUNT) return 0;
   if (d < RK_TOK_MOTION_COUNT && rk__reduced()) return 0;
   return rk_tok_durations[d];
 }

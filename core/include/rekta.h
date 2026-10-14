@@ -53,6 +53,7 @@ typedef struct rk_size { float w, h; } rk_size;
 typedef struct rk_rect { float x, y, w, h; } rk_rect;
 typedef struct rk_insets { float top, right, bottom, left; } rk_insets;   /* the CSS order */
 typedef uint32_t rk_color;                                                 /* 0xRRGGBBAA, straight alpha */
+#define RK_AUTO 0.0f                               /* a size, a width: the natural one */
 
 /* A view's transform, applied around its origin (0..1 of its size; 0.5, 0.5 is the centre). Rotations in degrees;
    rotate_x and rotate_y turn the view in depth, seen with the given perspective (0: the token's). */
@@ -89,7 +90,6 @@ typedef enum rk_role {
   RK_ROLE_WARNING_FULL, RK_ROLE_WARNING_SOFT, RK_ROLE_WARNING_TILE,
   RK_ROLE_ERROR_FULL, RK_ROLE_ERROR_SOFT, RK_ROLE_ERROR_TILE,
   RK_ROLE_FOCUS, RK_ROLE_HOVER, RK_ROLE_DISABLED, RK_ROLE_SHADING, RK_ROLE_GLASS,
-  RK_ROLE_COUNT,
   RK_ROLE_FORCE32 = 0x7fffffff
 } rk_role;
 
@@ -98,7 +98,6 @@ typedef enum rk_metric {
   RK_RADIUS_S, RK_RADIUS_M, RK_RADIUS_L, RK_RADIUS_TILE,
   RK_TILE_UNIT, RK_APPBAR_HEIGHT, RK_TOUCH_TARGET, RK_PANE_MIN,
   RK_CONTROL_HEIGHT, RK_ROW_HEIGHT, RK_CONTROL_PADDING,   /* these three follow the density */
-  RK_METRIC_COUNT,
   RK_METRIC_FORCE32 = 0x7fffffff
 } rk_metric;
 
@@ -106,7 +105,6 @@ typedef enum rk_duration {
   RK_DURATION_PRESS, RK_DURATION_SHORT, RK_DURATION_MODERATE, RK_DURATION_LONG, RK_DURATION_STAGGER,
   RK_DURATION_FLOAT, RK_DURATION_PIVOT_GLIDE, RK_DURATION_PIVOT_SIZE,
   RK_TIMING_TOAST, RK_TIMING_TAP_DELAY, RK_TIMING_LONG_PRESS, RK_TIMING_TIP_DELAY,
-  RK_DURATION_COUNT,
   RK_DURATION_FORCE32 = 0x7fffffff
 } rk_duration;
 
@@ -130,8 +128,9 @@ RK_API int rk_app_main(const rk_app_desc *desc);  /* runs until quit; returns th
 RK_API void rk_app_quit(int code);
 RK_API void rk_app_post(void (*fn)(void *user), void *user);    /* any thread: run fn on the main thread soon */
 RK_API double rk_app_now(void);                    /* ms, monotonic (virtual when headless) */
-RK_API uint32_t rk_app_after(double ms, bool repeat, void (*fn)(void *user), void *user);   /* a timer id, never 0 */
-RK_API void rk_app_cancel(uint32_t timer);
+RK_API uint32_t rk_app_after(double ms, void (*fn)(void *user), void *user);   /* once; an id, never 0 */
+RK_API uint32_t rk_app_every(double ms, void (*fn)(void *user), void *user);   /* again and again */
+RK_API void rk_app_cancel(uint32_t id);            /* a timer, or a change listener */
 RK_API bool rk_app_notify(const char *title, const char *body);   /* a system notification; false where there is none */
 
 typedef enum rk_theme { RK_THEME_SYSTEM, RK_THEME_LIGHT, RK_THEME_DARK, RK_THEME_FORCE32 = 0x7fffffff } rk_theme;
@@ -141,13 +140,13 @@ typedef enum rk_density { RK_DENSITY_SYSTEM, RK_DENSITY_COMFORTABLE, RK_DENSITY_
 RK_API void rk_app_set_theme(rk_theme theme);
 RK_API bool rk_app_is_dark(void);
 RK_API void rk_app_set_motion(rk_motion_pref motion);
-RK_API bool rk_app_reduced_motion(void);
+RK_API bool rk_app_is_reduced_motion(void);
 RK_API void rk_app_set_density(rk_density density);
 RK_API void rk_app_set_accent(rk_color light, rk_color dark);    /* 0, 0: the ink of the theme */
 /* A font file (TrueType or OpenType, or a collection's first face) for the characters Barlow lacks, tried before the
    system's: an app that writes Japanese may bring its own. False when it cannot be read or drawn with. */
 RK_API bool rk_app_add_font(const char *path);
-RK_API void rk_app_on_change(void (*fn)(void *user), void *user);   /* theme, motion, density or accent changed */
+RK_API uint32_t rk_app_on_change(void (*fn)(void *user), void *user);   /* theme, motion, density or accent changed; rk_app_cancel ends it */
 /* Misuse - a descriptor without its size, a call on the wrong kind of view, an icon that does not exist - is reported
    here, never passed over in silence; stderr until an app sets its own. */
 typedef enum rk_log_level { RK_LOG_ERROR, RK_LOG_WARNING, RK_LOG_LEVEL_FORCE32 = 0x7fffffff } rk_log_level;
@@ -177,12 +176,19 @@ RK_API rk_view *rk_window_focused(rk_window *window);
 /* The system's file chooser over the window, filtered by accept: extensions (".png,.jpg") or families ("image/" with
    a star); NULL or "" takes any file. chosen() comes later with the paths, or with none if it was cancelled. False
    when the system has none here. */
-RK_API bool rk_window_choose_files(rk_window *window, const char *accept, bool multiple,
+typedef enum rk_choose { RK_CHOOSE_ONE, RK_CHOOSE_MANY, RK_CHOOSE_FORCE32 = 0x7fffffff } rk_choose;
+RK_API bool rk_window_choose_files(rk_window *window, const char *accept, rk_choose choose,
                                    void (*chosen)(rk_window *window, const char *const *files, int count, void *user), void *user);
-/* The app's history, as the web's undoStack(): rk_window_do runs an action and remembers it (up to 50) - its toast in
-   the window offers undo. Ctrl (Cmd) and Z undoes, with Shift or Ctrl+Y redoes, outside text fields. free_user, if
-   given, lets user go when the action leaves the history. */
-RK_API void rk_window_do(rk_window *window, const char *label, void (*run)(void *user), void (*undo)(void *user), void *user, void (*free_user)(void *user));
+/* A window's history, as the web's undoStack(): rk_window_do runs an action and remembers it (up to 50) - its toast
+   offers undo. Ctrl (Cmd) and Z undoes, with Shift or Ctrl+Y redoes, outside text fields. Each window has its own. */
+typedef struct rk_action {
+  uint32_t size;                                   /* sizeof(rk_action) */
+  const char *label;                               /* what the toast says: "archived 3 builds" */
+  void (*run)(void *user), (*undo)(void *user);
+  void *user;
+  void (*free_user)(void *user);                   /* NULL, or lets user go when the action leaves the history */
+} rk_action;
+RK_API void rk_window_do(rk_window *window, const rk_action *action);
 RK_API bool rk_window_undo(rk_window *window);     /* false: nothing to undo */
 RK_API bool rk_window_redo(rk_window *window);
 
@@ -224,7 +230,7 @@ RK_API int rk_view_count(rk_view *view);
 RK_API rk_view *rk_view_child(rk_view *view, int index);
 RK_API rk_window *rk_view_window(rk_view *view);
 RK_API void rk_view_set_name(rk_view *view, const char *name);  /* for finding it: tests, the gallery */
-RK_API rk_view *rk_view_find(rk_view *root, const char *name);   /* by name, or a button by its label */
+RK_API rk_view *rk_view_find(rk_view *root, const char *name);   /* by name; a button's name is its label until set */
 RK_API void rk_view_set_menu(rk_view *view, rk_view *menu);   /* takes menu: a button opens it; another view on a right click or Shift+F10 */
 
 /* geometry */
@@ -238,13 +244,14 @@ RK_API rk_size rk_view_measure(rk_view *view, rk_size available);   /* its natur
 RK_API void rk_view_set_fill(rk_view *view, rk_role role);
 RK_API void rk_view_set_fill_color(rk_view *view, rk_color light, rk_color dark);
 RK_API void rk_view_set_radius(rk_view *view, float radius);
-RK_API void rk_view_set_rule(rk_view *view, bool top, bool bottom);  /* hairlines in text-low */
+enum { RK_RULE_TOP = 1, RK_RULE_BOTTOM = 2 };
+RK_API void rk_view_set_rules(rk_view *view, uint32_t rules);   /* hairlines in text-low: RK_RULE_TOP | RK_RULE_BOTTOM; 0 none */
 RK_API void rk_view_set_opacity(rk_view *view, float opacity);
 RK_API float rk_view_opacity(rk_view *view);
 RK_API void rk_view_set_transform(rk_view *view, rk_transform transform);
 RK_API rk_transform rk_view_transform(rk_view *view);
 RK_API void rk_view_set_hidden(rk_view *view, bool hidden);
-RK_API bool rk_view_hidden(rk_view *view);
+RK_API bool rk_view_is_hidden(rk_view *view);
 RK_API void rk_view_set_clip(rk_view *view, bool clip);
 
 /* layout: the view's own, then what its parent's layout reads from it */
@@ -293,12 +300,17 @@ typedef enum rk_event_type {
   RK_EVENT_FORCE32 = 0x7fffffff
 } rk_event_type;
 
-enum {
+/* Keys: printable keys are their uppercase ASCII code ('A', '1'); named keys from 0x100, in ranges kept for them so
+   new ones never move the old. */
+typedef enum rk_key {
   RK_KEY_NONE = 0, RK_KEY_TAB = 9, RK_KEY_ENTER = 13, RK_KEY_ESCAPE = 27, RK_KEY_SPACE = 32,
-  /* printable keys are their uppercase ASCII code ('A', '1'); named keys from 0x100 */
   RK_KEY_LEFT = 0x100, RK_KEY_RIGHT, RK_KEY_UP, RK_KEY_DOWN, RK_KEY_HOME, RK_KEY_END, RK_KEY_PAGE_UP, RK_KEY_PAGE_DOWN,
-  RK_KEY_BACKSPACE, RK_KEY_DELETE, RK_KEY_F1, RK_KEY_F10 = RK_KEY_F1 + 9, RK_KEY_BACK /* mouse or keyboard back */
-};
+  RK_KEY_BACKSPACE, RK_KEY_DELETE, RK_KEY_INSERT,
+  RK_KEY_BACK = 0x130,                             /* the mouse's or the keyboard's back */
+  RK_KEY_F1 = 0x140, RK_KEY_F2, RK_KEY_F3, RK_KEY_F4, RK_KEY_F5, RK_KEY_F6, RK_KEY_F7, RK_KEY_F8, RK_KEY_F9, RK_KEY_F10,
+  RK_KEY_F11, RK_KEY_F12, RK_KEY_F24 = RK_KEY_F1 + 23,   /* F13 to F24 follow F12 */
+  RK_KEY_FORCE32 = 0x7fffffff
+} rk_key;
 enum { RK_MOD_SHIFT = 1, RK_MOD_CTRL = 2, RK_MOD_ALT = 4, RK_MOD_SUPER = 8 };   /* RK_MOD_SUPER is Cmd on macOS */
 
 typedef struct rk_event {
@@ -308,7 +320,7 @@ typedef struct rk_event {
   rk_point position;                               /* pointer events: in the receiving view */
   int button;                                      /* 0 primary, 1 secondary, 2 middle */
   float wheel_x, wheel_y;                          /* logical px */
-  uint32_t key;                                    /* RK_KEY_* */
+  uint32_t key;                                    /* an rk_key, or a printable key's uppercase ASCII code */
   uint32_t mods;                                   /* RK_MOD_* */
   const char *text;                                /* RK_EVENT_TEXT, RK_EVENT_COMPOSE: UTF-8 */
   const char *const *files; int nfiles;            /* RK_EVENT_DROP: the files' paths, UTF-8, valid for the call */
@@ -341,7 +353,6 @@ typedef enum rk_text_style {
   RK_TEXT_STAT,                                    /* size-xxl, medium, tabular figures: a tile's number */
   RK_TEXT_PIVOT,                                   /* size-pivot-active, light: a pivot title */
   RK_TEXT_NAV,                                     /* size-nav-active, light: a place's strip */
-  RK_TEXT_STYLE_COUNT,
   RK_TEXT_FORCE32 = 0x7fffffff
 } rk_text_style;
 
@@ -390,8 +401,9 @@ RK_API int rk_menu_add(rk_view *menu, const char *label, const char *key, void (
 RK_API void rk_menu_add_separator(rk_view *menu);
 RK_API void rk_menu_add_label(rk_view *menu, const char *label);   /* a group's name */
 RK_API void rk_menu_clear(rk_view *menu);                          /* every item goes: build it again */
-RK_API void rk_menu_set_check(rk_view *menu, int item, int check); /* -1: none (the default), 0: empty, 1: filled */
-RK_API int rk_menu_check(rk_view *menu, int item);
+typedef enum rk_checkmark { RK_CHECKMARK_NONE, RK_CHECKMARK_OFF, RK_CHECKMARK_ON, RK_CHECKMARK_FORCE32 = 0x7fffffff } rk_checkmark;   /* NONE: no square */
+RK_API void rk_menu_set_check(rk_view *menu, int item, rk_checkmark check);
+RK_API rk_checkmark rk_menu_check(rk_view *menu, int item);
 RK_API void rk_menu_set_enabled(rk_view *menu, int item, bool enabled);
 RK_API void rk_menu_open(rk_view *menu, rk_view *from);            /* below from; focus goes back to it */
 RK_API void rk_menu_open_at(rk_view *menu, rk_view *from, rk_point point);   /* at a point in from: a context menu */
@@ -432,7 +444,8 @@ RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, 
 RK_API rk_view *rk_field(const char *label, const char *placeholder);   /* either may be NULL */
 RK_API const char *rk_field_text(rk_view *field);          /* UTF-8; valid until the text changes */
 RK_API void rk_field_set_text(rk_view *field, const char *text);
-RK_API void rk_field_set_hint(rk_view *field, const char *hint, bool error);   /* NULL removes it */
+RK_API void rk_field_set_hint(rk_view *field, const char *hint);     /* below the input; NULL removes it */
+RK_API void rk_field_set_error(rk_view *field, const char *error);   /* the cause and remedy, marked, in the hint's place */
 RK_API void rk_field_on_change(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);
 RK_API void rk_field_on_submit(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);   /* Enter */
 RK_API void rk_field_set_lines(rk_view *field, int lines);   /* the lines it shows; 1, the default, is one line */
@@ -472,7 +485,8 @@ RK_API rk_view *rk_drop(const char *title, const char *hint, const char *accept,
 RK_API rk_view *rk_tree(void);
 RK_API int rk_tree_add(rk_view *tree, int parent, const char *title);   /* the new item's number, or -1 */
 RK_API void rk_tree_set_meta(rk_view *tree, int item, const char *meta, rk_status status);   /* on the right, as a row's */
-RK_API void rk_tree_open(rk_view *tree, int item, bool open);   /* glides as a click does; item -1: every branch */
+RK_API void rk_tree_set_open(rk_view *tree, int item, bool open);   /* glides as a click does */
+RK_API void rk_tree_set_all_open(rk_view *tree, bool open);
 RK_API bool rk_tree_is_open(rk_view *tree, int item);
 RK_API void rk_tree_select(rk_view *tree, int item);   /* -1: none; shows nothing */
 RK_API int rk_tree_selected(rk_view *tree);
@@ -491,9 +505,9 @@ RK_API void rk_tree_on_toggle(rk_view *tree, void (*fn)(rk_view *tree, int item,
    wide at first, a double click gives that back. Compact one pane shows at a time: rk_split_show turns to the detail,
    whose crumb (the title) and Escape turn back. Each pane scrolls itself: give it an rk_scroll where it may be long. */
 RK_API rk_view *rk_split(rk_view *list, rk_view *detail, const char *title);   /* takes both; title: the list's, for the crumb */
-RK_API void rk_split_show(rk_view *split, bool detail);   /* sideways: a new item's detail slides in; compact: turns */
-RK_API bool rk_split_sideways(rk_view *split);
-RK_API bool rk_split_detail_shown(rk_view *split);        /* compact: which pane shows */
+RK_API void rk_split_set_detail_shown(rk_view *split, bool shown);   /* sideways: a new item's detail slides in; compact: turns */
+RK_API bool rk_split_is_detail_shown(rk_view *split);     /* compact: which pane shows */
+RK_API bool rk_split_is_sideways(rk_view *split);
 RK_API void rk_split_set_width(rk_view *split, float width);   /* the list's, as remembered; 0: its own */
 RK_API float rk_split_width(rk_view *split);              /* as laid out now */
 RK_API void rk_split_on_resize(rk_view *split, void (*fn)(rk_view *split, float width, void *user), void *user);   /* to remember it */
@@ -501,10 +515,11 @@ RK_API void rk_split_on_resize(rk_view *split, void (*fn)(rk_view *split, float 
 /* A table is a list with columns - every rk_list_ call works on it. The head stays put; a click on a sortable head
    sorts by it, ascending then descending: the app sorts its rows in on_sort and the table draws them again. */
 enum { RK_COLUMN_NUMERIC = 1, RK_COLUMN_SORTABLE = 2, RK_COLUMN_EDITABLE = 4 };   /* numbers sit to the right */
+typedef enum rk_sort { RK_SORT_NONE, RK_SORT_ASCENDING, RK_SORT_DESCENDING, RK_SORT_FORCE32 = 0x7fffffff } rk_sort;
 RK_API rk_view *rk_table(int count, const char *(*cell)(int row, int column, void *user), void *user);
-RK_API int rk_table_add_column(rk_view *table, const char *title, float width, unsigned flags);   /* width 0: shares the rest */
-RK_API void rk_table_on_sort(rk_view *table, void (*fn)(rk_view *table, int column, int dir, void *user), void *user);   /* dir 1 or -1 */
-RK_API void rk_table_set_sort(rk_view *table, int column, int dir);   /* shows the sort the rows have (-1, 0, 1) */
+RK_API int rk_table_add_column(rk_view *table, const char *title, float width, uint32_t flags);   /* width RK_AUTO: shares the rest */
+RK_API void rk_table_on_sort(rk_view *table, void (*fn)(rk_view *table, int column, rk_sort sort, void *user), void *user);
+RK_API void rk_table_set_sort(rk_view *table, int column, rk_sort sort);   /* shows the sort the rows have */
 RK_API void rk_table_set_column_width(rk_view *table, int column, float width);   /* as a drag leaves it; 0: its own */
 RK_API float rk_table_column_width(rk_view *table, int column);   /* as laid out now */
 /* Editing a cell: a double click or F2 opens it, Enter or Tab keeps the value (Tab goes on to the next editable cell),
@@ -515,7 +530,7 @@ RK_API void rk_table_edit(rk_view *table, int row, int column);   /* opens the c
 
 RK_API rk_view *rk_icon(const char *name, rk_role color);   /* 20 × 20 from the icon set */
 RK_API rk_view *rk_progress(float progress);                /* < 0: indeterminate */
-RK_API void rk_progress_set(rk_view *view, float progress);
+RK_API void rk_progress_set_value(rk_view *progress, float value);
 
 /* Controllers ----------------------------------------------------------------------------------------------------- */
 
@@ -534,7 +549,7 @@ RK_API rk_controller *rk_controller_create_with_view(rk_view *view, const char *
 RK_API void *rk_controller_state(rk_controller *controller);
 RK_API rk_view *rk_controller_view(rk_controller *controller);    /* loads it on first use */
 RK_API void rk_controller_set_title(rk_controller *controller, const char *title);
-RK_API const char *rk_controller_title(rk_controller *controller);
+RK_API const char *rk_controller_title(rk_controller *controller);   /* as set; the title bar names what shows */
 RK_API rk_controller *rk_controller_parent(rk_controller *controller);
 /* A controller inside another's views (a pivot in a page): the owner takes child, gives it its window, tells it when
    it appears and goes, and shows the sheets it presents. Returns child's view as a reference: add it where it goes. */
@@ -609,7 +624,7 @@ RK_API rk_size rk_text_measure(const char *text, rk_text_style style, float max_
 
 RK_API void rk_window_inject(rk_window *window, const rk_event *event);   /* as if it came from the system */
 RK_API void rk_view_tap(rk_view *view);            /* a press and release in its middle */
-RK_API void rk_window_key(rk_window *window, uint32_t key);   /* a key pressed and released (RK_KEY_*) */
+RK_API void rk_window_key(rk_window *window, uint32_t key);   /* a key pressed and released: an rk_key or a letter */
 RK_API rk_view *rk_window_view_at(rk_window *window, rk_point point);   /* what a press there reaches, or NULL */
 RK_API bool rk_window_snapshot(rk_window *window, const char *png_path);  /* the window's pixels as a PNG */
 RK_API void rk_app_run_for(double ms);             /* headless: advance the virtual clock, running every frame */
@@ -627,7 +642,8 @@ typedef struct rk_stats {
   double pixels;                                   /* device pixels drawn */
   double latency_ms, max_latency_ms;               /* from an input event to the end of the frame that showed it */
 } rk_stats;
-RK_API void rk_app_stats(rk_stats *stats, bool reset);   /* reset: the counts start again from zero */
+RK_API void rk_app_stats(rk_stats *stats);
+RK_API void rk_app_stats_reset(void);              /* the counts start again from zero */
 
 #ifdef __cplusplus
 }

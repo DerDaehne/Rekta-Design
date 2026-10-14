@@ -412,7 +412,8 @@ static uint32_t key_of(KeySym k) {
     case 0x1008FF26: return RK_KEY_BACK;                      /* XF86XK_Back */
     default: break;
   }
-  if (k >= XK_F1 && k <= XK_F10) return RK_KEY_F1 + (uint32_t)(k - XK_F1);
+  if (k >= XK_F1 && k <= XK_F24) return (rk_key)(RK_KEY_F1 + (k - XK_F1));
+  if (k == XK_Insert) return RK_KEY_INSERT;
   if (k >= XK_a && k <= XK_z) return (uint32_t)('A' + (k - XK_a));
   if (k >= XK_A && k <= XK_Z) return (uint32_t)k;
   if (k >= XK_0 && k <= XK_9) return (uint32_t)k;

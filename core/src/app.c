@@ -18,7 +18,7 @@ static pthread_mutex_t post_lock = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct timer { uint32_t id; double due, every; void (*fn)(void *); void *user; } timer;
 typedef struct post { void (*fn)(void *); void *user; } post;
-typedef struct listener { void (*fn)(void *); void *user; } listener;
+typedef struct listener { uint32_t id; void (*fn)(void *); void *user; } listener;
 
 static const rk_platform *plat;
 static rk_app_desc app;
@@ -36,14 +36,19 @@ double rk_app_now(void) { return rk__platform()->now(); }
 
 /* Timers ---------------------------------------------------------------------------------------------------------- */
 
-uint32_t rk_app_after(double ms, bool repeat, void (*fn)(void *), void *user) {
+/* Timers and change listeners share one run of ids, so rk_app_cancel ends either. */
+static uint32_t new_id(void) { uint32_t id = next_id++; if (!next_id) next_id = 1; return id; }
+
+static uint32_t add_timer(double ms, bool repeat, void (*fn)(void *), void *user) {
   timers = rk__grow(timers, &tcap, ntimers + 1, sizeof *timers);
   timer *t = &timers[ntimers++];
-  t->id = next_id++; if (!next_id) next_id = 1;
+  t->id = new_id();
   t->due = rk_app_now() + RK_MAX(0.0, ms); t->every = repeat ? RK_MAX(1.0, ms) : 0;
   t->fn = fn; t->user = user;
   return t->id;
 }
+uint32_t rk_app_after(double ms, void (*fn)(void *), void *user) { return add_timer(ms, false, fn, user); }
+uint32_t rk_app_every(double ms, void (*fn)(void *), void *user) { return add_timer(ms, true, fn, user); }
 
 bool rk_app_notify(const char *title, const char *body) {
   const rk_platform *p = rk__platform();
@@ -52,6 +57,7 @@ bool rk_app_notify(const char *title, const char *body) {
 
 void rk_app_cancel(uint32_t id) {
   for (int i = 0; i < ntimers; i++) if (timers[i].id == id) { timers[i] = timers[--ntimers]; return; }
+  for (int i = 0; i < nlisteners; i++) if (listeners[i].id == id) { memmove(listeners + i, listeners + i + 1, (size_t)(nlisteners - i - 1) * sizeof *listeners); nlisteners--; return; }
 }
 
 static void run_timers(double now) {
@@ -120,16 +126,18 @@ void rk_app_set_theme(rk_theme theme) {
 }
 bool rk_app_is_dark(void) { return rk__dark(); }
 void rk_app_set_motion(rk_motion_pref m) { rk__prefs.motion = m; changed(false); }
-bool rk_app_reduced_motion(void) { return rk__reduced(); }
+bool rk_app_is_reduced_motion(void) { return rk__reduced(); }
 void rk_app_set_density(rk_density d) { rk__prefs.density = d; changed(false); }
 void rk_app_set_accent(rk_color light, rk_color dark) {
   look_changes();
   rk__prefs.accent[0] = light; rk__prefs.accent[1] = dark ? dark : light;
   changed(true);
 }
-void rk_app_on_change(void (*fn)(void *), void *user) {
+uint32_t rk_app_on_change(void (*fn)(void *), void *user) {
   listeners = rk__grow(listeners, &lcap, nlisteners + 1, sizeof *listeners);
-  listeners[nlisteners].fn = fn; listeners[nlisteners].user = user; nlisteners++;
+  uint32_t id = new_id();
+  listeners[nlisteners].id = id; listeners[nlisteners].fn = fn; listeners[nlisteners].user = user; nlisteners++;
+  return id;
 }
 
 void rk__app_settings_changed(void) {
@@ -197,7 +205,11 @@ void rk__app_window_closed(rk_window *w) {
   if (!rk__windows()) running = false;                     /* the last window closed: the app ends */
 }
 
-void rk_app_stats(rk_stats *s, bool reset) {
+void rk_app_stats_reset(void) { rk__stats(NULL, true); }
+
+void rk_app_stats(rk_stats *s) { rk__stats(s, false); }
+
+void rk__stats(rk_stats *s, bool reset) {
   if (s) {
     rk_stats o;
     memset(&o, 0, sizeof o);
@@ -257,9 +269,11 @@ int rk_app_main(const rk_app_desc *desc) {
     fprintf(stderr, "rekta: %u frames, %.2f ms a frame on average, %.2f the slowest, %u over 8 ms, %.1f megapixels a frame, %u glyphs\n",
             m->frames, m->draw_ms / m->frames, m->max_ms, m->slow, m->pixels / 1e6 / m->frames, m->glyphs);
   while (rk__windows()) rk_window_close(rk__windows());
-  rk__undo_clear();
   plat->shutdown();
   rk__text_shutdown();
-  free(timers); timers = NULL; ntimers = tcap = 0;
+  free(timers); timers = NULL; ntimers = tcap = 0;     /* nothing stays for a later rk_app_main */
+  free(listeners); listeners = NULL; nlisteners = lcap = 0;
+  LOCK(); free(posts); posts = NULL; nposts = pcap = 0; UNLOCK();
+  launched = false;
   return exit_code;
 }

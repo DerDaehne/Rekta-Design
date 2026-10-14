@@ -35,6 +35,7 @@ static const rk_class toasts_class = { { sizeof(rk_view_class), "rk_toasts", NUL
 static void window_destroy(void *self) {
   rk_window *w = self;
   rk__tip_hide(w, false);
+  rk__history_free(w);
   if (w->controller) { rk__controller_appear(w->controller, false); rk_release(w->controller); }
   if (w->root) { w->root->window = NULL; rk_release(w->root); }
   rk__bitmap_free(w->own_fb);
@@ -729,7 +730,7 @@ static void event(rk_window *w, const rk_event *e) {
         press_start(w, f, 0, 0);
         key_press *kp = rk__alloc(sizeof *kp);
         kp->w = w; kp->v = rk_retain(f);
-        rk_app_after(rk_duration_of(RK_DURATION_PRESS), false, key_release, kp);
+        rk_app_after(rk_duration_of(RK_DURATION_PRESS), key_release, kp);
         break;
       }
       rk_view *to = f;
@@ -807,7 +808,8 @@ static void chooser_done(void *ctx, const char *const *files, int n) {
   rk_release(c->w);
   free(c);
 }
-bool rk_window_choose_files(rk_window *w, const char *accept, bool multiple, void (*chosen)(rk_window *w, const char *const *files, int n, void *user), void *user) {
+bool rk_window_choose_files(rk_window *w, const char *accept, rk_choose choose, void (*chosen)(rk_window *w, const char *const *files, int n, void *user), void *user) {
+  bool multiple = choose == RK_CHOOSE_MANY;
   const rk_platform *p = rk__platform();
   if (!w || w->closed || !p->choose_files) return false;
   choosing *c = rk__alloc(sizeof *c);

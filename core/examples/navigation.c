@@ -104,12 +104,12 @@ static void launch(void *user) {
   rk_window_desc d = { .size = sizeof d, .title = "Navigation", .width = width, .height = height };
   window = rk_window_create(&d);
   rk_window_show(window, places(!strcmp(style, "side")));
-  if (shot_path) rk_app_after(1500, false, take_shot, NULL);
+  if (shot_path) rk_app_after(1500, take_shot, NULL);
   if (film_dir) {
-    rk_app_after(400, false, go, (void *)(intptr_t)2);
-    rk_app_after(2000, false, go, (void *)(intptr_t)0);
-    rk_app_after(3600, false, go, (void *)(intptr_t)1);
-    rk_app_after(20, true, take_frame, NULL);
+    rk_app_after(400, go, (void *)(intptr_t)2);
+    rk_app_after(2000, go, (void *)(intptr_t)0);
+    rk_app_after(3600, go, (void *)(intptr_t)1);
+    rk_app_every(20, take_frame, NULL);
   }
 }
 

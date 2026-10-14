@@ -69,9 +69,12 @@ rk_view *rk_controller_view(rk_controller *c) {
 static rk_controller *visible_child(rk_controller *c);
 static rk_controller *pivot_visible(rk_controller *c);
 
-const char *rk_controller_title(rk_controller *c) {
+const char *rk_controller_title(rk_controller *c) { return c ? c->title : NULL; }
+
+/* What the title bar names: the title of what shows, deepest first. */
+const char *rk__controller_shown_title(rk_controller *c) {
   rk_controller *v = visible_child(c);
-  if (v && v != c) { const char *t = rk_controller_title(v); if (t && *t) return t; }
+  if (v && v != c) { const char *t = rk__controller_shown_title(v); if (t && *t) return t; }
   return c->title;
 }
 
@@ -400,7 +403,7 @@ static void start_turn(rk_controller *c, rk_controller *old, bool owned, rk_cont
   double wait = old && old->view && rk__view_visible(old->view) ? turn_out(&pl->out, old->view, pressed, back) : 0;
   if (wait <= 0) { swap_now(s); return; }
   pl->pending = s;
-  pl->timer = rk_app_after(wait, false, swap_now, s);
+  pl->timer = rk_app_after(wait, swap_now, s);
 }
 
 void rk_places_go(rk_controller *c, rk_controller *place) {
@@ -699,7 +702,7 @@ static void scroller_show(scroller *s) {   /* the bar shows, and takes the point
   s->bar = true;
   s->rail->passthrough = false;
   if (s->hide) rk_app_cancel(s->hide);
-  s->hide = rk_app_after(900, false, scroller_hide, s);
+  s->hide = rk_app_after(900, scroller_hide, s);
   rk__view_dirty(s->rail);
 }
 static void scroller_to(scroller *s, float to, double settle) {
@@ -1101,7 +1104,7 @@ void rk_pivot_select(rk_controller *c, int index) {
   if (((strip *)p->strip->state)->nav) {
     p->leaving = old; p->back = dir < 0;
     double wait = rk__view_visible(rk_controller_view(old)) ? turn_out(&p->out, rk_controller_view(old), NULL, p->back) : 0;
-    if (wait > 0) p->timer = rk_app_after(wait, false, pivot_arrive, p); else pivot_arrive(p);
+    if (wait > 0) p->timer = rk_app_after(wait, pivot_arrive, p); else pivot_arrive(p);
     return;
   }
   rk__view_detach(rk_controller_view(old));               /* the controller keeps its view */

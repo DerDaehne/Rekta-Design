@@ -41,7 +41,7 @@ typedef struct list {
   int down_row; double down_at;                            /* the last press on a row: a second soon after edits */
   const char *(*cell)(int row, int column, void *user);
   int sort_col, sort_dir;
-  void (*sort)(rk_view *table, int column, int dir, void *user); void *sort_user;
+  void (*sort)(rk_view *table, int column, rk_sort sort, void *user); void *sort_user;
 } list;
 
 static float row_height(void) { return rk_metric_of(RK_ROW_HEIGHT); }
@@ -174,7 +174,7 @@ static bool edit_commit(rk_view *v, list *l, bool focus_back) {
   if (!strcmp(value, l->edit_old)) { edit_finish(v, l, focus_back); return true; }
   const char *why = l->commit ? l->commit(v, l->edit_row, l->edit_col, value, l->commit_user) : NULL;
   if (!l->editor) return true;                             /* the app closed it itself */
-  if (why) { rk_field_set_hint(l->editor, why, true); place_editor(v, l); return false; }
+  if (why) { rk_field_set_error(l->editor, why); place_editor(v, l); return false; }
   edit_finish(v, l, focus_back);
   return true;
 }
@@ -216,7 +216,7 @@ static void sort_by(rk_view *v, list *l, int k) {
   l->sort_col = k;
   list_remember(l);
   bool had = l->sel.n > 0;
-  if (l->sort) l->sort(v, k, l->sort_dir, l->sort_user);
+  if (l->sort) l->sort(v, k, l->sort_dir > 0 ? RK_SORT_ASCENDING : RK_SORT_DESCENDING, l->sort_user);
   follow_items(l, true, l->active_key, l->anchor_key);
   if (l->key) reveal_row(v, l, l->active);
   rk__view_dirty(v);
@@ -454,7 +454,7 @@ static bool list_input(rk_view *v, const rk_event *e, void *st) {
         }
         return false;
       }
-      if (e->key == RK_KEY_F1 + 1 && l->ncols) { edit_start(v, l, l->active, editable_from(l, 0, 1)); return true; }   /* F2 */
+      if (e->key == RK_KEY_F2 && l->ncols) { edit_start(v, l, l->active, editable_from(l, 0, 1)); return true; }   /* F2 */
       if (l->head >= 0) {                                       /* in the head: columns, their order and widths */
         float step = rk_metric_of(RK_SPACE_M) * (e->mods & RK_MOD_SHIFT ? 4 : 1);
         switch (e->key) {
@@ -606,8 +606,8 @@ int rk_table_add_column(rk_view *v, const char *title, float width, unsigned fla
   return l->ncols - 1;
 }
 
-void rk_table_on_sort(rk_view *v, void (*fn)(rk_view *, int, int, void *), void *user) { list *l = list_of(v); if (l) { l->sort = fn; l->sort_user = user; } }
-void rk_table_set_sort(rk_view *v, int column, int dir) { list *l = list_of(v); if (l) { l->sort_col = column; l->sort_dir = dir > 0 ? 1 : dir < 0 ? -1 : 0; rk__view_dirty(v); } }
+void rk_table_on_sort(rk_view *v, void (*fn)(rk_view *, int, rk_sort, void *), void *user) { list *l = list_of(v); if (l) { l->sort = fn; l->sort_user = user; } }
+void rk_table_set_sort(rk_view *v, int column, rk_sort sort) { list *l = list_of(v); if (l) { l->sort_col = column; l->sort_dir = sort == RK_SORT_ASCENDING ? 1 : sort == RK_SORT_DESCENDING ? -1 : 0; rk__view_dirty(v); } }
 
 void rk_table_set_column_width(rk_view *v, int column, float width) {
   list *l = list_of(v);

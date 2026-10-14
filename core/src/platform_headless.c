@@ -38,7 +38,7 @@ static bool hl_choose(void *native, const char *accept, bool multiple, void (*do
   hl_ask *a = malloc(sizeof *a);
   if (!a) return false;
   a->done = done; a->ctx = ctx;
-  rk_app_after(1, false, hl_answer, a);
+  rk_app_after(1, hl_answer, a);
   return true;
 }
 

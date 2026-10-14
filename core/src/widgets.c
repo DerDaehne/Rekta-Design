@@ -110,6 +110,7 @@ static rk_view *button_make(const char *text, const char *icon, int kind) {
   v->press = RK_PRESS_FLAT; v->focusable = true; v->hug = true;
   v->access = RK_ACCESS_BUTTON;
   rk__setstr(&v->access_label, text);
+  if (text && *text) rk__setstr(&v->name, text);              /* found by its label until named otherwise */
   return v;
 }
 rk_view *rk_button(const char *text, void (*on_press)(rk_view *button, void *user), void *user) {
@@ -422,7 +423,7 @@ rk_view *rk_progress(float progress) {
   v->access = RK_ACCESS_PROGRESS;
   return v;
 }
-void rk_progress_set(rk_view *v, float progress) { if (v->cls == &progress_class) set_value(v, progress); }
+void rk_progress_set_value(rk_view *v, float progress) { if (v->cls == &progress_class) set_value(v, progress); }
 
 /* Focus ----------------------------------------------------------------------------------------------------------- */
 
@@ -450,7 +451,7 @@ static void toast_leave(void *st) {
   toast *t = st;
   t->timer = 0;
   rk_window *w = rk__view_window(t->view);
-  if (w && (rk__view_within(w->focus, t->view) || rk__view_within(w->hover, t->view))) { t->timer = rk_app_after(TOAST_HOLD_MS, false, toast_leave, t); return; }
+  if (w && (rk__view_within(w->focus, t->view) || rk__view_within(w->hover, t->view))) { t->timer = rk_app_after(TOAST_HOLD_MS, toast_leave, t); return; }
   go(t);
 }
 
@@ -498,7 +499,7 @@ rk_view *rk__toast_create(const char *message, const char *action, void (*on_act
     rk_view_on_activate(b, toast_act, t);
     rk__view_add(v, b); rk_release(b);
   }
-  t->timer = rk_app_after(rk_duration_of(RK_TIMING_TOAST), false, toast_leave, t);
+  t->timer = rk_app_after(rk_duration_of(RK_TIMING_TOAST), toast_leave, t);
   return v;
 }
 
@@ -517,7 +518,7 @@ static void titlebar_draw(rk_view *v, rk_canvas *c, void *st) {
   rk__text_draw(c, title, -1, x, ty, &name, rk_color_of(RK_ROLE_TEXT));
   x += rk__text_width(title, -1, &name) + rk_metric_of(RK_SPACE_S);
   rk_controller *root = tb->w->controller;
-  const char *pl = root ? rk_controller_title(root) : NULL;
+  const char *pl = root ? rk__controller_shown_title(root) : NULL;
   if (pl && *pl) {
     rk__text_draw(c, "/", -1, x, ty, &place, rk_color_of(RK_ROLE_TEXT_MEDIUM));
     x += rk__text_width("/", -1, &place) + rk_metric_of(RK_SPACE_S);
