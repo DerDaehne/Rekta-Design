@@ -333,20 +333,6 @@ static inline uint32_t lerp_px(uint32_t a, uint32_t b, uint32_t t) {   /* t 0..2
   return rb | (ag << 8);
 }
 
-static inline uint32_t sample(const rk_bitmap *s, float u, float v) {
-  u -= 0.5f; v -= 0.5f;
-  int x = (int)floorf(u), y = (int)floorf(v);
-  uint32_t fx = (uint32_t)((u - x) * 256.0f), fy = (uint32_t)((v - y) * 256.0f);
-  if (x >= 0 && y >= 0 && x + 1 < s->w && y + 1 < s->h) {      /* inside: no edge checks */
-    const uint32_t *p = s->px + (size_t)y * s->stride + x;
-    return lerp_px(lerp_px(p[0], p[1], fx), lerp_px(p[s->stride], p[s->stride + 1], fx), fy);
-  }
-  #define PX(X, Y) (((X) < 0 || (Y) < 0 || (X) >= s->w || (Y) >= s->h) ? 0u : s->px[(size_t)(Y) * s->stride + (X)])
-  uint32_t top = lerp_px(PX(x, y), PX(x + 1, y), fx), bot = lerp_px(PX(x, y + 1), PX(x + 1, y + 1), fx);
-  #undef PX
-  return lerp_px(top, bot, fy);
-}
-
 /* The quad's extent along one scanline: where its edges cross height y (it is convex: the image of a square under a
    perspective that keeps it in front). */
 static bool quad_span(const float q[8], float y, float *l, float *r) {
