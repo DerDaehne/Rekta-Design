@@ -2583,11 +2583,12 @@ static void test_declared_navigation(void) {
   rk_app_run_for(50);
 }
 
-typedef struct dcoll { int n, shown, sort, sorted, opened; bool third, hidden, src_open, swap, docs, can_export; } dcoll;
+typedef struct dcoll { int n, shown, sort, sorted, opened, file, any; bool third, hidden, src_open, swap, docs, can_export; } dcoll;
 static void dcoll_item(int i, rk_list_item *out, void *u) { (void)u; static char t[32]; snprintf(t, sizeof t, "item %d", i); out->title = t; }
 static const char *dcoll_cell(int r, int c, void *u) { (void)u; static char t[32]; snprintf(t, sizeof t, "%d:%d", r, c); return t; }
 static void dcoll_sort(rk_view *v, int c, rk_sort s, void *u) { (void)v; (void)c; (void)s; ((dcoll *)u)->sorted++; }
 static void dcoll_open(rk_view *v, void *u) { (void)v; ((dcoll *)u)->opened++; }
+static void dcoll_any(rk_view *v, void *u) { (void)v; ((dcoll *)u)->any++; }
 static void dcoll_menu(void *u) {
   dcoll *c = u;
   RK_HEADING("sort by");
@@ -2599,6 +2600,7 @@ static void dcoll_menu(void *u) {
 }
 static int tree_first(rk_view *v) { return tree_of(v)->first; }   /* the order a tree shows its top items in */
 static int tree_next(rk_view *v, int item) { return tree_of(v)->nodes[item].next; }
+static void tree_click(rk_view *v, int item) { tree *t = tree_of(v); t->show(v, item, t->show_user); }   /* as a click on it */
 
 static void dcoll_build(void *user) {
   dcoll *c = user;
@@ -2609,11 +2611,11 @@ static void dcoll_build(void *user) {
       RK_COLUMN("size", .flags = RK_COLUMN_NUMERIC | RK_COLUMN_SORTABLE);
       if (c->third) RK_COLUMN("note");
     }
-    RK_TREE(.key = "tree", .width = 200) {
+    RK_TREE(.key = "tree", .width = 200, .chosen = &c->file, .on_press = dcoll_any) {
       if (c->swap && c->docs) RK_ITEM("docs", .key = "docs");
       RK_ITEM("src", .key = "src", .open = &c->src_open) {
-        RK_ITEM("main.c", .key = "main.c", .on_press = dcoll_open);
-        RK_ITEM("view.c", .key = "view.c", .meta = "12 KB");
+        RK_ITEM("main.c", .key = "main.c", .value = 1, .on_press = dcoll_open);
+        RK_ITEM("view.c", .key = "view.c", .value = 2, .meta = "12 KB");
       }
       if (!c->swap && c->docs) RK_ITEM("docs", .key = "docs");
     }
@@ -2622,7 +2624,7 @@ static void dcoll_build(void *user) {
 }
 
 static void test_declared_collections(void) {
-  dcoll c = { .n = 50, .shown = -1, .docs = true };
+  dcoll c = { .n = 50, .shown = -1, .file = -1, .docs = true };
   rk_window_desc d = { .size = sizeof d, .title = "collections", .width = 1000, .height = 500, .build = dcoll_build, .user = &c };
   rk_window *w = rk_window_create(&d);
   rk_app_run_for(400);
@@ -2645,6 +2647,10 @@ static void test_declared_collections(void) {
   key(w, RK_KEY_LEFT, 0);
   rk_app_run_for(50);
   CHECK(!c.src_open && !rk_tree_is_open(tree, 0), "the user closes it: written back");
+  tree_click(tree, 2);
+  CHECK(c.file == 2 && c.any == 1 && c.opened == 0, "an item shown: the tree's .chosen and .on_press stand for its items'");
+  tree_click(tree, 1);
+  CHECK(c.file == 1 && c.any == 1 && c.opened == 1, "an item's own .on_press before the tree's");
   c.docs = false;
   rk_ui_update(NULL);
   CHECK(in_window(w, "tree") == tree && rk_tree_title(tree, 3) == NULL, "an item taken out goes from the same tree");

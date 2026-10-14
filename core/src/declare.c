@@ -8,11 +8,16 @@
    new), then navigation - a place opened turns, a sheet comes down, a page slides. A change of content takes its
    transition before its setter: a tile's new value peeks in, a new status turns it over.
 
-   A node keeps a copy of what was declared last and never reads its view back, so the library sets what the
-   description changed, never what the user changed. A bound value is read from the app at each build and written
-   back when the user changes it. After anything that may have changed the app's state - a handler, a timer, a post, a
-   press, a key - every declared view builds again (rk__ui_settle). What a controller cannot follow in place (a
-   section taken out of a panorama, a column out of a table) makes it again, once. */
+   A node keeps a copy of what was declared last and never reads its view back. A value the app holds (.on, .chosen,
+   .number, .day, .buffer, .open: a pointer) is what the view shows after every build; the user's change is written
+   there first and the build that follows agrees. A value only given (.value, .input) is where the view starts, and is
+   set again only when the declaration moves it, so the user's change stands until the app says otherwise.
+
+   Handlers never build: they mark the app's state as maybe changed, and every declared window builds at the next safe
+   point (rk__ui_settle) - after an event, a timer or post of the app's, a look change, a close asked for, a motion's
+   end, and before each frame. The library's own timers (a caret, a tooltip) build nothing. A controller's parts - a
+   panorama's sections, a pivot's pages, a table's columns, a tree's items - come, go and move in place; only a places
+   whose first place is another opens anew. */
 #include "rk_internal.h"
 #include "rk_tokens.h"
 #include <stdarg.h>
@@ -347,7 +352,7 @@ static void ui_tree_shown(rk_view *v, int num, void *u) {
   if (!it) return;
   int *chosen = ui_item_chosen(it);
   if (chosen) *chosen = (int)it->last.value;       /* the item shown, where the app keeps it */
-  ui_call(it, it->last.on_press, v);
+  ui_call(it, it->last.on_press ? it->last.on_press : t->last.on_press, v);
 }
 static void ui_tree_toggled(rk_view *v, int num, bool open, void *u) {
   ui_node *t = u, *it = t->hooked ? ui_item_of(t, num) : NULL;

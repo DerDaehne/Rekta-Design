@@ -97,22 +97,16 @@ static void tile_menu(void *u) {                                     /* a right 
 }
 
 static void rekta_section(void) {
-  char task[16], presses[16], pinned[8][16];
   bool done = D.task_done >= 1;
-  snprintf(task, sizeof task, "%d / 8", (int)lroundf(D.task_done * 8));
-  snprintf(presses, sizeof presses, "%d", D.presses);
   RK_LABEL("Tiles, not cards.", .style = RK_TEXT_GROUP);
   RK_LABEL("A tile's whole area is one fill, and the fill is its status. Press one: it nudges back where you press it. A tile that opens something presses; one that only informs does not.");
   RK_TILES() {
-    RK_TILE(task, .key = "task", .label = "import steps", .status = done ? RK_STATUS_SUCCESS : RK_STATUS_INFO, .span = { 2, 2 },
+    RK_TILE(rk_ui_fmt("%d / 8", (int)lroundf(D.task_done * 8)), .key = "task", .label = "import steps", .status = done ? RK_STATUS_SUCCESS : RK_STATUS_INFO, .span = { 2, 2 },
             .message = done ? "Imported. Stillness means done." : "Each step advances the bar; the last one flips the tile.",
             .busy = !done, .progress = done ? 0 : D.task_done, .pulse = (uint32_t)D.restarts);
-    for (int i = 0; i < D.npins; i++) {
-      snprintf(pinned[i], sizeof pinned[i], "%d", D.pins[i]);
-      RK_TILE(pinned[i], .id = (uint64_t)D.pins[i], .label = "pinned tile");
-    }
+    for (int i = 0; i < D.npins; i++) RK_TILE(rk_ui_fmt("%d", D.pins[i]), RK_ID(D.pins[i]), .label = "pinned tile");
     RK_TILE("0.3", .key = "notes", .label = "release notes", .on_press = open_notes);
-    RK_TILE(presses, .key = "presses", .label = D.presses == 1 ? "tile pressed" : "tiles pressed", .status = RK_STATUS_WARNING, .on_press = press_tile);
+    RK_TILE(rk_ui_fmt("%d", D.presses), .key = "presses", .label = D.presses == 1 ? "tile pressed" : "tiles pressed", .status = RK_STATUS_WARNING, .on_press = press_tile);
     RK_TILE("12", .key = "grow", .label = "builds today", .status = RK_STATUS_SUCCESS, .span = { D.big ? 2 : 1, D.big ? 2 : 1 }, .menu = tile_menu);
     RK_TILE("51", .label = "icons");
   }
@@ -180,12 +174,10 @@ static void toggle_feed(rk_view *v, void *u) {
 
 static void live_section(void) {
   static const rk_status order[] = { RK_STATUS_INFO, RK_STATUS_WARNING, RK_STATUS_SUCCESS, RK_STATUS_ERROR };
-  char queue[16];
-  snprintf(queue, sizeof queue, "%d", D.queue);
   RK_LABEL("Live, and honest about it.", .style = RK_TEXT_GROUP);
   RK_LABEL("Every two seconds the queue moves and its number peeks in; every six the runners' status flips. Events arrive at the top and the oldest leaves.");
   RK_TILES() {
-    RK_TILE(queue, .key = "live", .label = "jobs in the queue", .status = RK_STATUS_INFO, .span = { 2, 1 }, .series = D.series, .nseries = D.nseries);
+    RK_TILE(rk_ui_fmt("%d", D.queue), .key = "live", .label = "jobs in the queue", .status = RK_STATUS_INFO, .span = { 2, 1 }, .series = D.series, .nseries = D.nseries);
     RK_TILE("3", .key = "runners", .label = "runners", .status = order[D.status]);
   }
   RK_LABEL("latest events", .style = RK_TEXT_KICKER);
@@ -220,8 +212,6 @@ static void fade(rk_view *v, void *u) { (void)v; (void)u; D.fades++; }
 
 static void motion_section(void) {
   static const char *const lines[] = { "Same place, new words: the old ones fade out over the new.", "A cross-fade changes the whole look, and moves nothing.", "Theme and accent changes cross-fade the window this way." };
-  char inbox[64];
-  snprintf(inbox, sizeof inbox, "Inbox: %d letters.", D.inbox);
   RK_LABEL("Every transition means one thing.", .style = RK_TEXT_GROUP);
   RK_LABEL("A sheet is a short question from the top edge; a toast says something happened; archiving goes into the window's history: its toast, Ctrl+Z and Ctrl+Y take it back and forth.");
   RK_HSTACK() {
@@ -229,7 +219,7 @@ static void motion_section(void) {
     RK_BUTTON("archive", .icon = "archive", .on_press = archive);
     RK_BUTTON("a toast", .on_press = plain_toast);
   }
-  RK_LABEL(inbox, .style = RK_TEXT_SMALL);
+  RK_LABEL(rk_ui_fmt("Inbox: %d letters.", D.inbox), .style = RK_TEXT_SMALL);
   RK_LABEL("cross-fade", .style = RK_TEXT_KICKER);
   RK_LABEL(lines[D.fades % 3], .change = RK_UI_CROSSFADE);
   RK_HSTACK() RK_BUTTON("new words", .button = RK_BUTTON_QUIET, .on_press = fade);
@@ -329,9 +319,6 @@ static void controls_section(void) {
   static const char *const sizes[] = { "small", "medium", "large", "a whole wall" };
   static const char *const cities[] = { "Amsterdam", "Berlin", "Bern", "Bonn", "Copenhagen", "Hamburg", "Lisbon", "Munich", "Vienna" };
   static const char *const bar[][2] = { { "edit", "edit" }, { "share", "link" }, { "delete", "trash" } };
-  char copies[48];
-  int n = (int)D.copies;
-  snprintf(copies, sizeof copies, n == 1 ? "%d copy, printed on Monday." : "%d copies, printed on Monday.", n);
 
   RK_LABEL("Native where it can be, Rekta where it shows.", .style = RK_TEXT_GROUP);
   RK_HSTACK() {
@@ -356,15 +343,15 @@ static void controls_section(void) {
   RK_HSTACK() RK_BUTTON("advance", .button = RK_BUTTON_QUIET, .on_press = advance);
   RK_LABEL("a select, and a field that suggests", .style = RK_TEXT_KICKER);
   RK_HSTACK() {
-    RK_SELECT(.options = sizes, .count = 4, .chosen = &D.size);
+    RK_SELECT(RK_OPTIONS(sizes), .chosen = &D.size);
     RK_DATE(.day = &D.day);
   }
-  RK_FIELD("City", .placeholder = "Type, or Down for the list", .options = cities, .count = 9);
+  RK_FIELD("City", .placeholder = "Type, or Down for the list", RK_OPTIONS(cities));
   RK_LABEL("a slider sets the bar; a stepper counts", .style = RK_TEXT_KICKER);
   RK_SLIDER(.min = 0, .max = 100, .step = 5, .number = &D.volume, .on_change = slide_bar);
   RK_HSTACK(.cross = RK_ALIGN_CENTER) {
     RK_STEPPER(.min = 1, .max = 20, .step = 1, .number = &D.copies);
-    RK_LABEL(copies);
+    RK_LABEL(rk_ui_fmt(D.copies == 1 ? "%d copy, printed on Monday." : "%d copies, printed on Monday.", (int)D.copies));
   }
 
   RK_LABEL("a custom view, drawn with the canvas", .style = RK_TEXT_KICKER);
@@ -449,12 +436,10 @@ static void sort_builds(rk_view *table, int column, rk_sort sort, void *u) {
 }
 
 static void lists_section(void) {
-  char picked[64];
-  snprintf(picked, sizeof picked, D.picked ? "%d selected. Escape ends it." : "Ctrl+click selects several.", D.picked);
   RK_LABEL("A million rows, a screenful of work.", .style = RK_TEXT_GROUP);
   RK_LABEL("Only the rows in sight are drawn; nothing is kept for the others. A click opens one; Ctrl+click, Shift+click and Ctrl+A select.");
   RK_LIST(.count = 1000000, .item = build_item, .height = 300, .on_select = build_show, .on_change = builds_picked);
-  RK_LABEL(picked, .style = RK_TEXT_SMALL);
+  RK_LABEL(rk_ui_fmt(D.picked ? "%d selected. Escape ends it." : "Ctrl+click selects several.", D.picked), .style = RK_TEXT_SMALL);
   RK_LABEL("a table: click a head to sort, drag its edge to widen; double click a note to edit it", .style = RK_TEXT_KICKER);
   RK_TABLE(.count = NBUILDS, .cell = build_cell, .height = 320, .on_sort = sort_builds, .on_edit = note_commit, .on_select = table_show) {
     RK_COLUMN("build", .width = 140, .flags = RK_COLUMN_SORTABLE);
@@ -487,12 +472,12 @@ static void pictures_dropped(rk_view *drop, const char *const *taken, int nt, co
   toast(msg);
 }
 
-#define FILE(i) FILES[i], .chosen = &D.file, .value = (i), .on_press = desk_show   /* a file: shown in the detail when picked */
+#define FILE(i) FILES[i], .value = (i)               /* a file: picking it writes its number to the tree's .chosen */
 
 static void desk_section(void) {
   RK_LABEL("A desk: things beside their detail.", .style = RK_TEXT_GROUP);
   RK_SPLIT("files", .open = &D.detail, .height = 460) {
-    RK_TREE() {
+    RK_TREE(.chosen = &D.file, .on_press = desk_show) {
       RK_ITEM(FILE(0), .open = &D.open_src) {
         RK_ITEM(FILE(1), .open = &D.open_ui) { RK_ITEM(FILE(2)); RK_ITEM(FILE(3)); RK_ITEM(FILE(4)); }
         RK_ITEM(FILE(5));
@@ -504,7 +489,7 @@ static void desk_section(void) {
     RK_VSTACK() {
       RK_LABEL(FILES[D.file], .style = RK_TEXT_GROUP);
       RK_LABEL("steps: drag a grip, or Space then Up and Down", .style = RK_TEXT_KICKER);
-      RK_ROWS(.on_move = steps_moved) for (int i = 0; i < 4; i++) RK_ROW(STEPS[D.steps[i]], .id = (uint64_t)D.steps[i] + 1);
+      RK_ROWS(.on_move = steps_moved) for (int i = 0; i < 4; i++) RK_ROW(STEPS[D.steps[i]], RK_ID(D.steps[i]));
       RK_DROP("Drop pictures here", .hint = "or choose them · nothing leaves your device", .accept = "image/*", .on_files = pictures_dropped);
     }
   }
@@ -557,20 +542,19 @@ static void settings_section(void) {
   static const char *const theme[] = { "system", "light", "dark" }, *const density[] = { "as the pointer", "comfortable", "compact" };
   static const char *const motion[] = { "as the system", "on", "off" }, *const accent[] = { "ink", "plum" };
   static const char *const digest[] = { "every morning", "on Mondays", "never" };
-  char now[160];
-  snprintf(now, sizeof now, "Now: %s, %s density, motion %s.", rk_app_is_dark() ? "dark" : "light",
-           rk_metric_of(RK_CONTROL_HEIGHT) < 40 ? "compact" : "comfortable", rk_app_is_reduced_motion() ? "reduced" : "on");
   RK_LABEL("Yours to choose.", .style = RK_TEXT_GROUP);
   RK_LABEL("Each follows the system until you choose. A change of theme or accent cross-fades; reduced motion makes every transition instant, never skipped.");
   choice("theme", theme, 3, &D.theme, set_theme);
   choice("density", density, 3, &D.density, set_density);
   choice("motion", motion, 3, &D.motion, set_motion);
   choice("accent", accent, 2, &D.accent, set_accent);
-  RK_LABEL(now, .style = RK_TEXT_SMALL);                      /* the look as it is: built again when it changes */
+  RK_LABEL(rk_ui_fmt("Now: %s, %s density, motion %s.", rk_app_is_dark() ? "dark" : "light",
+                     rk_metric_of(RK_CONTROL_HEIGHT) < 40 ? "compact" : "comfortable", rk_app_is_reduced_motion() ? "reduced" : "on"),
+           .style = RK_TEXT_SMALL);                      /* the look as it is: built again when it changes */
   RK_LABEL("notifications", .style = RK_TEXT_KICKER);
   RK_CHECK("Tell me when a build fails", .on = &D.notify, .on_change = say_notify);
   RK_LABEL("a digest", .style = RK_TEXT_SMALL);
-  RK_CHOICES(.options = digest, .count = 3, .chosen = &D.digest, .on_change = say_digest);
+  RK_CHOICES(RK_OPTIONS(digest), .chosen = &D.digest, .on_change = say_digest);
   RK_TOGGLE("Sounds", .on = &D.sounds, .on_change = say_sound);
 }
 

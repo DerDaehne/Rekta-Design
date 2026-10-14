@@ -662,10 +662,8 @@ RK_API void rk_view_transition(rk_view *view, rk_transition transition);   /* ca
  *     static void build_one(rk_view *button, void *user) { app.finished++; }     // only the state: the screen follows
  *
  *     static void today(void *user) {
- *       char n[16];
- *       snprintf(n, sizeof n, "%d", app.finished);
  *       RK_PANORAMA() RK_SECTION("today") {
- *         RK_TILES() RK_TILE(n, .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
+ *         RK_TILES() RK_TILE(rk_ui_fmt("%d", app.finished), .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
  *         RK_BUTTON("build one", .on_press = build_one);
  *       }
  *     }
@@ -679,8 +677,9 @@ RK_API void rk_view_transition(rk_view *view, rk_transition transition);   /* ca
  *     The library sets what the declaration changed, never what the user changed: typing is never overwritten.
  *   - Who a view is: its .key (or .id) among its siblings, else its place among the unkeyed siblings of its kind. Give
  *     a key to everything that comes and goes in a list, so it keeps its focus, text and motion.
- *   - Strings and arrays are copied or compared when a macro runs: a local buffer is fine. Bound pointers and .user
- *     are kept: they live as long as the view.
+ *   - Strings and arrays are copied or compared when a macro runs: a local buffer or rk_ui_fmt() is fine. Bound
+ *     pointers, .user and .data are kept, and used until the next build declares the view again - in a scope skipped
+ *     by .version, until it is built again. Point them at the app's state, never at a local of the build.
  *   - A scope ({ ... } after a container) ends at its brace; break or continue inside it ends the scope, not a loop
  *     around it. No return or goto out of one.
  *   - A field 0 is the default: the design's gap, the kind's size, no tooltip, enabled. rk_ui grows only at its end.
@@ -766,7 +765,8 @@ typedef struct rk_ui {
   bool *on;                                        /* a check, a toggle; a menu item's square */
   int *chosen;                                     /* choices, segments, a select; a pivot's page; the item a list or a
                                                       table shows; a menu item is checked, a tree's item selected, when
-                                                      *chosen == .value - picking it writes .value there */
+                                                      *chosen == .value - picking it writes .value there (a tree's
+                                                      .chosen and .on_press stand for its items') */
   double *number;                                  /* a slider, a stepper */
   rk_day *day;                                     /* a date */
   char *buffer; size_t buffer_size;                /* a field's text, cut to fit */
@@ -806,7 +806,8 @@ typedef struct rk_ui {
 
   /* the work it can skip, the motion it can play */
   uint32_t version;                                /* a scope with the same non-zero version as last time is not built
-                                                      again; a list's or a table's: its rows are drawn again only when it
+                                                      again: what it holds keeps its last description, bound pointers
+                                                      too; a list's or a table's: its rows are drawn again only when it
                                                       changes (0: at every build) */
   uint32_t pulse;                                  /* a new one plays its change again */
   rk_ui_change change;
