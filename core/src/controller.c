@@ -18,14 +18,26 @@ struct rk_controller {
   rk_controller **embedded; int nembedded, embed_cap;      /* what it holds in its own views (rk_controller_embed) */
   bool appeared;
   bool transparent;                                        /* only holds embedded[0]: it stands for it */
-  rk__heard heard;                                         /* places, a pivot, a sheet: what the user did */
+  void (*told)(void); void *told_user;                     /* places, a pivot, a sheet: hears what the user did */
 };
 
 static void strip_relevel(rk_controller *c);
-static void tell(rk_controller *c, int index) { if (c->heard.fn) c->heard.fn(c, index, c->heard.user); }
-void rk__places_hear(rk_controller *c, rk__heard h) { c->heard = h; }
-void rk__pivot_hear(rk_controller *c, rk__heard h) { c->heard = h; }
-void rk__sheet_hear(rk_controller *c, rk__heard h) { c->heard = h; }
+/* What the user did, told: one hook a controller, typed by its kind (cast back to the type it was given as) */
+static void tell(rk_controller *c, int index) {
+  if (!c->told) return;
+  if (c->kind == K_PIVOT) ((void (*)(rk_controller *, int, void *))c->told)(c, index, c->told_user);
+  else ((void (*)(rk_controller *, void *))c->told)(c, c->told_user);
+}
+static void hear(rk_controller *c, void (*fn)(void), void *user) { c->told = fn; c->told_user = fn ? user : NULL; }
+void rk_places_on_back(rk_controller *c, void (*fn)(rk_controller *places, void *user), void *user) {
+  if (c && c->kind == K_PLACES) hear(c, (void (*)(void))fn, user); else rk__warn("rk_places_on_back: not places");
+}
+void rk_pivot_on_change(rk_controller *c, void (*fn)(rk_controller *pivot, int index, void *user), void *user) {
+  if (c && c->kind == K_PIVOT) hear(c, (void (*)(void))fn, user); else rk__warn("rk_pivot_on_change: not a pivot");
+}
+void rk_controller_on_dismiss(rk_controller *c, void (*fn)(rk_controller *sheet, void *user), void *user) {
+  if (c && c->kind == K_PLAIN) hear(c, (void (*)(void))fn, user); else rk__warn("rk_controller_on_dismiss: a sheet is a plain controller");
+}
 void rk__controller_set_transparent(rk_controller *c, bool t) {
   if (c->transparent == t) return;
   c->transparent = t;
@@ -59,6 +71,7 @@ static rk_controller *holder(rk_controller *c) {           /* the parent, lookin
 static void controller_destroy(void *self) {
   rk_controller *c = self;
   if (c->sheet) { c->sheet->presenter = NULL; rk_release(c->sheet); }
+  rk_release(c->focus_before);                             /* a sheet that never left: what had focus before it */
   for (int i = 0; i < c->nembedded; i++) { c->embedded[i]->parent = NULL; rk_release(c->embedded[i]); }   /* held by no one now */
   free(c->embedded);
   if (c->impl_free) c->impl_free(c->impl);
@@ -1234,12 +1247,15 @@ void rk_controller_present(rk_controller *presenter, rk_controller *sheet) {
   rk__controller_appear(sheet, true);
 }
 
+/* The box that left, and its shading: only these go - the sheet may have been presented again meanwhile. */
+typedef struct gone_box { rk_controller *sheet; rk_view *shade; } gone_box;
 static void sheet_gone(rk_view *box, void *user) {
-  rk_controller *sheet = user;
-  rk_view *shade = sheet->sheet_shade;
-  sheet->sheet_box = sheet->sheet_shade = NULL;
-  if (shade) rk__view_detach(shade);
+  gone_box *g = user;
+  rk_controller *sheet = g->sheet;
+  if (sheet->sheet_box == box) { sheet->sheet_box = sheet->sheet_shade = NULL; }
+  if (g->shade) { if (g->shade->parent) rk__view_detach(g->shade); rk_release(g->shade); }
   if (box->parent) rk__view_detach(box);
+  free(g);
   rk_release(sheet);
 }
 
@@ -1265,7 +1281,10 @@ void rk_controller_dismiss(rk_controller *sheet) {
   rk__animate(box, RK_PROP_OPACITY, &a0, &a1, 1, d, 0, rk__ease_out);
   if (shade) shade->leaving = true;
   box->leaving = true;
-  rk__animate_transform_cb(box, &t0, &t1, d, 0, rk__ease_out, sheet_gone, sheet);
+  sheet->sheet_box = sheet->sheet_shade = NULL;            /* presented again, it gets a box of its own */
+  gone_box *g = rk__alloc(sizeof *g);
+  g->sheet = sheet; g->shade = shade ? rk_retain(shade) : NULL;
+  rk__animate_transform_cb(box, &t0, &t1, d, 0, rk__ease_out, sheet_gone, g);
 }
 
 /* A short question, as the web's confirm(): a kicker, the question as a group heading, a line, cancel and ok. The
@@ -1277,9 +1296,7 @@ static void ask_cancel(rk_view *b, void *user) { (void)b; asking *a = user; ask_
 static void ask_gone(rk_controller *c, void *st) { (void)c; ask_tell(st, false); }   /* Escape, the shading */
 static void ask_free(void *st) { free(st); }
 
-void rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user) { rk__confirm(presenter, desc, answered, user); }
-
-rk_controller *rk__confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user) {
+rk_controller *rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user) {
   rk_confirm_desc d = { sizeof d, "", NULL, NULL, "ok", "cancel", false };
   if (RK__SIZED(desc, "rk_confirm", "rk_confirm_desc")) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
   if (!presenter || !presenter->window) { rk__error("rk_confirm: the presenter is in no window"); if (answered) answered(false, user); return NULL; }

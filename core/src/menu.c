@@ -30,6 +30,7 @@ typedef struct menu {
   rk_view *view;
   float min_w; int prefer;                                 /* at least this wide; the item it starts at (-1: the first) */
   bool passive;                                            /* floats without focus: its opener moves the active row */
+  void (*opening)(rk_view *menu, void *user); void *opening_user;   /* declare.c: fill it now */
 } menu;
 
 static float pad_y(void) { return rk_metric_of(RK_SPACE_XS); }
@@ -223,6 +224,7 @@ static void open_by(rk_view *v, rk_view *from, rk_rect at, bool keys, bool passi
   if (!m || !w) return;
   m->passive = passive; v->focusable = !passive;
   if (v->parent) rk_menu_close(v);
+  if (m->opening) m->opening(v, m->opening_user);          /* declared: its items, as they are now */
   rk_retain(from); rk_release(m->from); m->from = from;    /* held while it is open */
   rk_size s = menu_measure(v, (rk_size){ INFINITY, INFINITY }, m);
   float gap = rk_metric_of(RK_SPACE_XS), edge = rk_metric_of(RK_SPACE_M);
@@ -325,6 +327,7 @@ void rk__menu_show_passive(rk_view *v, rk_view *from, rk_rect below) {
 
 bool rk__menu_open(rk_view *v) { return v && v->parent != NULL; }
 bool rk__is_menu(rk_view *v) { return menu_of(v) != NULL; }
+void rk__menu_on_open(rk_view *v, void (*fn)(rk_view *, void *), void *user) { menu *m = menu_of(v); if (m) { m->opening = fn; m->opening_user = user; } }
 void rk__menu_move(rk_view *v, int dir) { menu *m = menu_of(v); if (m && m->n) { m->hover = false; menu_step(v, m, dir); } }
 int rk__menu_active(rk_view *v) { menu *m = menu_of(v); return m ? m->active : -1; }
 void rk__menu_choose(rk_view *v, int i) { menu *m = menu_of(v); if (m) choose(v, m, i); }

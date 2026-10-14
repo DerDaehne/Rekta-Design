@@ -193,6 +193,26 @@ void rk_view_set_name(rk_view *v, const char *name) { rk__setstr(&v->name, name)
 void rk_view_set_menu(rk_view *v, rk_view *menu) { rk_release(v->menu); v->menu = menu; }   /* takes menu */
 
 /* By name; a button is named by its label until it is given another. */
+/* The children in this order, none taken out - so focus stays where it is; children not named keep their slots among
+   them, in their order. Inside an RK_MOTION_REFLOW block they glide there. */
+void rk_view_reorder(rk_view *v, rk_view *const *order, int n) {
+  static uint32_t mark;
+  if (!v || n <= 0) return;
+  if (++mark == 0) mark = 1;
+  for (int i = 0; i < n; i++) {
+    if (!order[i] || order[i]->parent != v) { rk__error("rk_view_reorder: child %d is not one of the view's", i); return; }
+    order[i]->order_mark = mark;
+  }
+  int j = 0;
+  bool moved = false;
+  for (int i = 0; i < v->nkids && j < n; i++) {
+    if (v->kids[i]->order_mark != mark) continue;
+    if (v->kids[i] != order[j]) { moved = true; v->kids[i] = order[j]; }
+    j++;
+  }
+  if (moved) rk__view_relayout_up(v);
+}
+
 rk_view *rk_view_find(rk_view *root, const char *name) {
   if (!root || !name) return NULL;
   if (root->name && !strcmp(root->name, name)) return root;

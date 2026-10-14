@@ -246,7 +246,7 @@ struct rk_view {
   float press_x, press_y; int pressed;                     /* -1..1 from the centre; 1 pressed, 2 letting go */
   double press_since;
   int index_hint;                                          /* build-in order */
-  uint32_t ui_mark;                                        /* declare.c: one of the views a node arranges */
+  uint32_t order_mark;                                     /* rk_view_reorder: one of the children named */
 };
 
 extern const rk_type rk__view_type;
@@ -368,14 +368,6 @@ rk_view *rk__controller_key_view(rk_controller *c);       /* where keys go when 
 void rk__reveal(rk_view *v);                               /* scroll it into view (keyboard focus) */
 void rk__reveal_rect(rk_view *v, rk_rect r);               /* a part of it, in its own coordinates */
 rk_view *rk__first_focusable(rk_view *v);                  /* itself or the first view in it that takes focus */
-/* What the user does to navigation - back among places, a facet picked, a sheet or a split's detail closed - heard by
-   declared views (declare.c), which keep the app's state in step. Never told what the app does itself. */
-typedef struct rk__heard { void (*fn)(void *what, int index, void *user); void *user; } rk__heard;
-void rk__places_hear(rk_controller *places, rk__heard h);   /* index: the depth left */
-void rk__pivot_hear(rk_controller *pivot, rk__heard h);     /* index: the facet picked */
-void rk__sheet_hear(rk_controller *sheet, rk__heard h);     /* Escape or the shading */
-void rk__split_hear(rk_view *split, rk__heard h);           /* the crumb or Escape: back to the list */
-rk_controller *rk__confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user);   /* its sheet, borrowed */
 /* A controller that only holds another (a declared window's host): what it holds counts as held by its parent, so a
    pivot in it still picks the place. */
 void rk__controller_set_transparent(rk_controller *c, bool transparent);
@@ -384,8 +376,9 @@ void rk__controller_unembed(rk_controller *child);        /* undoes rk_controlle
 void rk__list_detach(rk_view *list);                      /* a list that leaves: no rows, no handlers */
 void rk__drop_detach(rk_view *drop);
 uint32_t rk__after_quiet(double ms, bool repeat, void (*fn)(void *), void *user);   /* a timer that reaches no app code */
-void rk__ui_settle(void);                                 /* after a callback: every declared view builds again */
-void rk__ui_window(rk_window *w, void (*build)(void *user), void *user);   /* a window built from a declaration */
+void rk__ui_dirty(void);                                  /* the library called the app: its state may have changed */
+void rk__ui_settle(void);                                 /* then, at a safe point: every declared view builds again */
+void rk__ui_window(rk_window *w, const rk_window_desc *desc);   /* a window built from a declaration */
 struct turn;                                               /* a place change, for views that turn as places do */
 struct turn *rk__turn_new(void);
 void rk__turn_free(struct turn *t);
@@ -414,6 +407,7 @@ void rk__menu_shape(rk_view *menu, float min_w, int prefer);
 void rk__menu_show_passive(rk_view *menu, rk_view *from, rk_rect below);   /* below: in the window */
 bool rk__menu_open(rk_view *menu);
 bool rk__is_menu(rk_view *v);
+void rk__menu_on_open(rk_view *menu, void (*fn)(rk_view *menu, void *user), void *user);   /* just before it opens */
 void rk__menu_move(rk_view *menu, int dir);
 int rk__menu_active(rk_view *menu);
 void rk__menu_choose(rk_view *menu, int item);                    /* focus inside it goes back to where it came from */

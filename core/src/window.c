@@ -44,7 +44,7 @@ static void window_destroy(void *self) {
 static const rk_type window_type = { "rk_window", window_destroy };
 
 rk_window *rk_window_create(const rk_window_desc *desc) {
-  rk_window_desc d = { sizeof d, "", 1280, 800, 0, 0, false, NULL, NULL };
+  rk_window_desc d = { sizeof d, "", 1280, 800, 0, 0, false, NULL, NULL, NULL };
   if (desc && RK__SIZED(desc, "rk_window_create", "rk_window_desc")) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
   if (d.width <= 0) d.width = 1280;
   if (d.height <= 0) d.height = 800;
@@ -69,7 +69,7 @@ rk_window *rk_window_create(const rk_window_desc *desc) {
   if (!w->native && !rk__headless()) { rk_release(w); return NULL; }
   w->next = open_windows; open_windows = w;              /* the app holds an open window: the caller's pointer is borrowed */
   w->needs_layout = w->needs_draw = true;
-  if (d.build) rk__ui_window(w, d.build, d.user);         /* declared: it shows what the build says */
+  if (d.build) rk__ui_window(w, &d);         /* declared: it shows what the build says */
   return w;
 }
 
@@ -119,8 +119,10 @@ void rk_window_close(rk_window *w) {
 }
 
 void rk__window_close_request(rk_window *w) {
-  if (w->should_close && !w->should_close(w, w->close_user)) return;
-  rk_window_close(w);
+  bool closing = !w->should_close || w->should_close(w, w->close_user);
+  if (w->should_close) rk__ui_dirty();                     /* it may have asked (unsaved changes?) */
+  if (closing) rk_window_close(w);
+  rk__ui_settle();
 }
 
 void rk_window_set_title(rk_window *w, const char *title) {
@@ -624,7 +626,7 @@ void rk__window_event(rk_window *w, const rk_event *e) {
      reaches only views made by hand, which say so with rk_ui_update) */
   bool app = e->type != RK_EVENT_POINTER_MOVE && e->type != RK_EVENT_POINTER_ENTER && e->type != RK_EVENT_POINTER_LEAVE &&
              e->type != RK_EVENT_WHEEL && e->type != RK_EVENT_DRAG_ENTER && e->type != RK_EVENT_DRAG_MOVE && e->type != RK_EVENT_DRAG_LEAVE;
-  if (app) rk__ui_settle();
+  if (app) { rk__ui_dirty(); rk__ui_settle(); }
   if (!w->needs_draw && !rk__anim_running()) rk__meter.input_at = was;   /* nothing to show for it */
   rk_release(w);
 }

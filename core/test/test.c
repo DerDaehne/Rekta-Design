@@ -2362,8 +2362,13 @@ static void test_declare(void) {
   CHECK(rk_control_value(sounds) == 0 && rk_control_value(mine) == 1 && bar->value == 0.5f, "the app's value reaches its toggle, the progress bar glides to its own");
   rk_view *menu = kid(rk_view_parent(t), 1)->menu;
   rk_ui_update(page);
-  CHECK(menu && kid(rk_view_parent(t), 1)->menu == menu && s.menus > 1 && rk__is_object(rk_view_find(page, "bell"), &rk__view_type),
-        "a menu is declared at each build, its view made once; an icon is declared too");
+  CHECK(menu && kid(rk_view_parent(t), 1)->menu == menu && s.menus == 0 && rk__is_object(rk_view_find(page, "bell"), &rk__view_type),
+        "a closed menu is not declared, its view made once; an icon is declared too");
+  rk_menu_open(menu, kid(rk_view_parent(t), 1));
+  int menus = s.menus;
+  rk_ui_update(page);
+  CHECK(menus == 1 && s.menus == 2 && rk_menu_check(menu, 0) == RK_CHECKMARK_NONE, "it is declared as it opens, and at each build while open");
+  rk_menu_close(menu);
   rk_app_run_for(400);
 
   /* misuse is said */
@@ -2646,10 +2651,10 @@ static void test_declared_collections(void) {
   rk_view *tree2 = in_window(w, "tree");
   CHECK(tree2 && !strcmp(rk_tree_title(tree2, 0), "docs") && !strcmp(rk_tree_title(tree2, 1), "src"), "items in a new order: the tree made again in it");
   rk_view *menu = more->menu;
-  CHECK(menu && rk_menu_check(menu, 1) == RK_CHECKMARK_ON && rk_menu_check(menu, 2) == RK_CHECKMARK_OFF && rk_menu_check(menu, 4) == RK_CHECKMARK_OFF,
-        "a declared menu: a choice checked where it is bound, a square for a bound flag");
   rk_view_tap(more);
   rk_app_run_for(300);
+  CHECK(menu && rk_menu_check(menu, 1) == RK_CHECKMARK_ON && rk_menu_check(menu, 2) == RK_CHECKMARK_OFF && rk_menu_check(menu, 4) == RK_CHECKMARK_OFF,
+        "a declared menu: a choice checked where it is bound, a square for a bound flag");
   key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_DOWN, 0);
   key(w, RK_KEY_ENTER, 0);
   rk_app_run_for(300);
@@ -2752,6 +2757,94 @@ static void test_declared_more(void) {
   rk_release(v);
 }
 
+/* The review's findings, held: given values move, bound ones hold; break closes; what bounces back is said ---------- */
+
+typedef struct dfix {
+  bool allowed, asking, second, filter, sheet; int n, keys, refused; char text[16]; bool focus_name;
+} dfix;
+static void dfix_refuse(rk_view *v, void *u) { (void)v; dfix *f = u; f->allowed = false; f->refused++; }
+static void dfix_clear(rk_view *v, void *u) { (void)v; ((dfix *)u)->text[0] = 0; }
+static void dfix_next(rk_view *v, void *u) { (void)v; ((dfix *)u)->second = true; }
+static bool dfix_key(rk_window *w, uint32_t key, uint32_t mods, void *u) { (void)w; if (key == 'N' && (mods & RK_MOD_CTRL)) { ((dfix *)u)->keys++; return true; } return false; }
+static void dfix_build(void *user) {
+  dfix *f = user;
+  RK_PIVOT(.key = "pivot") { RK_PAGE("one") RK_LABEL("first"); RK_PAGE("two") RK_LABEL("second"); }   /* given: the user's page stays */
+  RK_TOGGLE("Allowed", .key = "allowed", .on = &f->allowed, .on_change = dfix_refuse);                    /* bound: the app refuses */
+  RK_FIELD("Name", .key = "name", .buffer = f->text, .buffer_size = sizeof f->text, .on_submit = dfix_clear, .focus = f->focus_name);
+  for (int i = 0; i < 4; i++) RK_HSTACK(RK_ID(i)) { RK_LABEL(rk_ui_fmt("box %d", i)); if (i == 1) break; }
+  RK_LABEL("after the boxes", .key = "after");
+  RK_VSTACK(.key = "filtered", .change = RK_UI_IN_PLACE) for (int i = 0; i < f->n; i++) RK_LABEL("line", RK_ID(i));
+  RK_CONFIRM("first?", .open = &f->asking, .on_close = dfix_next);
+  RK_CONFIRM("second?", .open = &f->second);
+  if (f->sheet) RK_SHEET("bounces");                                                                      /* no .open: it comes back */
+}
+
+static void test_declared_fixes(void) {
+  dfix f = { .n = 5 };
+  rk_window_desc d = { .size = sizeof d, .title = "fixes", .width = 900, .height = 700, .build = dfix_build, .user = &f, .on_key = dfix_key };
+  rk_window *w = rk_window_create(&d);
+  rk_app_run_for(400);
+  int said;
+  rk_view *pv = in_window(w, "pivot"), *strip_v = ((pivot *)pv->controller->impl)->strip;
+  rk_window_focus(w, strip_v);
+  key(w, RK_KEY_RIGHT, 0);
+  rk_app_run_for(800);
+  rk_ui_update(NULL);
+  CHECK(rk_pivot_selected(pv->controller) == 1, "a pivot without a binding keeps the page the user picked");
+  rk_view *al = in_window(w, "allowed");
+  rk_view_tap(al);
+  rk_app_run_for(50);
+  CHECK(f.refused == 1 && !f.allowed && rk_control_value(al) == 0, "bound: the app refuses the user's change and the view holds the app's");
+  rk_view *name = in_window(w, "name");
+  rk_window_focus(w, name);
+  type_text(w, "hello");
+  key(w, RK_KEY_ENTER, 0);
+  rk_app_run_for(50);
+  CHECK(!f.text[0] && !*rk_field_text(name), "bound: the app clears the field's text");
+  rk_view *after = in_window(w, "after"), *root_v = rk_view_parent(after);
+  int boxes = 0;
+  for (int i = 0; i < rk_view_count(root_v); i++) if (rk_view_child(root_v, i)->layout == RK_LAYOUT_HSTACK) boxes++;
+  CHECK(boxes == 4 && rk_view_parent(after) == rk_view_parent(in_window(w, "pivot")), "a break inside a scope closes it, not the loop: what follows stands beside it (%d boxes)", boxes);
+  rk_view *filtered = in_window(w, "filtered");
+  f.n = 2;
+  rk_ui_update(NULL);
+  CHECK(rk_view_count(filtered) == 2, "in an RK_UI_IN_PLACE scope what goes is gone at once (%d)", rk_view_count(filtered));
+  key(w, 'N', RK_MOD_CTRL);
+  CHECK(f.keys == 1, "a key no view takes reaches the window's on_key");
+  f.focus_name = true;
+  rk_window_focus(w, al);
+  rk_ui_update(NULL);
+  CHECK(rk_window_focused(w) == name, "a view declared with .focus takes it");
+  said = logged;
+  rk_ui_open(RK_UI(RK_UI_LABEL, .text = "x"));                  /* outside a build: said */
+  CHECK(logged == said + 1, "misuse outside a build is said");
+  f.asking = true;
+  rk_ui_update(NULL);
+  rk_app_run_for(400);
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_app_run_for(400);
+  CHECK(!f.asking && f.second && w->sheets->nkids > 0, "an answer that asks again: the next question comes after the first is gone");
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_app_run_for(400);
+  f.sheet = true;
+  rk_ui_update(NULL);
+  rk_app_run_for(400);
+  said = logged;
+  key(w, RK_KEY_ESCAPE, 0);                                       /* the sheet that bounces */
+  rk_app_run_for(400);
+  CHECK(w->sheets->nkids > 0 && logged > said && strstr(logged_last, "closed by the user"), "closed by the user, declared open again: it comes back, and that is said (%d sheets, %d said)", w->sheets->nkids, logged - said);
+  done(w);
+  rk_app_run_for(50);
+}
+
+static void dwarn_build(void *u) { (void)u; RK_FIELD("Mail", .label = "x"); RK_ROWS() { RK_ROW("a", .key = "same"); RK_ROW("b", .key = "same"); } }
+static void test_declared_warnings(void) {
+  int said = logged;
+  rk_view *v = rk_ui_view(dwarn_build, NULL);
+  CHECK(logged >= said + 2, "a field it does not read and a key two siblings share are said (%d)", logged - said);
+  rk_release(v);
+}
+
 /* Main ------------------------------------------------------------------------------------------------------------ */
 
 static void launch(void *user) {
@@ -2801,6 +2894,7 @@ static void launch(void *user) {
   { int lv = rk__live_views; test_declared_navigation(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_navigation: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_collections(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_collections: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_more(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "more: %d views more\n", rk__live_views - lv); }
+  { int lv = rk__live_views; test_declared_fixes(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "fixes alone: %d\n", rk__live_views - lv); test_declared_warnings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "fixes: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_skip(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_skip: %d views more\n", rk__live_views - lv); }
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

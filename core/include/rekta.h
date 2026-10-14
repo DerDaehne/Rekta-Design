@@ -165,7 +165,9 @@ typedef struct rk_window_desc {
   float min_width, min_height;                     /* 0: pane-min × 320 */
   bool system_frame;                               /* keep the system's title bar instead of Rekta's */
   void (*build)(void *user);                       /* declares what it shows (see Declared UI); NULL: rk_window_show */
-  void *user;                                      /* build's */
+  void *user;                                      /* build's and on_key's */
+  bool (*on_key)(rk_window *window, uint32_t key, uint32_t mods, void *user);   /* a declared window's: a key no view
+                                                      took (a shortcut, Ctrl+N); true: taken */
 } rk_window_desc;
 
 RK_API rk_window *rk_window_create(const rk_window_desc *desc);   /* an open window lives until closed */
@@ -232,6 +234,7 @@ RK_API rk_view *rk_view_create(void);              /* a plain view; see rk_vstac
 RK_API rk_view *rk_add(rk_view *parent, rk_view *child);
 RK_API rk_view *rk_insert(rk_view *parent, rk_view *child, int index);
 RK_API void rk_view_remove(rk_view *child);       /* from its parent; gone unless you retained it */
+RK_API void rk_view_reorder(rk_view *view, rk_view *const *children, int count);   /* in this order, none taken out: focus stays */
 RK_API rk_view *rk_view_parent(rk_view *view);
 RK_API int rk_view_count(rk_view *view);
 RK_API rk_view *rk_view_child(rk_view *view, int index);
@@ -533,6 +536,7 @@ RK_API rk_view *rk_split(rk_view *list, rk_view *detail, const char *title);   /
 RK_API void rk_split_set_detail_shown(rk_view *split, bool shown);   /* sideways: a new item's detail slides in; compact: turns */
 RK_API bool rk_split_is_detail_shown(rk_view *split);     /* compact: which pane shows */
 RK_API bool rk_split_is_sideways(rk_view *split);
+RK_API void rk_split_on_back(rk_view *split, void (*fn)(rk_view *split, void *user), void *user);   /* compact: the user went back to the list (the crumb, Escape) */
 RK_API void rk_split_set_width(rk_view *split, float width);   /* the list's, as remembered; 0: its own */
 RK_API float rk_split_width(rk_view *split);              /* as laid out now */
 RK_API void rk_split_on_resize(rk_view *split, void (*fn)(rk_view *split, float width, void *user), void *user);   /* to remember it */
@@ -588,6 +592,7 @@ RK_API rk_controller *rk_places(rk_controller *home);   /* takes home */
 RK_API void rk_places_go(rk_controller *places, rk_controller *place);   /* takes place */
 RK_API void rk_places_back(rk_controller *places);
 RK_API int rk_places_depth(rk_controller *places);
+RK_API void rk_places_on_back(rk_controller *places, void (*fn)(rk_controller *places, void *user), void *user);   /* the user went back (Escape, the back key) */
 
 /* Panorama: one place laid out sideways in sections under a strip of their titles that glides by place. */
 RK_API rk_controller *rk_panorama(void);
@@ -599,12 +604,14 @@ RK_API void rk_pivot_add(rk_controller *pivot, const char *title, rk_view *page)
 RK_API void rk_pivot_add_controller(rk_controller *pivot, rk_controller *facet);  /* takes facet; its title, live */
 RK_API void rk_pivot_select(rk_controller *pivot, int index);
 RK_API int rk_pivot_selected(rk_controller *pivot);
+RK_API void rk_pivot_on_change(rk_controller *pivot, void (*fn)(rk_controller *pivot, int index, void *user), void *user);   /* the user picked a facet */
 typedef enum rk_pivot_layout { RK_PIVOT_TOP, RK_PIVOT_SIDE, RK_PIVOT_LAYOUT_FORCE32 = 0x7fffffff } rk_pivot_layout;
 RK_API void rk_pivot_set_layout(rk_controller *pivot, rk_pivot_layout layout);   /* titles along the top or down the leading side */
 
 /* Sheets: a short question from the top edge over a shaded backdrop. Escape or a click on the shading dismisses. */
 RK_API void rk_controller_present(rk_controller *presenter, rk_controller *sheet);   /* takes sheet */
 RK_API void rk_controller_dismiss(rk_controller *sheet);
+RK_API void rk_controller_on_dismiss(rk_controller *sheet, void (*fn)(rk_controller *sheet, void *user), void *user);   /* the user dismissed it: Escape, the shading */
 /* A short question in a sheet, as the web's confirm(): the safe answer is the primary button and has focus (cancel,
    for what cannot be undone); Escape and the shading answer cancel. answered() hears it once. */
 typedef struct rk_confirm_desc {
@@ -613,7 +620,7 @@ typedef struct rk_confirm_desc {
   const char *ok, *cancel;                         /* NULL: "ok", "cancel" */
   bool cancel_is_safe;
 } rk_confirm_desc;
-RK_API void rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user);
+RK_API rk_controller *rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user);   /* its sheet, borrowed: dismiss it to withdraw the question */
 
 /* Motion ---------------------------------------------------------------------------------------------------------- */
 
@@ -664,7 +671,8 @@ RK_API void rk_view_transition(rk_view *view, rk_transition transition);   /* ca
  *     a key to everything that comes and goes in a list, so it keeps its focus, text and motion.
  *   - Strings and arrays are copied or compared when a macro runs: a local buffer is fine. Bound pointers and .user
  *     are kept: they live as long as the view.
- *   - A scope ({ ... } after a container) ends at its brace: no return, break or goto out of it.
+ *   - A scope ({ ... } after a container) ends at its brace; break or continue inside it ends the scope, not a loop
+ *     around it. No return or goto out of one.
  *   - A field 0 is the default: the design's gap, the kind's size, no tooltip, enabled. rk_ui grows only at its end.
  *   - Controllers stay underneath: RK_PLACES, RK_PIVOT, RK_PANORAMA and sheets declare them, RK_HOST puts any view
  *     made by hand (a custom view), and rk_ui_view() puts a declared view into a tree made by hand.
@@ -697,15 +705,15 @@ typedef struct rk_day { int year, month, day; } rk_day;   /* a date; year 0: non
 typedef struct rk_ui {
   uint32_t size;                                   /* sizeof(rk_ui): the macros set it */
   rk_ui_kind kind;
-  const char *key;                                 /* who it is among its siblings; also its name for rk_view_find */
-  uint64_t id;                                     /* or a number for who it is (0: none) */
-
-  /* what it says */
   const char *text;                                /* the macro's first argument: a label's text, a button's, a tile's value,
                                                       a row's or an item's title, the label of a field, a check or a toggle,
                                                       the title of a section, page, place, sheet, column or drop, an
                                                       image's path, a confirmation's question, a split's list (its crumb);
                                                       a panorama's, pivot's or places' title, for the title bar */
+  const char *key;                                 /* who it is among its siblings; also its name for rk_view_find */
+  uint64_t id;                                     /* or a number for who it is (0: none; RK_ID counts from 0) */
+
+  /* what else it says */
   const char *label;                               /* a tile's: what the value counts; a confirmation's word above it */
   const char *meta;                                /* a row's or an item's; a tile's status word */
   const char *message;                             /* a tile's; a confirmation's line under the question */
@@ -714,6 +722,7 @@ typedef struct rk_ui {
   const char *icon;                                /* a button's; an icon's name */
   const char *shortcut;                            /* a menu item's key hint: "Ctrl+E" */
   const char *tooltip;
+  const char *access;                              /* what a screen reader says, where the view says too little (an icon) */
   const char *accept;                              /* a drop's filter: ".png,.jpg", "image/" with a star */
   const char *ok, *cancel;                         /* a confirmation's answers: "ok", "cancel" */
 
@@ -757,12 +766,15 @@ typedef struct rk_ui {
   /* layout */
   struct { int columns, rows; } span;              /* in RK_TILES; 0: 1 */
   float width, height;                             /* fixed; 0: natural. A column's or a section's width */
+  float min_width, min_height;
   float grow;                                      /* a weight in a stack; 0: the kind's (1 for lists, splits, places) */
   float gap;                                       /* a container's; 0: the design's, RK_NO_GAP: none */
   rk_insets padding;
   rk_align align, cross;                           /* a stack's, along and across; AUTO: the kind's */
   uint32_t flags;                                  /* a column's: RK_COLUMN_NUMERIC | SORTABLE | EDITABLE */
+  rk_sort sort;                                    /* a column's: the sort its rows have, shown in its head */
   bool disabled;                                   /* greyed, takes nothing; its tooltip says why */
+  bool focus;                                      /* takes focus when it is made, and again when this turns true */
 
   /* behaviour: callbacks get .user, or the user the build was given when it is NULL */
   void *user;
@@ -800,12 +812,33 @@ RK_API void rk_ui_update(rk_view *view);           /* the state changed where th
 RK_API bool rk_ui_open(const rk_ui *ui);
 RK_API void rk_ui_close(void);
 RK_API void rk_ui_put(const rk_ui *ui);
+/* Text formatted for a declaration, valid until the build ends: RK_TILE(rk_ui_fmt("%d", n), ...). */
+RK_API const char *rk_ui_fmt(const char *format, ...);
 
-/* The macros (C99; from C++ fill an rk_ui and call the functions). A view's first argument is what it says, the rest
+/* The macros (C99; C++20 with the fields in rk_ui's order, and -Wno-missing-field-initializers). A view's first argument is what it says, the rest
    are fields by name: RK_TILE("12", .label = "builds today", .status = RK_STATUS_SUCCESS). One that holds views takes a
    scope after it: RK_VSTACK(.gap = RK_NO_GAP) { ... }. */
+#ifdef __cplusplus
+/* C++20 designated initializers: the fields in the order rk_ui declares them */
+static inline const rk_ui *rk_ui_ref_(const rk_ui &ui) { return &ui; }
+#define RK_UI(kind_, ...) rk_ui_ref_(rk_ui{ .size = sizeof(rk_ui), .kind = (kind_), __VA_ARGS__ })
+#else
 #define RK_UI(kind_, ...) (&(const rk_ui){ .size = sizeof(rk_ui), .kind = (kind_), __VA_ARGS__ })
-#define RK_UI_SCOPE(node) for (int rk_ui_once_ = rk_ui_open(node); rk_ui_once_; rk_ui_once_ = (rk_ui_close(), 0))
+#endif
+#define RK_ID(n) .id = (uint64_t)(n) + 1               /* who it is by a number from 0: .id itself takes 0 as none */
+#define RK_OPTIONS(array) .options = (array), .count = (int)(sizeof(array) / sizeof((array)[0]))   /* a static array's */
+/* A scope is two loops, so a break or a continue inside it still closes it (it leaves the scope, not a loop around
+   it); each scope's names are its own, so nested scopes shadow nothing. */
+#if defined(__COUNTER__)
+#  define RK_UI_ID_ __COUNTER__
+#else
+#  define RK_UI_ID_ __LINE__
+#endif
+#define RK_UI_CAT_(a, b) a##b
+#define RK_UI_CAT(a, b) RK_UI_CAT_(a, b)
+#define RK_UI_SCOPE(node) RK_UI_SCOPE_(node, RK_UI_ID_)
+#define RK_UI_SCOPE_(node, id) RK_UI_SCOPE__(node, RK_UI_CAT(rk_ui_open_, id), RK_UI_CAT(rk_ui_done_, id))
+#define RK_UI_SCOPE__(node, o, d) for (int o = rk_ui_open(node), d = !o; !d; d = 1, rk_ui_close()) for (; o; o = 0)
 
 #define RK_VSTACK(...)   RK_UI_SCOPE(RK_UI(RK_UI_VSTACK, __VA_ARGS__))
 #define RK_HSTACK(...)   RK_UI_SCOPE(RK_UI(RK_UI_HSTACK, __VA_ARGS__))

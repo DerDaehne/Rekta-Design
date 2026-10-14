@@ -74,7 +74,7 @@ static void group_done(group *g) {
   if (!g || --g->pending > 0 || !g->committed) return;
   void (*fn)(void *) = g->fn; void *user = g->user;
   free(g);
-  if (fn) fn(user);
+  if (fn) { fn(user); rk__ui_dirty(); }                  /* the app's code may have run (rk_animate_on_done) */
 }
 
 void rk__anim_cancel(rk_view *v, int prop) {

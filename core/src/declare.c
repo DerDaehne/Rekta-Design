@@ -2,19 +2,20 @@
 
    A build says what a window shows, node by node. Each node is matched as it is declared with the one the last build
    made at its place - by key or id, else as the next unkeyed node of its kind - and only what differs from the last
-   description is set on its view, with the setters an app would ui_call. What comes, goes or moves is gathered while the
+   description is set on its view, with the setters an app would call. What comes, goes or moves is gathered while the
    build runs and done when it ends, so the design's motion tells the change: first what leaves (RK_MOTION_LEAVE: it
    fades, the rest close up after it), then what enters or moves (RK_MOTION_ENTER, or RK_MOTION_REFLOW when nothing is
    new), then navigation - a place opened turns, a sheet comes down, a page slides. A change of content takes its
-   ui_transition before its setter: a tile's new value peeks in, a new status turns it over.
+   transition before its setter: a tile's new value peeks in, a new status turns it over.
 
    A node keeps a copy of what was declared last and never reads its view back, so the library sets what the
-   description ui_changed, never what the user ui_changed. A bound value is read from the app at each build and written
-   back when the user changes it. After anything that may have ui_changed the app's state - a handler, a timer, a post, a
+   description changed, never what the user changed. A bound value is read from the app at each build and written
+   back when the user changes it. After anything that may have changed the app's state - a handler, a timer, a post, a
    press, a key - every declared view builds again (rk__ui_settle). What a controller cannot follow in place (a
    section taken out of a panorama, a column out of a table) makes it again, once. */
 #include "rk_internal.h"
 #include "rk_tokens.h"
+#include <stdarg.h>
 
 typedef struct ui_root ui_root;
 typedef struct ui_node ui_node;
@@ -53,7 +54,7 @@ static const kind_info *ui_info(rk_ui_kind k) { return &ui_kinds[k >= 0 && k <= 
 static bool ui_is_controller(rk_ui_kind k) { return k == RK_UI_PANORAMA || k == RK_UI_PIVOT || k == RK_UI_PLACES; }
 
 struct ui_node {
-  rk_ui last;                                      /* as declared last: its ui_strings, series and options its own */
+  rk_ui last;                                      /* as declared last: its strings, series and options its own */
   ui_root *root; ui_node *parent;
   rk_view *view;                                   /* where what it holds goes; a leaf's own view */
   rk_view *outer;                                  /* what stands in its parent's views: a scroll, a split, a controller's */
@@ -74,6 +75,9 @@ struct ui_node {
                                                       page's index; -1 until it is added */
   uint32_t pulse;
   bool seen, fresh, stale, opened, presented, quiet, hooked;
+  bool moved;                                      /* the declaration moved its value this build */
+  bool still;                                      /* in a scope declared RK_UI_IN_PLACE: nothing it holds moves */
+  bool closed_by_user, warned;                     /* closed by the user without .open; that it came back was said */
 };
 
 struct ui_root {
@@ -83,18 +87,18 @@ struct ui_root {
   ui_node **stack; rk_controller **owners; int depth, scap;
   ui_node **gone; int ngone, gcap;                 /* what the build no longer declares */
   ui_node **swaps; int nswaps, swcap;              /* new nodes in an old one's place */
-  ui_node **holders; int nholders, hdcap;          /* nodes whose views to ui_arrange */
+  ui_node **holders; int nholders, hdcap;          /* nodes whose views to arrange */
   ui_node **navs; int nnavs, nvcap;                /* navigation to bring in step after the views */
   rk_ui *collect; int ncollect, ccap; bool collecting;   /* a menu being declared */
   bool building, pending, reflow, inset;
-  int handling;
-  unsigned settled;
+  char *arena; size_t arena_used, arena_cap;       /* rk_ui_fmt's text, until the build ends */
+  ui_node *focus;                                  /* a view to focus once it stands where it goes */
+  rk_window *window; bool (*on_key)(rk_window *, uint32_t, uint32_t, void *);   /* a window's */
   ui_root *next_root;
 };
 
 static ui_root *ui_roots;                             /* every declared view alive */
 static ui_root *ui_cur;                               /* the one building */
-static unsigned ui_epoch = 1;                         /* settles so far: a root built in this one is not built again */
 
 static void *ui_root_user(ui_node *n, const rk_ui *d) { return d->user ? d->user : n->root->user; }
 static void *ui_node_user(ui_node *n) { return ui_root_user(n, &n->last); }
@@ -103,7 +107,7 @@ static void *ui_node_user(ui_node *n) { return ui_root_user(n, &n->last); }
 
 #define F(field) offsetof(rk_ui, field)
 static const size_t ui_strings[] = { F(key), F(text), F(label), F(meta), F(message), F(hint), F(error), F(placeholder), F(icon),
-                                  F(shortcut), F(tooltip), F(accept), F(ok), F(cancel), F(input) };
+                                  F(shortcut), F(tooltip), F(access), F(accept), F(ok), F(cancel), F(input) };
 #undef F
 #define STR(u, off) (*(const char **)((char *)(u) + (off)))
 
@@ -173,6 +177,7 @@ static double ui_value_of(const rk_ui *d) {
     default: return d->value;
   }
 }
+static bool ui_is_bound(const rk_ui *d) { return d->on || d->chosen || d->number || d->day; }
 static bool ui_given_value(const rk_ui *d) {          /* a list or a table without .chosen shows what the user picks */
   if (d->kind == RK_UI_LIST || d->kind == RK_UI_TABLE) return d->chosen != NULL;
   return true;
@@ -194,7 +199,7 @@ static ui_node *ui_node_new(ui_root *r, ui_node *parent, rk_ui_kind kind) {
   return n;
 }
 
-/* Its views ui_call nothing of the app's or of ours any more: it is leaving, or replaced. What it holds too. */
+/* Its views call nothing of the app's or of ours any more: it is leaving, or replaced. What it holds too. */
 static void ui_unhook(ui_node *n) {
   for (int i = 0; i < n->nkids; i++) ui_unhook(n->kids[i]);
   n->hooked = false;
@@ -213,14 +218,14 @@ static void ui_unhook(ui_node *n) {
     case RK_UI_ROWS: if (n->last.on_move) rk_rows_set_sortable(v, NULL, NULL); break;
     case RK_UI_DROP: rk__drop_detach(v); break;
     case RK_UI_ITEM: if (n->tree && n->num >= 0 && n->num < n->tree->icap) n->tree->items[n->num] = NULL; break;
-    case RK_UI_SPLIT: rk__split_hear(n->outer, (rk__heard){ NULL, NULL }); break;
+    case RK_UI_SPLIT: rk_split_on_back(n->outer, NULL, NULL); break;
     case RK_UI_PIVOT: case RK_UI_PLACES: case RK_UI_PANORAMA:
-      if (k == RK_UI_PIVOT) rk__pivot_hear(n->ctl, (rk__heard){ NULL, NULL });
-      if (k == RK_UI_PLACES) rk__places_hear(n->ctl, (rk__heard){ NULL, NULL });
+      if (k == RK_UI_PIVOT) rk_pivot_on_change(n->ctl, NULL, NULL);
+      if (k == RK_UI_PLACES) rk_places_on_back(n->ctl, NULL, NULL);
       rk__controller_unembed(n->ctl);
       break;
     case RK_UI_SHEET:
-      rk__sheet_hear(n->ctl, (rk__heard){ NULL, NULL });
+      rk_controller_on_dismiss(n->ctl, NULL, NULL);
       if (n->presented) { n->presented = false; rk_controller_dismiss(n->ctl); }
       break;
     case RK_UI_CONFIRM:
@@ -254,50 +259,39 @@ static void ui_free_batch(void *user) {
   free(batch);
 }
 
-/* Handlers: the app's state changes, then it builds again ------------------------------------------------------- */
+/* Handlers: the app's state changes; every declared view builds before the window shows it ---------------------- */
 
-static void ui_rebuild(ui_root *r);
+static bool ui_dirty;                              /* the app may have changed its state: build at the next settle */
+static int ui_calling;                             /* the app's code running from here: never a build inside it */
+#define UI_APP(stmt) do { ui_calling++; stmt; ui_calling--; ui_dirty = true; } while (0)
 
-static void ui_call(ui_node *n, void (*fn)(rk_view *, void *), rk_view *v) {
-  ui_root *r = n->root;
-  rk_view *hold = rk_retain(r->top.view);
-  r->handling++;
-  if (fn) fn(v, ui_node_user(n));                     /* n may be gone after this */
-  r->handling--;
-  ui_rebuild(r);
-  rk_release(hold);
-}
+static void ui_call(ui_node *n, void (*fn)(rk_view *, void *), rk_view *v) { if (fn) UI_APP(fn(v, ui_node_user(n))); else ui_dirty = true; }
 
 static void ui_pressed(rk_view *v, void *u) { ui_node *n = u; if (n->hooked) ui_call(n, n->last.on_press, v); }
 static void ui_submitted(rk_view *v, void *u) { ui_node *n = u; if (n->hooked) ui_call(n, n->last.on_submit, v); }
 
-/* the user ui_changed a value: written where it is bound, then told */
+/* the user changed a value: written where it is bound, then told */
 static void ui_changed(rk_view *v, void *u) {
   ui_node *n = u;
   if (!n->hooked) return;
   rk_ui *d = &n->last;
   switch (d->kind) {
-    case RK_UI_FIELD: {
-      const char *t = rk_field_text(v);
+    case RK_UI_FIELD:
       if (d->buffer && d->buffer_size) {
+        const char *t = rk_field_text(v);
         size_t len = strlen(t), cap = d->buffer_size - 1;
         if (len > cap) { len = cap; while (len && ((unsigned char)t[len] & 0xc0) == 0x80) len--; }   /* never half a character */
         memcpy(d->buffer, t, len); d->buffer[len] = 0;
-        rk__setstr(&n->input, t);
       }
       break;
-    }
-    case RK_UI_DATE: {
-      int y = 0, m = 0, dd = 0;
-      rk_date_value(v, &y, &m, &dd);
-      if (d->day) { d->day->year = y; d->day->month = m; d->day->day = dd; n->value = y > 0 ? y * 10000 + m * 100 + dd : 0; }
+    case RK_UI_DATE:
+      if (d->day) { int y = 0, m = 0, dd = 0; rk_date_value(v, &y, &m, &dd); d->day->year = y; d->day->month = m; d->day->day = dd; }
       break;
-    }
     default: {
       double x = rk_control_value(v);
-      if (d->on) { *d->on = x != 0; n->value = x; }
-      else if (d->chosen) { *d->chosen = (int)x; n->value = x; }
-      else if (d->number) { *d->number = x; n->value = x; }
+      if (d->on) *d->on = x != 0;
+      else if (d->chosen) *d->chosen = (int)x;
+      else if (d->number) *d->number = x;
       break;
     }
   }
@@ -311,37 +305,18 @@ static const char *ui_table_cell(int row, int column, void *u) { ui_node *n = u;
 static void ui_list_shown(rk_view *v, int index, void *u) {
   ui_node *n = u;
   if (!n->hooked) return;
-  if (n->last.chosen) { *n->last.chosen = index; n->value = index; }
-  ui_root *r = n->root;
-  rk_view *hold = rk_retain(r->top.view);
-  r->handling++;
-  if (n->last.on_select) n->last.on_select(v, index, ui_node_user(n));
-  r->handling--;
-  ui_rebuild(r);
-  rk_release(hold);
+  if (n->last.chosen) { *n->last.chosen = index; n->value = index; }   /* shown by the user: not to be shown again */
+  if (n->last.on_select) UI_APP(n->last.on_select(v, index, ui_node_user(n))); else ui_dirty = true;
 }
 static void ui_list_changed(rk_view *v, void *u) { ui_node *n = u; if (n->hooked) ui_call(n, n->last.on_change, v); }
 static void ui_table_sorted(rk_view *v, int column, rk_sort sort, void *u) {
   ui_node *n = u;
-  if (!n->hooked || !n->last.on_sort) return;
-  ui_root *r = n->root;
-  rk_view *hold = rk_retain(r->top.view);
-  r->handling++;
-  n->last.on_sort(v, column, sort, ui_node_user(n));
-  r->handling--;
-  ui_rebuild(r);
-  rk_release(hold);
+  if (n->hooked && n->last.on_sort) UI_APP(n->last.on_sort(v, column, sort, ui_node_user(n)));
 }
 static const char *ui_table_edited(rk_view *v, int row, int column, const char *value, void *u) {
   ui_node *n = u;
-  if (!n->hooked || !n->last.on_edit) return NULL;
-  ui_root *r = n->root;
-  rk_view *hold = rk_retain(r->top.view);
-  r->handling++;
-  const char *why = n->last.on_edit(v, row, column, value, ui_node_user(n));
-  r->handling--;
-  ui_rebuild(r);
-  rk_release(hold);
+  const char *why = NULL;
+  if (n->hooked && n->last.on_edit) UI_APP(why = n->last.on_edit(v, row, column, value, ui_node_user(n)));
   return why;
 }
 static void ui_rows_moved(rk_view *v, int from, int to, void *u) {
@@ -354,32 +329,21 @@ static void ui_rows_moved(rk_view *v, int from, int to, void *u) {
     else memmove(n->kids + to + 1, n->kids + to, (size_t)(from - to) * sizeof *n->kids);
     n->kids[to] = k;
   }
-  ui_root *r = n->root;
-  rk_view *hold = rk_retain(r->top.view);
-  r->handling++;
-  if (n->last.on_move) n->last.on_move(v, from, to, ui_node_user(n));
-  r->handling--;
-  ui_rebuild(r);
-  rk_release(hold);
+  if (n->last.on_move) UI_APP(n->last.on_move(v, from, to, ui_node_user(n))); else ui_dirty = true;
 }
 static void ui_drop_files(rk_view *v, const char *const *taken, int nt, const char *const *refused, int nr, void *u) {
   ui_node *n = u;
-  if (!n->hooked || !n->last.on_files) return;
-  ui_root *r = n->root;
-  rk_view *hold = rk_retain(r->top.view);
-  r->handling++;
-  n->last.on_files(v, taken, nt, refused, nr, ui_node_user(n));
-  r->handling--;
-  ui_rebuild(r);
-  rk_release(hold);
+  if (n->hooked && n->last.on_files) UI_APP(n->last.on_files(v, taken, nt, refused, nr, ui_node_user(n)));
 }
 
-/* Trees: an item shown, a branch opened or closed */
+/* Trees: an item shown, a branch opened or closed. An item's choice is its own .chosen, or its tree's. */
 static ui_node *ui_item_of(ui_node *tree, int num) { return num >= 0 && num < tree->icap ? tree->items[num] : NULL; }
+static int *ui_item_chosen(ui_node *it) { return it->last.chosen ? it->last.chosen : it->tree ? it->tree->last.chosen : NULL; }
 static void ui_tree_shown(rk_view *v, int num, void *u) {
   ui_node *t = u, *it = t->hooked ? ui_item_of(t, num) : NULL;
   if (!it) return;
-  if (it->last.chosen) *it->last.chosen = (int)it->last.value;   /* the item shown, where the app keeps it */
+  int *chosen = ui_item_chosen(it);
+  if (chosen) *chosen = (int)it->last.value;       /* the item shown, where the app keeps it */
   ui_call(it, it->last.on_press, v);
 }
 static void ui_tree_toggled(rk_view *v, int num, bool open, void *u) {
@@ -390,36 +354,36 @@ static void ui_tree_toggled(rk_view *v, int num, bool open, void *u) {
   ui_call(it, it->last.on_change, v);
 }
 
-/* Navigation: what the user did */
+/* Navigation: what the user did. Without .open the declaration decides: if it still says open, it opens again -
+   and that is said, once, as it is surely not what the app meant. */
 static void ui_closed_by_user(ui_node *n, rk_view *v) {
   if (n->last.open) *n->last.open = false;
+  else n->closed_by_user = true;
   ui_call(n, n->last.on_close, v);
 }
-static void ui_pivot_heard(void *what, int index, void *u) {
+static void ui_pivot_heard(rk_controller *what, int index, void *u) {
   (void)what;
   ui_node *n = u;
   if (!n->hooked) return;
-  n->value = index;
   if (n->last.chosen) *n->last.chosen = index;
   ui_call(n, n->last.on_change, n->outer);
 }
-static void ui_places_heard(void *what, int depth, void *u) {
-  (void)what;
+static void ui_places_heard(rk_controller *what, void *u) {
   ui_node *n = u;
-  if (!n->hooked || n->npushed <= depth) return;
+  if (!n->hooked || n->npushed <= rk_places_depth(what)) return;
   ui_node *gone = n->pushed[--n->npushed];               /* the place the user left */
   gone->opened = false;
   ui_closed_by_user(gone, gone->view);
 }
-static void ui_sheet_heard(void *what, int index, void *u) {
-  (void)what; (void)index;
+static void ui_sheet_heard(rk_controller *what, void *u) {
+  (void)what;
   ui_node *n = u;
   if (!n->hooked) return;
   n->presented = false;
   ui_closed_by_user(n, n->view);
 }
-static void ui_split_heard(void *what, int index, void *u) {
-  (void)what; (void)index;
+static void ui_split_heard(rk_view *what, void *u) {
+  (void)what;
   ui_node *n = u;
   if (!n->hooked) return;
   n->opened = false;
@@ -431,10 +395,11 @@ static void ui_confirm_answered(bool ok, void *u) {
   if (n->quiet) { n->quiet = false; return; }            /* the app closed it */
   if (!n->hooked) return;
   if (n->last.open) *n->last.open = false;
+  else n->closed_by_user = true;
   ui_call(n, ok ? n->last.on_press : n->last.on_close, n->parent ? n->parent->view : NULL);
 }
 
-/* Menus: declared by a function of their own, built again when what they say ui_changed -------------------------- */
+/* Menus: declared by a function of their own, built again when what they say changed ---------------------------- */
 
 static void ui_menu_pressed(rk_view *menu, int item, void *u) {
   (void)menu;
@@ -443,13 +408,7 @@ static void ui_menu_pressed(rk_view *menu, int item, void *u) {
   rk_ui *e = &n->entries[item];
   if (e->on) *e->on = !*e->on;
   else if (e->chosen) *e->chosen = (int)e->value;
-  ui_root *r = n->root;
-  rk_view *hold = rk_retain(r->top.view);
-  r->handling++;
-  if (e->on_press) e->on_press(n->outer, e->user ? e->user : r->user);
-  r->handling--;
-  ui_rebuild(r);
-  rk_release(hold);
+  if (e->on_press) UI_APP(e->on_press(n->outer, e->user ? e->user : n->root->user)); else ui_dirty = true;
 }
 
 static rk_checkmark ui_entry_check(const rk_ui *e) {
@@ -458,20 +417,17 @@ static rk_checkmark ui_entry_check(const rk_ui *e) {
   return e->check;
 }
 
-static void ui_sync_menu(ui_node *n, const rk_ui *d) {
+static void ui_fill_menu(ui_node *n, const rk_ui *d) {
   ui_root *r = n->root;
-  if (!d->menu) {
-    if (n->menu) { rk_view_set_menu(n->outer, NULL); rk_release(n->menu); n->menu = NULL; }
-    for (int i = 0; i < n->nentries; i++) ui_drop_last(&n->entries[i]);
-    n->nentries = 0;
-    return;
-  }
   /* declare it */
+  ui_root *outer = ui_cur;
+  ui_cur = r;
   bool was = r->collecting;
   int base = r->ncollect;
   r->collecting = true;
   d->menu(ui_root_user(n, d));
   r->collecting = was;
+  ui_cur = outer;
   int count = r->ncollect - base;
   rk_ui *now = r->collect + base;
   bool rebuilt = count != n->nentries;
@@ -479,7 +435,6 @@ static void ui_sync_menu(ui_node *n, const rk_ui *d) {
     rk_ui *a = &n->entries[i], *b = &now[i];
     rebuilt = a->kind != b->kind || !ui_same(a->text, b->text) || !ui_same(a->shortcut, b->shortcut);
   }
-  if (!n->menu) { n->menu = rk_menu(); rk_view_set_menu(n->outer, rk_retain(n->menu)); rebuilt = true; }
   if (rebuilt) {
     rk_menu_clear(n->menu);
     for (int i = 0; i < count; i++) {
@@ -496,7 +451,7 @@ static void ui_sync_menu(ui_node *n, const rk_ui *d) {
     if (rk_menu_check(n->menu, i) != c) rk_menu_set_check(n->menu, i, c);   /* the menu toggles a square itself as it is picked */
     if (!was_e || was_e->disabled != e->disabled || rebuilt) rk_menu_set_enabled(n->menu, i, !e->disabled);
   }
-  /* ui_keep it: what it says now, its bindings too */
+  /* keep it: what it says now, its bindings too */
   if (count > n->nentries) {
     n->entries = rk__realloc(n->entries, (size_t)count * sizeof *n->entries);
     memset(n->entries + n->nentries, 0, (size_t)(count - n->nentries) * sizeof *n->entries);
@@ -507,6 +462,139 @@ static void ui_sync_menu(ui_node *n, const rk_ui *d) {
   for (int i = 0; i < count; i++) ui_drop_last(&now[i]);
   r->ncollect = base;
 }
+
+static void ui_menu_opening(rk_view *menu, void *u) { (void)menu; ui_node *n = u; if (n->hooked && n->last.menu) ui_fill_menu(n, &n->last); }
+
+/* A menu is declared when it opens, and again at each build while it is open: a closed menu costs nothing. */
+static void ui_sync_menu(ui_node *n, const rk_ui *d) {
+  if (!d->menu) {
+    if (n->menu) { rk_view_set_menu(n->outer, NULL); rk_release(n->menu); n->menu = NULL; }
+    for (int i = 0; i < n->nentries; i++) ui_drop_last(&n->entries[i]);
+    n->nentries = 0;
+    return;
+  }
+  if (!n->menu) {
+    n->menu = rk_menu();
+    rk__menu_on_open(n->menu, ui_menu_opening, n);
+    rk_view_set_menu(n->outer, rk_retain(n->menu));
+  }
+  if (rk__menu_open(n->menu)) ui_fill_menu(n, d);
+}
+
+/* What each kind reads: anything else declared on it is said, once, instead of passing in silence ------------------ */
+
+enum {
+  G_TEXT, G_LABEL, G_META, G_MESSAGE, G_HINT, G_PLACEHOLDER, G_ICON, G_SHORTCUT, G_ACCEPT, G_ANSWERS, G_STYLE, G_COLOR,
+  G_BUTTON, G_STATUS, G_FIT, G_SIDE, G_PROGRESS, G_SERIES, G_OPTIONS, G_COUNT, G_VALUE, G_RANGE, G_INPUT, G_CHECK,
+  G_LINES, G_DATA, G_ON, G_CHOSEN, G_NUMBER, G_DAY, G_BUFFER, G_OPEN, G_GAP, G_FLAGS, G_ON_CHANGE, G_ON_SUBMIT,
+  G_ON_CLOSE, G_ON_SELECT, G_ITEM, G_CELL, G_ON_MOVE, G_ON_FILES, G_HOST, G_VERSION, G_COUNT_OF
+};
+#define B(g) (1ull << (g))
+static const char *const ui_group_names[G_COUNT_OF] = {
+  ".text (its first argument)", ".label", ".meta", ".message", ".hint or .error", ".placeholder", ".icon", ".shortcut",
+  ".accept", ".ok or .cancel", ".style", ".color", ".button", ".status", ".fit", ".side", ".progress or .busy",
+  ".series", ".options", ".count", ".value", ".min, .max or .step", ".input", ".check", ".lines or .secret", ".data",
+  ".on", ".chosen", ".number", ".day", ".buffer", ".open", ".gap, .padding, .align or .cross", ".flags or .sort",
+  ".on_change", ".on_submit", ".on_close", ".on_select", ".item or .item_key", ".cell, .on_sort or .on_edit",
+  ".on_move", ".on_files", ".make or .update", ".version",
+};
+static uint64_t ui_present(const rk_ui *d) {
+  uint64_t m = 0;
+  if (d->text) m |= B(G_TEXT);
+  if (d->label) m |= B(G_LABEL);
+  if (d->meta) m |= B(G_META);
+  if (d->message) m |= B(G_MESSAGE);
+  if (d->hint || d->error) m |= B(G_HINT);
+  if (d->placeholder) m |= B(G_PLACEHOLDER);
+  if (d->icon) m |= B(G_ICON);
+  if (d->shortcut) m |= B(G_SHORTCUT);
+  if (d->accept) m |= B(G_ACCEPT);
+  if (d->ok || d->cancel || d->cancel_is_safe) m |= B(G_ANSWERS);
+  if (d->style) m |= B(G_STYLE);
+  if (d->color) m |= B(G_COLOR);
+  if (d->button) m |= B(G_BUTTON);
+  if (d->status) m |= B(G_STATUS);
+  if (d->fit) m |= B(G_FIT);
+  if (d->side) m |= B(G_SIDE);
+  if (d->progress || d->busy) m |= B(G_PROGRESS);
+  if (d->series || d->nseries) m |= B(G_SERIES);
+  if (d->options) m |= B(G_OPTIONS);
+  if (d->count && !d->options) m |= B(G_COUNT);
+  if (d->value) m |= B(G_VALUE);
+  if (d->min || d->max || d->step) m |= B(G_RANGE);
+  if (d->input) m |= B(G_INPUT);
+  if (d->check) m |= B(G_CHECK);
+  if (d->lines || d->secret) m |= B(G_LINES);
+  if (d->data || d->data_size) m |= B(G_DATA);
+  if (d->on) m |= B(G_ON);
+  if (d->chosen) m |= B(G_CHOSEN);
+  if (d->number) m |= B(G_NUMBER);
+  if (d->day) m |= B(G_DAY);
+  if (d->buffer || d->buffer_size) m |= B(G_BUFFER);
+  if (d->open) m |= B(G_OPEN);
+  if (d->gap || d->padding.top || d->padding.right || d->padding.bottom || d->padding.left || d->align || d->cross) m |= B(G_GAP);
+  if (d->flags || d->sort) m |= B(G_FLAGS);
+  if (d->on_change) m |= B(G_ON_CHANGE);
+  if (d->on_submit) m |= B(G_ON_SUBMIT);
+  if (d->on_close) m |= B(G_ON_CLOSE);
+  if (d->on_select) m |= B(G_ON_SELECT);
+  if (d->item || d->item_key) m |= B(G_ITEM);
+  if (d->cell || d->on_sort || d->on_edit) m |= B(G_CELL);
+  if (d->on_move) m |= B(G_ON_MOVE);
+  if (d->on_files) m |= B(G_ON_FILES);
+  if (d->make || d->update) m |= B(G_HOST);
+  if (d->version) m |= B(G_VERSION);
+  return m;
+}
+static uint64_t ui_reads(rk_ui_kind k, bool in_menu) {
+  const uint64_t box = B(G_GAP) | B(G_VERSION), control = B(G_VALUE) | B(G_ON_CHANGE);
+  switch (k) {
+    case RK_UI_VSTACK: case RK_UI_HSTACK: case RK_UI_TILES: case RK_UI_SCROLL: return box;
+    case RK_UI_ROWS: return box | B(G_ON_MOVE);
+    case RK_UI_SPLIT: return B(G_TEXT) | B(G_OPEN) | B(G_ON_CLOSE) | B(G_VERSION);
+    case RK_UI_LABEL: return B(G_TEXT) | B(G_STYLE) | B(G_COLOR);
+    case RK_UI_BUTTON: return B(G_TEXT) | B(G_BUTTON) | B(G_ICON);
+    case RK_UI_TILE: return B(G_TEXT) | B(G_LABEL) | B(G_META) | B(G_STATUS) | B(G_MESSAGE) | B(G_PROGRESS) | B(G_SERIES);
+    case RK_UI_ROW: return B(G_TEXT) | B(G_META) | B(G_STATUS);
+    case RK_UI_ICON: return B(G_ICON) | B(G_COLOR);
+    case RK_UI_PROGRESS: return B(G_PROGRESS);
+    case RK_UI_IMAGE: return B(G_TEXT) | B(G_FIT) | B(G_DATA);
+    case RK_UI_SPACER: return 0;
+    case RK_UI_FIELD: return B(G_TEXT) | B(G_PLACEHOLDER) | B(G_HINT) | B(G_INPUT) | B(G_BUFFER) | B(G_LINES) | B(G_OPTIONS) | B(G_ON_CHANGE) | B(G_ON_SUBMIT);
+    case RK_UI_CHECK: case RK_UI_TOGGLE: return B(G_TEXT) | B(G_ON) | control;
+    case RK_UI_CHOICES: case RK_UI_SEGMENTS: case RK_UI_SELECT: return B(G_OPTIONS) | B(G_CHOSEN) | control;
+    case RK_UI_SLIDER: case RK_UI_STEPPER: return B(G_RANGE) | B(G_NUMBER) | control;
+    case RK_UI_DATE: return B(G_DAY) | control;
+    case RK_UI_DROP: return B(G_TEXT) | B(G_HINT) | B(G_ACCEPT) | B(G_ON_FILES);
+    case RK_UI_LIST: return B(G_COUNT) | B(G_ITEM) | B(G_CHOSEN) | B(G_ON_SELECT) | B(G_ON_CHANGE) | B(G_VERSION);
+    case RK_UI_TABLE: return B(G_COUNT) | B(G_CELL) | B(G_ITEM) | B(G_CHOSEN) | B(G_ON_SELECT) | B(G_ON_CHANGE) | B(G_VERSION);
+    case RK_UI_COLUMN: return B(G_TEXT) | B(G_FLAGS);
+    case RK_UI_TREE: return B(G_CHOSEN) | B(G_VERSION);
+    case RK_UI_ITEM: return in_menu ? B(G_TEXT) | B(G_SHORTCUT) | B(G_ON) | B(G_CHOSEN) | B(G_VALUE) | B(G_CHECK)
+                                    : B(G_TEXT) | B(G_META) | B(G_STATUS) | B(G_OPEN) | B(G_CHOSEN) | B(G_VALUE) | B(G_ON_CHANGE);
+    case RK_UI_SEPARATOR: return 0;
+    case RK_UI_HEADING: return B(G_TEXT);
+    case RK_UI_PANORAMA: case RK_UI_PLACES: return B(G_TEXT);
+    case RK_UI_SECTION: case RK_UI_PAGE: return B(G_TEXT) | box;
+    case RK_UI_PIVOT: return B(G_TEXT) | B(G_CHOSEN) | B(G_SIDE) | control;
+    case RK_UI_PLACE: case RK_UI_SHEET: return B(G_TEXT) | B(G_OPEN) | B(G_ON_CLOSE) | box;
+    case RK_UI_CONFIRM: return B(G_TEXT) | B(G_LABEL) | B(G_MESSAGE) | B(G_ANSWERS) | B(G_OPEN) | B(G_ON_CLOSE);
+    case RK_UI_HOST: return B(G_HOST);
+    default: return 0;
+  }
+}
+static void ui_check_fields(const rk_ui *d, bool in_menu) {
+  static uint64_t said[LAST_KIND + 2];
+  int k = d->kind == RK_UI_ITEM && in_menu ? LAST_KIND + 1 : d->kind;
+  uint64_t extra = ui_present(d) & ~ui_reads(d->kind, in_menu) & ~said[k];
+  for (int g = 0; extra && g < G_COUNT_OF; g++) if (extra & B(g)) {
+    said[k] |= B(g); extra &= ~B(g);
+    const char *why = g == G_LABEL && (d->kind == RK_UI_FIELD || d->kind == RK_UI_CHECK || d->kind == RK_UI_TOGGLE || d->kind == RK_UI_BUTTON)
+                      ? ": its label is the first argument" : g == G_VALUE && ui_is_bound(d) ? ": it is bound" : "";
+    rk__warn("%s%s does not read %s%s", ui_info(d->kind)->name, in_menu ? " in a menu" : "", ui_group_names[g], why);
+  }
+}
+#undef B
 
 /* What differs goes to the view ------------------------------------------------------------------------------------- */
 
@@ -538,8 +626,12 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
   rk_ui_kind k = d->kind;
   bool layout = false, pulse = !fresh && d->pulse != n->pulse;
   n->pulse = d->pulse;
+  /* bound: controlled - what the app holds is what shows, after every build; given: a start, moved only when the
+     declaration moves it, else the user's stays. A list's shown item is moved, never held: the user selects several. */
   double val = ui_value_of(d);
-  bool set_val = ui_given_value(d) && (fresh ? false : val != n->value);
+  bool moved = !fresh && val != n->value, bound = ui_is_bound(d);
+  bool set_val = ui_given_value(d) && !fresh && (k == RK_UI_LIST || k == RK_UI_TABLE ? moved : bound || moved);
+  n->moved = fresh || moved;
   switch (k) {
     case RK_UI_LABEL:
       if (CHANGED_S(text) && !fresh) { ui_transition(n, d, RK_UI_IN_PLACE, fresh); rk_label_set_text(v, d->text); layout = true; }
@@ -590,12 +682,10 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
         if (d->error) rk_field_set_error(v, d->error); else if (d->hint || !fresh) rk_field_set_hint(v, d->hint);
         layout = true;
       }
-      /* the app's text, when it ui_changed: never over what the user typed since */
-      const char *t = ui_text_of(d);
-      if (t && !ui_same(t, n->input)) {
-        if (strcmp(rk_field_text(v), t)) rk_field_set_text(v, t);
-        rk__setstr(&n->input, t);
-      }
+      /* the app's text, when it changed: never over what the user typed since */
+      const char *t = ui_text_of(d);                 /* bound: held; given: set when it moves */
+      if (t && (d->buffer ? !fresh : !ui_same(t, n->input)) && strcmp(rk_field_text(v), t)) rk_field_set_text(v, t);
+      rk__setstr(&n->input, t);
       if (CHANGED(lines) && (d->lines || !fresh)) { rk_field_set_lines(v, d->lines > 0 ? d->lines : 1); layout = true; }
       if (CHANGED(secret) && (d->secret || !fresh)) rk_field_set_secret(v, d->secret);
       if (fresh ? ui_options_count(d) > 0 : !ui_same_options(d->options, ui_options_count(d), o->options, ui_options_count(o)))
@@ -647,6 +737,7 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
       if (!fresh && n->parent && n->num >= 0) {
         if (!ui_same(d->text, o->text) || d->flags != o->flags) { n->parent->stale = true; r->pending = true; }
         else if (d->width != o->width) rk_table_set_column_width(n->parent->view, n->num, d->width);
+        if (d->sort != o->sort) rk_table_set_sort(n->parent->view, n->num, d->sort);
       }
       break;
     case RK_UI_ITEM:
@@ -658,15 +749,22 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
     default: break;
   }
   if (set_val) {
-    if (k == RK_UI_DATE) { int x = (int)val; rk_date_set_value(v, x / 10000, x / 100 % 100, x % 100); }
-    else if (k == RK_UI_PIVOT) { /* in step with the pages, after them */ }
+    if (k == RK_UI_DATE) {
+      int x = (int)val, y = 0, m = 0, dd = 0;
+      rk_date_value(v, &y, &m, &dd);
+      if (x != (y > 0 ? y * 10000 + m * 100 + dd : 0)) rk_date_set_value(v, x / 10000, x / 100 % 100, x % 100);
+    } else if (k == RK_UI_PIVOT) { /* in step with the pages, after them */ }
     else if (ui_info(k)->role == R_VIEW && k >= RK_UI_CHECK && k <= RK_UI_SELECT) { if (rk_control_value(v) != val) rk_control_set_value(v, val); }
   }
-  if (k != RK_UI_PIVOT || fresh) n->value = val;
+  if (k != RK_UI_LIST && k != RK_UI_TABLE) n->value = val;  /* as declared; a list keeps the shown item, user's too */
+  else if (set_val || fresh) n->value = val;
   /* what any view has */
   if (ui_info(k)->role == R_VIEW && k != RK_UI_NONE) {
     if (CHANGED_S(key) && (d->key || !fresh)) rk_view_set_name(outer, d->key);
     if (CHANGED_S(tooltip) && (d->tooltip || !fresh)) rk_view_set_tooltip(outer, d->tooltip);
+    if (CHANGED_S(access) && d->access) rk__setstr(&outer->access_label, d->access);
+    if (CHANGED(min_width) || CHANGED(min_height)) { if (d->min_width || d->min_height || !fresh) { rk_view_set_min_size(outer, d->min_width, d->min_height); layout = true; } }
+    if (d->focus && (fresh || !o->focus)) r->focus = n;
     if (CHANGED(disabled) && (d->disabled || !fresh)) rk_view_set_enabled(outer, !d->disabled);
     if (CHANGED(fill) && (d->fill || !fresh)) rk_view_set_fill(outer, d->fill);
     if (CHANGED(rules) && (d->rules || !fresh)) rk_view_set_rules(outer, d->rules);
@@ -689,7 +787,7 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
     if (CHANGED(align) || CHANGED(cross)) { if (d->align || d->cross || !fresh) { rk_view_set_align(v, d->align, d->cross); layout = true; } }
   }
   if (ui_info(k)->role == R_VIEW && k != RK_UI_NONE && (fresh || d->menu != o->menu || d->menu)) ui_sync_menu(n, d);
-  if (layout && !fresh) r->reflow = true;          /* it glides to its new size */
+  if (layout && !fresh && !n->still) r->reflow = true;   /* it glides to its new size */
   ui_keep(&n->last, d);
 }
 
@@ -725,7 +823,7 @@ static ui_node *ui_create(ui_root *r, ui_node *parent, const rk_ui *d) {
     case RK_UI_SPLIT:
       n->panes[0] = ui_fill_box(); n->panes[1] = ui_fill_box();
       v = rk_split(rk_retain(n->panes[0]), rk_retain(n->panes[1]), d->text);
-      rk__split_hear(v, (rk__heard){ ui_split_heard, n });
+      rk_split_on_back(v, ui_split_heard, n);
       break;
     case RK_UI_LABEL: v = rk_label(d->text, d->style); break;
     case RK_UI_BUTTON: v = rk_button(d->text, NULL, NULL); break;
@@ -764,14 +862,14 @@ static ui_node *ui_create(ui_root *r, ui_node *parent, const rk_ui *d) {
       n->ctl = d->kind == RK_UI_PANORAMA ? rk_panorama() : d->kind == RK_UI_PIVOT ? rk_pivot() : rk_places(NULL);
       v = rk_controller_embed(ui_owner_here(r), rk_retain(n->ctl));   /* its view, a reference: the node's */
       if (d->text) rk_controller_set_title(n->ctl, d->text);   /* what the title bar names */
-      if (d->kind == RK_UI_PIVOT) rk__pivot_hear(n->ctl, (rk__heard){ ui_pivot_heard, n });
-      if (d->kind == RK_UI_PLACES) rk__places_hear(n->ctl, (rk__heard){ ui_places_heard, n });
+      if (d->kind == RK_UI_PIVOT) rk_pivot_on_change(n->ctl, ui_pivot_heard, n);
+      if (d->kind == RK_UI_PLACES) rk_places_on_back(n->ctl, ui_places_heard, n);
       break;
     case RK_UI_SECTION: v = ui_column_box(); break;
     case RK_UI_PAGE: case RK_UI_PLACE: case RK_UI_SHEET:
       v = ui_column_box();
       n->ctl = rk_controller_create_with_view(rk_retain(v), d->text);
-      if (d->kind == RK_UI_SHEET) rk__sheet_hear(n->ctl, (rk__heard){ ui_sheet_heard, n });
+      if (d->kind == RK_UI_SHEET) rk_controller_on_dismiss(n->ctl, ui_sheet_heard, n);
       break;
     case RK_UI_CONFIRM: case RK_UI_COLUMN: break;
     case RK_UI_HOST: v = d->make ? d->make(user) : NULL; break;
@@ -824,6 +922,8 @@ static ui_node *ui_find(ui_node *p, const rk_ui *d) {
     }
     return NULL;
   }
+  if (p->nnext && ui_keyed(&p->next[p->nnext - 1]->last) && ui_same_one(p->next[p->nnext - 1], d))
+    rk__warn("rk_ui: two views are %s%s among the same siblings: each needs its own key", d->key ? d->key : "", d->id ? " (one id)" : "");
   ui_node *k = NULL;
   if (p->from < n && ui_same_one(p->kids[p->from], d)) k = p->kids[p->from];   /* in the order it was: the common case */
   else {
@@ -836,7 +936,7 @@ static ui_node *ui_find(ui_node *p, const rk_ui *d) {
   }
   if (!k) return NULL;
   if (k->seen) {
-    rk__warn("rk_ui: two views are %s%s among the ui_same siblings: each needs its own key", d->key ? d->key : "", d->id ? " (one id)" : "");
+    rk__warn("rk_ui: two views are %s%s among the same siblings: each needs its own key", d->key ? d->key : "", d->id ? " (one id)" : "");
     return NULL;
   }
   int j = p->from < n && p->kids[p->from] == k ? p->from : -1;
@@ -895,7 +995,7 @@ static rk_controller *ui_owner_of(ui_node *n, rk_controller *outer) {
   }
 }
 
-/* Its scope runs: not when its version is the ui_same as the last, nor for a place or a sheet that is closed */
+/* Its scope runs: not when its version is the same as the last, nor for a place or a sheet that is closed */
 static bool ui_scope_runs(const rk_ui *d, bool fresh, uint32_t was_version) {
   if (!fresh && d->version && d->version == was_version) return false;
   if ((d->kind == RK_UI_PLACE || d->kind == RK_UI_SHEET) && ui_open_of(d) == 0 && !fresh) return false;
@@ -907,6 +1007,34 @@ static bool ui_needs_nav(rk_ui_kind k) {
          k == RK_UI_TABLE || k == RK_UI_TREE;
 }
 
+const char *rk_ui_fmt(const char *format, ...) {
+  ui_root *r = ui_cur;
+  if (!r) { rk__error("rk_ui_fmt: only inside a build"); return ""; }
+  va_list ap;
+  va_start(ap, format);
+  int n = vsnprintf(NULL, 0, format, ap);
+  va_end(ap);
+  if (n < 0) return "";
+  size_t need = r->arena_used + (size_t)n + 1;
+  if (need > r->arena_cap) {                       /* a new block: what was given out before stays where it is */
+    size_t cap = RK_MAX(need - r->arena_used, (size_t)4096);
+    char *block = rk__alloc(cap + sizeof(char *));
+    memcpy(block, &r->arena, sizeof(char *));      /* chained, freed when the build ends */
+    r->arena = block; r->arena_used = sizeof(char *); r->arena_cap = cap + sizeof(char *);
+  }
+  char *out = r->arena + r->arena_used;
+  va_start(ap, format);
+  vsnprintf(out, (size_t)n + 1, format, ap);
+  va_end(ap);
+  r->arena_used += (size_t)n + 1;
+  return out;
+}
+
+static void ui_arena_free(ui_root *r) {
+  while (r->arena) { char *next; memcpy(&next, r->arena, sizeof next); free(r->arena); r->arena = next; }
+  r->arena_used = r->arena_cap = 0;
+}
+
 bool rk_ui_open(const rk_ui *in) {
   ui_root *r = ui_cur;
   if (!r) { rk__error("rk_ui_open: only inside a build (rk_window_desc.build or rk_ui_view)"); return false; }
@@ -915,6 +1043,7 @@ bool rk_ui_open(const rk_ui *in) {
   memset(&d, 0, sizeof d);
   memcpy(&d, in, RK_MIN((size_t)in->size, sizeof d));
   if (d.kind <= RK_UI_NONE || d.kind > LAST_KIND) { rk__error("rk_ui_open: no kind of view is %d", (int)d.kind); return false; }
+  ui_check_fields(&d, r->collecting);
   if (r->collecting) {                             /* a menu: its entries */
     if (d.kind != RK_UI_ITEM && d.kind != RK_UI_SEPARATOR && d.kind != RK_UI_HEADING) {
       rk__error("rk_ui_open: a menu holds RK_ITEM, RK_SEPARATOR and RK_HEADING (%s in it)", ui_info(d.kind)->name);
@@ -940,11 +1069,11 @@ bool rk_ui_open(const rk_ui *in) {
     return false;
   }
   ui_node *old = ui_find(p, &d), *n;
-  bool fresh = false;
+  bool fresh = false, still = p->still || (d.change == RK_UI_IN_PLACE && ui_info(d.kind)->holds != H_NONE);
   uint32_t was_version = old ? old->last.version : 0;
-  if (old && ui_made_with(old, &d)) { n = old; ui_update(n, &d, false); }
+  if (old && ui_made_with(old, &d)) { n = old; n->still = still; ui_update(n, &d, false); }
   else {
-    n = ui_create(r, p, &d); fresh = true;
+    n = ui_create(r, p, &d); fresh = true; n->still = still;
     if (old) { n->replaces = old; n->at = old->at; ui_record(&r->swaps, &r->nswaps, &r->swcap, n); }
   }
   p->next = rk__grow(p->next, &p->ncap, p->nnext + 1, sizeof *p->next);
@@ -975,7 +1104,7 @@ static void ui_finish(ui_root *r, ui_node *n) {
     }
     if (lost && !n->fresh) { n->stale = true; r->pending = true; }
   }
-  if (h == H_ITEMS) {                              /* a tree adds items at the end of their parent: the rest ui_keep their order */
+  if (h == H_ITEMS) {                              /* a tree adds items at the end of their parent: the rest keep their order */
     int last_num = -1; bool new_seen = false;
     for (int i = 0; i < n->nnext; i++) {
       ui_node *k = n->next[i];
@@ -1028,22 +1157,12 @@ static int ui_index_in(rk_view *parent, rk_view *v) {
   return -1;
 }
 
-/* The views a node holds stand in its order in their holder; the views leaving ui_keep their places. True when a view
+/* The views a node holds stand in its order in their holder; the views leaving keep their places. True when a view
    was added. */
 static bool ui_arrange_in(rk_view *h, rk_view **want, int n) {
-  static uint32_t mark;
   bool added = false;
   for (int i = 0; i < n; i++) if (want[i]->parent != h) { rk__view_insert(h, want[i], h->nkids); added = true; }
-  if (++mark == 0) mark = 1;
-  for (int i = 0; i < n; i++) want[i]->ui_mark = mark;
-  int j = 0;
-  bool moved = false;
-  for (int i = 0; i < h->nkids && j < n; i++) {           /* only its own slots: what leaves, or is not its, stays */
-    if (h->kids[i]->ui_mark != mark) continue;
-    if (h->kids[i] != want[j]) { moved = true; h->kids[i] = want[j]; }
-    j++;
-  }
-  if (moved || added) rk__view_relayout_up(h);
+  rk_view_reorder(h, want, n);                     /* what leaves, or is not the node's, keeps its slot */
   return added;
 }
 
@@ -1061,7 +1180,7 @@ static void ui_arrange(ui_node *n) {
     }
     return;
   }
-  rk_view *buf[64], **want = n->nkids <= 64 ? buf : rk__alloc((size_t)n->nkids * sizeof *want);
+  rk_view *buf[64] = { 0 }, **want = n->nkids <= 64 ? buf : rk__alloc((size_t)n->nkids * sizeof *want);
   int m = 0;
   for (int i = 0; i < n->nkids; i++) if (ui_info(n->kids[i]->last.kind)->role == R_VIEW) want[m++] = n->kids[i]->outer;
   ui_arrange_in(n->view, want, m);
@@ -1079,6 +1198,16 @@ static bool ui_any_new(ui_node *n) {
 }
 
 /* After the build: navigation --------------------------------------------------------------------------------------- */
+
+/* Closed by the user, declared open again: it comes back, as declared - and that is said, once. */
+static void ui_came_back(ui_node *n) {
+  if (!n->closed_by_user) return;
+  n->closed_by_user = false;
+  if (n->warned) return;
+  n->warned = true;
+  rk__warn("%s \"%s\" was closed by the user and is declared open again: bind .open, or stop declaring it in .on_close",
+           ui_info(n->last.kind)->name, n->last.text ? n->last.text : "");
+}
 
 /* Who shows a sheet: the page, place or sheet it is declared in, else the window's host */
 static rk_controller *ui_presenter_for(ui_root *r, ui_node *n) {
@@ -1108,9 +1237,8 @@ static void ui_sync_nav(ui_root *r, ui_node *n) {
         if (s->num < 0) { rk_pivot_add_controller(n->ctl, rk_retain(s->ctl)); s->num = slot; }
         slot++;
       }
-      int want = (int)ui_value_of(d);
+      int want = d->chosen ? *d->chosen : n->moved ? (int)d->value : -1;   /* bound: held; given: when it moves */
       if (want >= 0 && want < slot && want != rk_pivot_selected(n->ctl)) rk_pivot_select(n->ctl, want);
-      n->value = rk_pivot_selected(n->ctl);
       break;
     }
     case RK_UI_PLACES: {
@@ -1124,6 +1252,7 @@ static void ui_sync_nav(ui_root *r, ui_node *n) {
       if (k == 0 && n->npushed) { n->stale = true; r->pending = true; break; }   /* another first place: places anew */
       while (n->npushed > k) { n->pushed[--n->npushed]->opened = false; rk_places_back(n->ctl); }
       for (int i = k; i < m; i++) {
+        ui_came_back(want[i]);
         rk_places_go(n->ctl, rk_retain(want[i]->ctl));
         want[i]->opened = true;
         ui_record(&n->pushed, &n->npushed, &n->pcap, want[i]);
@@ -1133,18 +1262,22 @@ static void ui_sync_nav(ui_root *r, ui_node *n) {
     }
     case RK_UI_SHEET: {
       int open = ui_open_of(d);
+      if (open != 1) n->closed_by_user = false;
       rk_controller *owner = ui_presenter_for(r, n);
       if (open == 1 && !rk__controller_presented(n->ctl)) {
+        ui_came_back(n);
         if (owner && rk_controller_window(owner)) { rk_controller_present(owner, rk_retain(n->ctl)); n->presented = rk__controller_presented(n->ctl); }
       } else if (open == 0 && rk__controller_presented(n->ctl)) { n->presented = false; rk_controller_dismiss(n->ctl); }
       break;
     }
     case RK_UI_CONFIRM: {
       int open = ui_open_of(d);
+      if (open != 1) n->closed_by_user = false;
       rk_controller *owner = ui_presenter_for(r, n);
       if (open == 1 && !n->asked && owner && rk_controller_window(owner)) {
+        ui_came_back(n);
         rk_confirm_desc c = { sizeof c, d->text, d->message, d->label, d->ok, d->cancel, d->cancel_is_safe };
-        rk_controller *s = rk__confirm(owner, &c, ui_confirm_answered, n);
+        rk_controller *s = rk_confirm(owner, &c, ui_confirm_answered, n);
         n->asked = s ? rk_retain(s) : NULL;
       } else if (open == 0 && n->asked) {
         rk_controller *s = n->asked;
@@ -1166,7 +1299,10 @@ static void ui_sync_nav(ui_root *r, ui_node *n) {
       for (int i = 0; i < n->nkids; i++) {
         ui_node *c = n->kids[i];
         if (c->last.kind != RK_UI_COLUMN) continue;
-        if (c->num < 0) { rk_table_add_column(n->view, c->last.text, c->last.width, c->last.flags); c->num = slot; }
+        if (c->num < 0) {
+          rk_table_add_column(n->view, c->last.text, c->last.width, c->last.flags); c->num = slot;
+          if (c->last.sort) rk_table_set_sort(n->view, slot, c->last.sort);
+        }
         slot++;
       }
       rk_table_on_sort(n->view, ui_table_sorted, n);
@@ -1199,11 +1335,26 @@ static void ui_tree_add(ui_node *tree, ui_node *holder, int parent_num) {
       }
     }
     if (it->num >= 0) {
-      if (it->last.chosen && *it->last.chosen == (int)it->last.value && rk_tree_selected(tree->view) != it->num) rk_tree_select(tree->view, it->num);
+      int *chosen = ui_item_chosen(it);
+      if (chosen && *chosen == (int)it->last.value && rk_tree_selected(tree->view) != it->num) rk_tree_select(tree->view, it->num);
       int open = ui_open_of(&it->last);
       if (open >= 0 && (bool)open != rk_tree_is_open(tree->view, it->num)) rk_tree_set_open(tree->view, it->num, open);
       it->opened = rk_tree_is_open(tree->view, it->num);
       ui_tree_add(tree, it, it->num);
+    }
+  }
+}
+
+/* A node no longer declared: it calls nothing, and its view leaves its parent (with motion inside a LEAVE block). */
+static void ui_take_out(ui_node *g) {
+  ui_unhook(g);
+  if (g->last.kind == RK_UI_ITEM && g->tree && g->num >= 0 && !g->tree->stale) rk_tree_remove(g->tree->view, g->num);
+  if (ui_info(g->last.kind)->role == R_VIEW && g->outer && g->outer->parent) rk_view_remove(g->outer);
+  if (g->last.kind == RK_UI_PLACE && g->parent) {          /* a place no longer declared: out of the stack */
+    ui_node *pl = g->parent;
+    for (int p = 0; p < pl->npushed; p++) if (pl->pushed[p] == g) {
+      while (pl->npushed > p) { pl->pushed[--pl->npushed]->opened = false; rk_places_back(pl->ctl); }
+      break;
     }
   }
 }
@@ -1231,37 +1382,41 @@ static void ui_run(ui_root *r) {
     if (focus) { rk_view *f = rk__first_focusable(n->outer); if (f) rk_window_focus(w, f); }
   }
   r->nswaps = 0;
-  /* what goes leaves first; its nodes live until it is gone, so a fading list still draws */
-  if (r->ngone) {
-    ui_node **batch = rk__alloc((size_t)(r->ngone + 1) * sizeof *batch);
-    memcpy(batch, r->gone, (size_t)r->ngone * sizeof *batch);
-    batch[r->ngone] = NULL;
+  /* what goes leaves first; its nodes live until it is gone, so a fading list still draws. In a scope declared
+     RK_UI_IN_PLACE nothing moves: it goes, comes and stands at once. */
+  int moving = 0, nstill = 0;
+  ui_node **still = r->ngone ? rk__alloc((size_t)r->ngone * sizeof *still) : NULL;   /* kept apart for after the motion */
+  for (int i = 0; i < r->ngone; i++) {
+    ui_node *g = r->gone[i];
+    if (g->parent && g->parent->still) still[nstill++] = g; else r->gone[moving++] = g;
+  }
+  if (moving) {
+    ui_node **batch = rk__alloc((size_t)(moving + 1) * sizeof *batch);
+    memcpy(batch, r->gone, (size_t)moving * sizeof *batch);
+    batch[moving] = NULL;
     rk_animate_begin(RK_MOTION_LEAVE);
-    for (int i = 0; i < r->ngone; i++) {
-      ui_node *g = r->gone[i];
-      ui_unhook(g);
-      if (g->last.kind == RK_UI_ITEM && g->tree && g->num >= 0 && !g->tree->stale) rk_tree_remove(g->tree->view, g->num);
-      if (ui_info(g->last.kind)->role == R_VIEW && g->outer && g->outer->parent) rk_view_remove(g->outer);
-      if (g->last.kind == RK_UI_PLACE && g->parent) {          /* a place no longer declared: out of the stack */
-        ui_node *pl = g->parent;
-        for (int p = 0; p < pl->npushed; p++) if (pl->pushed[p] == g) {
-          while (pl->npushed > p) { pl->pushed[--pl->npushed]->opened = false; rk_places_back(pl->ctl); }
-          break;
-        }
-      }
-    }
+    for (int i = 0; i < moving; i++) ui_take_out(r->gone[i]);
     rk_animate_on_done(ui_free_batch, batch);
     rk_animate_commit();
-    r->ngone = 0;
   }
+  r->ngone = 0;
   /* then the new build comes in and the rest make room */
-  bool entering = false, any = false;
-  for (int i = 0; i < r->nholders; i++) if (r->holders[i]) { any = true; entering |= ui_any_new(r->holders[i]); }
+  bool entering = false, any = false, any_still = nstill > 0;
+  for (int i = 0; i < r->nholders; i++) if (r->holders[i]) {
+    if (r->holders[i]->still) { any_still = true; continue; }
+    any = true; entering |= ui_any_new(r->holders[i]);
+  }
   if (any || r->reflow) {
     rk_animate_begin(entering ? RK_MOTION_ENTER : RK_MOTION_REFLOW);
-    for (int i = 0; i < r->nholders; i++) if (r->holders[i]) ui_arrange(r->holders[i]);
+    for (int i = 0; i < r->nholders; i++) if (r->holders[i] && !r->holders[i]->still) ui_arrange(r->holders[i]);
     rk_animate_commit();
   }
+  if (any_still) {                                 /* outside any motion: at once */
+    for (int i = 0; i < nstill; i++) { ui_take_out(still[i]); ui_node_free(still[i]); }
+    for (int i = 0; i < r->nholders; i++) if (r->holders[i] && r->holders[i]->still) ui_arrange(r->holders[i]);
+    rk__layout_pending();
+  }
+  free(still);
   r->nholders = 0;
   r->reflow = false;
   /* then navigation: places turn, pages slide, sheets come down */
@@ -1271,6 +1426,14 @@ static void ui_run(ui_root *r) {
     else ui_sync_nav(r, n);
   }
   r->nnavs = 0;
+  /* then focus, where the build asked for it, once its view stands where it goes */
+  if (r->focus) {
+    ui_node *f = r->focus;
+    r->focus = NULL;
+    rk_window *w = f->outer ? rk_view_window(f->outer) : NULL;
+    rk_view *t = w ? rk__first_focusable(f->outer) : NULL;
+    if (t) { w->focus_visible = true; rk_window_focus(w, t); }
+  }
 }
 
 static void ui_build_once(ui_root *r) {
@@ -1287,6 +1450,7 @@ static void ui_build_once(ui_root *r) {
   ui_finish(r, &r->top);
   r->depth = 0;
   r->building = false;
+  ui_arena_free(r);
   ui_cur = outer;
   ui_run(r);
   /* a window's host stands for the one controller it holds, so a pivot at the top still picks the place; plain views
@@ -1303,12 +1467,11 @@ static void ui_build_once(ui_root *r) {
 
 static void ui_rebuild(ui_root *r) {
   if (!r->build) return;
-  if (r->building || r->handling) { r->pending = true; return; }   /* once the build or the handler is done */
+  if (r->building || ui_calling) { ui_dirty = true; return; }   /* never inside a build or the app's handler: after it */
   rk_view *hold = rk_retain(r->top.view);
   int pass = 0;
   do { r->pending = false; ui_build_once(r); } while (r->pending && ++pass < 8);
   if (r->pending) { r->pending = false; rk__warn("a build asks for another build each time (8 in a row): stopped"); }
-  r->settled = ui_epoch;
   rk_release(hold);
 }
 
@@ -1360,12 +1523,25 @@ rk_view *rk_ui_view(void (*build)(void *user), void *user) {
   return r->top.view;
 }
 
-void rk__ui_window(rk_window *w, void (*build)(void *), void *user) {
-  ui_root *r = ui_root_new(build, user);
-  r->host = rk_controller_create_with_view(r->top.view, NULL);   /* takes the view */
+/* A window's host: the declared view, and the keys no view took */
+static rk_view *ui_host_load(rk_controller *c, void *state) { (void)c; return ((ui_root *)state)->top.view; }
+static bool ui_host_event(rk_controller *c, const rk_event *e, void *state) {
+  (void)c;
+  ui_root *r = state;
+  bool taken = false;
+  if (e->type == RK_EVENT_KEY_DOWN && r->on_key) UI_APP(taken = r->on_key(r->window, e->key, e->mods, r->user));
+  return taken;
+}
+
+void rk__ui_window(rk_window *w, const rk_window_desc *desc) {
+  ui_root *r = ui_root_new(desc->build, desc->user);
+  r->window = w; r->on_key = desc->on_key;
+  rk_controller_class cls = { sizeof cls, "rk_ui_window", ui_host_load, NULL, NULL, ui_host_event, NULL };
+  r->host = rk_controller_create(&cls, r);
+  rk_controller_view(r->host);                     /* takes the view */
   ui_rebuild(r);
   rk_window_show(w, r->host);                      /* takes the host */
-  ui_rebuild(r);                                      /* in its window now: what needs one (a sheet) can come */
+  ui_rebuild(r);                                   /* in its window now: what needs one (a sheet) can come */
 }
 
 void rk_ui_update(rk_view *view) {
@@ -1374,21 +1550,27 @@ void rk_ui_update(rk_view *view) {
     ui_rebuild(view->state);
     return;
   }
-  for (ui_root *r = ui_roots; r; r = r->next_root) r->settled = 0;
+  ui_dirty = true;
   rk__ui_settle();
 }
 
-/* After a callback the library ran: every declared view builds again, each once. */
+/* Something the library called may have changed the app's state: build at the next settle. */
+void rk__ui_dirty(void) { ui_dirty = true; }
+
+/* At the end of an event, a timer, a post, a frame: every declared view builds once if the state may have changed -
+   outside any handler and any controller's own work, so a build never runs in the middle of either. */
 void rk__ui_settle(void) {
   static bool settling;
-  if (!ui_roots || settling) return;
+  if (!ui_dirty || !ui_roots || settling || ui_calling) return;
   settling = true;
-  int n = 0, cap = 0;
-  rk_view **all = NULL;
-  for (ui_root *r = ui_roots; r; r = r->next_root) if (r->settled != ui_epoch) { all = rk__grow(all, &cap, n + 1, sizeof *all); all[n++] = rk_retain(r->top.view); }
-  for (int i = 0; i < n; i++) { ui_root *r = all[i]->state; if (r && r->settled != ui_epoch) ui_rebuild(r); }
-  for (int i = 0; i < n; i++) rk_release(all[i]);
-  free(all);
-  ui_epoch++;
+  for (int round = 0; ui_dirty && round < 3; round++) {   /* a host's update may change the state again: a few rounds */
+    ui_dirty = false;
+    int n = 0, cap = 0;
+    rk_view **all = NULL;
+    for (ui_root *r = ui_roots; r; r = r->next_root) { all = rk__grow(all, &cap, n + 1, sizeof *all); all[n++] = rk_retain(r->top.view); }
+    for (int i = 0; i < n; i++) ui_rebuild(all[i]->state);
+    for (int i = 0; i < n; i++) rk_release(all[i]);
+    free(all);
+  }
   settling = false;
 }

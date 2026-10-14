@@ -89,7 +89,7 @@ static void run_timers(double now) {
     if (t.every > 0) timers[at].due = RK_MAX(t.due + t.every, now);
     else timers[at] = timers[--ntimers];
     t.fn(t.user);
-    if (!t.quiet) rk__ui_settle();                         /* what is declared follows what the timer changed */
+    if (!t.quiet) { rk__ui_dirty(); rk__ui_settle(); }     /* what is declared follows what the timer changed */
   }
 }
 
@@ -118,7 +118,7 @@ static void run_posts(void) {
     nposts--;
     UNLOCK();
     p.fn(p.user);
-    rk__ui_settle();
+    rk__ui_dirty(); rk__ui_settle();
   }
 }
 
@@ -132,7 +132,7 @@ static void changed(bool crossfade) {
     (void)crossfade;
   }
   for (int i = 0; i < nlisteners; i++) listeners[i].fn(listeners[i].user);
-  rk__ui_settle();                                         /* what is declared may read the look (rk_app_is_dark) */
+  rk__ui_dirty(); rk__ui_settle();                         /* what is declared may read the look (rk_app_is_dark) */
 }
 
 /* A change of the whole look cross-fades over duration-short, as the web's view transition. */
@@ -196,6 +196,7 @@ static void step(double max_wait) {
   run_posts();
   run_timers(now);
   rk__anim_close_blocks();
+  rk__ui_settle();                                         /* anything left to build, before the frame shows it */
   bool paced = rk__platform()->ready != NULL, any_ready = false;
   for (rk_window *w = rk__windows(); w; w = w->next) any_ready |= ready(w);
   /* paced: when a window can take a frame (or none could for a while: motion still moves on, unseen) */
