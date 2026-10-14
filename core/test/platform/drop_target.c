@@ -14,7 +14,7 @@ static void launch(void *user) {
   (void)user;
   rk_window_desc d = { .size = sizeof d, .title = "drop-target", .width = 400, .height = 300 };
   rk_window *w = rk_window_create(&d);
-  rk_view *page = rk_column();
+  rk_view *page = rk_vstack();
   rk_view_set_padding(page, (rk_insets){ 0, 0, 0, 0 });
   rk_view *zone = rk_add(page, rk_drop("Drop pictures here", NULL, "image/*", dropped, NULL));
   rk_view_set_grow(zone, 1);

@@ -64,7 +64,7 @@ static rk_controller *notes_place(void) {
   rk_pivot_add(pivot, facet("files", files, 2));
 
   float l = rk_metric_of(RK_SPACE_L), xl = rk_metric_of(RK_SPACE_XL);
-  rk_view *page = rk_column();
+  rk_view *page = rk_vstack();
   rk_view_set_padding(page, (rk_insets){ l, xl, l, xl });
   rk_add(page, rk_label("Release notes", RK_TEXT_TITLE));
   rk_add(page, rk_label("A place of its own. The facets slide from their side; Escape, the back button or Alt+Left turn back home.", RK_TEXT_BODY));
@@ -153,7 +153,7 @@ static rk_view *tile_menu(void) {
 }
 
 static rk_view *rekta_section(void) {
-  rk_view *s = rk_column();
+  rk_view *s = rk_vstack();
   rk_add(s, rk_label("Tiles, not cards.", RK_TEXT_GROUP));
   rk_add(s, rk_label("A tile's whole area is one fill, and the fill is its status. Press one: it nudges back where you press it. A tile that opens something presses; one that only informs does not.", RK_TEXT_BODY));
 
@@ -181,7 +181,7 @@ static rk_view *rekta_section(void) {
 
   rk_add(D.board, rk_tile("51", "icons"));
 
-  rk_view *buttons = rk_add(s, rk_row());
+  rk_view *buttons = rk_add(s, rk_hstack());
   rk_add(buttons, rk_button("pin a tile", pin, NULL));
   rk_add(buttons, rk_button("unpin it", unpin, NULL));
   rk_add(buttons, rk_button("resize", grow, NULL));
@@ -243,7 +243,7 @@ static void toggle_feed(rk_view *v, void *u) {
 }
 
 static rk_view *live_section(void) {
-  rk_view *s = rk_column();
+  rk_view *s = rk_vstack();
   rk_add(s, rk_label("Live, and honest about it.", RK_TEXT_GROUP));
   rk_add(s, rk_label("Every two seconds the queue moves and its number peeks in; every six the runners' status flips. Events arrive at the top and the oldest leaves.", RK_TEXT_BODY));
 
@@ -259,7 +259,7 @@ static rk_view *live_section(void) {
   for (int i = 0; i < 3; i++) rk_rows_add(D.events, EVENTS[i][0], NULL, event_status(i));
   D.events_n = 3;
 
-  rk_view *feed = rk_add(rk_add(s, rk_row()), rk_button("feed on or off", toggle_feed, NULL));
+  rk_view *feed = rk_add(rk_add(s, rk_hstack()), rk_button("feed on or off", toggle_feed, NULL));
   rk_button_set_kind(feed, RK_BUTTON_QUIET);
   rk_button_set_icon(feed, "pause");
   return s;
@@ -279,11 +279,11 @@ static void sheet_reset(rk_view *v, void *u) {
 
 static void open_sheet(rk_view *v, void *u) {
   (void)v; (void)u;
-  rk_view *s = rk_column();
+  rk_view *s = rk_vstack();
   rk_add(s, rk_label("sheet", RK_TEXT_KICKER));
   rk_add(s, rk_label("Reset the counter?", RK_TEXT_GROUP));
   rk_add(s, rk_label("The pressed tiles go back to zero. Escape or a click on the shading keeps them.", RK_TEXT_BODY));
-  rk_view *buttons = rk_add(s, rk_row());
+  rk_view *buttons = rk_add(s, rk_hstack());
   rk_add(buttons, rk_button("keep it", sheet_close, NULL));
   rk_button_set_kind(rk_add(buttons, rk_button("reset", sheet_reset, NULL)), RK_BUTTON_PRIMARY);
   D.sheet = rk_controller_create_with_view(s, "Reset the counter?");
@@ -313,11 +313,11 @@ static void fade(rk_view *v, void *u) {
 }
 
 static rk_view *motion_section(void) {
-  rk_view *s = rk_column();
+  rk_view *s = rk_vstack();
   rk_add(s, rk_label("Every transition means one thing.", RK_TEXT_GROUP));
   rk_add(s, rk_label("A sheet is a short question from the top edge; a toast says something happened; archiving goes into the window's history: its toast, Ctrl+Z and Ctrl+Y take it back and forth.", RK_TEXT_BODY));
 
-  rk_view *buttons = rk_add(s, rk_row());
+  rk_view *buttons = rk_add(s, rk_hstack());
   rk_button_set_kind(rk_add(buttons, rk_button("open a sheet", open_sheet, NULL)), RK_BUTTON_PRIMARY);
   rk_button_set_icon(rk_add(buttons, rk_button("archive", toast_undo, NULL)), "archive");
   rk_add(buttons, rk_button("a toast", toast_plain, NULL));
@@ -327,7 +327,7 @@ static rk_view *motion_section(void) {
 
   rk_add(s, rk_label("cross-fade", RK_TEXT_KICKER));
   D.fade = rk_add(s, rk_label("Same place, new words: the old ones fade out over the new.", RK_TEXT_BODY));
-  rk_button_set_kind(rk_add(rk_add(s, rk_row()), rk_button("new words", fade, NULL)), RK_BUTTON_QUIET);
+  rk_button_set_kind(rk_add(rk_add(s, rk_hstack()), rk_button("new words", fade, NULL)), RK_BUTTON_QUIET);
   return s;
 }
 
@@ -433,10 +433,10 @@ static void check_mail(rk_view *field, void *user) {
 static void mail_typed(rk_view *field, void *user) { (void)user; rk_field_set_hint(field, "Enter saves it.", false); }
 
 static rk_view *controls_section(void) {
-  rk_view *s = rk_column();
+  rk_view *s = rk_vstack();
   rk_add(s, rk_label("Native where it can be, Rekta where it shows.", RK_TEXT_GROUP));
 
-  rk_view *kinds = rk_add(s, rk_row());
+  rk_view *kinds = rk_add(s, rk_hstack());
   rk_button_set_kind(rk_add(kinds, rk_button("primary", NULL, NULL)), RK_BUTTON_PRIMARY);
   rk_add(kinds, rk_button("default", NULL, NULL));
   rk_button_set_kind(rk_add(kinds, rk_button("quiet", NULL, NULL)), RK_BUTTON_QUIET);
@@ -445,7 +445,7 @@ static rk_view *controls_section(void) {
   rk_view_set_tooltip(off, "nothing to do yet");
 
   static const char *const bar[][2] = { { "edit", "edit" }, { "share", "link" }, { "delete", "trash" }, { NULL, "more" } };
-  rk_view *app_bar = rk_add(s, rk_row());
+  rk_view *app_bar = rk_add(s, rk_hstack());
   rk_view_set_gap(app_bar, 2);
   for (int i = 0; i < 4; i++) {
     rk_view *b = rk_add(app_bar, rk_button(bar[i][0], NULL, NULL));
@@ -466,18 +466,18 @@ static rk_view *controls_section(void) {
   rk_add(s, rk_label("progress", RK_TEXT_KICKER));
   D.bar = rk_add(s, rk_progress(0.25f));
   rk_add(s, rk_progress(-1));                                  /* working on it, no end known */
-  rk_button_set_kind(rk_add(rk_add(s, rk_row()), rk_button("advance", advance, NULL)), RK_BUTTON_QUIET);
+  rk_button_set_kind(rk_add(rk_add(s, rk_hstack()), rk_button("advance", advance, NULL)), RK_BUTTON_QUIET);
   static const char *const sizes[] = { "small", "medium", "large", "a whole wall" };
   static const char *const cities[] = { "Amsterdam", "Berlin", "Bern", "Bonn", "Copenhagen", "Hamburg", "Lisbon", "Munich", "Vienna" };
   rk_add(s, rk_label("a select, and a field that suggests", RK_TEXT_KICKER));
-  rk_view *pick = rk_add(s, rk_row());
+  rk_view *pick = rk_add(s, rk_hstack());
   rk_add(pick, rk_select(sizes, 4, 1));
   rk_add(pick, rk_date(2026, 10, 13));
   rk_view *city = rk_add(s, rk_field("City", "Type, or Down for the list"));
   rk_field_set_options(city, cities, 9);
   rk_add(s, rk_label("a slider sets the bar; a stepper counts", RK_TEXT_KICKER));
   rk_control_on_change(rk_add(s, rk_slider(0, 100, 5, 25)), slide_bar, NULL);
-  rk_view *copies = rk_add(s, rk_row());
+  rk_view *copies = rk_add(s, rk_hstack());
   rk_control_on_change(rk_add(copies, rk_stepper(1, 20, 1, 2)), count_copies, NULL);
   D.copies = rk_add(copies, rk_label("2 copies, printed on Monday.", RK_TEXT_BODY));
   rk_view_set_align(copies, RK_ALIGN_START, RK_ALIGN_CENTER);
@@ -487,7 +487,7 @@ static rk_view *controls_section(void) {
   for (int i = 0; i < 7; i++) ch->to[i] = ch->from[i] = (float)(i == 5 || i == 6 ? 0.15 : 0.6 + 0.05 * i);
   D.chart = rk_add(s, rk_view_create_custom(&chart_class, ch));
   rk_view_set_access(D.chart, RK_ACCESS_IMAGE, "build minutes by weekday");
-  rk_button_set_kind(rk_add(rk_add(s, rk_row()), rk_button("new figures", new_figures, NULL)), RK_BUTTON_QUIET);
+  rk_button_set_kind(rk_add(rk_add(s, rk_hstack()), rk_button("new figures", new_figures, NULL)), RK_BUTTON_QUIET);
 
   rk_add(s, rk_label("rows", RK_TEXT_KICKER));
   rk_view *rows = rk_add(s, rk_rows());
@@ -587,7 +587,7 @@ static void sort_builds(rk_view *table, int column, int dir, void *user) {
 }
 
 static rk_view *lists_section(void) {
-  rk_view *s = rk_column();
+  rk_view *s = rk_vstack();
   rk_add(s, rk_label("A million rows, a screenful of work.", RK_TEXT_GROUP));
   rk_add(s, rk_label("Only the rows in sight are drawn; nothing is kept for the others. A click opens one; Ctrl+click, Shift+click and Ctrl+A select.", RK_TEXT_BODY));
   rk_view *list = rk_add(s, rk_list(1000000, build_item, NULL));
@@ -633,7 +633,7 @@ static void pictures_dropped(rk_view *drop, const char *const *taken, int nt, co
 }
 
 static rk_view *desk_section(void) {
-  rk_view *s = rk_column();
+  rk_view *s = rk_vstack();
   rk_add(s, rk_label("A desk: things beside their detail.", RK_TEXT_GROUP));
   rk_view *tree = rk_tree();
   int src = rk_tree_add(tree, -1, "src"), ui = rk_tree_add(tree, src, "ui");
@@ -647,7 +647,7 @@ static rk_view *desk_section(void) {
   rk_tree_open(tree, src, true); rk_tree_open(tree, ui, true);
   rk_tree_select(tree, split_c);
   rk_tree_on_show(tree, desk_show, NULL);
-  rk_view *detail = rk_column();
+  rk_view *detail = rk_vstack();
   desk_title = rk_add(detail, rk_label("split.c", RK_TEXT_GROUP));
   rk_add(detail, rk_label("steps: drag a grip, or Space then Up and Down", RK_TEXT_KICKER));
   desk_steps = rk_add(detail, rk_rows());
@@ -670,7 +670,7 @@ static const char *const ICONS[] = {
 };
 
 static rk_view *type_section(void) {
-  rk_view *s = rk_column();
+  rk_view *s = rk_vstack();
   rk_add(s, rk_label("Barlow, in a few roles.", RK_TEXT_GROUP));
   rk_add(s, rk_label("Title, semibold", RK_TEXT_TITLE));
   rk_add(s, rk_label("a kicker, tracked", RK_TEXT_KICKER));
@@ -681,10 +681,10 @@ static rk_view *type_section(void) {
 
   rk_add(s, rk_label("51 icons on a 20px grid", RK_TEXT_KICKER));
   int n = (int)(sizeof ICONS / sizeof ICONS[0]);
-  rk_view *lines = rk_add(s, rk_column());
+  rk_view *lines = rk_add(s, rk_vstack());
   rk_view_set_gap(lines, rk_metric_of(RK_SPACE_S));
   for (int i = 0; i < n; i += 13) {
-    rk_view *line = rk_add(lines, rk_row());
+    rk_view *line = rk_add(lines, rk_hstack());
     rk_view_set_gap(line, 14);
     for (int k = i; k < i + 13 && k < n; k++) rk_add(line, rk_icon(ICONS[k], RK_ROLE_TEXT));
   }
@@ -709,7 +709,7 @@ static void set_accent(rk_view *v, void *u) { (void)u; if (rk_control_value(v)) 
 /* A choice: a kicker and segments, the chosen segment's place as the value. */
 static void choice(rk_view *s, const char *title, const char *const names[], int count, void (*fn)(rk_view *, void *)) {
   rk_add(s, rk_label(title, RK_TEXT_KICKER));
-  rk_view *seg = rk_add(rk_add(s, rk_row()), rk_segments(names, count, 0));
+  rk_view *seg = rk_add(rk_add(s, rk_hstack()), rk_segments(names, count, 0));
   rk_view_set_name(seg, title);
   rk_control_on_change(seg, fn, NULL);
 }
@@ -728,7 +728,7 @@ static void say_sound(rk_view *v, void *u) { (void)u; rk_window_toast(rk_view_wi
 static rk_view *settings_section(void) {
   static const char *const theme[] = { "system", "light", "dark" }, *const density[] = { "as the pointer", "comfortable", "compact" };
   static const char *const motion[] = { "as the system", "on", "off" }, *const accent[] = { "ink", "plum" };
-  rk_view *s = rk_column();
+  rk_view *s = rk_vstack();
   rk_add(s, rk_label("Yours to choose.", RK_TEXT_GROUP));
   rk_add(s, rk_label("Each follows the system until you choose. A change of theme or accent cross-fades; reduced motion makes every transition instant, never skipped.", RK_TEXT_BODY));
   choice(s, "theme", theme, 3, set_theme);

@@ -46,7 +46,7 @@ A constructor returns a reference you own.
 It is named after the thing it makes:
 .Fn rk_label ,
 .Fn rk_tile ,
-.Fn rk_column .
+.Fn rk_vstack .
 Where the thing is a type of its own it is called
 .Fn *_create :
 .Fn rk_window_create ,
@@ -184,7 +184,7 @@ False when the system has none here.
 .El
 .Ss Containers and views
 .Bl -tag -width Ds
-.It Fn rk_column , Fn rk_row , Fn rk_tile_grid
+.It Fn rk_vstack , Fn rk_hstack , Fn rk_tile_grid
 Containers with the spacing the design gives them: a column top to
 bottom, a row left to right, a grid of tiles in tile units.
 A column stretches its children to its width, except buttons, which keep
@@ -662,7 +662,7 @@ static void build_one(rk_view *button, void *user) {
 }
 
 static rk_view *today(void) {
-  rk_view *page = rk_column();
+  rk_view *page = rk_vstack();
   rk_add(page, rk_label("Today", RK_TEXT_GROUP));
 
   rk_view *tiles = rk_add(page, rk_tile_grid());

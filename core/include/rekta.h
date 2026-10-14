@@ -4,7 +4,7 @@
  *   - C99. Functions rk_noun_verb, types rk_noun, constants RK_NOUN.
  *   - Value types cross by value and never change layout. Units are logical pixels.
  *   - Objects are opaque and reference counted. One rule for who owns what:
- *       - a view or controller constructor returns a reference you own (rk_label(), rk_column(), rk_pivot(), ...);
+ *       - a view or controller constructor returns a reference you own (rk_label(), rk_vstack(), rk_pivot(), ...);
  *       - every call that puts a view or controller somewhere takes that reference over: adding it to a view, a
  *         panorama, a pivot, places, a scroll, a split or a menu slot, showing it in a window, presenting it, giving
  *         it to rk_controller_create_with_view(). What is in the tree belongs to the tree; you never release it;
@@ -194,7 +194,7 @@ RK_API void rk_window_toast(rk_window *window, const char *message, const char *
 
 typedef enum rk_layout {
   RK_LAYOUT_MANUAL,                                /* children keep the frames set on them */
-  RK_LAYOUT_COLUMN, RK_LAYOUT_ROW,                 /* stacks: gap, padding, alignment, grow */
+  RK_LAYOUT_VSTACK, RK_LAYOUT_HSTACK,              /* stacks: gap, padding, alignment, grow */
   RK_LAYOUT_TILES,                                 /* the tile grid: units of tile-unit, gap space-s, spans */
   RK_LAYOUT_OVERLAY,                               /* every child fills the padded bounds */
   RK_LAYOUT_FORCE32 = 0x7fffffff
@@ -213,7 +213,7 @@ typedef enum rk_access_role {
 
 typedef enum rk_press { RK_PRESS_NONE, RK_PRESS_TILE, RK_PRESS_ROW, RK_PRESS_FLAT, RK_PRESS_FORCE32 = 0x7fffffff } rk_press;
 
-RK_API rk_view *rk_view_create(void);              /* a plain view; see rk_column() and the like for containers */
+RK_API rk_view *rk_view_create(void);              /* a plain view; see rk_vstack() and the like for containers */
 
 /* the tree: adding takes the child over and returns it, so it can be kept to change it later */
 RK_API rk_view *rk_add(rk_view *parent, rk_view *child);
@@ -348,8 +348,8 @@ typedef enum rk_text_style {
 typedef enum rk_status { RK_STATUS_NONE, RK_STATUS_INFO, RK_STATUS_SUCCESS, RK_STATUS_WARNING, RK_STATUS_ERROR, RK_STATUS_FORCE32 = 0x7fffffff } rk_status;
 
 /* Containers with the spacing the design gives them; change it with rk_view_set_gap() and the like. */
-RK_API rk_view *rk_column(void);                   /* top to bottom, gap space-m */
-RK_API rk_view *rk_row(void);                      /* left to right, gap space-s, aligned to the start */
+RK_API rk_view *rk_vstack(void);                   /* top to bottom, gap space-m (SwiftUI VStack, a flex column) */
+RK_API rk_view *rk_hstack(void);                   /* left to right, gap space-s, aligned to the start (HStack) */
 RK_API rk_view *rk_tile_grid(void);                /* tiles in units of tile-unit, gap space-s */
 
 RK_API rk_view *rk_label(const char *text, rk_text_style style);   /* wraps at its width */
@@ -374,6 +374,8 @@ RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1;
 /* Hairline rows: a title on the left, a meta or a status tag on the right. */
 RK_API rk_view *rk_rows(void);
 RK_API rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_status status);   /* the row, borrowed */
+/* A row is a view: rk_insert moves it, rk_view_remove takes it out, and it presses, has a tooltip or a menu like any. */
+RK_API void rk_row_set(rk_view *row, const char *title, const char *meta, rk_status status);
 /* Rows the user puts in order: each gets a grip that drags it (4 px, then it lifts and the others step aside) or, from
    the keyboard, Space picks it up, Up and Down move it, Space puts it down and Escape puts it back; Alt with Up or Down
    moves it at once. moved() hears each move to keep the app's order (and its undo); rk_rows_move moves one, gliding. */
@@ -387,6 +389,7 @@ RK_API rk_view *rk_menu(void);
 RK_API int rk_menu_add(rk_view *menu, const char *label, const char *key, void (*fn)(rk_view *menu, int item, void *user), void *user);   /* the item's index */
 RK_API void rk_menu_add_separator(rk_view *menu);
 RK_API void rk_menu_add_label(rk_view *menu, const char *label);   /* a group's name */
+RK_API void rk_menu_clear(rk_view *menu);                          /* every item goes: build it again */
 RK_API void rk_menu_set_check(rk_view *menu, int item, int check); /* -1: none (the default), 0: empty, 1: filled */
 RK_API int rk_menu_check(rk_view *menu, int item);
 RK_API void rk_menu_set_enabled(rk_view *menu, int item, bool enabled);
@@ -436,15 +439,23 @@ RK_API void rk_field_set_lines(rk_view *field, int lines);   /* the lines it sho
 RK_API void rk_field_set_options(rk_view *field, const char *const *options, int count);   /* a combobox: suggestions as you type */
 
 /* A long list: only the rows in sight are drawn and nothing is kept for each item - item() fills a row while it is
-   drawn, so the strings it gives need to last only for the call. Hairline rows, selected the Metro way: a click
-   selects one and shows it (on_show); Ctrl+click toggles and starts selecting several; Shift+click takes a range. */
-typedef struct rk_list_item { const char *title, *meta; rk_status status; } rk_list_item;
+   drawn, so the strings it gives need to last only for the call (out->size says how much of the struct this library
+   knows). Hairline rows, selected the Metro way: a click selects one and shows it (on_show); Ctrl+click toggles and
+   starts selecting several; Shift+click takes a range. In a stack it fills what the others leave, and scrolls. */
+typedef struct rk_list_item { uint32_t size; const char *title, *meta; rk_status status; } rk_list_item;
 RK_API rk_view *rk_list(int count, void (*item)(int index, rk_list_item *out, void *user), void *user);
 RK_API void rk_list_set_count(rk_view *list, int count);   /* the items changed: drawn again */
+/* What identifies an item, called with the list's user: then the selection and the active row follow the items when
+   they move (a sort, items added above). Without keys an item is its index, and a sort lets the selection go. */
+RK_API void rk_list_set_key(rk_view *list, uint64_t (*key)(int index, void *user));
 RK_API void rk_list_on_show(rk_view *list, void (*fn)(rk_view *list, int index, void *user), void *user);
-RK_API void rk_list_on_change(rk_view *list, void (*fn)(rk_view *list, void *user), void *user);   /* the selection */
-RK_API bool rk_list_selected(rk_view *list, int index);
+RK_API void rk_list_on_change(rk_view *list, void (*fn)(rk_view *list, void *user), void *user);   /* the user changed the selection */
+RK_API bool rk_list_is_selected(rk_view *list, int index);
 RK_API int rk_list_selection_count(rk_view *list);
+RK_API int rk_list_selection(rk_view *list, int *indices, int max);   /* fills up to max, in order; returns how many there are */
+RK_API void rk_list_select(rk_view *list, int index, bool selected);   /* the app's choice: drawn, not told */
+RK_API void rk_list_clear_selection(rk_view *list);
+RK_API int rk_list_active(rk_view *list);                  /* the row the keyboard is on; -1 when empty */
 RK_API void rk_list_scroll_to(rk_view *list, int index);   /* glides it into sight and makes it the active row */
 
 /* A place to drop files: a dashed edge that turns solid while files are over it. accept filters them as the file
@@ -466,6 +477,11 @@ RK_API void rk_tree_select(rk_view *tree, int item);   /* -1: none; shows nothin
 RK_API int rk_tree_selected(rk_view *tree);
 RK_API int rk_tree_parent(rk_view *tree, int item);   /* -1 at the top */
 RK_API const char *rk_tree_title(rk_view *tree, int item);
+RK_API void rk_tree_set_title(rk_view *tree, int item, const char *title);
+RK_API void rk_tree_set_user(rk_view *tree, int item, void *user);   /* the app's own, for its item */
+RK_API void *rk_tree_user(rk_view *tree, int item);
+RK_API void rk_tree_remove(rk_view *tree, int item);      /* with everything under it; its number is not given again */
+RK_API void rk_tree_clear(rk_view *tree);                 /* every item; numbers start again at 0 */
 RK_API void rk_tree_on_show(rk_view *tree, void (*fn)(rk_view *tree, int item, void *user), void *user);
 RK_API void rk_tree_on_toggle(rk_view *tree, void (*fn)(rk_view *tree, int item, bool open, void *user), void *user);
 

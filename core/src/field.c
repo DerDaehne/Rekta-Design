@@ -211,7 +211,7 @@ static void suggest_chosen(rk_view *menu, int item, void *user);
 
 static void suggest(rk_view *v, field *f, bool open) {
   if (!f->suggest) return;
-  rk__menu_clear(f->suggest);
+  rk_menu_clear(f->suggest);
   f->nshown = 0;
   int mark = -1;
   for (int i = 0; i < f->noptions; i++) {

@@ -89,7 +89,7 @@ static void build_one(rk_view *button, void *user) {
 }
 
 static rk_view *today(void) {
-  rk_view *page = rk_column();
+  rk_view *page = rk_vstack();
   rk_add(page, rk_label("Today", RK_TEXT_GROUP));
 
   rk_view *tiles = rk_add(page, rk_tile_grid());

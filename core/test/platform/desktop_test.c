@@ -31,7 +31,7 @@ static void launch(void *user) {
   (void)user;
   rk_window_desc d = { .size = sizeof d, .title = "chooser-test", .width = 300, .height = 200 };
   rk_window *w = rk_window_create(&d);
-  rk_window_show(w, rk_controller_create_with_view(rk_column(), "chooser"));
+  rk_window_show(w, rk_controller_create_with_view(rk_vstack(), "chooser"));
   rk_app_after(200, false, notifying ? notify : ask, w);
 }
 

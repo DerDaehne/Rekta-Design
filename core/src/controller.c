@@ -944,7 +944,7 @@ static void pivot_mode(pivot *p) {
   s->side = side; s->level_set = false;
   for (int i = 0; i < s->n; i++) rk__glide_set(&s->scale[i], strip_rest(s, i));
   rk__glide_set(&s->glide, 0);
-  v->layout = side ? RK_LAYOUT_ROW : RK_LAYOUT_COLUMN;
+  v->layout = side ? RK_LAYOUT_HSTACK : RK_LAYOUT_VSTACK;
   v->gap = side ? 0 : rk_metric_of(RK_SPACE_M);
   v->padding = (rk_insets){ side ? rk_metric_of(RK_SPACE_L) : 0, 0, 0, 0 };   /* the list and its facet start together, clear of the bar */
   strip_level(s);
@@ -973,7 +973,7 @@ rk_controller *rk_pivot(void) {
   p->self = c;
   c->kind = K_PIVOT; c->impl = p; c->impl_free = pivot_free;
   rk_view *v = rk__view_create(&pivot_class, p);
-  rk_view_set_layout(v, RK_LAYOUT_COLUMN);                 /* how it measures; pivot_layout lays it out either way */
+  rk_view_set_layout(v, RK_LAYOUT_VSTACK);                 /* how it measures; pivot_layout lays it out either way */
   rk_view_set_gap(v, rk_metric_of(RK_SPACE_M));
   rk_view_set_align(v, RK_ALIGN_START, RK_ALIGN_STRETCH);
   c->view = v; v->controller = c;
@@ -1093,7 +1093,7 @@ void rk_controller_present(rk_controller *presenter, rk_controller *sheet) {
   shade->press = RK_PRESS_FLAT; shade->focusable = false;
   rk_view *box = rk_view_create();
   float m = rk_metric_of(RK_SPACE_M), l = rk_metric_of(RK_SPACE_L), r = rk_metric_of(RK_RADIUS_M);
-  rk_view_set_layout(box, RK_LAYOUT_COLUMN);
+  rk_view_set_layout(box, RK_LAYOUT_VSTACK);
   rk_view_set_padding(box, (rk_insets){ l + r, w->size.w > 560 ? rk_metric_of(RK_SPACE_XL) : m, l, w->size.w > 560 ? rk_metric_of(RK_SPACE_XL) : m });
   rk_view_set_fill(box, RK_ROLE_BG);
   box->radius = r;

@@ -401,7 +401,7 @@ static rk_size measure(rk_view *v, rk_size avail) {
   if (v->cls && v->cls->pub.measure) {
     s = v->cls->pub.measure(v, (rk_size){ v->fixed_w > 0 ? v->fixed_w : avail.w, v->fixed_h > 0 ? v->fixed_h : avail.h }, v->state);
   } else switch (v->layout) {
-    case RK_LAYOUT_COLUMN: {
+    case RK_LAYOUT_VSTACK: {
       int n = 0;
       for (int i = 0; i < v->nkids; i++) {
         rk_view *k = v->kids[i];
@@ -413,7 +413,7 @@ static rk_size measure(rk_view *v, rk_size avail) {
       s.w += p.left + p.right; s.h += p.top + p.bottom;
       break;
     }
-    case RK_LAYOUT_ROW: {
+    case RK_LAYOUT_HSTACK: {
       int n = 0;
       for (int i = 0; i < v->nkids; i++) {
         rk_view *k = v->kids[i];
@@ -531,8 +531,8 @@ void rk__stack(rk_view *v, bool column) { stack(v, column); }
 void rk__layout(rk_view *v) {
   if (v->cls && v->cls->pub.layout) v->cls->pub.layout(v, v->state);
   else switch (v->layout) {
-    case RK_LAYOUT_COLUMN: stack(v, true); break;
-    case RK_LAYOUT_ROW: stack(v, false); break;
+    case RK_LAYOUT_VSTACK: stack(v, true); break;
+    case RK_LAYOUT_HSTACK: stack(v, false); break;
     case RK_LAYOUT_TILES: {
       rk_rect *rects = rk__alloc((size_t)RK_MAX(v->nkids, 1) * sizeof *rects);
       rk_insets p = v->padding;

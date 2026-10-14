@@ -31,7 +31,7 @@ static const char *build_cell(int row, int column, void *user) {
 }
 
 static rk_view *place_view(int i) {
-  rk_view *page = rk_column();
+  rk_view *page = rk_vstack();
   if (i == 0) {
     rk_add(page, rk_label("Good morning.", RK_TEXT_GROUP));
     rk_view *grid = rk_add(page, rk_tile_grid());
@@ -57,7 +57,7 @@ static rk_view *place_view(int i) {
     static const char *const theme[] = { "system", "light", "dark" };
     rk_add(page, rk_label("Yours to choose.", RK_TEXT_GROUP));
     rk_add(page, rk_label("theme", RK_TEXT_KICKER));
-    rk_add(rk_add(page, rk_row()), rk_segments(theme, 3, 0));
+    rk_add(rk_add(page, rk_hstack()), rk_segments(theme, 3, 0));
     rk_add(page, rk_toggle("Sounds", false));
   }
   return page;

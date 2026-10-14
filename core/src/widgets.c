@@ -238,11 +238,11 @@ static rk_view *container(rk_layout layout, float gap) {
   return v;
 }
 
-rk_view *rk_column(void) { return container(RK_LAYOUT_COLUMN, rk_metric_of(RK_SPACE_M)); }
+rk_view *rk_vstack(void) { return container(RK_LAYOUT_VSTACK, rk_metric_of(RK_SPACE_M)); }
 rk_view *rk_tile_grid(void) { return container(RK_LAYOUT_TILES, rk_metric_of(RK_SPACE_S)); }
 
-rk_view *rk_row(void) {
-  rk_view *v = container(RK_LAYOUT_ROW, rk_metric_of(RK_SPACE_S));
+rk_view *rk_hstack(void) {
+  rk_view *v = container(RK_LAYOUT_HSTACK, rk_metric_of(RK_SPACE_S));
   rk_view_set_align(v, RK_ALIGN_START, RK_ALIGN_START);
   return v;
 }
@@ -349,7 +349,7 @@ static const rk_class row_class = { { sizeof(rk_view_class), "rk_rows_row", row_
 
 rk_view *rk_rows(void) {
   rk_view *v = rk_view_create();
-  rk_view_set_layout(v, RK_LAYOUT_COLUMN);
+  rk_view_set_layout(v, RK_LAYOUT_VSTACK);
   v->access = RK_ACCESS_LIST;
   return v;
 }
@@ -364,6 +364,17 @@ rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_stat
   rk_release(v);
   rows_added(rows, v);
   return v;
+}
+
+/* A row says something new: its title, meta and status at once, as rk_rows_add took them. */
+void rk_row_set(rk_view *v, const char *title, const char *meta, rk_status status) {
+  if (!v || v->cls != &row_class) { rk__warn("rk_row_set: not a row of rk_rows"); return; }
+  row *r = v->state;
+  rk__setstr(&r->title, title ? title : "");
+  rk__setstr(&r->meta, meta);
+  r->status = status;
+  rk__setstr(&v->access_label, r->title);
+  rk__view_dirty(v);
 }
 
 /* Icon and progress ----------------------------------------------------------------------------------------------- */
@@ -465,7 +476,7 @@ rk_view *rk__toast_create(const char *message, const char *action, void (*on_act
   t->fn = on_action; t->user = user;
   rk_view *v = rk__view_create(&toast_class, t);
   t->view = v;
-  v->layout = RK_LAYOUT_ROW; v->cross = RK_ALIGN_STRETCH;
+  v->layout = RK_LAYOUT_HSTACK; v->cross = RK_ALIGN_STRETCH;
   v->fill_role = RK_ROLE_TEXT; v->pfill = rk_color_of(RK_ROLE_TEXT);
   v->radius = rk_metric_of(RK_RADIUS_S);
   v->clip = true;
@@ -476,7 +487,7 @@ rk_view *rk__toast_create(const char *message, const char *action, void (*on_act
   rk_label_set_color(msg, RK_ROLE_BG);
   float m = rk_metric_of(RK_SPACE_M), s = rk_metric_of(RK_SPACE_S) + rk_metric_of(RK_SPACE_XS);
   rk_view *wrap = rk_view_create();
-  rk_view_set_layout(wrap, RK_LAYOUT_COLUMN);
+  rk_view_set_layout(wrap, RK_LAYOUT_VSTACK);
   rk_view_set_align(wrap, RK_ALIGN_CENTER, RK_ALIGN_STRETCH);
   rk_view_set_padding(wrap, (rk_insets){ s, m, s, m });
   rk_view_set_grow(wrap, 1);

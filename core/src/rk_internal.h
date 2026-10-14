@@ -336,7 +336,6 @@ void rk__field_select_all(rk_view *field);
 /* menu.c, for the controls built on a menu */
 void rk__menu_mark(rk_view *menu, int chosen);              /* a mark on the chosen item, none on the others */
 void rk__menu_shape(rk_view *menu, float min_w, int prefer);
-void rk__menu_clear(rk_view *menu);
 void rk__menu_show_passive(rk_view *menu, rk_view *from, rk_rect below);   /* below: in the window */
 bool rk__menu_open(rk_view *menu);
 void rk__menu_move(rk_view *menu, int dir);

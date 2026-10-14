@@ -53,7 +53,7 @@ static void draw(int i, bool dark) {
   rk_app_set_theme(dark ? RK_THEME_DARK : RK_THEME_LIGHT);
   rk_window_desc d = { .size = sizeof d, .title = "gallery", .width = WIDTH + 2 * PAD + 64, .height = 480 };
   rk_window *w = rk_window_create(&d);
-  rk_view *page = rk_column(), *frame = rk_column();
+  rk_view *page = rk_vstack(), *frame = rk_vstack();
   rk_view_set_padding(frame, (rk_insets){ PAD, PAD, PAD, PAD });
   rk_view_set_size(frame, WIDTH + 2 * PAD, 0);
   rk_add(frame, specimens[i].make());

@@ -30,7 +30,7 @@ static void done(rk_window *w) { rk_window_close(w); }
 
 /* a column with the gap and padding a test measures against */
 static rk_view *col(float gap, float pad) {
-  rk_view *v = rk_column();
+  rk_view *v = rk_vstack();
   rk_view_set_gap(v, gap);
   rk_view_set_padding(v, (rk_insets){ pad, pad, pad, pad });
   return v;
@@ -118,7 +118,7 @@ static void test_text(void) {
 static void test_layout(void) {
   rk_window *w = window(800, 600);
   rk_view *root = col(8, 16);
-  rk_view *row = rk_add(root, rk_row());
+  rk_view *row = rk_add(root, rk_hstack());
   rk_view_set_gap(row, 10);
   rk_view_set_align(row, RK_ALIGN_START, RK_ALIGN_STRETCH);    /* as a plain view: children fill its height */
   rk_view *a = rk_add(row, rk_view_create()), *b = rk_add(row, rk_view_create());
@@ -351,7 +351,7 @@ static void test_enabled(void) {
   rk_view *page = col(16, 16);
   rk_view *b = rk_add(page, rk_button("send", count_press, NULL));
   rk_view *plain = rk_add(page, rk_button("plain", count_press, NULL));
-  rk_view *group = rk_add(page, rk_column());
+  rk_view *group = rk_add(page, rk_vstack());
   rk_view *chk = rk_add(group, rk_check("done", false));
   show(w, page, "enabled");
   int before = pressed_count;
@@ -407,7 +407,7 @@ static void test_limits(void) {
   rk_view *grid = rk_add(page, rk_tile_grid());
   for (int i = 0; i < 10000; i++) rk_add(grid, rk_tile("1", "x"));
   rk_view_set_span(rk_view_child(grid, 9999), 2, 2);
-  rk_view *stack = rk_add(page, rk_column());
+  rk_view *stack = rk_add(page, rk_vstack());
   for (int i = 0; i < 600; i++) rk_add(stack, rk_label("line", RK_TEXT_BODY));
   show(w, rk_scroll(page), "limits");
   rk__layout_pending();
@@ -461,7 +461,7 @@ static void test_damage(void) {
   rk_window *w = window(800, 500);
   rk_view *page = col(12, 16);
   rk_view *title = rk_add(page, rk_label("Builds", RK_TEXT_TITLE));
-  rk_view *row = rk_add(page, rk_row());
+  rk_view *row = rk_add(page, rk_hstack());
   rk_view *a = rk_add(row, rk_button("one", NULL, NULL));
   rk_view *bt = rk_add(row, rk_button("two", NULL, NULL));
   rk_view *rows = rk_add(page, rk_rows());
@@ -503,11 +503,11 @@ static void test_damage(void) {
 static void test_api(void) {
   int before = rk__live_views;
   rk_window *w = window(600, 400);
-  rk_view *page = rk_column();
+  rk_view *page = rk_vstack();
   rk_view *grid = rk_add(page, rk_tile_grid());
   rk_view *t = rk_add(grid, rk_tile("12", "builds"));
   CHECK(rk_view_parent(t) == grid && rk_view_count(grid) == 1, "rk_add returns the child, in place");
-  rk_view *b = rk_add(rk_add(page, rk_row()), rk_button("pin a tile", count_press, NULL));
+  rk_view *b = rk_add(rk_add(page, rk_hstack()), rk_button("pin a tile", count_press, NULL));
   CHECK(rk_view_find(page, "pin a tile") == b, "a button is found by its label");
   rk_view_set_name(t, "builds");
   CHECK(rk_view_find(page, "builds") == t, "a view by its name");
@@ -570,7 +570,7 @@ static void test_list(void) {
   rk_window_snapshot(w, "/dev/null");
   CHECK(item_calls > 0 && item_calls <= in_sight, "a frame asks only for the rows in sight (%d of 100000, %d fit)", item_calls, in_sight);
   tap_row(w, list, 2, 0);
-  CHECK(shown == 2 && rk_list_selection_count(list) == 1 && rk_list_selected(list, 2), "a click selects one and shows it (%d)", shown);
+  CHECK(shown == 2 && rk_list_selection_count(list) == 1 && rk_list_is_selected(list, 2), "a click selects one and shows it (%d)", shown);
   tap_row(w, list, 5, RK_MOD_CTRL);
   CHECK(rk_list_selection_count(list) == 2 && shown == 2, "Ctrl+click toggles, starts selecting several, shows nothing");
   tap_row(w, list, 7, 0);
@@ -579,7 +579,7 @@ static void test_list(void) {
   CHECK(rk_list_selection_count(list) == 0, "Escape ends it");
   tap_row(w, list, 3, 0);
   tap_row(w, list, 6, RK_MOD_SHIFT);
-  CHECK(rk_list_selection_count(list) == 4 && rk_list_selected(list, 4), "Shift+click takes a range (%d)", rk_list_selection_count(list));
+  CHECK(rk_list_selection_count(list) == 4 && rk_list_is_selected(list, 4), "Shift+click takes a range (%d)", rk_list_selection_count(list));
   CHECK(selection_changes >= 6, "every change is told (%d)", selection_changes);
   rk_window_focus(w, list);
   w->focus_visible = true;
@@ -686,7 +686,7 @@ static void on_menu(rk_view *m, int item, void *u) { (void)m; (void)u; menu_chos
 static void test_menu(void) {
   rk_window *w = window(560, 420);
   rk_view *page = col(16, 24);
-  rk_view *row = rk_add(page, rk_row());
+  rk_view *row = rk_add(page, rk_hstack());
   rk_view *more = rk_add(row, rk_button("more", NULL, NULL));
   rk_view *m = rk_menu();
   int open_i = rk_menu_add(m, "open", "Enter", on_menu, NULL);
@@ -765,6 +765,55 @@ static const char *table_cell(int row, int col, void *u) {
 }
 static void table_sort(rk_view *t, int col, int dir, void *u) { (void)t; (void)u; sorted_col = col; sorted_dir = dir; }
 
+/* The selection follows the items, not the rows they stand on: with keys a sort or new items above keep the same
+   builds selected and the keyboard on the same one; without keys a sort lets the selection go rather than mark the
+   wrong ones. The app selects too, and reads the selection back. */
+static int order[8], norder;                                   /* the app's rows: build ids in the order shown */
+static uint64_t build_key(int index, void *u) { (void)u; return (uint64_t)order[index]; }
+static const char *build_cell(int row, int col, void *u) { static char buf[16]; (void)u; (void)col; snprintf(buf, sizeof buf, "#%d", order[row]); return buf; }
+static void build_sort(rk_view *t, int col, int dir, void *u) {
+  (void)t; (void)col; (void)u;
+  for (int i = 0; i < norder; i++) for (int j = i + 1; j < norder; j++) if ((order[j] < order[i]) == (dir > 0)) { int x = order[i]; order[i] = order[j]; order[j] = x; }
+}
+
+static void test_list_keys(void) {
+  rk_window *w = window(400, 360);
+  rk_view *page = col(8, 16);
+  rk_view *t = rk_add(page, rk_table(0, build_cell, NULL));
+  rk_table_add_column(t, "build", 0, RK_COLUMN_SORTABLE);
+  rk_table_on_sort(t, build_sort, NULL);
+  norder = 5;
+  for (int i = 0; i < norder; i++) order[i] = 10 + i;           /* #10 .. #14 */
+  rk_list_set_count(t, norder);
+  rk_list_set_key(t, build_key);
+  show(w, page, "keys");
+  rk_list_select(t, 1, true); rk_list_select(t, 3, true);        /* #11 and #13 */
+  int sel[8], n = rk_list_selection(t, sel, 8);
+  CHECK(n == 2 && sel[0] == 1 && sel[1] == 3 && rk_list_selection_count(t) == 2, "the app selects, and reads it back (%d)", n);
+  rk_list_scroll_to(t, 3);                                       /* the keyboard on #13 */
+  rk_rect r = rk__window_rect(t);
+  click(w, (rk_point){ r.x + 60, r.y + 10 }, 10);                /* ascending: as it was */
+  click(w, (rk_point){ r.x + 60, r.y + 10 }, 10);                /* descending: #14 #13 #12 #11 #10 */
+  n = rk_list_selection(t, sel, 8);
+  CHECK(order[0] == 14 && n == 2 && sel[0] == 1 && sel[1] == 3 && order[sel[0]] == 13 && order[sel[1]] == 11, "sorted the other way, #11 and #13 stay selected where they went");
+  CHECK(order[rk_list_active(t)] == 13, "and the keyboard stays on #13 (row %d)", rk_list_active(t));
+  memmove(order + 1, order, (size_t)norder * sizeof *order); order[0] = 99; norder++;   /* a new build above */
+  rk_list_set_count(t, norder);
+  n = rk_list_selection(t, sel, 8);
+  CHECK(n == 2 && order[sel[0]] == 13 && order[sel[1]] == 11 && order[rk_list_active(t)] == 13, "a new item above: the same builds, one row down");
+  memmove(order, order + 1, (size_t)(norder - 1) * sizeof *order); norder--;          /* #99 again gone, and #13 too */
+  for (int i = 0; i < norder; i++) if (order[i] == 13) { memmove(order + i, order + i + 1, (size_t)(norder - i - 1) * sizeof *order); norder--; break; }
+  rk_list_set_count(t, norder);
+  CHECK(rk_list_selection_count(t) == 1 && order[rk_list_selection(t, sel, 8) ? sel[0] : 0] == 11, "an item gone leaves the selection");
+  rk_list_clear_selection(t);
+  CHECK(rk_list_selection_count(t) == 0, "rk_list_clear_selection");
+  rk_list_set_key(t, NULL);                                      /* without keys */
+  rk_list_select(t, 0, true);
+  click(w, (rk_point){ r.x + 60, r.y + 10 }, 10);
+  CHECK(rk_list_selection_count(t) == 0, "without keys a sort lets the selection go instead of marking other items");
+  done(w);
+}
+
 static void test_table(void) {
   rk_window *w = window(560, 360);
   rk_view *page = col(8, 16);
@@ -788,7 +837,7 @@ static void test_table(void) {
   float H = rk_metric_of(RK_ROW_HEIGHT), hh = ((list *)t->state)->ncols ? head_height(t->state) : 0;
   shown = -1;
   click(w, (rk_point){ r.x + 60, r.y + hh + 2.5f * H }, 10);
-  CHECK(shown == 2 && rk_list_selected(t, 2), "a click on a row selects it and shows it (%d)", shown);
+  CHECK(shown == 2 && rk_list_is_selected(t, 2), "a click on a row selects it and shows it (%d)", shown);
   rk_list_scroll_to(t, 500);
   rk_app_run_for(900);
   CHECK(t->pvalue > 400 * H && rk_window_view_at(w, (rk_point){ r.x + 60, r.y + 10 }) == t, "scrolled far; the head stays on top");
@@ -1007,7 +1056,7 @@ static void scroll_tap(rk_view *v, void *u) { (void)v; scroll_taps = (int)(intpt
 static void test_scroll(void) {
   rk_window *w = window(360, 300);
   rk_view *page = col(8, 16);
-  rk_view *list = rk_column();
+  rk_view *list = rk_vstack();
   rk_view *b[40];
   for (int i = 0; i < 40; i++) { char t[16]; snprintf(t, sizeof t, "item %d", i); b[i] = rk_add(list, rk_button(t, scroll_tap, (void *)(intptr_t)i)); }
   rk_view *sc = rk_add(page, rk_scroll(list));
@@ -1438,6 +1487,42 @@ static void test_undo(void) {
 static int tree_shown = -1, tree_toggles;
 static void tree_show(rk_view *t, int item, void *u) { (void)t; (void)u; tree_shown = item; }
 static void tree_toggled(rk_view *t, int item, bool open, void *u) { (void)t; (void)item; (void)open; (void)u; tree_toggles++; }
+/* Collections change: a row says something new, a tree loses a branch or everything, keeps the app's data for an
+   item, a menu is built again. */
+static void test_collections(void) {
+  rk_window *w = window(500, 400);
+  rk_view *page = col(8, 16);
+  rk_view *rows = rk_add(page, rk_rows());
+  rk_view *r0 = rk_rows_add(rows, "Nightly import", NULL, RK_STATUS_WARNING);
+  rk_rows_add(rows, "Docs", "3 kB", RK_STATUS_NONE);
+  rk_view *tr = rk_add(page, rk_tree());
+  int a = rk_tree_add(tr, -1, "a"), a1 = rk_tree_add(tr, a, "a1"), b = rk_tree_add(tr, -1, "b");
+  static int payload = 42;
+  rk_tree_set_user(tr, a1, &payload);
+  show(w, page, "collections");
+  rk_row_set(r0, "Nightly import", "done", RK_STATUS_SUCCESS);
+  CHECK(!strcmp(((row *)r0->state)->title, "Nightly import") && ((row *)r0->state)->status == RK_STATUS_SUCCESS, "rk_row_set changes a row in place");
+  rk_insert(rows, r0, 1);
+  CHECK(rk_view_child(rows, 1) == r0, "a row moves like any view");
+  CHECK(rk_tree_user(tr, a1) == &payload && rk_tree_user(tr, b) == NULL, "a tree item keeps the app's data");
+  rk_tree_set_title(tr, b, "bee");
+  CHECK(!strcmp(rk_tree_title(tr, b), "bee"), "and a new title");
+  rk_tree_select(tr, a1);
+  rk_tree_remove(tr, a);
+  CHECK(rk_tree_title(tr, a) == NULL && rk_tree_title(tr, a1) == NULL && rk_tree_selected(tr) == -1 && !strcmp(rk_tree_title(tr, b), "bee"), "a branch removed: it and what was under it, and its selection");
+  int c = rk_tree_add(tr, -1, "c");
+  CHECK(c > b, "removed numbers are not given again (%d)", c);
+  rk_tree_clear(tr);
+  CHECK(rk_tree_title(tr, b) == NULL && rk_tree_add(tr, -1, "fresh") == 0, "cleared: numbers start again");
+  rk_view *m = rk_menu();
+  rk_menu_add(m, "one", NULL, NULL, NULL);
+  rk_menu_clear(m);
+  CHECK(rk_menu_add(m, "again", NULL, NULL, NULL) == 0, "a menu cleared is built again from 0");
+  rk_release(m);
+  CHECK(damage_lies(w) == 0, "and drawn honestly");
+  done(w);
+}
+
 static void test_tree(void) {
   rk_window *w = window(560, 420);
   rk_view *root = col(16, 24);
@@ -1839,7 +1924,7 @@ static void scene_type(void) {
   rk_add(root, rk_label("label", RK_TEXT_LABEL));
   rk_add(root, rk_label("meta 0123456789", RK_TEXT_META));
   rk_add(root, rk_label("summary", RK_TEXT_PIVOT));
-  rk_view *icons = rk_add(root, rk_row());
+  rk_view *icons = rk_add(root, rk_hstack());
   rk_view_set_gap(icons, 12);
   rk_view_set_align(icons, RK_ALIGN_START, RK_ALIGN_STRETCH);
   for (int i = 0; i < RK_ICON_COUNT; i += 3) rk_add(icons, rk_icon(rk_icon_defs[i].name, RK_ROLE_TEXT));
@@ -1851,7 +1936,7 @@ static void scene_type(void) {
 static void scene_controls(const char *name) {
   rk_window *w = window(720, 420);
   rk_view *root = col(16, 32);
-  rk_view *row = rk_add(root, rk_row());
+  rk_view *row = rk_add(root, rk_hstack());
   rk_button_set_kind(rk_add(row, rk_button("primary", NULL, NULL)), RK_BUTTON_PRIMARY);
   rk_add(row, rk_button("default", NULL, NULL));
   rk_button_set_kind(rk_add(row, rk_button("quiet", NULL, NULL)), RK_BUTTON_QUIET);
@@ -1923,6 +2008,8 @@ static void launch(void *user) {
   test_enabled();
   test_limits();
   test_damage();
+  test_list_keys();
+  test_collections();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

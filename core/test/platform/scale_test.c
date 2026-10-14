@@ -47,7 +47,7 @@ static void launch(void *user) {
   (void)user;
   rk_window_desc d = { .size = sizeof d, .title = "scale-test", .width = 300, .height = 200 };
   win = rk_window_create(&d);
-  rk_window_show(win, rk_controller_create_with_view(rk_column(), "scale"));
+  rk_window_show(win, rk_controller_create_with_view(rk_vstack(), "scale"));
   rk_app_after(300, false, change, NULL);
 }
 

@@ -69,7 +69,7 @@ All of it is in `core/include/rekta.h`.
   logical pixels (CSS px, Apple pt); the window scales to the screen.
 - **Objects** are opaque pointers: `rk_window`, `rk_view`, `rk_controller`,
   reference counted under one rule. A constructor returns a reference you
-  own; it is named after the thing (`rk_label`, `rk_tile`, `rk_column`), or
+  own; it is named after the thing (`rk_label`, `rk_tile`, `rk_vstack`), or
   `*_create` where the thing is a type of its own (window, view, controller).
   Adding, showing and presenting take that reference over (`rk_add`,
   `rk_insert`, `rk_panorama_add`, `rk_pivot_add`, `rk_places`,

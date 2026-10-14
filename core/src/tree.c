@@ -13,7 +13,8 @@
 
 typedef struct node {
   char *title, *meta; rk_status status;
-  int parent, first, last, next;                           /* the item's place: -1 where there is none */
+  void *user;                                              /* the app's, for its item (rk_tree_set_user) */
+  int parent, first, last, next;                           /* the item's place: -1 where there is none; parent -2: removed */
   bool open;
   rk_tween grow, turn;                                        /* the branch's height, 0 to 1; the chevron, 0 right to 1 down */
 } node;
@@ -290,7 +291,7 @@ static void tree_destroy(void *st) {
 static const rk_class tree_class = { { sizeof(rk_view_class), "rk_tree", tree_draw, tree_measure, NULL, tree_event, tree_destroy }, NULL, NULL };
 
 static tree *tree_of(rk_view *v) { return v && v->cls == &tree_class ? v->state : NULL; }
-static bool tree_has(tree *t, int i) { return t && i >= 0 && i < t->n; }
+static bool tree_has(tree *t, int i) { return t && i >= 0 && i < t->n && t->nodes[i].parent != -2; }
 
 rk_view *rk_tree(void) {
   tree *t = rk__alloc(sizeof *t);
@@ -315,6 +316,48 @@ int rk_tree_add(rk_view *v, int parent, const char *title) {
   rk__view_relayout_up(v);
   return i;
 }
+
+/* An item and everything under it go; their numbers are not given out again until the tree is cleared. */
+static void forget(tree *t, int i) {
+  for (int k = t->nodes[i].first; k >= 0; k = t->nodes[k].next) forget(t, k);
+  free(t->nodes[i].title); free(t->nodes[i].meta);
+  t->nodes[i].title = t->nodes[i].meta = NULL;
+  t->nodes[i].parent = -2;
+  if (t->selected == i) t->selected = -1;
+  if (t->active == i) t->active = -1;
+  if (t->pressed == i) t->pressed = -1;
+}
+
+void rk_tree_remove(rk_view *v, int item) {
+  tree *t = tree_of(v);
+  if (!tree_has(t, item)) return;
+  int parent = t->nodes[item].parent;
+  int *first = parent >= 0 ? &t->nodes[parent].first : &t->first, *last = parent >= 0 ? &t->nodes[parent].last : &t->last;
+  int prev = -1;
+  for (int k = *first; k >= 0 && k != item; k = t->nodes[k].next) prev = k;
+  if (prev >= 0) t->nodes[prev].next = t->nodes[item].next; else *first = t->nodes[item].next;
+  if (*last == item) *last = prev;
+  forget(t, item);
+  if (t->active < 0) t->active = prev >= 0 ? prev : parent >= 0 ? parent : t->first;
+  rk__view_relayout_up(v);
+}
+
+void rk_tree_clear(rk_view *v) {
+  tree *t = tree_of(v);
+  if (!t) return;
+  for (int i = 0; i < t->n; i++) { free(t->nodes[i].title); free(t->nodes[i].meta); }
+  t->n = 0; t->first = t->last = t->active = t->selected = t->pressed = t->down_item = -1;
+  rk__view_relayout_up(v);
+}
+
+void rk_tree_set_title(rk_view *v, int item, const char *title) {
+  tree *t = tree_of(v);
+  if (!tree_has(t, item)) return;
+  rk__setstr(&t->nodes[item].title, title ? title : "");
+  rk__view_relayout_up(v);
+}
+void rk_tree_set_user(rk_view *v, int item, void *user) { tree *t = tree_of(v); if (tree_has(t, item)) t->nodes[item].user = user; }
+void *rk_tree_user(rk_view *v, int item) { tree *t = tree_of(v); return tree_has(t, item) ? t->nodes[item].user : NULL; }
 
 void rk_tree_set_meta(rk_view *v, int item, const char *meta, rk_status status) {
   tree *t = tree_of(v);

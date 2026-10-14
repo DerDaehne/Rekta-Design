@@ -298,7 +298,7 @@ void rk__menu_mark(rk_view *v, int chosen) {
 
 void rk__menu_shape(rk_view *v, float min_w, int prefer) { menu *m = menu_of(v); if (m) { m->min_w = min_w; m->prefer = prefer; } }
 
-void rk__menu_clear(rk_view *v) {
+void rk_menu_clear(rk_view *v) {
   menu *m = menu_of(v);
   if (!m) return;
   for (int i = 0; i < m->n; i++) { free(m->items[i].label); free(m->items[i].key); }
