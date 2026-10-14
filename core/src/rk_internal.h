@@ -366,6 +366,17 @@ rk_view *rk__controller_key_view(rk_controller *c);       /* where keys go when 
 void rk__reveal(rk_view *v);                               /* scroll it into view (keyboard focus) */
 void rk__reveal_rect(rk_view *v, rk_rect r);               /* a part of it, in its own coordinates */
 rk_view *rk__first_focusable(rk_view *v);                  /* itself or the first view in it that takes focus */
+/* What the user does to navigation - back among places, a facet picked, a sheet or a split's detail closed - heard by
+   declared views (declare.c), which keep the app's state in step. Never told what the app does itself. */
+typedef struct rk__heard { void (*fn)(void *what, int index, void *user); void *user; } rk__heard;
+void rk__places_hear(rk_controller *places, rk__heard h);   /* index: the depth left */
+void rk__pivot_hear(rk_controller *pivot, rk__heard h);     /* index: the facet picked */
+void rk__sheet_hear(rk_controller *sheet, rk__heard h);     /* Escape or the shading */
+void rk__split_hear(rk_view *split, rk__heard h);           /* the crumb or Escape: back to the list */
+rk_controller *rk__confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user);   /* its sheet, borrowed */
+/* A controller that only holds another (a declared window's host): what it holds counts as held by its parent, so a
+   pivot in it still picks the place. */
+void rk__controller_set_transparent(rk_controller *c, bool transparent);
 struct turn;                                               /* a place change, for views that turn as places do */
 struct turn *rk__turn_new(void);
 void rk__turn_free(struct turn *t);

@@ -206,7 +206,8 @@ typedef enum rk_layout {
   RK_LAYOUT_FORCE32 = 0x7fffffff
 } rk_layout;
 
-typedef enum rk_align { RK_ALIGN_STRETCH, RK_ALIGN_START, RK_ALIGN_CENTER, RK_ALIGN_END, RK_ALIGN_BETWEEN, RK_ALIGN_FORCE32 = 0x7fffffff } rk_align;
+/* AUTO: a column stretches its children across, a row keeps them to the start; both start along. */
+typedef enum rk_align { RK_ALIGN_AUTO, RK_ALIGN_STRETCH, RK_ALIGN_START, RK_ALIGN_CENTER, RK_ALIGN_END, RK_ALIGN_BETWEEN, RK_ALIGN_FORCE32 = 0x7fffffff } rk_align;
 
 typedef enum rk_access_role {
   RK_ACCESS_NONE, RK_ACCESS_GROUP, RK_ACCESS_TEXT, RK_ACCESS_HEADING, RK_ACCESS_BUTTON, RK_ACCESS_LINK,
@@ -373,11 +374,13 @@ RK_API rk_view *rk_tile_grid(void);                /* tiles in units of tile-uni
 
 RK_API rk_view *rk_label(const char *text, rk_text_style style);   /* wraps at its width */
 RK_API void rk_label_set_text(rk_view *label, const char *text);
+RK_API void rk_label_set_style(rk_view *label, rk_text_style style);
 RK_API void rk_label_set_color(rk_view *label, rk_role role);
 
 typedef enum rk_button_kind { RK_BUTTON_DEFAULT, RK_BUTTON_PRIMARY, RK_BUTTON_QUIET, RK_BUTTON_BAR, RK_BUTTON_FORCE32 = 0x7fffffff } rk_button_kind;
 /* A button keeps its own width, also in a column. */
 RK_API rk_view *rk_button(const char *label, void (*on_press)(rk_view *button, void *user), void *user);   /* on_press may be NULL */
+RK_API void rk_button_set_label(rk_view *button, const char *label);
 RK_API void rk_button_set_kind(rk_view *button, rk_button_kind kind);   /* RK_BUTTON_DEFAULT until set */
 RK_API void rk_button_set_icon(rk_view *button, const char *icon);      /* from the icon set; NULL removes it */
 
@@ -448,6 +451,9 @@ RK_API void rk_date_set_value(rk_view *date, int year, int month, int day);   /*
 RK_API double rk_control_value(rk_view *control);
 RK_API void rk_control_set_value(rk_view *control, double value);   /* a number snaps to the range and step; an index it lacks is ignored */
 RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, void *user), void *user);
+RK_API void rk_control_set_label(rk_view *control, const char *label);   /* a check's or a toggle's */
+RK_API void rk_control_set_options(rk_view *control, const char *const *options, int count);   /* choices, segments, a select; a choice it lacks goes */
+RK_API void rk_control_set_range(rk_view *control, double min, double max, double step);   /* a slider's or a stepper's; the value fits in */
 
 /* A text field, as the web's: a label above, the input, a hint below - or an error, its cause and remedy, marked.
    One line, edited with the desktop's keys and the pointer; Enter submits. With more lines it is a text area: the
@@ -455,6 +461,8 @@ RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, 
 RK_API rk_view *rk_field(const char *label, const char *placeholder);   /* either may be NULL */
 RK_API const char *rk_field_text(rk_view *field);          /* UTF-8; valid until the text changes */
 RK_API void rk_field_set_text(rk_view *field, const char *text);
+RK_API void rk_field_set_label(rk_view *field, const char *label);
+RK_API void rk_field_set_placeholder(rk_view *field, const char *placeholder);
 RK_API void rk_field_set_hint(rk_view *field, const char *hint);     /* below the input; NULL removes it */
 RK_API void rk_field_set_error(rk_view *field, const char *error);   /* the cause and remedy, marked, in the hint's place */
 RK_API void rk_field_on_change(rk_view *field, void (*fn)(rk_view *field, void *user), void *user);   /* what the user types, not rk_field_set_text */
@@ -540,6 +548,7 @@ RK_API void rk_table_on_edit(rk_view *table, const char *(*commit)(rk_view *tabl
 RK_API void rk_table_edit(rk_view *table, int row, int column);   /* opens the cell for editing */
 
 RK_API rk_view *rk_icon(const char *name, rk_role color);   /* 20 × 20 from the icon set */
+RK_API void rk_icon_set(rk_view *icon, const char *name, rk_role color);
 RK_API rk_view *rk_progress(float progress);                /* < 0: indeterminate */
 RK_API void rk_progress_set_value(rk_view *progress, float value);
 

@@ -572,6 +572,22 @@ void rk_field_set_error(rk_view *v, const char *error) { set_hint(v, error, true
 void rk_field_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->change = fn; f->change_user = user; } }
 void rk_field_on_submit(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->submit = fn; f->submit_user = user; } }
 
+void rk_field_set_label(rk_view *v, const char *label) {
+  field *f = RK__EXPECT(field_of, v, "a field");
+  if (!f) return;
+  rk__setstr(&f->label, label);
+  rk__setstr(&v->access_label, label ? label : f->placeholder);
+  rk__view_relayout_up(v);
+}
+
+void rk_field_set_placeholder(rk_view *v, const char *placeholder) {
+  field *f = RK__EXPECT(field_of, v, "a field");
+  if (!f) return;
+  rk__setstr(&f->placeholder, placeholder);
+  if (!f->label) rk__setstr(&v->access_label, placeholder);
+  rk__view_dirty(v);
+}
+
 void rk_field_set_secret(rk_view *v, bool secret) {
   field *f = RK__EXPECT(field_of, v, "a field");
   if (!f) return;

@@ -1619,6 +1619,39 @@ static void act_up(void *u) { (*(int *)u)++; }
 static void act_down(void *u) { (*(int *)u)--; }
 static void *off_thread(void *u) { (void)u; rk_release(rk_label("from elsewhere", RK_TEXT_BODY)); return NULL; }
 
+/* What a view says and offers changes after it is made: every property has its setter. */
+static void test_setters(void) {
+  rk_view *b = rk_button("save", NULL, NULL);
+  rk_size was = rk_view_measure(b, (rk_size){ INFINITY, INFINITY });
+  rk_button_set_label(b, "save everything");
+  CHECK(rk_view_measure(b, (rk_size){ INFINITY, INFINITY }).w > was.w && rk_view_find(b, "save everything") == b, "a button's new label is drawn and found");
+  rk_release(b);
+  rk_view *l = rk_label("Today", RK_TEXT_BODY);
+  float h = rk_view_measure(l, (rk_size){ 400, INFINITY }).h;
+  rk_label_set_style(l, RK_TEXT_GROUP);
+  CHECK(rk_view_measure(l, (rk_size){ 400, INFINITY }).h > h, "a label takes a new style");
+  rk_release(l);
+  const char *three[] = { "a", "b", "c" }, *two[] = { "x", "y" };
+  rk_view *seg = rk_segments(three, 3, 2), *sel = rk_select(three, 3, 1), *ch = rk_choices(three, 3, 0);
+  rk_control_set_options(seg, two, 2); rk_control_set_options(sel, two, 2); rk_control_set_options(ch, two, 2);
+  CHECK(rk_control_value(seg) == -1 && rk_control_value(sel) == 1 && rk_control_value(ch) == 0, "new options keep a choice they have, let go one they lack");
+  rk_release(seg); rk_release(sel); rk_release(ch);
+  rk_view *sl = rk_slider(0, 100, 10, 80);
+  rk_control_set_range(sl, 0, 50, 5);
+  CHECK(rk_control_value(sl) == 50, "a new range fits the value in (%g)", rk_control_value(sl));
+  rk_release(sl);
+  rk_view *k = rk_check("wifi", true), *f = rk_field("Mail", "name@example.com"), *i = rk_icon("home", RK_ROLE_TEXT);
+  int said = logged;
+  rk_control_set_label(k, "bluetooth"); rk_field_set_label(f, "Address"); rk_field_set_placeholder(f, "street"); rk_icon_set(i, "bell", RK_ROLE_ACCENT);
+  CHECK(logged == said, "setters on their own kinds say nothing (%s)", logged_last);
+  rk_release(k); rk_release(f); rk_release(i);
+  rk_view *row = rk_hstack(), *a1 = rk_add(row, rk_label("a", RK_TEXT_BODY));
+  rk_view_set_frame(row, (rk_rect){ 0, 0, 200, 100 });
+  rk__layout(row);
+  CHECK(rk_view_frame(a1).h < 100, "a row keeps its children to the start across (AUTO)");
+  rk_release(row);
+}
+
 static void test_api_rules(void) {
   rk_view *bar = rk_hstack();
   rk_view *more = rk_add(bar, rk_button(NULL, NULL, NULL));
@@ -2441,6 +2474,7 @@ static void launch(void *user) {
   test_collections();
   test_embed();
   test_confirm_secret();
+  test_setters();
   test_api_rules();
   test_spring();
   test_declare();

@@ -17,7 +17,21 @@ struct rk_controller {
   rk_view *sheet_shade, *sheet_box, *focus_before;
   rk_controller **embedded; int nembedded, embed_cap;      /* what it holds in its own views (rk_controller_embed) */
   bool appeared;
+  bool transparent;                                        /* only holds embedded[0]: it stands for it */
+  rk__heard heard;                                         /* places, a pivot, a sheet: what the user did */
 };
+
+static void tell(rk_controller *c, int index) { if (c->heard.fn) c->heard.fn(c, index, c->heard.user); }
+void rk__places_hear(rk_controller *c, rk__heard h) { c->heard = h; }
+void rk__pivot_hear(rk_controller *c, rk__heard h) { c->heard = h; }
+void rk__sheet_hear(rk_controller *c, rk__heard h) { c->heard = h; }
+void rk__controller_set_transparent(rk_controller *c, bool t) { c->transparent = t; }
+static rk_controller *stands_for(rk_controller *c) { return c->transparent && c->nembedded == 1 ? c->embedded[0] : NULL; }
+static rk_controller *holder(rk_controller *c) {           /* the parent, looking through a transparent host */
+  rk_controller *up = c->parent;
+  while (up && up->transparent) up = up->parent;
+  return up;
+}
 
 static void controller_destroy(void *self) {
   rk_controller *c = self;
@@ -168,6 +182,7 @@ static void places_layout(rk_view *v, void *st) {
 static const rk_class places_class = { { sizeof(rk_view_class), "rk_places", NULL, NULL, places_layout, NULL, NULL }, NULL, NULL };
 
 static rk_controller *visible_child(rk_controller *c) {
+  if (stands_for(c)) return stands_for(c);
   if (c->kind == K_PLACES) { places *p = c->impl; return p->n ? p->stack[p->n - 1] : NULL; }
   if (c->kind == K_PIVOT) return pivot_visible(c);
   return c;
@@ -957,7 +972,12 @@ typedef struct pivot {
   turn out; rk_controller *leaving; uint32_t timer; bool back;   /* a place change: the facet turning away */
 } pivot;
 
-static void pivot_select_cb(void *owner, int i) { rk_pivot_select(((pivot *)owner)->self, i); }
+static void pivot_select_cb(void *owner, int i) {         /* the user picked it */
+  rk_controller *c = ((pivot *)owner)->self;
+  int was = ((pivot *)owner)->sel;
+  rk_pivot_select(c, i);
+  if (((pivot *)owner)->sel != was) tell(c, i);
+}
 static void pivot_free(void *st) {
   pivot *p = st;
   if (p->timer) rk_app_cancel(p->timer);
@@ -973,9 +993,9 @@ static rk_controller *pivot_visible(rk_controller *c) { pivot *p = c->impl; retu
    page, a panorama or another pivot it picks a facet. */
 static void strip_level(strip *s) {
   if (!s->pivot) return;
-  rk_controller *up = s->pivot->parent;
+  rk_controller *up = holder(s->pivot);
   bool top = !up || up->kind == K_PLACES;                  /* it is the place; held in a page it picks a facet */
-  for (rk_controller *a = up; a && top; a = a->parent) if (a->kind == K_PIVOT || a->kind == K_PANORAMA) top = false;
+  for (rk_controller *a = up; a && top; a = holder(a)) if (a->kind == K_PIVOT || a->kind == K_PANORAMA) top = false;
   if (top == s->nav && s->level_set) return;
   s->nav = top; s->level_set = true;
   pivot *p = s->pivot->impl;
@@ -1143,7 +1163,8 @@ static void sheets_layout(rk_view *v, void *st) {
 }
 const rk_class rk__sheets_class = { { sizeof(rk_view_class), "rk_sheets", NULL, NULL, sheets_layout, NULL, NULL }, NULL, NULL };
 
-static void shade_tap(rk_view *v, void *user) { (void)v; rk_controller_dismiss(user); }
+static void user_dismiss(rk_controller *sheet) { rk_retain(sheet); rk_controller_dismiss(sheet); tell(sheet, 0); rk_release(sheet); }
+static void shade_tap(rk_view *v, void *user) { (void)v; user_dismiss(user); }
 
 rk_view *rk__first_focusable(rk_view *v) {
   if (v->hidden) return NULL;
@@ -1234,10 +1255,12 @@ static void ask_cancel(rk_view *b, void *user) { (void)b; asking *a = user; ask_
 static void ask_gone(rk_controller *c, void *st) { (void)c; ask_tell(st, false); }   /* Escape, the shading */
 static void ask_free(void *st) { free(st); }
 
-void rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user) {
+void rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user) { rk__confirm(presenter, desc, answered, user); }
+
+rk_controller *rk__confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user) {
   rk_confirm_desc d = { sizeof d, "", NULL, NULL, "ok", "cancel", false };
   if (RK__SIZED(desc, "rk_confirm", "rk_confirm_desc")) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
-  if (!presenter || !presenter->window) { rk__error("rk_confirm: the presenter is in no window"); if (answered) answered(false, user); return; }
+  if (!presenter || !presenter->window) { rk__error("rk_confirm: the presenter is in no window"); if (answered) answered(false, user); return NULL; }
   asking *a = rk__alloc(sizeof *a);
   a->answered = answered; a->user = user;
   rk_view *page = rk_vstack();
@@ -1258,6 +1281,7 @@ void rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*an
   rk_window *w = presenter->window;
   w->focus_visible = true;
   rk_window_focus(w, safe);
+  return sheet;
 }
 
 /* Window keys and the chain --------------------------------------------------------------------------------------- */
@@ -1265,7 +1289,8 @@ void rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*an
 static rk_controller *find_places(rk_controller *c) {
   for (int guard = 0; c && guard < 16; guard++) {
     if (c->kind == K_PLACES) return c;
-    if (c->kind == K_PIVOT) c = pivot_visible(c); else return NULL;
+    if (stands_for(c)) c = stands_for(c);
+    else if (c->kind == K_PIVOT) c = pivot_visible(c); else return NULL;
   }
   return NULL;
 }
@@ -1280,13 +1305,13 @@ bool rk__window_key(rk_window *w, const rk_event *e) {
   if (e->key == RK_KEY_ESCAPE) {
     for (int i = w->sheets->nkids - 1; i >= 0; i--) {
       rk_view *k = w->sheets->kids[i];
-      if (k->owner && !k->leaving) { rk_controller_dismiss(k->owner); return true; }
+      if (k->owner && !k->leaving) { user_dismiss(k->owner); return true; }
     }
     back = true;
   }
   if (back) {
     rk_controller *pl = find_places(w->controller);
-    if (pl && rk_places_depth(pl) > 1) { rk_places_back(pl); return true; }
+    if (pl && rk_places_depth(pl) > 1) { rk_places_back(pl); tell(pl, rk_places_depth(pl)); return true; }
   }
   return false;
 }

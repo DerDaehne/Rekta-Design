@@ -16,6 +16,7 @@ typedef struct split {
   rk_view *self, *list, *detail, *handle, *crumb;
   char *title;
   float set;                                               /* the list's width as asked; 0: its own */
+  rk__heard heard;                                         /* the user went back to the list (declare.c) */
   bool detail_shown, sideways, laid;                        /* compact: which pane; how it was laid out last */
   struct turn *turn; uint32_t timer; bool going;           /* compact: a turn under way, to the detail or back */
   float drag_x, drag_w; bool dragging; double down_at;
@@ -177,6 +178,7 @@ static bool split_event(rk_view *v, const rk_event *e, void *st) {
   split *s = st;
   if (e->type == RK_EVENT_KEY_DOWN && e->key == RK_KEY_ESCAPE && !e->mods && !s->sideways && s->going) {
     rk_split_set_detail_shown(s->self, false);                          /* compact, in the detail: back to the list */
+    if (s->heard.fn) s->heard.fn(s->self, 0, s->heard.user);
     return true;
   }
   return false;
@@ -193,7 +195,13 @@ static const rk_class split_class = { { sizeof(rk_view_class), "rk_split", NULL,
 
 static split *split_of(rk_view *v) { return v && v->cls == &split_class ? v->state : NULL; }
 
-static void crumb_back(rk_view *crumb, void *user) { (void)crumb; rk_split_set_detail_shown(user, false); }
+static void crumb_back(rk_view *crumb, void *user) {
+  (void)crumb;
+  rk_split_set_detail_shown(user, false);
+  split *s = split_of(user);
+  if (s && s->heard.fn) s->heard.fn(s->self, 0, s->heard.user);
+}
+void rk__split_hear(rk_view *v, rk__heard h) { split *s = split_of(v); if (s) s->heard = h; }
 
 rk_view *rk_split(rk_view *list, rk_view *detail, const char *title) {
   split *s = rk__alloc(sizeof *s);

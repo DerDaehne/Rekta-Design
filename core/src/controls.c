@@ -1075,5 +1075,55 @@ void rk_control_set_value(rk_view *v, double value) {
   rk__view_dirty(v);
 }
 
+/* What a control says and offers, changed after it is made. A choice the new options lack is let go (-1); a number
+   is fitted to the new range. Neither is told to the change handler: the app made the change. */
+void rk_control_set_label(rk_view *v, const char *label) {
+  char **slot = v && v->cls == &check_class ? &((check *)v->state)->label : v && v->cls == &toggle_class ? &((toggle *)v->state)->label : NULL;
+  if (!rk__expect(slot, v, __func__, "a check or a toggle")) return;
+  rk__setstr(slot, label);
+  rk__setstr(&v->access_label, label);
+  rk__view_relayout_up(v);
+}
+
+static void swap_labels(char ***labels, int *n, const char *const *options, int count) {
+  for (int i = 0; i < *n; i++) free((*labels)[i]);
+  free(*labels);
+  *n = count; *labels = copy_labels(options, count);
+}
+
+void rk_control_set_options(rk_view *v, const char *const *options, int count) {
+  if (!rk__expect(v && (v->cls == &choices_class || v->cls == &segments_class || v->cls == &select_class) ? v : NULL, v, __func__,
+                  "choices, segments or a select")) return;
+  count = RK_MAX(0, count);
+  control *c = v->state;
+  if (v->cls == &choices_class) { choices *o = v->state; swap_labels(&o->labels, &o->n, options, count); o->down = -1; }
+  else if (v->cls == &segments_class) {
+    segments *g = v->state;
+    swap_labels(&g->labels, &g->n, options, RK_MIN(count, 5));
+    free(g->x); g->x = rk__alloc((size_t)(g->n + 1) * sizeof *g->x);
+    g->down = -1;
+  } else {
+    select_box *b = v->state;
+    swap_labels(&b->labels, &b->n, options, count);
+    rk_menu_close(b->menu);
+    rk_menu_clear(b->menu);
+    for (int i = 0; i < b->n; i++) rk_menu_add(b->menu, b->labels[i], NULL, select_chosen, b);
+  }
+  int n = v->cls == &choices_class ? ((choices *)c)->n : v->cls == &segments_class ? ((segments *)c)->n : ((select_box *)c)->n;
+  if (c->value >= n) { c->value = -1; if (v->cls == &segments_class) ((segments *)c)->from = -1; }
+  rk__view_relayout_up(v);
+}
+
+void rk_control_set_range(rk_view *v, double min, double max, double step) {
+  range *r = v && v->cls == &slider_class ? &((slider *)v->state)->r : v && v->cls == &stepper_class ? &((stepper *)v->state)->r : NULL;
+  if (!rk__expect(r, v, __func__, "a slider or a stepper")) return;
+  r->min = min; r->max = RK_MAX(min, max); r->step = step > 0 ? step : 0;
+  control *c = v->state;
+  double was = c->value;
+  c->value = range_fit(r, c->value);
+  if (c->apply && was != c->value) c->apply(v, was, c->value);
+  rk__view_relayout_up(v);
+}
+
 void rk_control_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { control *c = control_of(v); if (c) { c->change = fn; c->change_user = user; } }
 

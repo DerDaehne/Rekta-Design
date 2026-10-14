@@ -24,7 +24,7 @@ rk_view *rk__view_create(const rk_class *cls, void *state) {
   rk__live_views++;
   v->opacity = v->popacity = 1;
   v->transform = v->ptransform = rk_transform_identity();
-  v->main = RK_ALIGN_START; v->cross = RK_ALIGN_STRETCH;
+  v->main = v->cross = RK_ALIGN_AUTO;                       /* a column stretches, a row keeps to the start */
   v->span_c = v->span_r = 1;
   v->content_alpha = 1;
   v->cls = cls; v->state = state;
@@ -518,20 +518,21 @@ static void stack(rk_view *v, bool column) {
   }
   float used = RK_MAX(0, n - 1) * v->gap;
   for (int j = 0; j < n; j++) used += sizes[j];
+  rk_align main_a = v->main, cross_a = v->cross != RK_ALIGN_AUTO ? v->cross : column ? RK_ALIGN_STRETCH : RK_ALIGN_START;
   float free_ = main_len - used, pos = 0, extra_gap = 0;
   if (free_ > 0) {
-    if (v->main == RK_ALIGN_CENTER) pos = free_ / 2;
-    else if (v->main == RK_ALIGN_END) pos = free_;
-    else if (v->main == RK_ALIGN_BETWEEN && n > 1) extra_gap = free_ / (n - 1);
+    if (main_a == RK_ALIGN_CENTER) pos = free_ / 2;
+    else if (main_a == RK_ALIGN_END) pos = free_;
+    else if (main_a == RK_ALIGN_BETWEEN && n > 1) extra_gap = free_ / (n - 1);
   }
   for (int j = 0; j < n; j++) {
     rk_view *k = v->kids[idx[j]];
     float cs = cross_len, co = 0;
     float fixed_cross = column ? k->fixed_w : k->fixed_h;
-    if (v->cross != RK_ALIGN_STRETCH || fixed_cross > 0 || k->hug) {   /* a fixed size, or a button, is not stretched */
+    if (cross_a != RK_ALIGN_STRETCH || fixed_cross > 0 || k->hug) {   /* a fixed size, or a button, is not stretched */
       cs = RK_MIN(cross[j], cross_len);
-      if (v->cross == RK_ALIGN_CENTER) co = (cross_len - cs) / 2;
-      else if (v->cross == RK_ALIGN_END) co = cross_len - cs;
+      if (cross_a == RK_ALIGN_CENTER) co = (cross_len - cs) / 2;
+      else if (cross_a == RK_ALIGN_END) co = cross_len - cs;
     }
     rk_rect f = column ? (rk_rect){ p.left + co, p.top + pos, cs, sizes[j] } : (rk_rect){ p.left + pos, p.top + co, sizes[j], cs };
     rk__set_frame(k, f);

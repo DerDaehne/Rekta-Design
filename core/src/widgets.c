@@ -56,6 +56,14 @@ void rk_label_set_text(rk_view *v, const char *text) {
   rk__setstr(&v->access_label, l->text);
   rk__view_relayout_up(v);
 }
+void rk_label_set_style(rk_view *v, rk_text_style style) {
+  if (!rk__expect(v && v->cls == &label_class ? v : NULL, v, __func__, "a label")) return;
+  label *l = v->state;
+  if (l->style == style) return;
+  l->style = style;
+  v->access = style == RK_TEXT_TITLE || style == RK_TEXT_GROUP ? RK_ACCESS_HEADING : RK_ACCESS_TEXT;
+  rk__view_relayout_up(v);
+}
 void rk_label_set_color(rk_view *v, rk_role role) { if (rk__expect(v && v->cls == &label_class ? v : NULL, v, __func__, "a label")) { ((label *)v->state)->color = role; rk__view_dirty(v); } }
 
 /* Button ---------------------------------------------------------------------------------------------------------- */
@@ -117,6 +125,17 @@ rk_view *rk_button(const char *text, void (*on_press)(rk_view *button, void *use
   rk_view *v = button_make(text, NULL, RK_BUTTON_DEFAULT);
   if (on_press) rk_view_on_activate(v, on_press, user);
   return v;
+}
+
+void rk_button_set_label(rk_view *v, const char *text) {
+  if (!rk__expect(v && v->cls == &button_class ? v : NULL, v, __func__, "a button")) return;
+  button *b = v->state;
+  if (!strcmp(b->label, text ? text : "")) return;
+  bool named_by_it = !v->name || !strcmp(v->name, *b->label ? b->label : b->icon ? b->icon : "");
+  rk__setstr(&b->label, text ? text : "");
+  rk__setstr(&v->access_label, *b->label ? b->label : b->icon);
+  if (named_by_it) rk__setstr(&v->name, *b->label ? b->label : b->icon);   /* still found by what it says */
+  rk__view_relayout_up(v);
 }
 
 void rk_button_set_kind(rk_view *v, rk_button_kind kind) {
@@ -246,11 +265,7 @@ static rk_view *container(rk_layout layout, float gap) {
 rk_view *rk_vstack(void) { return container(RK_LAYOUT_VSTACK, rk_metric_of(RK_SPACE_M)); }
 rk_view *rk_tile_grid(void) { return container(RK_LAYOUT_TILES, rk_metric_of(RK_SPACE_S)); }
 
-rk_view *rk_hstack(void) {
-  rk_view *v = container(RK_LAYOUT_HSTACK, rk_metric_of(RK_SPACE_S));
-  rk_view_set_align(v, RK_ALIGN_START, RK_ALIGN_START);
-  return v;
-}
+rk_view *rk_hstack(void) { return container(RK_LAYOUT_HSTACK, rk_metric_of(RK_SPACE_S)); }
 
 void rk_tile_set_status(rk_view *v, rk_status status, const char *word) {
   if (!rk__expect(v && v->cls == &tile_class ? v : NULL, v, __func__, "a tile")) return;
@@ -398,6 +413,14 @@ rk_view *rk_icon(const char *name, rk_role color) {
   rk_view *v = rk__view_create(&icon_class, i);
   v->access = RK_ACCESS_IMAGE;
   return v;
+}
+
+void rk_icon_set(rk_view *v, const char *name, rk_role color) {
+  if (!rk__expect(v && v->cls == &icon_class ? v : NULL, v, __func__, "an icon")) return;
+  icon *i = v->state;
+  rk__icon_check(name, __func__);
+  rk__setstr(&i->name, name); i->color = color;
+  rk__view_dirty(v);
 }
 
 static rk_size progress_measure(rk_view *v, rk_size a, void *st) { (void)v; (void)st; return (rk_size){ isfinite(a.w) ? a.w : 150, 4 }; }
