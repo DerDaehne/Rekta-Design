@@ -7,6 +7,18 @@ it; each entry says how.
 
 ## Unreleased
 
+### Breaking (rekta-core: declared first)
+
+The declared UI is now the way to write a rekta-core app, and the view tree
+the public foundation under it. The experiment's separate `rekta_ui.h` is gone:
+everything is in `rekta.h`.
+
+| Was | Now |
+| --- | --- |
+| `rk_align` began with `RK_ALIGN_START` | it begins with `RK_ALIGN_AUTO` (a column stretches, a row keeps to the start): every value moved by one, so rebuild |
+| `rk_confirm` returned nothing | it returns the sheet, so the app can dismiss it before the answer |
+| `#include "rekta_ui.h"` | `#include "rekta.h"` |
+
 ### Breaking (rekta-core: the API review)
 
 An independent review held rekta-core to modern library practice and to how
@@ -44,6 +56,36 @@ apps change as follows (`man rekta` has the whole API):
 
 ### Added
 
+- **rekta-core: declared UI.** A window given `rk_window_desc.build` (with
+  `.user`, and `.on_key` for keys nothing focused takes) calls it to know what
+  to show: macros for every view, collection, menu and controller (`RK_TILE`,
+  `RK_VSTACK`, `RK_TABLE` with `RK_COLUMN`, `RK_TREE` with `RK_ITEM`,
+  `RK_PLACES`, `RK_PIVOT`, `RK_PANORAMA`, `RK_SHEET`, `RK_CONFIRM`, `RK_HOST` for
+  a view made by hand) fill `rk_ui` descriptors. Every declared window builds
+  again after each event, timer, post and close the library hands the app, and
+  only what differs reaches the views, with the motion each change means: what
+  goes leaves first, what comes enters, the rest reflow, a place turns, a tile's
+  new value peeks in. Nodes are matched by `.key` or `.id` (`RK_ID(n)`), else by
+  place. Bound values (`.on`, `.chosen`, `.number`, `.day`, `.buffer`, `.open`)
+  show what the app holds after every build; given ones (`.value`, `.input`)
+  are set again only when the declaration moves them. `.version` skips
+  unchanged scopes, `.change` picks a transition (`RK_UI_IN_PLACE` for none),
+  `rk_ui_fmt` formats text for a build, `RK_OPTIONS` passes a static array,
+  `rk_ui_view` and `rk_ui_update` join declared views and trees made by hand.
+  Fields a kind does not read, duplicate keys, scopes left by a `return` and
+  sheets the user closed but the build opens again are said through the log.
+  The demo, `hello.c` and `navigation.c` are declared; the demo is about a
+  fifth shorter and draws its storm phase as fast as before.
+- **rekta-core: every property changes in place.** Setters for what could only
+  be set when made: `rk_label_set_style`, `rk_button_set_label`,
+  `rk_control_set_label`, `rk_control_set_options`, `rk_control_set_range`,
+  `rk_field_set_label`, `rk_field_set_placeholder`, `rk_icon_set`. Parts change
+  where they stand: `rk_panorama_insert`, `_remove`, `_set_title`,
+  `_set_width`; `rk_pivot_insert_controller`, `rk_pivot_remove`;
+  `rk_table_insert_column`, `_remove_column`, `_set_column`; `rk_tree_move`;
+  `rk_view_reorder` puts children in order without taking them out, so focus
+  stays. Hooks for what the user did: `rk_places_on_back`,
+  `rk_pivot_on_change`, `rk_controller_on_dismiss`, `rk_split_on_back`.
 - **rekta-core: from the API review.** Disabled views with a reason: any view
   can be disabled (`rk_view_set_enabled`), greying it and everything in it,
   and a tooltip (`rk_view_set_tooltip`) floats after `tip-delay` or on keyboard
@@ -496,6 +538,13 @@ apps change as follows (`man rekta` has the whole API):
 
 ### Fixed
 
+- rekta-core, found while building the declared UI: a menu open when its
+  window closed kept the window alive (they now close with it); a sheet
+  destroyed while it had focus kept the view focused before it; a controller
+  destroyed before the controllers it held left them pointing at it; a place
+  turning with nothing in it passed `NULL` to `qsort`; a sheet presented again while
+  it was leaving lost its new place; a place's turn treated a page and the
+  pivot inside it as one block.
 - rekta-core: the rasterizer gave the first pixel of a slanted edge crossing
   the clip's left border the wrong coverage, so a rounded corner drawn in part
   did not match the whole; edges are now split at the clip border. Found by

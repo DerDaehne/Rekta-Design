@@ -9,6 +9,10 @@ is [include/rekta.h](include/rekta.h).
   libxkbcommon) with Xlib as the fallback. Glyphs come from
   `third_party/stb_truetype.h` and pictures from `third_party/stb_image.h`
   (both public domain); Barlow is built in.
+- Declared: a build function says what a window shows from the app's state;
+  the library keeps the views and, after every handler, changes only what
+  differs, with the design's motion. The view tree it stands on is public, for
+  custom views and anything a declaration cannot say.
 - One header, one translation unit (`src/rekta.c`), plus `src/platform_cocoa.m`
   on macOS.
 - A software renderer: every platform draws the same pixels, and the tests
@@ -37,7 +41,7 @@ back. `demo --shots DIR` takes the same tour without a screen.
 
 ```sh
 make               # build/librekta.a and build/demo
-make test          # 436 checks and 36 reference images, headless (the comparison needs node)
+make test          # 544 checks and 36 reference images, headless (the comparison needs node)
 make shots         # the demo's tour as PNGs in build/shots
 make sanitize      # tests and demo under AddressSanitizer and UBSan
 make modules       # each source compiled on its own; the unity build only joins them
@@ -69,12 +73,12 @@ servers); `RK_HEADLESS=1` in the environment runs any build without a screen.
 ## A first app
 
 `examples/hello.c`, built with the library and run by `make test`; `man ./man/rekta.3`
-explains every call in it.
+explains every call in it. The app keeps its state; `today` says what the window
+shows from it, and runs again after every handler.
 
 ```c
 /* hello.c: a first app. A section of tiles, a button that counts, a tile that opens something. */
 #include "rekta.h"
-#include <stdio.h>
 
 static int finished = 312;                         /* the state: the window shows what is here */
 
@@ -84,13 +88,11 @@ static void open_notes(rk_view *tile, void *user) {
   rk_window_toast(rk_view_window(tile), "Release notes are on their way.", NULL, NULL, NULL);
 }
 
-static void today(void *user) {
-  char builds[16];
-  snprintf(builds, sizeof builds, "%d", finished);
+static void today(void *user) {                    /* what the window shows: built again after every handler */
   RK_PANORAMA() RK_SECTION("today") {
     RK_LABEL("Today", .style = RK_TEXT_GROUP);
     RK_TILES() {
-      RK_TILE(builds, .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
+      RK_TILE(rk_ui_fmt("%d", finished), .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
       RK_TILE("0.3", .label = "release notes", .on_press = open_notes);   /* it presses, and opens something */
     }
     RK_BUTTON("build one", .on_press = build_one);
@@ -108,14 +110,23 @@ int main(void) {
 }
 ```
 
-A live value changes with its meaning, never with numbers you pick:
+A live value changes with its meaning, never with numbers you pick. Declared,
+the change is the motion: a tile's new number peeks in, a new status turns it
+over, a new span makes the grid room, a key that goes leaves and the rest close
+up after it:
+
+```c
+RK_TILES() for (int i = 0; i < app.nbuilds; i++)
+  RK_TILE(rk_ui_fmt("%d", app.builds[i].minutes), RK_ID(app.builds[i].id), .label = "minutes",
+          .status = app.builds[i].failed ? RK_STATUS_ERROR : RK_STATUS_SUCCESS, .span = { app.builds[i].big ? 2 : 1, 1 });
+```
+
+Underneath, the same by hand, for a custom view or an experiment the
+declaration does not cover:
 
 ```c
 rk_view_transition(tile, RK_TRANSITION_PEEK);   /* a new number peeks in */
 rk_tile_set_stat(tile, "13", "builds today");
-
-rk_view_transition(tile, RK_TRANSITION_FLIP);   /* a new status turns the tile over */
-rk_tile_set_status(tile, RK_STATUS_ERROR, NULL);
 
 rk_animate_begin(RK_MOTION_REFLOW);             /* it grows; the grid makes room */
 rk_view_set_span(tile, 2, 2);

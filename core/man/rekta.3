@@ -25,19 +25,131 @@ on Windows:
 .Nm
 draws Rekta Design itself, the same pixels on every system, and asks the
 system only for a window, input and settings.
-An app is a tree: a
+An app says what a window shows in a
+.Em build
+function, from its own state; the library makes the views, keeps them, and
+after anything that may have changed the state builds again and changes only
+what differs, with the design's motion.
+Underneath stands a tree anyone may reach: a
 .Em window
 shows a
 .Em controller ,
 a controller owns a
 .Em view ,
 and views contain views.
+The declared UI is the way to write an app; the tree is there for what it
+cannot say, such as a custom view.
 Layout, spacing, colour, type and motion come from the design tokens, so
 an app says what it shows and rarely how.
 .Pp
 Everything runs on the main thread.
 .Fn rk_app_post
 is the one function another thread may call.
+.Ss Declared UI
+A window given
+.Fa desc->build
+calls it to know what to show:
+.Bd -literal -offset indent
+static void today(void *user) {
+  RK_PANORAMA() RK_SECTION("today") {
+    RK_TILES() RK_TILE(rk_ui_fmt("%d", app.finished), .label = "finished");
+    RK_BUTTON("build one", .on_press = build_one);
+  }
+}
+.Ed
+.Pp
+Each macro declares one node: its first argument is its text, the rest are
+fields of
+.Vt rk_ui
+by name, and a field left out is the default.
+A container's scope, the block after it, holds what it holds;
+.Ic break
+or
+.Ic continue
+inside one ends the scope, and a
+.Ic return
+or
+.Ic goto
+out of one is a mistake the build reports.
+The kinds: views that hold views
+.Pq Dv RK_VSTACK , RK_HSTACK , RK_TILES , RK_ROWS , RK_SCROLL , RK_SPLIT ;
+views
+.Pq Dv RK_LABEL , RK_BUTTON , RK_TILE , RK_ROW , RK_ICON , RK_PROGRESS , RK_IMAGE , RK_SPACER , RK_FIELD , RK_CHECK , RK_TOGGLE , RK_CHOICES , RK_SEGMENTS , RK_SLIDER , RK_STEPPER , RK_SELECT , RK_DATE , RK_DROP ;
+collections
+.Pq Dv RK_LIST , RK_TABLE No with Dv RK_COLUMN , RK_TREE No with Dv RK_ITEM ;
+menus, declared by a
+.Fa .menu
+function
+.Pq Dv RK_ITEM , RK_SEPARATOR , RK_HEADING ;
+navigation
+.Pq Dv RK_PLACES No with Dv RK_PLACE , RK_PIVOT No with Dv RK_PAGE , RK_PANORAMA No with Dv RK_SECTION , RK_SHEET , RK_CONFIRM ;
+and
+.Dv RK_HOST ,
+which puts a view made by hand.
+.Bl -tag -width Ds
+.It When it builds
+After every event, timer, post and close the library hands the app, after
+a look change and at the end of a motion, and before each frame.
+Handlers never build themselves; state changed anywhere else calls
+.Fn rk_ui_update .
+.It Who a node is
+Its
+.Fa .key
+or
+.Fa .id
+.Pq Dv RK_ID Ns Pq n No for a number from 0
+among its siblings, else its place among its unkeyed siblings of its kind.
+What comes and goes in a list wants a key, so it keeps its focus, its text
+and its motion.
+.It Values
+A value bound by a pointer
+.Pq Fa .on , .chosen , .number , .day , .buffer , .open
+is what the view shows after every build, and the user's change is written
+there first.
+A value only given
+.Pq Fa .value , .input
+is where the view starts; it is set again only when the declaration moves
+it, and
+.Fa .on_change
+tells the app what the user did.
+.It Strings and pointers
+Strings and arrays are copied when the macro runs: a local buffer, or
+.Fn rk_ui_fmt ,
+which formats into memory that lasts until the build ends, is fine.
+Bound pointers,
+.Fa .user
+and
+.Fa .data
+are kept until the next build declares the node again; in a scope skipped by
+.Fa .version ,
+until it is built again.
+.It Skipping work
+A scope whose
+.Fa .version
+is the same as last time is not built again; a list's or a table's rows are
+drawn again only when its version changes.
+.It Mistakes
+A field the kind does not read, a key twice among siblings, a node the user
+closed that the build declares open again: each is said once through the log.
+.El
+.Pp
+A change takes the motion its kind means; a node's
+.Fa .change
+picks another
+.Pq Dv RK_UI_PEEK , RK_UI_FLIP , RK_UI_CROSSFADE ,
+and on a container
+.Dv RK_UI_IN_PLACE
+makes what its scope holds come, go and move at once.
+.Pp
+.Fn rk_ui_view
+puts a declared view into a tree made by hand.
+.Fn rk_ui_open ,
+.Fn rk_ui_close
+and
+.Fn rk_ui_put
+are what the macros call, with an
+.Vt rk_ui
+filled in by hand.
 .Ss Who owns what
 Objects are reference counted, and one rule says who owns them:
 .Bl -bullet
@@ -153,6 +265,14 @@ by
 .Fa desc->height
 logical pixels, with Rekta's title bar unless
 .Fa desc->system_frame .
+With
+.Fa desc->build
+it shows what that function declares
+.Pq Sx Declared UI ,
+called with
+.Fa desc->user ;
+.Fa desc->on_key
+hears the keys nothing focused takes.
 .It Fn rk_window_show "rk_window *window" "rk_controller *root"
 Shows the window with
 .Fa root
@@ -227,6 +347,11 @@ Takes it out of its parent; it is gone unless you retained it.
 Inside an
 .Dv RK_MOTION_LEAVE
 block it leaves first and the rest close up.
+.It Fn rk_view_reorder "rk_view *view" "rk_view *const *children" "int count"
+Puts the children in that order, without taking them out: focus stays, and
+inside an
+.Dv RK_MOTION_REFLOW
+block they glide there.
 .It Fn rk_label "const char *text" "rk_text_style style"
 Text that wraps at its width, in one of the type roles
 .Pf ( Dv RK_TEXT_BODY ,
@@ -241,6 +366,15 @@ makes it primary, quiet or a bar button;
 gives it an icon
 .Pq Sx ICONS ;
 a button with an icon alone is named by it.
+Every view's text changes in place:
+.Fn rk_label_set_style ,
+.Fn rk_button_set_label ,
+.Fn rk_control_set_label ,
+.Fn rk_control_set_options ,
+.Fn rk_control_set_range ,
+.Fn rk_field_set_label ,
+.Fn rk_field_set_placeholder ,
+.Fn rk_icon_set .
 .It Fn rk_tile "const char *value" "const char *label"
 A tile: a value and what it counts.
 .Fn rk_tile_set_status
@@ -467,7 +601,9 @@ adds an item under
 .Fa parent
 (\-1 at the top) and returns its number;
 .Fn rk_tree_set_meta
-puts a meta or a status on its right.
+puts a meta or a status on its right;
+.Fn rk_tree_move
+puts an item before another of its siblings, or at their end.
 A click, Enter or Space selects an item and calls the
 .Fn rk_tree_on_show
 handler; selection never follows focus.
@@ -512,7 +648,9 @@ Compact one pane shows at a time:
 .Fn rk_split_set_detail_shown
 turns to the detail, whose crumb
 .Pq Fa title
-and Escape turn back; sideways it slides a new item's detail in.
+and Escape turn back, which
+.Fn rk_split_on_back
+hears; sideways it slides a new item's detail in.
 .Fn rk_split_is_sideways ,
 .Fn rk_split_is_detail_shown
 and
@@ -532,6 +670,11 @@ shares what is left) and flags:
 sets it to the right,
 .Dv RK_COLUMN_SORTABLE
 lets a click on its head sort by it, ascending then descending.
+.Fn rk_table_insert_column ,
+.Fn rk_table_remove_column
+and
+.Fn rk_table_set_column
+change the columns where they stand.
 The app sorts its rows in the
 .Fn rk_table_on_sort
 handler, which hears the column and an
@@ -623,13 +766,27 @@ A navigation stack starting at
 .Fn rk_places_go
 turns the current place away and the new one in;
 .Fn rk_places_back ,
-Escape or the back button turn back.
+Escape or the back button turn back, and
+.Fn rk_places_on_back
+hears it.
 .It Fn rk_panorama , Fn rk_panorama_add
 One place laid out sideways in sections under a strip of their titles.
+.Fn rk_panorama_insert ,
+.Fn rk_panorama_remove ,
+.Fn rk_panorama_set_title
+and
+.Fn rk_panorama_set_width
+change a section where it stands.
 .It Fn rk_pivot , Fn rk_pivot_add "rk_controller *pivot" "const char *title" "rk_view *page" , Fn rk_pivot_select
 Facets of one place; the change slides from its side.
 .Fn rk_pivot_add_controller
-adds a facet that is a controller, under its title, which may change.
+adds a facet that is a controller, under its title, which may change;
+.Fn rk_pivot_insert_controller
+puts one at an index and
+.Fn rk_pivot_remove
+takes one out, the one before it showing when it was in sight.
+.Fn rk_pivot_on_change
+hears the user pick a page.
 A pivot with no pivot or panorama above it is the window's way between
 places: its titles take the nav level, its pages start at their indent, and a
 change turns the place as
@@ -652,6 +809,8 @@ gives it its window and tells it when it appears and goes.
 Returns the child's view as a reference: add it where it goes.
 .It Fn rk_controller_present , Fn rk_controller_dismiss
 A sheet: a short question from the top edge.
+.Fn rk_controller_on_dismiss
+hears the user close it.
 .It Fn rk_confirm "rk_controller *presenter" "const rk_confirm_desc *desc" "void (*answered)(bool ok, void *user)" "void *user"
 A question in a sheet with two answers: the safe one is the primary button
 and has focus
@@ -659,6 +818,7 @@ and has focus
 for what cannot be undone); Escape and the shading answer cancel.
 .Fa answered
 hears it once.
+Returns the sheet, so the app may dismiss it before the answer.
 .El
 .Ss Motion
 Motion is named by what it means, never by numbers you pick.
@@ -775,11 +935,10 @@ trash tune undo up upload user warning window
 .Ed
 .Sh EXAMPLES
 A section of tiles, a button that counts, and a tile that opens
-something:
+something, declared:
 .Bd -literal
 /* hello.c: a first app. A section of tiles, a button that counts, a tile that opens something. */
 #include "rekta.h"
-#include <stdio.h>
 
 static int finished = 312;                         /* the state: the window shows what is here */
 
@@ -789,13 +948,11 @@ static void open_notes(rk_view *tile, void *user) {
   rk_window_toast(rk_view_window(tile), "Release notes are on their way.", NULL, NULL, NULL);
 }
 
-static void today(void *user) {
-  char builds[16];
-  snprintf(builds, sizeof builds, "%d", finished);
+static void today(void *user) {                    /* what the window shows: built again after every handler */
   RK_PANORAMA() RK_SECTION("today") {
     RK_LABEL("Today", .style = RK_TEXT_GROUP);
     RK_TILES() {
-      RK_TILE(builds, .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
+      RK_TILE(rk_ui_fmt("%d", finished), .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
       RK_TILE("0.3", .label = "release notes", .on_press = open_notes);   /* it presses, and opens something */
     }
     RK_BUTTON("build one", .on_press = build_one);

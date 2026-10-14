@@ -18,6 +18,10 @@ implement the same specification (the tokens, the icons, [motion.md](motion.md),
 - **A clean ABI.** C99, opaque handles, no struct that can grow crosses the
   boundary except size-prefixed descriptors. Any language with a C FFI can use
   it.
+- **Declared first.** An app says what a window shows from its state; the
+  library keeps the views and changes only what differs, with the design's
+  motion. The tree underneath stays public: custom views and experiments use
+  it directly, and a declaration can hold any view made by hand.
 - **Composition as in UIKit.** Windows hold a root controller; controllers own
   views, appear and disappear, contain other controllers and present sheets;
   views form a tree, lay out their children and draw themselves; events travel
@@ -27,6 +31,7 @@ implement the same specification (the tokens, the icons, [motion.md](motion.md),
 
 ```
 app code ──────────────── rekta.h (the ABI)
+  declared UI   rk_ui descriptors and macros · reconciler (keys, bound and given values, motion per change)
   controllers   window · controller · places · panorama · pivot · sheet
   views         view tree · layout · built-in views (tile, rows, label, button, icon, toast)
   motion        implicit animations · transitions (peek, flip, turn) · press
@@ -99,6 +104,48 @@ All of it is in `core/include/rekta.h`.
 - **Versioning.** `rk_version()` returns `RK_VERSION` of the library. Before
   1.0 a minor version may change the ABI, as the changelog says.
 
+## Declared UI
+
+A window given a `build` function calls it to know what to show. Each macro
+(`RK_TILE`, `RK_VSTACK`, `RK_PIVOT`, …) fills an `rk_ui`, a size-prefixed
+descriptor like the others, and a container's scope holds its children:
+
+```c
+static void today(void *user) {
+  RK_PANORAMA() RK_SECTION("today") {
+    RK_TILES() RK_TILE(rk_ui_fmt("%d", app.finished), .label = "finished");
+    RK_BUTTON("build one", .on_press = build_one);
+  }
+}
+```
+
+- **When it builds.** Handlers only change the app's state. After every event,
+  timer, post and close the library hands the app, after a look change, at the
+  end of a motion and before each frame, every declared window builds again.
+  `rk_ui_update` covers state changed where the library cannot see.
+- **Reconciling.** A node is matched with the one the last build made by
+  `.key` or `.id`, else by its place among unkeyed siblings of its kind; only
+  the fields that differ reach the view, through the same setters an app would
+  call. A controller's parts (sections, pages, columns, tree items) come, go
+  and move in place.
+- **Motion per change.** What goes leaves first (`RK_MOTION_LEAVE`), then what
+  comes enters or the rest reflow, then navigation turns or slides; a tile's
+  new value peeks in, a new status flips it. `.change` picks another
+  transition, `RK_UI_IN_PLACE` none.
+- **Values.** Bound by a pointer (`.on`, `.chosen`, `.number`, `.day`,
+  `.buffer`, `.open`): the view shows what the app holds after every build,
+  and the user's change is written there first. Given (`.value`, `.input`):
+  where the view starts, set again only when the declaration moves it.
+- **Work.** A build costs O(nodes declared); `.version` skips a scope that has
+  not changed, and a list's or table's rows are data-driven, so a million rows
+  are one node.
+- **Mistakes** are said once through the log: a field the kind does not read,
+  a key twice, a scope left open by a `return`, a closed sheet declared open
+  again.
+
+The tree below stays the foundation, and public: `RK_HOST` puts a view made by
+hand into a build, `rk_ui_view` puts a declared view into a tree made by hand.
+
 ## Composition
 
 **Window.** `rk_window_create` opens one; `rk_window_show` shows it with a
@@ -156,10 +203,10 @@ changelog says so.
 
 ## Status
 
-Stages 1 and 2 are done: the renderer, views, controllers, motion, input, text
+Stages 1 and 2 are done: the declared UI over the whole view set, the renderer, views, controllers, motion, input, text
 fields and areas (clipboard, input methods on every platform), menus, long lists,
 tables that sort, resize and edit, undo and focus everywhere; the headless
-platform, Wayland and X11 are tested here (436 checks, 36 reference images,
+platform, Wayland and X11 are tested here (544 checks, 36 reference images,
 AddressSanitizer and UBSan clean, each module compiling on its own); Win32 and
 Cocoa are built and tested in CI.
 
