@@ -636,15 +636,43 @@ static rk_view *strip_create(bool nav, void (*select)(void *, int), void *owner)
   return v;
 }
 
-static void strip_add(rk_view *v, const char *title) {
+static void strip_insert(rk_view *v, int index, const char *title) {
   strip *s = v->state;
+  index = RK_CLAMP(index, 0, s->n);
   int cap = s->n;                                          /* the three grow together */
   s->titles = rk__grow(s->titles, &cap, s->n + 1, sizeof *s->titles); cap = s->n;
   s->scale = rk__grow(s->scale, &cap, s->n + 1, sizeof *s->scale); cap = s->n;
   s->in = rk__grow(s->in, &cap, s->n + 1, sizeof *s->in);
-  s->titles[s->n++] = rk__strdup(title ? title : "");
-  rk__glide_set(&s->scale[s->n - 1], strip_rest(s, s->n - 1));
-  rk__glide_set(&s->in[s->n - 1], s->n - 1 == s->active);
+  int after = s->n - index;
+  memmove(s->titles + index + 1, s->titles + index, (size_t)after * sizeof *s->titles);
+  memmove(s->scale + index + 1, s->scale + index, (size_t)after * sizeof *s->scale);
+  memmove(s->in + index + 1, s->in + index, (size_t)after * sizeof *s->in);
+  s->n++;
+  if (s->n > 1 && index <= s->active) s->active++;         /* the title in sight stays in sight */
+  s->titles[index] = rk__strdup(title ? title : "");
+  rk__glide_set(&s->scale[index], strip_rest(s, index));
+  rk__glide_set(&s->in[index], index == s->active);
+  rk__view_relayout_up(v);
+}
+
+static void strip_remove(rk_view *v, int index) {
+  strip *s = v->state;
+  if (index < 0 || index >= s->n) return;
+  free(s->titles[index]);
+  int after = s->n - index - 1;
+  memmove(s->titles + index, s->titles + index + 1, (size_t)after * sizeof *s->titles);
+  memmove(s->scale + index, s->scale + index + 1, (size_t)after * sizeof *s->scale);
+  memmove(s->in + index, s->in + index + 1, (size_t)after * sizeof *s->in);
+  s->n--;
+  if (s->active > index || s->active >= s->n) s->active = RK_MAX(0, s->active - 1);
+  for (int i = 0; i < s->n; i++) { rk__glide_set(&s->scale[i], strip_rest(s, i)); rk__glide_set(&s->in[i], i == s->active); }
+  rk__view_relayout_up(v);
+}
+
+static void strip_set_title(rk_view *v, int index, const char *title) {
+  strip *s = v->state;
+  if (index < 0 || index >= s->n) return;
+  rk__setstr(&s->titles[index], title ? title : "");
   rk__view_relayout_up(v);
 }
 
@@ -948,10 +976,18 @@ rk_controller *rk_panorama(void) {
 }
 
 void rk_panorama_add(rk_controller *c, const char *title, rk_view *section_view, float width) {
-  if (c->kind != K_PANORAMA || !section_view) { rk_release(section_view); return; }
+  rk_panorama_insert(c, c && c->kind == K_PANORAMA ? ((panorama *)c->impl)->n : 0, title, section_view, width);
+}
+
+void rk_panorama_insert(rk_controller *c, int index, const char *title, rk_view *section_view, float width) {
+  if (!c || c->kind != K_PANORAMA || !section_view) { if (c && c->kind != K_PANORAMA) rk__error("rk_panorama_insert: not a panorama"); rk_release(section_view); return; }
   panorama *p = c->impl;
+  index = RK_CLAMP(index, 0, p->n);
   p->secs = rk__grow(p->secs, &p->cap, p->n + 1, sizeof *p->secs);
-  section *s = &p->secs[p->n++];
+  memmove(p->secs + index + 1, p->secs + index, (size_t)(p->n - index) * sizeof *p->secs);
+  p->n++;
+  section *s = &p->secs[index];
+  memset(s, 0, sizeof *s);
   s->title = rk__strdup(title); s->view = section_view; s->width = width;
   s->box = rk__view_create(&secbox_class, NULL);
   s->box->clip = true;
@@ -959,9 +995,39 @@ void rk_panorama_add(rk_controller *c, const char *title, rk_view *section_view,
   rk__setstr(&s->box->access_label, title);
   rk__view_add(s->box, section_view);
   rk_release(section_view);                                    /* the section box holds it now */
-  rk__view_add(p->track, s->box);
+  rk__view_insert(p->track, s->box, index);
   rk_release(s->box);
-  strip_add(p->strip, title);
+  strip_insert(p->strip, index, title);
+}
+
+void rk_panorama_remove(rk_controller *c, int index) {
+  if (!c || c->kind != K_PANORAMA) { rk__error("rk_panorama_remove: not a panorama"); return; }
+  panorama *p = c->impl;
+  if (index < 0 || index >= p->n) return;
+  section *s = &p->secs[index];
+  rk__view_detach(s->box);                                     /* with its section */
+  free(s->title);
+  memmove(p->secs + index, p->secs + index + 1, (size_t)(p->n - index - 1) * sizeof *p->secs);
+  p->n--;
+  strip_remove(p->strip, index);
+  rk__view_relayout_up(c->view);
+}
+
+void rk_panorama_set_title(rk_controller *c, int index, const char *title) {
+  if (!c || c->kind != K_PANORAMA) { rk__error("rk_panorama_set_title: not a panorama"); return; }
+  panorama *p = c->impl;
+  if (index < 0 || index >= p->n) return;
+  rk__setstr(&p->secs[index].title, title);
+  rk__setstr(&p->secs[index].box->access_label, title);
+  strip_set_title(p->strip, index, title);
+}
+
+void rk_panorama_set_width(rk_controller *c, int index, float width) {
+  if (!c || c->kind != K_PANORAMA) { rk__error("rk_panorama_set_width: not a panorama"); return; }
+  panorama *p = c->impl;
+  if (index < 0 || index >= p->n) return;
+  p->secs[index].width = width;
+  rk__view_relayout_up(c->view);
 }
 
 /* Keyboard focus never lands out of sight: the section scrolls it into view, the panorama brings the section. */
@@ -1115,17 +1181,49 @@ void rk_pivot_add(rk_controller *c, const char *title, rk_view *page) {
 }
 
 void rk_pivot_add_controller(rk_controller *c, rk_controller *facet) {
-  if (c->kind != K_PIVOT || !facet) { if (c->kind != K_PIVOT) rk__error("rk_pivot_add_controller: not a pivot"); rk_release(facet); return; }
+  rk_pivot_insert_controller(c, c && c->kind == K_PIVOT ? ((pivot *)c->impl)->n : 0, facet);
+}
+
+void rk_pivot_insert_controller(rk_controller *c, int index, rk_controller *facet) {
+  if (!c || c->kind != K_PIVOT || !facet) { if (c && c->kind != K_PIVOT) rk__error("rk_pivot_insert_controller: not a pivot"); rk_release(facet); return; }
   pivot *p = c->impl;
+  index = RK_CLAMP(index, 0, p->n);
   p->facets = rk__grow(p->facets, &p->cap, p->n + 1, sizeof *p->facets);
-  p->facets[p->n++] = facet;                                   /* takes the caller's reference */
+  memmove(p->facets + index + 1, p->facets + index, (size_t)(p->n - index) * sizeof *p->facets);
+  p->facets[index] = facet;                                    /* takes the caller's reference */
+  p->n++;
   facet->parent = c;
-  strip_add(p->strip, facet->title);
+  strip_insert(p->strip, index, facet->title);
   if (p->n == 1) {
     rk__view_add(p->body, rk_controller_view(facet));
     rk__controller_attach(facet, c->window);
     if (c->appeared) rk__controller_appear(facet, true);
+  } else if (index <= p->sel) p->sel++;                        /* the facet in sight stays in sight */
+}
+
+static void pivot_arrive(void *user);
+/* A facet goes; the one in sight going, the one before it shows (the first, when it was the first) - at once. */
+void rk_pivot_remove(rk_controller *c, int index) {
+  if (!c || c->kind != K_PIVOT) { rk__error("rk_pivot_remove: not a pivot"); return; }
+  pivot *p = c->impl;
+  if (index < 0 || index >= p->n) return;
+  if (p->timer) { rk_app_cancel(p->timer); p->timer = 0; pivot_arrive(p); }   /* a turn under way ends first */
+  rk_controller *gone = p->facets[index];
+  bool shown = index == p->sel;
+  if (shown) { rk__view_detach(rk_controller_view(gone)); rk__controller_appear(gone, false); }
+  memmove(p->facets + index, p->facets + index + 1, (size_t)(p->n - index - 1) * sizeof *p->facets);
+  p->n--;
+  strip_remove(p->strip, index);
+  if (p->sel > index || p->sel >= p->n) p->sel = RK_MAX(0, p->sel - 1);
+  if (shown && p->n) {
+    rk_controller *to = p->facets[p->sel];
+    rk__view_add(p->body, rk_controller_view(to));
+    rk__controller_attach(to, c->window);
+    if (c->appeared) rk__controller_appear(to, true);
   }
+  gone->parent = NULL;
+  rk_release(gone);
+  if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar);
 }
 
 /* A pivot that picks the place turns it: the facet in sight turns away, then the next one turns in. One later in

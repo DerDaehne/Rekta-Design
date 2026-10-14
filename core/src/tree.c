@@ -317,6 +317,30 @@ int rk_tree_add(rk_view *v, int parent, const char *title) {
   return i;
 }
 
+/* An item, with what it holds, moves among its siblings: before another (-1: to the end). */
+void rk_tree_move(rk_view *v, int item, int before) {
+  tree *t = RK__EXPECT(tree_of, v, "a tree");
+  if (!t || !tree_has(t, item) || item == before) return;
+  int parent = t->nodes[item].parent;
+  if (before >= 0 && (!tree_has(t, before) || t->nodes[before].parent != parent)) { rk__warn("rk_tree_move: %d is not a sibling of %d", before, item); return; }
+  int *first = parent >= 0 ? &t->nodes[parent].first : &t->first, *last = parent >= 0 ? &t->nodes[parent].last : &t->last;
+  int prev = -1;                                           /* out of its place */
+  for (int k = *first; k >= 0 && k != item; k = t->nodes[k].next) prev = k;
+  if (prev >= 0) t->nodes[prev].next = t->nodes[item].next; else *first = t->nodes[item].next;
+  if (*last == item) *last = prev;
+  t->nodes[item].next = -1;
+  if (before < 0) {                                        /* into its new one */
+    if (*last >= 0) t->nodes[*last].next = item; else *first = item;
+    *last = item;
+  } else {
+    int p = -1;
+    for (int k = *first; k >= 0 && k != before; k = t->nodes[k].next) p = k;
+    t->nodes[item].next = before;
+    if (p >= 0) t->nodes[p].next = item; else *first = item;
+  }
+  rk__view_relayout_up(v);
+}
+
 /* An item and everything under it go; their numbers are not given out again until the tree is cleared. */
 static void forget(tree *t, int i) {
   for (int k = t->nodes[i].first; k >= 0; k = t->nodes[k].next) forget(t, k);

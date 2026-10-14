@@ -2597,6 +2597,9 @@ static void dcoll_menu(void *u) {
   RK_ITEM("hidden files", .on = &c->hidden);
   RK_ITEM("export", .shortcut = "Ctrl+E", .disabled = !c->can_export);
 }
+static int tree_first(rk_view *v) { return tree_of(v)->first; }   /* the order a tree shows its top items in */
+static int tree_next(rk_view *v, int item) { return tree_of(v)->nodes[item].next; }
+
 static void dcoll_build(void *user) {
   dcoll *c = user;
   RK_HSTACK(.align = RK_ALIGN_START) {
@@ -2633,8 +2636,7 @@ static void test_declared_collections(void) {
   CHECK(in_window(w, "table") == tv && ((list *)tv->state)->ncols == 3, "a column added: the same table");
   c.third = false;
   rk_ui_update(NULL);
-  rk_view *tv2 = in_window(w, "table");
-  CHECK(tv2 && tv2 != tv && ((list *)tv2->state)->ncols == 2, "a column taken out: the table made again, once");
+  CHECK(in_window(w, "table") == tv && ((list *)tv->state)->ncols == 2 && !strcmp(((list *)tv->state)->cols[1].title, "size"), "a column taken out: from the same table");
   CHECK(!strcmp(rk_tree_title(tree, 0), "src") && !strcmp(rk_tree_title(tree, 1), "main.c") && rk_tree_parent(tree, 1) == 0, "a tree's declared items");
   c.src_open = true;
   rk_ui_update(NULL);
@@ -2648,8 +2650,9 @@ static void test_declared_collections(void) {
   CHECK(in_window(w, "tree") == tree && rk_tree_title(tree, 3) == NULL, "an item taken out goes from the same tree");
   c.docs = true; c.swap = true;
   rk_ui_update(NULL);
-  rk_view *tree2 = in_window(w, "tree");
-  CHECK(tree2 && !strcmp(rk_tree_title(tree2, 0), "docs") && !strcmp(rk_tree_title(tree2, 1), "src"), "items in a new order: the tree made again in it");
+  int first = tree_first(tree);
+  CHECK(in_window(w, "tree") == tree && !strcmp(rk_tree_title(tree, first), "docs") && !strcmp(rk_tree_title(tree, tree_next(tree, first)), "src")
+        && rk_tree_is_open(tree, 0) == c.src_open, "items in a new order: the same tree, in it");
   rk_view *menu = more->menu;
   rk_view_tap(more);
   rk_app_run_for(300);
@@ -2838,6 +2841,84 @@ static void test_declared_fixes(void) {
 }
 
 static void dwarn_build(void *u) { (void)u; RK_FIELD("Mail", .label = "x"); RK_ROWS() { RK_ROW("a", .key = "same"); RK_ROW("b", .key = "same"); } }
+/* A controller's parts change in place: the same panorama, pivot and table, its sections, pages and columns moved,
+   renamed and taken out where they stand. */
+typedef struct dslots { int order, gone, renamed; } dslots;
+
+static void dslots_build(void *user) {
+  dslots *s = user;
+  static const char *names[] = { "a", "b", "c" };
+  int order[3][3] = { { 0, 1, 2 }, { 2, 0, 1 }, { 1, 2, 0 } };
+  RK_HSTACK(.align = RK_ALIGN_START) {
+    RK_PANORAMA("pano", .key = "pano", .width = 400, .height = 300) {
+      for (int i = 0; i < 3; i++) {
+        int k = order[s->order][i];
+        if (k == s->gone) continue;
+        RK_SECTION(k == 0 && s->renamed ? "first" : names[k], .key = names[k], .width = s->renamed && k == 1 ? 240 : 0) RK_LABEL(names[k]);
+      }
+    }
+    RK_PIVOT(.key = "pivot", .width = 300, .height = 300) {
+      for (int i = 0; i < 3; i++) {
+        int k = order[s->order][i];
+        if (k == s->gone) continue;
+        RK_PAGE(names[k], .key = names[k]) RK_LABEL(names[k]);
+      }
+    }
+    RK_TABLE(.key = "table", .count = 3, .cell = dcoll_cell, .width = 300, .height = 200) {
+      for (int i = 0; i < 3; i++) {
+        int k = order[s->order][i];
+        if (k == s->gone) continue;
+        RK_COLUMN(k == 0 && s->renamed ? "first" : names[k], .key = names[k], .flags = k == 0 && s->renamed ? RK_COLUMN_NUMERIC : 0);
+      }
+    }
+  }
+}
+
+static const char *pano_title(void *c, int i) { panorama *p = ((rk_controller *)c)->impl; return i < p->n ? p->secs[i].title : NULL; }
+static const char *pivot_title(void *c, int i) { pivot *p = ((rk_controller *)c)->impl; return i < p->n ? rk_controller_title(p->facets[i]) : NULL; }
+static const char *column_title(void *v, int i) { list *l = ((rk_view *)v)->state; return i < l->ncols ? l->cols[i].title : NULL; }
+static bool titles(const char *(*get)(void *, int), void *of, const char *want) {   /* "c a b": in that order, no more */
+  char got[64] = ""; int i = 0;
+  for (const char *t; (t = get(of, i)); i++) { if (i) strcat(got, " "); strcat(got, t); }
+  return !strcmp(got, want);
+}
+
+static void test_declared_in_place(void) {
+  dslots s = { .gone = -1 };
+  rk_window_desc d = { .size = sizeof d, .title = "in place", .width = 1100, .height = 400, .build = dslots_build, .user = &s };
+  rk_window *w = rk_window_create(&d);
+  rk_app_run_for(400);
+  rk_view *pano = in_window(w, "pano"), *pv = in_window(w, "pivot"), *tv = in_window(w, "table");
+  CHECK(pano && pano->controller && pv && pv->controller && tv, "a panorama, a pivot and a table");
+  rk_controller *pc = pano->controller, *vc = pv->controller;
+  CHECK(titles(pano_title, pc, "a b c") && titles(pivot_title, vc, "a b c")
+        && titles(column_title, tv, "a b c"), "their parts as declared");
+  rk_pivot_select(vc, 2);                          /* the user turns to "c" */
+  rk_app_run_for(600);
+  rk_controller *shown = ((pivot *)vc->impl)->facets[2];
+  s.order = 1;
+  rk_ui_update(NULL);
+  rk_app_run_for(600);
+  CHECK(in_window(w, "pano") == pano && in_window(w, "pivot") == pv && in_window(w, "table") == tv, "a new order: the same panorama, pivot and table");
+  CHECK(titles(pano_title, pc, "c a b") && titles(pivot_title, vc, "c a b")
+        && titles(column_title, tv, "c a b"), "their parts moved where declared");
+  CHECK(((pivot *)vc->impl)->facets[rk_pivot_selected(vc)] == shown && rk_pivot_selected(vc) == 0, "the page in sight stays in sight where it went");
+  s.gone = 0;
+  rk_ui_update(NULL);
+  rk_app_run_for(600);
+  CHECK(titles(pano_title, pc, "c b") && titles(pivot_title, vc, "c b")
+        && titles(column_title, tv, "c b"), "a part taken out where it stood");
+  s.gone = -1; s.order = 2; s.renamed = 1;
+  rk_ui_update(NULL);
+  rk_app_run_for(600);
+  CHECK(titles(pano_title, pc, "b c first") && titles(pivot_title, vc, "b c a")
+        && titles(column_title, tv, "b c first"), "back in, moved and renamed in one build");
+  CHECK(((panorama *)pc->impl)->secs[0].width == 240 && (((list *)tv->state)->cols[2].flags & RK_COLUMN_NUMERIC), "a section's width and a column's flags, in place");
+  CHECK(in_window(w, "pano") == pano && in_window(w, "pivot") == pv && in_window(w, "table") == tv, "still the same ones");
+  done(w);
+  rk_app_run_for(50);
+}
+
 static void test_declared_warnings(void) {
   int said = logged;
   rk_view *v = rk_ui_view(dwarn_build, NULL);
@@ -2895,6 +2976,7 @@ static void launch(void *user) {
   { int lv = rk__live_views; test_declared_collections(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_collections: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_more(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "more: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_fixes(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "fixes alone: %d\n", rk__live_views - lv); test_declared_warnings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "fixes: %d views more\n", rk__live_views - lv); }
+  { int lv = rk__live_views; test_declared_in_place(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_in_place: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_skip(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_skip: %d views more\n", rk__live_views - lv); }
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

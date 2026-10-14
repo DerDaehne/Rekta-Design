@@ -66,6 +66,8 @@ struct ui_node {
   ui_node **hash; int hcap;                        /* by key, while a build looks them up */
   ui_node **pushed; int npushed, pcap;             /* places: the places open, in order */
   ui_node **items; int icap;                       /* a tree: its items by number */
+  ui_node **slots; int nslots, slcap;              /* a panorama's sections, a pivot's pages, a table's columns: as it
+                                                      holds them, in order */
   ui_node *tree;                                   /* an item's tree */
   ui_node *replaces;                               /* the node whose view this new one takes the place of */
   rk_controller *asked;                            /* a confirmation's sheet, while it asks */
@@ -78,6 +80,7 @@ struct ui_node {
   bool moved;                                      /* the declaration moved its value this build */
   bool still;                                      /* in a scope declared RK_UI_IN_PLACE: nothing it holds moves */
   bool closed_by_user, warned;                     /* closed by the user without .open; that it came back was said */
+  bool reorder;                                    /* a tree or an item: its items stand in another order */
 };
 
 struct ui_root {
@@ -238,7 +241,7 @@ static void ui_unhook(ui_node *n) {
 /* Frees it with what it holds; touches nothing outside it (a batch may be freed after its root is gone). */
 static void ui_node_free(ui_node *n) {
   for (int i = 0; i < n->nkids; i++) ui_node_free(n->kids[i]);
-  free(n->kids); free(n->next); free(n->hash); free(n->pushed); free(n->items);
+  free(n->kids); free(n->next); free(n->hash); free(n->pushed); free(n->items); free(n->slots);
   if (n->last.kind == RK_UI_LIST || n->last.kind == RK_UI_TABLE) rk__list_detach(n->view);
   for (int i = 0; i < n->nentries; i++) ui_drop_last(&n->entries[i]);
   free(n->entries);
@@ -731,12 +734,15 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
       if (!fresh && !ui_same(d->text, o->text)) rk_controller_set_title(n->ctl, d->text);   /* a page's title in its strip, live */
       break;
     case RK_UI_SECTION:
-      if (!fresh && (!ui_same(d->text, o->text) || d->width != o->width) && n->parent) { n->parent->stale = true; r->pending = true; }
+      if (!fresh && n->parent && n->num >= 0) {
+        if (!ui_same(d->text, o->text)) rk_panorama_set_title(n->parent->ctl, n->num, d->text);
+        if (d->width != o->width) rk_panorama_set_width(n->parent->ctl, n->num, d->width);
+      }
       break;
     case RK_UI_COLUMN:
       if (!fresh && n->parent && n->num >= 0) {
-        if (!ui_same(d->text, o->text) || d->flags != o->flags) { n->parent->stale = true; r->pending = true; }
-        else if (d->width != o->width) rk_table_set_column_width(n->parent->view, n->num, d->width);
+        if (!ui_same(d->text, o->text) || d->flags != o->flags) rk_table_set_column(n->parent->view, n->num, d->text, d->flags);
+        if (d->width != o->width) rk_table_set_column_width(n->parent->view, n->num, d->width);
         if (d->sort != o->sort) rk_table_set_sort(n->parent->view, n->num, d->sort);
       }
       break;
@@ -1091,25 +1097,15 @@ static void ui_finish(ui_root *r, ui_node *n) {
   for (int i = 0; i < n->nkids; i++) if (!n->kids[i]->seen) ui_record(&r->gone, &r->ngone, &r->gcap, n->kids[i]);
   for (int i = 0; i < n->nnext && !changed_order; i++) if (n->next[i]->at != i) changed_order = true;
   int h = ui_info(n->last.kind)->holds;
-  /* parts a controller holds: it follows appends in place; anything else makes it again */
-  if (h == H_SECTIONS || h == H_PAGES || h == H_COLUMNS) {
-    bool lost = false;
-    for (int i = 0; i < n->nkids; i++) if (!n->kids[i]->seen && ui_info(n->kids[i]->last.kind)->role == R_SLOT) lost = true;
-    int slot = 0;
-    for (int i = 0; i < n->nnext; i++) {
-      ui_node *k = n->next[i];
-      if (ui_info(k->last.kind)->role != R_SLOT) continue;
-      if (k->num >= 0 && k->num != slot) lost = true;
-      slot++;
-    }
-    if (lost && !n->fresh) { n->stale = true; r->pending = true; }
-  }
-  if (h == H_ITEMS) {                              /* a tree adds items at the end of their parent: the rest keep their order */
+  /* a tree adds items at the end of their parent: an item new before old ones, or old ones in another order, and the
+     parent's items are put in order once added */
+  if (h == H_ITEMS) {
     int last_num = -1; bool new_seen = false;
     for (int i = 0; i < n->nnext; i++) {
       ui_node *k = n->next[i];
+      if (k->last.kind != RK_UI_ITEM) continue;
       if (k->num < 0) { new_seen = true; continue; }
-      if (new_seen || k->num < last_num) { if (k->tree) { k->tree->stale = true; r->pending = true; } }
+      if (new_seen || k->num < last_num) n->reorder = true;
       last_num = k->num;
     }
   }
@@ -1216,27 +1212,57 @@ static rk_controller *ui_presenter_for(ui_root *r, ui_node *n) {
   return r->host;
 }
 
+/* A controller's parts, in place: what went is out (ui_take_out), what came goes in where declared, what moved moves. */
+static void ui_slot_out(ui_node *n, int j) {
+  switch (n->last.kind) {
+    case RK_UI_PANORAMA: rk_panorama_remove(n->ctl, j); break;
+    case RK_UI_PIVOT: rk_pivot_remove(n->ctl, j); break;
+    case RK_UI_TABLE: rk_table_remove_column(n->view, j); break;
+    default: break;
+  }
+  memmove(n->slots + j, n->slots + j + 1, (size_t)(n->nslots - j - 1) * sizeof *n->slots);
+  n->nslots--;
+  for (int i = j; i < n->nslots; i++) n->slots[i]->num = i;
+}
+
+static void ui_slot_in(ui_node *n, int i, ui_node *s) {
+  switch (n->last.kind) {
+    case RK_UI_PANORAMA: rk_panorama_insert(n->ctl, i, s->last.text, rk_retain(s->view), s->last.width); break;
+    case RK_UI_PIVOT: rk_pivot_insert_controller(n->ctl, i, rk_retain(s->ctl)); break;
+    case RK_UI_TABLE:
+      rk_table_insert_column(n->view, i, s->last.text, s->last.width, s->last.flags);
+      if (s->last.sort) rk_table_set_sort(n->view, i, s->last.sort);
+      break;
+    default: break;
+  }
+  n->slots = rk__grow(n->slots, &n->slcap, n->nslots + 1, sizeof *n->slots);
+  memmove(n->slots + i + 1, n->slots + i, (size_t)(n->nslots - i) * sizeof *n->slots);
+  n->slots[i] = s;
+  n->nslots++;
+  for (int k = i; k < n->nslots; k++) n->slots[k]->num = k;
+}
+
+static int ui_sync_slots(ui_node *n, rk_ui_kind kind) {
+  int at = 0;
+  for (int i = 0; i < n->nkids; i++) {
+    ui_node *s = n->kids[i];
+    if (s->last.kind != kind) continue;
+    if (at < n->nslots && n->slots[at] == s) { at++; continue; }
+    if (s->num >= 0 && s->num < n->nslots && n->slots[s->num] == s) ui_slot_out(n, s->num);   /* moved: out, then in */
+    ui_slot_in(n, at++, s);
+  }
+  return at;
+}
+
 static void ui_sync_nav(ui_root *r, ui_node *n) {
   rk_ui *d = &n->last;
   switch (d->kind) {
-    case RK_UI_PANORAMA: {
-      int slot = 0;
-      for (int i = 0; i < n->nkids; i++) {
-        ui_node *s = n->kids[i];
-        if (s->last.kind != RK_UI_SECTION) continue;
-        if (s->num < 0) { rk_panorama_add(n->ctl, s->last.text, rk_retain(s->view), s->last.width); s->num = slot; }
-        slot++;
-      }
-      break;
-    }
+    case RK_UI_PANORAMA: ui_sync_slots(n, RK_UI_SECTION); break;
     case RK_UI_PIVOT: {
-      int slot = 0;
-      for (int i = 0; i < n->nkids; i++) {
-        ui_node *s = n->kids[i];
-        if (s->last.kind != RK_UI_PAGE) continue;
-        if (s->num < 0) { rk_pivot_add_controller(n->ctl, rk_retain(s->ctl)); s->num = slot; }
-        slot++;
-      }
+      rk_controller *shown = rk_pivot_selected(n->ctl) >= 0 && rk_pivot_selected(n->ctl) < n->nslots ? n->slots[rk_pivot_selected(n->ctl)]->ctl : NULL;
+      int slot = ui_sync_slots(n, RK_UI_PAGE);
+      if (shown && !d->chosen && !n->moved)        /* the page in sight stays in sight, wherever it went */
+        for (int i = 0; i < slot; i++) if (n->slots[i]->ctl == shown && i != rk_pivot_selected(n->ctl)) rk_pivot_select(n->ctl, i);
       int want = d->chosen ? *d->chosen : n->moved ? (int)d->value : -1;   /* bound: held; given: when it moves */
       if (want >= 0 && want < slot && want != rk_pivot_selected(n->ctl)) rk_pivot_select(n->ctl, want);
       break;
@@ -1295,16 +1321,7 @@ static void ui_sync_nav(ui_root *r, ui_node *n) {
       break;
     }
     case RK_UI_TABLE: {
-      int slot = 0;
-      for (int i = 0; i < n->nkids; i++) {
-        ui_node *c = n->kids[i];
-        if (c->last.kind != RK_UI_COLUMN) continue;
-        if (c->num < 0) {
-          rk_table_add_column(n->view, c->last.text, c->last.width, c->last.flags); c->num = slot;
-          if (c->last.sort) rk_table_set_sort(n->view, slot, c->last.sort);
-        }
-        slot++;
-      }
+      ui_sync_slots(n, RK_UI_COLUMN);
       rk_table_on_sort(n->view, ui_table_sorted, n);
       rk_table_on_edit(n->view, d->on_edit ? ui_table_edited : NULL, n);
       rk_list_on_show(n->view, ui_list_shown, n);
@@ -1343,12 +1360,19 @@ static void ui_tree_add(ui_node *tree, ui_node *holder, int parent_num) {
       ui_tree_add(tree, it, it->num);
     }
   }
+  if (holder->reorder) {                           /* each to the end, as declared: they stand in that order */
+    holder->reorder = false;
+    for (int i = 0; i < holder->nkids; i++)
+      if (holder->kids[i]->last.kind == RK_UI_ITEM && holder->kids[i]->num >= 0) rk_tree_move(tree->view, holder->kids[i]->num, -1);
+  }
 }
 
 /* A node no longer declared: it calls nothing, and its view leaves its parent (with motion inside a LEAVE block). */
 static void ui_take_out(ui_node *g) {
   ui_unhook(g);
   if (g->last.kind == RK_UI_ITEM && g->tree && g->num >= 0 && !g->tree->stale) rk_tree_remove(g->tree->view, g->num);
+  ui_node *p = g->parent;
+  if (p && g->num >= 0 && g->num < p->nslots && p->slots[g->num] == g) ui_slot_out(p, g->num);
   if (ui_info(g->last.kind)->role == R_VIEW && g->outer && g->outer->parent) rk_view_remove(g->outer);
   if (g->last.kind == RK_UI_PLACE && g->parent) {          /* a place no longer declared: out of the stack */
     ui_node *pl = g->parent;

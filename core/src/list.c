@@ -596,14 +596,45 @@ rk_view *rk_table(int count, const char *(*cell)(int row, int column, void *user
 }
 
 int rk_table_add_column(rk_view *v, const char *title, float width, unsigned flags) {
+  list *l = list_of(v);
+  return rk_table_insert_column(v, l ? l->ncols : 0, title, width, flags);
+}
+
+int rk_table_insert_column(rk_view *v, int index, const char *title, float width, uint32_t flags) {
   list *l = RK__EXPECT(list_of, v, "a list or a table");
   if (!l || !l->cell) return -1;
+  if (l->editor) edit_finish(v, l, true);
+  index = RK_CLAMP(index, 0, l->ncols);
   l->cols = rk__grow(l->cols, &l->ccap, l->ncols + 1, sizeof *l->cols);
-  struct column *c = &l->cols[l->ncols++];
+  memmove(l->cols + index + 1, l->cols + index, (size_t)(l->ncols - index) * sizeof *l->cols);
+  l->ncols++;
+  struct column *c = &l->cols[index];
   memset(c, 0, sizeof *c);
   c->title = rk__strdup(title); c->width = RK_MAX(0.0f, width); c->flags = flags;
+  if (l->sort_col >= index) l->sort_col++;
+  if (l->head >= index) l->head++;
   rk__view_relayout_up(v); rk__view_dirty(v);
-  return l->ncols - 1;
+  return index;
+}
+
+void rk_table_remove_column(rk_view *v, int column) {
+  list *l = RK__EXPECT(list_of, v, "a list or a table");
+  if (!l || column < 0 || column >= l->ncols) return;
+  if (l->editor) edit_finish(v, l, true);
+  free(l->cols[column].title);
+  memmove(l->cols + column, l->cols + column + 1, (size_t)(l->ncols - column - 1) * sizeof *l->cols);
+  l->ncols--;
+  if (l->sort_col == column) { l->sort_col = -1; l->sort_dir = 0; } else if (l->sort_col > column) l->sort_col--;
+  if (l->head >= l->ncols) l->head = l->ncols - 1;
+  rk__view_relayout_up(v); rk__view_dirty(v);
+}
+
+void rk_table_set_column(rk_view *v, int column, const char *title, uint32_t flags) {
+  list *l = RK__EXPECT(list_of, v, "a list or a table");
+  if (!l || column < 0 || column >= l->ncols) return;
+  rk__setstr(&l->cols[column].title, title);
+  l->cols[column].flags = flags;
+  rk__view_relayout_up(v); rk__view_dirty(v);
 }
 
 void rk_table_on_sort(rk_view *v, void (*fn)(rk_view *, int, rk_sort, void *), void *user) { list *l = list_of(v); if (l) { l->sort = fn; l->sort_user = user; } }

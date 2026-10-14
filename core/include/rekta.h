@@ -524,6 +524,7 @@ RK_API void rk_tree_set_title(rk_view *tree, int item, const char *title);
 RK_API void rk_tree_set_user(rk_view *tree, int item, void *user);   /* the app's own, for its item */
 RK_API void *rk_tree_user(rk_view *tree, int item);
 RK_API void rk_tree_remove(rk_view *tree, int item);      /* with everything under it; its number is not given again */
+RK_API void rk_tree_move(rk_view *tree, int item, int before);   /* among its siblings, before another (-1: the end) */
 RK_API void rk_tree_clear(rk_view *tree);                 /* every item; numbers start again at 0 */
 RK_API void rk_tree_on_show(rk_view *tree, void (*fn)(rk_view *tree, int item, void *user), void *user);
 RK_API void rk_tree_on_toggle(rk_view *tree, void (*fn)(rk_view *tree, int item, bool open, void *user), void *user);
@@ -547,6 +548,9 @@ enum { RK_COLUMN_NUMERIC = 1, RK_COLUMN_SORTABLE = 2, RK_COLUMN_EDITABLE = 4 }; 
 typedef enum rk_sort { RK_SORT_NONE, RK_SORT_ASCENDING, RK_SORT_DESCENDING, RK_SORT_FORCE32 = 0x7fffffff } rk_sort;
 RK_API rk_view *rk_table(int count, const char *(*cell)(int row, int column, void *user), void *user);
 RK_API int rk_table_add_column(rk_view *table, const char *title, float width, uint32_t flags);   /* width RK_AUTO: shares the rest */
+RK_API int rk_table_insert_column(rk_view *table, int index, const char *title, float width, uint32_t flags);
+RK_API void rk_table_remove_column(rk_view *table, int column);
+RK_API void rk_table_set_column(rk_view *table, int column, const char *title, uint32_t flags);
 RK_API void rk_table_on_sort(rk_view *table, void (*fn)(rk_view *table, int column, rk_sort sort, void *user), void *user);
 RK_API void rk_table_set_sort(rk_view *table, int column, rk_sort sort);   /* shows the sort the rows have */
 RK_API void rk_table_set_column_width(rk_view *table, int column, float width);   /* as a drag leaves it; 0: its own */
@@ -597,11 +601,17 @@ RK_API void rk_places_on_back(rk_controller *places, void (*fn)(rk_controller *p
 /* Panorama: one place laid out sideways in sections under a strip of their titles that glides by place. */
 RK_API rk_controller *rk_panorama(void);
 RK_API void rk_panorama_add(rk_controller *panorama, const char *title, rk_view *section, float width);   /* takes section; width 0: natural */
+RK_API void rk_panorama_insert(rk_controller *panorama, int index, const char *title, rk_view *section, float width);   /* takes section */
+RK_API void rk_panorama_remove(rk_controller *panorama, int index);
+RK_API void rk_panorama_set_title(rk_controller *panorama, int index, const char *title);
+RK_API void rk_panorama_set_width(rk_controller *panorama, int index, float width);
 
 /* Pivot: facets of one place in a fixed order; the active title is large; a change slides from its side. */
 RK_API rk_controller *rk_pivot(void);
 RK_API void rk_pivot_add(rk_controller *pivot, const char *title, rk_view *page);   /* takes page, as rk_panorama_add */
 RK_API void rk_pivot_add_controller(rk_controller *pivot, rk_controller *facet);  /* takes facet; its title, live */
+RK_API void rk_pivot_insert_controller(rk_controller *pivot, int index, rk_controller *facet);   /* takes facet */
+RK_API void rk_pivot_remove(rk_controller *pivot, int index);   /* the one in sight going: the one before it shows */
 RK_API void rk_pivot_select(rk_controller *pivot, int index);
 RK_API int rk_pivot_selected(rk_controller *pivot);
 RK_API void rk_pivot_on_change(rk_controller *pivot, void (*fn)(rk_controller *pivot, int index, void *user), void *user);   /* the user picked a facet */
