@@ -377,7 +377,9 @@ static void ui_drop_files(rk_view *v, const char *const *taken, int nt, const ch
 static ui_node *ui_item_of(ui_node *tree, int num) { return num >= 0 && num < tree->icap ? tree->items[num] : NULL; }
 static void ui_tree_shown(rk_view *v, int num, void *u) {
   ui_node *t = u, *it = t->hooked ? ui_item_of(t, num) : NULL;
-  if (it) ui_call(it, it->last.on_press, v);
+  if (!it) return;
+  if (it->last.chosen) *it->last.chosen = (int)it->last.value;   /* the item shown, where the app keeps it */
+  ui_call(it, it->last.on_press, v);
 }
 static void ui_tree_toggled(rk_view *v, int num, bool open, void *u) {
   ui_node *t = u, *it = t->hooked ? ui_item_of(t, num) : NULL;
@@ -559,7 +561,8 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
       if (status && (d->status || d->meta || !fresh)) rk_tile_set_status(v, d->status, d->meta);
       if (stat) rk_tile_set_stat(v, d->text, d->label);
       if (CHANGED_S(message) && (d->message || !fresh)) rk_tile_set_message(v, d->message);
-      if (CHANGED(progress) && (d->progress > 0 || !fresh)) rk_tile_set_progress(v, d->progress > 0 ? d->progress : -1);
+      float bar = d->busy || d->progress > 0 ? d->progress : -1, was_bar = o->busy || o->progress > 0 ? o->progress : -1;   /* busy: a bar at 0 too */
+      if (fresh ? bar >= 0 : bar != was_bar) rk_tile_set_progress(v, bar);
       if ((fresh && d->series && d->nseries > 0) || (!fresh && !ui_same_series(d->series, d->nseries, o->series, o->nseries)))
         rk_tile_set_series(v, d->series, d->series ? d->nseries : 0);
       break;
@@ -628,6 +631,10 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
       break;
     case RK_UI_PIVOT:
       if (CHANGED(side) && (d->side || !fresh)) rk_pivot_set_layout(n->ctl, d->side ? RK_PIVOT_SIDE : RK_PIVOT_TOP);
+      if (!fresh && !ui_same(d->text, o->text)) rk_controller_set_title(n->ctl, d->text);
+      break;
+    case RK_UI_PANORAMA: case RK_UI_PLACES:
+      if (!fresh && !ui_same(d->text, o->text)) rk_controller_set_title(n->ctl, d->text);
       break;
     case RK_UI_PAGE: case RK_UI_PLACE: case RK_UI_SHEET:
       if (!fresh && !ui_same(d->text, o->text)) rk_controller_set_title(n->ctl, d->text);   /* a page's title in its strip, live */
@@ -755,6 +762,7 @@ static ui_node *ui_create(ui_root *r, ui_node *parent, const rk_ui *d) {
     case RK_UI_PANORAMA: case RK_UI_PIVOT: case RK_UI_PLACES:
       n->ctl = d->kind == RK_UI_PANORAMA ? rk_panorama() : d->kind == RK_UI_PIVOT ? rk_pivot() : rk_places(NULL);
       v = rk_controller_embed(ui_owner_here(r), rk_retain(n->ctl));   /* its view, a reference: the node's */
+      if (d->text) rk_controller_set_title(n->ctl, d->text);   /* what the title bar names */
       if (d->kind == RK_UI_PIVOT) rk__pivot_hear(n->ctl, (rk__heard){ ui_pivot_heard, n });
       if (d->kind == RK_UI_PLACES) rk__places_hear(n->ctl, (rk__heard){ ui_places_heard, n });
       break;
@@ -1190,6 +1198,7 @@ static void ui_tree_add(ui_node *tree, ui_node *holder, int parent_num) {
       }
     }
     if (it->num >= 0) {
+      if (it->last.chosen && *it->last.chosen == (int)it->last.value && rk_tree_selected(tree->view) != it->num) rk_tree_select(tree->view, it->num);
       int open = ui_open_of(&it->last);
       if (open >= 0 && (bool)open != rk_tree_is_open(tree->view, it->num)) rk_tree_set_open(tree->view, it->num, open);
       it->opened = rk_tree_is_open(tree->view, it->num);

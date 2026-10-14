@@ -704,7 +704,8 @@ typedef struct rk_ui {
   const char *text;                                /* the macro's first argument: a label's text, a button's, a tile's value,
                                                       a row's or an item's title, the label of a field, a check or a toggle,
                                                       the title of a section, page, place, sheet, column or drop, an
-                                                      image's path, a confirmation's question, a split's list (its crumb) */
+                                                      image's path, a confirmation's question, a split's list (its crumb);
+                                                      a panorama's, pivot's or places' title, for the title bar */
   const char *label;                               /* a tile's: what the value counts; a confirmation's word above it */
   const char *meta;                                /* a row's or an item's; a tile's status word */
   const char *message;                             /* a tile's; a confirmation's line under the question */
@@ -728,8 +729,8 @@ typedef struct rk_ui {
   bool cancel_is_safe;                             /* a confirmation: cancel is the primary answer */
 
   /* what the app gives it */
-  float progress;                                  /* a progress bar's, 0..1; a tile's bar when above 0 */
-  bool busy;                                       /* a progress bar with no end known */
+  float progress;                                  /* a progress bar's, 0..1; a tile's bar when above 0 or busy */
+  bool busy;                                       /* a progress bar with no end known; a tile with work under way */
   const float *series; int nseries;                /* a tile's sparkline */
   const char *const *options; int count;           /* choices, segments, a select, a field's suggestions; count: also a
                                                       list's or a table's rows */
@@ -745,7 +746,8 @@ typedef struct rk_ui {
   /* bound: the user's change is written here, then it builds again */
   bool *on;                                        /* a check, a toggle; a menu item's square */
   int *chosen;                                     /* choices, segments, a select; a pivot's page; the item a list or a
-                                                      table shows; a menu item is checked when *chosen == .value */
+                                                      table shows; a menu item is checked, a tree's item selected, when
+                                                      *chosen == .value - picking it writes .value there */
   double *number;                                  /* a slider, a stepper */
   rk_day *day;                                     /* a date */
   char *buffer; size_t buffer_size;                /* a field's text, cut to fit */
@@ -839,7 +841,7 @@ RK_API void rk_ui_put(const rk_ui *ui);
 #define RK_SEPARATOR(...) rk_ui_put(RK_UI(RK_UI_SEPARATOR, __VA_ARGS__))
 #define RK_HEADING(...)  rk_ui_put(RK_UI(RK_UI_HEADING, .text = __VA_ARGS__))
 
-#define RK_PANORAMA(...) RK_UI_SCOPE(RK_UI(RK_UI_PANORAMA, __VA_ARGS__))   /* holds RK_SECTION */
+#define RK_PANORAMA(...) RK_UI_SCOPE(RK_UI(RK_UI_PANORAMA, __VA_ARGS__))   /* holds RK_SECTION; .text: its title */
 #define RK_SECTION(...)  RK_UI_SCOPE(RK_UI(RK_UI_SECTION, .text = __VA_ARGS__))
 #define RK_PIVOT(...)    RK_UI_SCOPE(RK_UI(RK_UI_PIVOT, __VA_ARGS__))      /* holds RK_PAGE */
 #define RK_PAGE(...)     RK_UI_SCOPE(RK_UI(RK_UI_PAGE, .text = __VA_ARGS__))

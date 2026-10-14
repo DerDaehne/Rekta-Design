@@ -132,7 +132,7 @@ static void changed(bool crossfade) {
     (void)crossfade;
   }
   for (int i = 0; i < nlisteners; i++) listeners[i].fn(listeners[i].user);
-  if (nlisteners) rk__ui_settle();
+  rk__ui_settle();                                         /* what is declared may read the look (rk_app_is_dark) */
 }
 
 /* A change of the whole look cross-fades over duration-short, as the web's view transition. */

@@ -48,6 +48,8 @@ void rk__controller_unembed(rk_controller *child) {
   }
 }
 static rk_controller *stands_for(rk_controller *c) { return c->transparent && c->nembedded == 1 ? c->embedded[0] : NULL; }
+/* What turns: a host's own view is only a box around the one it stands for, whose parts turn each by itself */
+static rk_view *turning_view(rk_controller *c) { while (stands_for(c)) c = stands_for(c); return rk_controller_view(c); }
 static rk_controller *holder(rk_controller *c) {           /* the parent, looking through a transparent host */
   rk_controller *up = c->parent;
   while (up && up->transparent) up = up->parent;
@@ -416,7 +418,7 @@ static void swap_now(void *user) {
   nv->ptransform = nv->transform; nv->popacity = nv->opacity;
   rk__view_add(c->view, nv);
   rk__controller_attach(s->to, c->window);
-  turn_in(nv, s->back);
+  turn_in(turning_view(s->to), s->back);
   if (c->appeared) rk__controller_appear(s->to, true);
   rk_window *w = c->window;
   if (w) {
@@ -435,7 +437,7 @@ static void start_turn(rk_controller *c, rk_controller *old, bool owned, rk_cont
   pl->leaving = old; pl->leaving_owned = owned;
   swap *s = rk__alloc(sizeof *s);
   s->places = c; s->to = to; s->back = back;
-  double wait = old && old->view && rk__view_visible(old->view) ? turn_out(&pl->out, old->view, pressed, back) : 0;
+  double wait = old && old->view && rk__view_visible(old->view) ? turn_out(&pl->out, turning_view(old), pressed, back) : 0;
   if (wait <= 0) { swap_now(s); return; }
   pl->pending = s;
   pl->timer = rk_app_after(wait, swap_now, s);
@@ -1126,7 +1128,7 @@ static void pivot_arrive(void *user) {
   nv->ptransform = nv->transform; nv->popacity = nv->opacity;
   rk__view_add(p->body, nv);
   rk__controller_attach(to, c->window);
-  turn_in(nv, p->back);
+  turn_in(turning_view(to), p->back);
   if (c->appeared) rk__controller_appear(to, true);
   if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar);
 }
@@ -1143,7 +1145,7 @@ void rk_pivot_select(rk_controller *c, int index) {
   strip_activate(p->strip, index);
   if (((strip *)p->strip->state)->nav) {
     p->leaving = old; p->back = dir < 0;
-    double wait = rk__view_visible(rk_controller_view(old)) ? turn_out(&p->out, rk_controller_view(old), NULL, p->back) : 0;
+    double wait = rk__view_visible(rk_controller_view(old)) ? turn_out(&p->out, turning_view(old), NULL, p->back) : 0;
     if (wait > 0) p->timer = rk_app_after(wait, pivot_arrive, p); else pivot_arrive(p);
     return;
   }
