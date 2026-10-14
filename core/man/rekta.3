@@ -1,5 +1,5 @@
 .\" rekta.3: the rekta-core library. Keep EXAMPLES the same as examples/hello.c (make test checks it).
-.Dd October 13, 2026
+.Dd October 14, 2026
 .Dt REKTA 3
 .Os
 .Sh NAME
@@ -53,26 +53,29 @@ Where the thing is a type of its own it is called
 .Fn rk_view_create ,
 .Fn rk_controller_create .
 .It
-Adding, showing and presenting take that reference over:
-.Fn rk_add ,
-.Fn rk_insert ,
-.Fn rk_panorama_add ,
-.Fn rk_pivot_add ,
-.Fn rk_places ,
-.Fn rk_places_go ,
-.Fn rk_controller_present ,
-.Fn rk_view_set_menu ,
-.Fn rk_controller_create_with_view
-and
-.Fn rk_window_show .
+Every call that puts a view or controller somewhere takes that reference
+over: adding it to a view, a panorama, a pivot, places, a scroll, a split or
+a menu slot, showing it in a window, presenting it, giving it to
+.Fn rk_controller_create_with_view .
 What you put into the tree belongs to the tree; you never release it.
-To move a view that is already in a tree, pass
-.Fn rk_retain view .
 .It
-Every other pointer you get is borrowed.
-A view stays valid while it is in the tree; an open window stays valid
-until it is closed.
+A view that is already in a tree moves when you add it elsewhere; there is
+nothing to retain.
+.It
+A window belongs to the app from
+.Fn rk_window_create
+until it closes; the pointer you get is borrowed.
+.It
+Every other pointer you get is borrowed, valid while what it points to is
+in the tree or open.
 .El
+.Pp
+.Fn rk_retain
+keeps an object beyond that and
+.Fn rk_release
+lets it go; both report a pointer that is no Rekta object, or one already
+freed
+.Pq see Sx ERRORS .
 .Pp
 .Fn rk_add
 returns the child it added, so a view can be made, added and kept in one
@@ -100,9 +103,11 @@ Ends the loop.
 From any thread: runs
 .Fa fn
 on the main thread soon.
-.It Fn rk_app_after "double ms" "bool repeat" "void (*fn)(void *user)" "void *user"
-A timer; returns its id for
-.Fn rk_app_cancel .
+.It Fn rk_app_after "double ms" "void (*fn)(void *user)" "void *user" , Fn rk_app_every "double ms" "void (*fn)(void *user)" "void *user"
+A timer that runs once, or again and again; each returns an id, never 0,
+for
+.Fn rk_app_cancel ,
+which also ends a change listener.
 .It Fn rk_app_now
 Milliseconds on a monotonic clock.
 .It Fn rk_app_notify "const char *title" "const char *body"
@@ -118,7 +123,16 @@ the person once, and only for an app in a bundle.
 Each follows the system until set.
 A change of theme or accent cross-fades the windows.
 .Fn rk_app_on_change
-tells you when any of them changed.
+tells you when any of them changed and returns an id for
+.Fn rk_app_cancel ;
+.Fn rk_app_is_dark
+and
+.Fn rk_app_is_reduced_motion
+say how things stand.
+.It Fn rk_app_set_log "void (*fn)(rk_log_level level, const char *message, void *user)" "void *user"
+Where misuse is said
+.Pq see Sx ERRORS ;
+standard error until set.
 .It Fn rk_app_add_font "const char *path"
 A font file for the characters Barlow lacks, tried before the system's
 fonts; false when it cannot be read or drawn with.
@@ -154,15 +168,25 @@ A short message from the top edge; with an
 (undo, retry) it stays a little longer.
 While focus or the pointer is on it, it stays; Escape dismisses it, and
 focus goes back to where it came from.
-.It Fn rk_window_do "rk_window *window" "const char *label" "void (*run)(void *)" "void (*undo)(void *)" "void *user" "void (*free_user)(void *)"
+.It Fn rk_window_do "rk_window *window" "const rk_action *action"
 Runs
-.Fa run
-and keeps it in the app's history (the last 50), with a toast that says
-.Fa label
-and offers undo.
-.Fa free_user
+.Fa action->run
+and keeps the action in the window's history (the last 50), with a toast
+that says
+.Fa action->label
+and offers undo; each window has its own.
+.Fa action->free_user
 is called once the history lets the action go.
 A new action drops what was undone.
+Set
+.Fa action->size
+to
+.Li sizeof(rk_action) :
+.Bd -literal -offset indent
+rk_action a = { .size = sizeof a, .label = "archived 3 builds",
+                .run = archive, .undo = unarchive, .user = builds };
+rk_window_do(window, &a);
+.Ed
 .It Fn rk_window_undo , Fn rk_window_redo
 Steps back or forward through the history, with a toast; false when
 there is nothing to step to.
@@ -171,10 +195,13 @@ a text field, which keeps a history of its own, a word at a time.
 .It Fn rk_window_set_title , Fn rk_window_set_size , Fn rk_window_size , Fn rk_window_scale , Fn rk_window_focus
 As named.
 Sizes are logical pixels; the scale is device pixels per logical pixel.
-.It Fn rk_window_choose_files "rk_window *window" "const char *accept" "bool multiple" "void (*chosen)(rk_window *window, const char *const *files, int count, void *user)" "void *user"
+.It Fn rk_window_choose_files "rk_window *window" "const char *accept" "rk_choose choose" "void (*chosen)(rk_window *window, const char *const *files, int count, void *user)" "void *user"
 The system's file chooser over the window, with the filter
 .Fn rk_drop
-uses;
+uses,
+.Dv RK_CHOOSE_ONE
+or
+.Dv RK_CHOOSE_MANY ;
 .Fa chosen
 comes later with the paths, or with none if it was cancelled.
 On Linux this is the desktop portal, else
@@ -192,7 +219,7 @@ their own.
 .It Fn rk_add "rk_view *parent" "rk_view *child"
 Adds
 .Fa child
-at the end, takes it, and returns it.
+at the end, takes it, and returns it; a child that has a parent moves.
 .Fn rk_insert
 puts it at an index.
 .It Fn rk_view_remove "rk_view *child"
@@ -211,9 +238,9 @@ A button.
 .Fn rk_button_set_kind
 makes it primary, quiet or a bar button;
 .Fn rk_button_set_icon
-gives it an icon;
-.Fn rk_button_set_disabled
-says why it cannot be pressed.
+gives it an icon
+.Pq Sx ICONS ;
+a button with an icon alone is named by it.
 .It Fn rk_tile "const char *value" "const char *label"
 A tile: a value and what it counts.
 .Fn rk_tile_set_status
@@ -227,6 +254,13 @@ change what it shows.
 A tile with an activate handler presses and opens something.
 .It Fn rk_rows , Fn rk_rows_add
 Hairline rows: a title on the left, a meta or a status on the right.
+A row is a view:
+.Fn rk_row_set
+changes it,
+.Fn rk_insert
+moves it,
+.Fn rk_view_remove
+takes it out, and it presses, has a tooltip or a menu like any other.
 .It Fn rk_rows_set_sortable "rk_view *rows" "void (*moved)(rk_view *rows, int from, int to, void *user)" "void *user"
 Rows the user puts in order: each gets a grip at its leading edge.
 Dragged 4 pixels up or down, a row lifts (the background and a 1 pixel edge)
@@ -249,16 +283,23 @@ and
 .Fn rk_menu_add_label
 group them.
 .Fn rk_menu_set_check
-gives an item a square that a choice toggles while the menu stays open;
-.Fn rk_menu_set_disabled
-greys one out.
+gives an item a square
+.Pf ( Dv RK_CHECKMARK_OFF ,
+.Dv RK_CHECKMARK_ON )
+that a choice toggles while the menu stays open;
+.Fn rk_menu_set_enabled
+greys one out, and
+.Fn rk_menu_clear
+empties the menu to build it again.
 .Fn rk_view_set_menu
 attaches it: a button opens it when pressed, any other view on a right
 click or Shift+F10.
 .Fn rk_menu_open
 and
 .Fn rk_menu_open_at
-open it by hand; it floats below what opened it, above where there is no
+open it by hand,
+.Fn rk_menu_close
+closes it; it floats below what opened it, above where there is no
 room, never outside the window.
 Keys: Up and Down, Home and End, a letter, Enter or Space, Escape; Tab or
 a press outside closes it.
@@ -321,13 +362,18 @@ The calendar, Alt+Down or Enter opens the month below it, Monday first:
 the arrows go by day and week, Page Up and Page Down by month (with
 Shift, by year), Home and End to the month's ends, Enter takes a day,
 Escape closes.
-.It Fn rk_control_value , Fn rk_control_set_value , Fn rk_control_on_change , Fn rk_control_set_disabled
+.It Fn rk_control_value , Fn rk_control_set_value , Fn rk_control_on_change
 Every control holds a number: 0 or 1, the chosen index, the number, or
-the date as yyyymmdd.
+the date as yyyymmdd
+.Po
+.Fn rk_date_value
+and
+.Fn rk_date_set_value
+take it apart
+.Pc .
 A number snaps to the range and step; an index the control lacks is
 ignored; the change handler hears
 what the user changes, not what the app sets.
-A disabled control is greyed and leaves the Tab order.
 .It Fn rk_field "const char *label" "const char *placeholder"
 A text field: a label above, the input, a hint below.
 One line, edited with the desktop's keys (arrows, Ctrl by word, Shift to
@@ -339,9 +385,12 @@ and
 .Fn rk_field_set_text
 read and write it;
 .Fn rk_field_set_hint
-shows a hint, or with
-.Fa error
-the cause and remedy of an error, marked;
+shows a hint below it,
+.Fn rk_field_set_error
+the cause and remedy of an error, marked, in its place;
+.Fn rk_field_set_secret
+makes it a password, its text shown as dots and never copied or read
+aloud;
 .Fn rk_field_on_change
 follows every edit and
 .Fn rk_field_on_submit
@@ -373,15 +422,27 @@ Only the rows in sight are drawn and nothing is kept for each item:
 fills a row's title, meta and status while it is drawn.
 .Fn rk_list_set_count
 says the items changed.
+With
+.Fn rk_list_set_key ,
+which gives each item a key of its own, the selection and the active row
+follow their items when they move or go; without it they keep to their
+places.
 A click selects one and calls the
 .Fn rk_list_on_show
 handler; Ctrl and a click toggles and starts selecting several, Shift and
 a click takes a range, Escape ends it;
-.Fn rk_list_on_change ,
-.Fn rk_list_selected
+.Fn rk_list_on_change
+hears what the user changes.
+.Fn rk_list_is_selected ,
+.Fn rk_list_selection_count ,
+.Fn rk_list_selection
 and
-.Fn rk_list_selection_count
-follow the selection.
+.Fn rk_list_active
+read it;
+.Fn rk_list_select
+and
+.Fn rk_list_clear_selection
+set it from the app.
 .Fn rk_list_scroll_to
 glides a row into sight.
 .It Fn rk_drop "const char *title" "const char *hint" "const char *accept" "void (*files)(rk_view *drop, const char *const *taken, int ntaken, const char *const *refused, int nrefused, void *user)" "void *user"
@@ -414,18 +475,27 @@ A click on the chevron or a double click opens or closes a branch, which
 glides open over its height;
 .Fn rk_tree_on_toggle
 hears it,
-.Fn rk_tree_open
-does it
-(item \-1: every branch).
+.Fn rk_tree_set_open
+and
+.Fn rk_tree_set_all_open
+do it.
 Up and Down move, Right opens or goes in, Left closes or goes up, * opens
 every sibling, a letter goes to the next item starting with it.
 .Fn rk_tree_select ,
 .Fn rk_tree_selected ,
 .Fn rk_tree_is_open ,
-.Fn rk_tree_parent
+.Fn rk_tree_parent ,
+.Fn rk_tree_title ,
+.Fn rk_tree_set_title ,
+.Fn rk_tree_user
 and
-.Fn rk_tree_title
+.Fn rk_tree_set_user
 read and set the rest.
+.Fn rk_tree_remove
+takes an item out with everything under it (its number is not given
+again);
+.Fn rk_tree_clear
+empties the tree.
 .It Fn rk_split "rk_view *list" "rk_view *detail" "const char *title"
 A list beside its detail; takes both.
 Sideways (the split 760 logical pixels wide or more, the window 481 tall or
@@ -439,12 +509,12 @@ hears a change, to remember;
 .Fn rk_split_set_width
 gives it back.
 Compact one pane shows at a time:
-.Fn rk_split_show
+.Fn rk_split_set_detail_shown
 turns to the detail, whose crumb
 .Pq Fa title
 and Escape turn back; sideways it slides a new item's detail in.
-.Fn rk_split_sideways ,
-.Fn rk_split_detail_shown
+.Fn rk_split_is_sideways ,
+.Fn rk_split_is_detail_shown
 and
 .Fn rk_split_width
 read the state.
@@ -455,14 +525,20 @@ A table: a list with columns, and every
 .Fn rk_list_*
 call works on it.
 .Fn rk_table_add_column
-adds a column with a title, a width (0 shares what is left) and flags:
+adds a column with a title, a width
+.Pf ( Dv RK_AUTO
+shares what is left) and flags:
 .Dv RK_COLUMN_NUMERIC
 sets it to the right,
 .Dv RK_COLUMN_SORTABLE
 lets a click on its head sort by it, ascending then descending.
 The app sorts its rows in the
 .Fn rk_table_on_sort
-handler; the table draws them again.
+handler, which hears the column and an
+.Vt rk_sort ;
+the table draws them again.
+.Fn rk_table_set_sort
+shows the sort the rows already have.
 The head stays put while the rows scroll.
 A column's edge in the head drags its width, never below 48; a double
 click on it gives the column its own width back.
@@ -485,17 +561,38 @@ returns
 to take the value, or why not: the reason shows below the cell, which
 stays open.
 .It Fn rk_icon , Fn rk_progress
-An icon from the set; a progress bar (indeterminate below zero).
+An icon from the set
+.Pq Sx ICONS ;
+a progress bar, indeterminate below zero, moved by
+.Fn rk_progress_set_value .
 .It Fn rk_view_on_activate "rk_view *view" "void (*fn)(rk_view *, void *)" "void *user"
 Called with the view when it is pressed or activated from the keyboard.
 .It Fn rk_view_find "rk_view *root" "const char *name"
 The view with that name
 .Pq Fn rk_view_set_name ,
-or a button by its label.
+or a button by its label, or its icon when it has no label.
+.It Fn rk_view_set_enabled "rk_view *view" "bool enabled"
+Any view: a disabled one is greyed and takes no press, and so is
+everything inside it; it leaves the Tab order unless it has a tooltip, which
+says why;
+.Fn rk_view_is_enabled
+says whether it or a view holding it is disabled.
+.It Fn rk_view_set_tooltip "rk_view *view" "const char *text"
+A short text that floats near the view after the pointer rests on it a
+moment, or when it takes focus from the keyboard.
+It repeats what the view says, never the only way to learn it.
+.It Fn rk_view_set_cursor , Fn rk_view_set_user
+The pointer's shape over the view; the app's own data, with a function
+that lets it go when the view does.
 .It Fn rk_view_set_padding , Fn rk_view_set_gap , Fn rk_view_set_align , Fn rk_view_set_grow , Fn rk_view_set_size , Fn rk_view_set_span
 Layout, where the defaults do not fit.
-.It Fn rk_view_set_fill , Fn rk_view_set_radius , Fn rk_view_set_rule , Fn rk_view_set_opacity , Fn rk_view_set_hidden
-Look, by role so it follows the theme.
+.It Fn rk_view_set_fill , Fn rk_view_set_radius , Fn rk_view_set_rules , Fn rk_view_set_opacity , Fn rk_view_set_hidden
+Look, by role so it follows the theme;
+.Fn rk_view_set_rules
+takes
+.Dv RK_RULE_TOP
+and
+.Dv RK_RULE_BOTTOM .
 .It Fn rk_view_create_custom "const rk_view_class *cls" "void *state"
 A view of your own: a class with
 .Fa draw ,
@@ -506,6 +603,10 @@ and
 callbacks, drawing with the
 .Fn rk_canvas_*
 functions.
+.Fn rk_view_animate_value
+moves a number of its own with the design's motion and
+.Fn rk_view_value
+reads it while it draws.
 .El
 .Ss Controllers
 .Bl -tag -width Ds
@@ -525,8 +626,10 @@ turns the current place away and the new one in;
 Escape or the back button turn back.
 .It Fn rk_panorama , Fn rk_panorama_add
 One place laid out sideways in sections under a strip of their titles.
-.It Fn rk_pivot , Fn rk_pivot_add , Fn rk_pivot_select
+.It Fn rk_pivot , Fn rk_pivot_add "rk_controller *pivot" "const char *title" "rk_view *page" , Fn rk_pivot_select
 Facets of one place; the change slides from its side.
+.Fn rk_pivot_add_controller
+adds a facet that is a controller, under its title, which may change.
 A pivot with no pivot or panorama above it is the window's way between
 places: its titles take the nav level, its pages start at their indent, and a
 change turns the place as
@@ -541,8 +644,21 @@ in and dark.
 Up and Down then pick the title.
 A window narrower than 760 or lower than 481 logical pixels keeps them along
 the top.
+.It Fn rk_controller_embed "rk_controller *owner" "rk_controller *child"
+A controller inside another's views, such as a pivot in a page: the owner
+takes
+.Fa child ,
+gives it its window and tells it when it appears and goes.
+Returns the child's view as a reference: add it where it goes.
 .It Fn rk_controller_present , Fn rk_controller_dismiss
 A sheet: a short question from the top edge.
+.It Fn rk_confirm "rk_controller *presenter" "const rk_confirm_desc *desc" "void (*answered)(bool ok, void *user)" "void *user"
+A question in a sheet with two answers: the safe one is the primary button
+and has focus
+.Pf ( Fa desc->cancel_is_safe
+for what cannot be undone); Escape and the shading answer cancel.
+.Fa answered
+hears it once.
 .El
 .Ss Motion
 Motion is named by what it means, never by numbers you pick.
@@ -596,6 +712,9 @@ Ctrl+Left and Ctrl+Right change the width (with Shift, four times as much),
 Down or Escape go back to the rows.
 .El
 .Ss Testing and measuring
+These are declared in
+.In rekta_test.h ,
+apart from what an app needs.
 .Bl -tag -width Ds
 .It Fn rk_view_tap , Fn rk_window_key , Fn rk_window_inject
 Input as if it came from the system.
@@ -607,14 +726,14 @@ The window's pixels as a PNG.
 Without a screen
 .Pq Fa desc->headless ,
 advances the virtual clock, running every frame.
-.It Fn rk_app_stats "rk_stats *stats" "bool reset"
+.It Fn rk_app_stats "rk_stats *stats" , Fn rk_app_stats_reset
 Frames drawn, time spent drawing, the slowest frame, input latency,
-glyphs rasterized, animations running.
+glyphs rasterized, animations running; the reset starts the counts again.
 .El
 .Sh RETURN VALUES
-Constructors return
-.Dv NULL
-only when memory runs out.
+Constructors never return
+.Dv NULL :
+when memory runs out the library says so on standard error and aborts.
 Functions that take a reference take it even when they fail, so a caller
 never has to release it on an error path.
 .Sh ENVIRONMENT
@@ -639,6 +758,21 @@ Non-zero: a line for every frame on standard error.
 .It Ev RK_PROFILE
 Non-zero: the drawing time when the app ends.
 .El
+.Sh ICONS
+.Fn rk_button_set_icon ,
+.Fn rk_icon
+and
+.Fn rk_canvas_icon
+take these names; any other is said
+.Pq see Sx ERRORS
+and draws nothing:
+.Bd -filled -offset indent
+archive back bell calendar check chevron-down chevron-left chevron-right
+chevron-up clock close copy down download edit error external eye file
+filter folder forward grip home info install link lock menu minus more
+motion offline pause pin play plus redo refresh search sort stop theme
+trash tune undo up upload user warning window
+.Ed
 .Sh EXAMPLES
 A section of tiles, a button that counts, and a tile that opens
 something:
@@ -692,9 +826,14 @@ int main(void) {
 }
 .Ed
 .Sh ERRORS
-Misuse \(em a view added to itself, a released object used \(em asserts
-in debug builds.
-Setters for one kind of view do nothing on another kind.
+Misuse does nothing and is said through
+.Fn rk_app_set_log
+.Pq standard error until set :
+a setter for one kind of view called on another, a descriptor whose
+.Fa size
+is 0, a call from a thread other than the main one, an icon that is not
+in the set, a pointer that is no Rekta object or one already released.
+A view added to itself or inside itself asserts in debug builds.
 .Sh SEE ALSO
 .Pa docs/core.md
 (the design and the ABI rules),
@@ -707,4 +846,7 @@ Descriptors that may grow start with
 .Vt uint32_t size ;
 enums are 32 bits wide; strings are UTF-8 and copied by the library.
 .Sh BUGS
-Text fields, menus, tables and screen-reader bridges are not there yet.
+Scripts that join or reorder (Arabic, Hebrew, the Indic scripts) are not
+shaped.
+The accessibility tree is built, but the bridges to the systems' screen
+readers (UI Automation, NSAccessibility, AT-SPI) are not there yet.

@@ -71,22 +71,31 @@ All of it is in `core/include/rekta.h`.
   reference counted under one rule. A constructor returns a reference you
   own; it is named after the thing (`rk_label`, `rk_tile`, `rk_vstack`), or
   `*_create` where the thing is a type of its own (window, view, controller).
-  Adding, showing and presenting take that reference over (`rk_add`,
-  `rk_insert`, `rk_panorama_add`, `rk_pivot_add`, `rk_places`,
-  `rk_places_go`, `rk_controller_present`, `rk_window_show`): what goes into
-  the tree belongs to the tree, and app code never releases it. `rk_add`
-  returns the child, so it can be kept to change it later. Everything else
-  is borrowed. `man ./core/man/rekta.3` has the whole API by task.
+  Every call that puts a view or controller somewhere takes that reference
+  over (`rk_add`, `rk_insert`, `rk_panorama_add`, `rk_pivot_add`,
+  `rk_places`, `rk_places_go`, `rk_controller_present`, `rk_window_show`,
+  ...): what goes into the tree belongs to the tree, and app code never
+  releases it. A view that already has a parent moves. A window belongs to
+  the app until it closes. `rk_add` returns the child, so it can be kept to
+  change it later. Everything else is borrowed. `man ./core/man/rekta.3` has
+  the whole API by task.
 - **Descriptors** that may grow start with `uint32_t size` (set it to
   `sizeof`): `rk_app_desc`, `rk_window_desc`, `rk_view_class`,
-  `rk_controller_class`. A newer library reads an older, shorter struct.
+  `rk_controller_class`, `rk_action`, `rk_confirm_desc`, `rk_list_item`. A
+  newer library reads an older, shorter struct; one whose size is 0 is said
+  and ignored.
 - **Callbacks** are a function pointer and a `void *user`, never more.
 - **Enums** are 32-bit (`_FORCE32` members); new members only at the end.
 - **Strings** are UTF-8, NUL-terminated, copied by the callee.
 - **Threads.** Everything runs on the main thread, as in UIKit;
   `rk_app_post` is the one function another thread may call.
-- **Errors.** Creation returns `NULL` when memory runs out; nothing else fails.
-  Misuse (a view added to itself, a released object used) asserts in debug builds.
+- **Errors.** Nothing returns `NULL` for want of memory: the library says so
+  and aborts, so no app has to check. Misuse (a setter for one kind of view on
+  another, a size of 0, a call from another thread, an unknown icon, a
+  released object) does nothing and is said through `rk_app_set_log`
+  (standard error until set); a view added to itself asserts in debug builds.
+- **Tests** have a header of their own, `rekta_test.h`: injected input, taps,
+  keys, snapshots, the virtual clock and the frame statistics.
 - **Versioning.** `rk_version()` returns `RK_VERSION` of the library. Before
   1.0 a minor version may change the ABI, as the changelog says.
 
@@ -150,8 +159,9 @@ changelog says so.
 Stages 1 and 2 are done: the renderer, views, controllers, motion, input, text
 fields and areas (clipboard, input methods on every platform), menus, long lists,
 tables that sort, resize and edit, undo and focus everywhere; the headless
-platform, Wayland and X11 are tested here (193 checks, 21 reference images,
-AddressSanitizer and UBSan clean); Win32 and Cocoa are built and tested in CI.
+platform, Wayland and X11 are tested here (436 checks, 36 reference images,
+AddressSanitizer and UBSan clean, each module compiling on its own); Win32 and
+Cocoa are built and tested in CI.
 
 ## Stages
 
@@ -162,7 +172,7 @@ AddressSanitizer and UBSan clean); Win32 and Cocoa are built and tested in CI.
    selection, long lists, focus everywhere, live tiles, undo, Win32 and Cocoa
    complete.
 3. **Everyone.** Accessibility bridges, several windows, the
-   reference gallery against the web in CI (running: thirteen specimens,
+   reference gallery against the web in CI (running: 26 specimens,
    light and dark, in `test/gallery.mjs`).
 
 ## Building
@@ -173,6 +183,7 @@ make -C core test       # headless tests against the reference images
 ```
 
 On Windows, `core\build.bat` does the same with MSVC. The library links only
-against the system: `user32 gdi32 imm32 dwmapi` on Windows, `Cocoa QuartzCore`
+against the system: `user32 gdi32 advapi32` on Windows (the rest is loaded
+when first needed), `Cocoa QuartzCore`
 on macOS, `wayland-client wayland-cursor xkbcommon X11 Xext` and `libm` on Linux
 (`make WAYLAND=0` for X11 alone).

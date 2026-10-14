@@ -7,7 +7,62 @@ it; each entry says how.
 
 ## Unreleased
 
+### Breaking (rekta-core: the API review)
+
+An independent review held rekta-core to modern library practice and to how
+it feels to use. Its API is now smaller in concepts and says what it means;
+apps change as follows (`man rekta` has the whole API):
+
+| Was | Now |
+| --- | --- |
+| `rk_button_set_disabled(b, reason)`, `rk_control_set_disabled` | `rk_view_set_enabled` on any view, with `rk_view_set_tooltip` for the reason |
+| `rk_menu_set_disabled` | `rk_menu_set_enabled` |
+| `rk_menu_set_check(menu, i, -1/0/1)` | an `rk_checkmark`: `RK_CHECKMARK_NONE`, `_OFF`, `_ON` |
+| `rk_app_after(ms, repeat, fn, user)` | `rk_app_after(ms, fn, user)` once, `rk_app_every` again and again |
+| `rk_app_on_change` returned nothing | returns an id for `rk_app_cancel` |
+| `rk_window_do(w, label, run, undo, user, free)` | `rk_window_do(w, &(rk_action){ .size = sizeof(rk_action), ... })`; each window has its own history |
+| `rk_window_choose_files(w, accept, bool, ...)` | `RK_CHOOSE_ONE` or `RK_CHOOSE_MANY` |
+| `rk_field_set_hint(f, text, error)` | `rk_field_set_hint` and `rk_field_set_error` |
+| `rk_view_set_rule(v, top, bottom)` | `rk_view_set_rules(v, RK_RULE_TOP \| RK_RULE_BOTTOM)` |
+| `rk_list_selected` | `rk_list_is_selected`; `rk_list_item` starts with `size` |
+| `rk_tree_open(t, item)`, item -1 for all | `rk_tree_set_open(t, item, open)`, `rk_tree_set_all_open` |
+| `rk_split_show(s, detail)`, `rk_split_sideways`, `rk_split_detail_shown` | `rk_split_set_detail_shown`, `rk_split_is_sideways`, `rk_split_is_detail_shown` |
+| a table's sort as a direction 1 or -1 | `rk_sort` (`RK_SORT_NONE`, `_ASCENDING`, `_DESCENDING`); column flags `uint32_t` |
+| `rk_column`, `rk_row` (stacks) | `rk_vstack`, `rk_hstack`; "row" is a hairline row, "column" a table's |
+| `rk_pivot_add(pivot, controller)` | `rk_pivot_add(pivot, title, view)` as the panorama's; `rk_pivot_add_controller` |
+| `rk_progress_set` | `rk_progress_set_value` |
+| `rk_view_hidden`, `rk_app_reduced_motion` | `rk_view_is_hidden`, `rk_app_is_reduced_motion` |
+| `rk_app_stats(s, reset)` | `rk_app_stats(s)`, `rk_app_stats_reset()` |
+| `rk_control_value` of a date as yyyymmdd only | also `rk_date_value(d, &y, &m, &d)`, `rk_date_set_value` |
+| `*_COUNT` members of public enums | gone; the library keeps its own counts |
+| testing calls in `rekta.h` | in `rekta_test.h` (still exported) |
+| `rk_view_find` by name or a button's label | by name; a button's name is its label, or its icon alone |
+| a view already in a tree needed `rk_retain` to move | `rk_add` and `rk_insert` move it |
+| `rk_window_create` returned a reference | the window belongs to the app until it closes; the pointer is borrowed |
+| constructors could return `NULL` | never: out of memory the library aborts |
+| apps padded a place's page by hand | places set a page in, as a pivot sets its facets in |
+
 ### Added
+
+- **rekta-core: from the API review.** Disabled views with a reason: any view
+  can be disabled (`rk_view_set_enabled`), greying it and everything in it,
+  and a tooltip (`rk_view_set_tooltip`) floats after `tip-delay` or on keyboard
+  focus. Misuse is said instead of passing silently or corrupting memory
+  (`rk_app_set_log`): a setter on the wrong kind of view, a descriptor without
+  its size, a call from another thread, an unknown icon, a pointer that is no
+  object or already freed. Lists keep their selection by item
+  (`rk_list_set_key`) and say it (`rk_list_selection`, `rk_list_active`,
+  `rk_list_select`, `rk_list_clear_selection`); rows change in place
+  (`rk_row_set`), menus are built again (`rk_menu_clear`), tree items are
+  removed, renamed and carry the app's data. `rk_controller_embed` puts a
+  controller inside another's views; `rk_confirm` asks a question in a sheet;
+  `rk_field_set_secret` makes a password field; custom views move with the
+  design's motion (`rk_view_animate_value`, `rk_view_value`) and set the
+  pointer (`rk_view_set_cursor`). No fixed limits remain (10,000 tiles, 600
+  children, nesting animation blocks); a relayout draws only what changed and
+  measures each view once per pass; each source compiles on its own
+  (`make modules`, in CI). The keys F1 to F24 and Insert arrive on every
+  platform.
 
 - **The reference gallery**: `core/test/gallery.c` and `test/gallery.mjs`
   draw the same thirteen specimens (button, checkboxes, toggles, segments,
@@ -440,6 +495,11 @@ it; each entry says how.
   at a time, instead of the place swinging in whole.
 
 ### Fixed
+
+- rekta-core: the rasterizer gave the first pixel of a slanted edge crossing
+  the clip's left border the wrong coverage, so a rounded corner drawn in part
+  did not match the whole; edges are now split at the clip border. Found by
+  the new test that holds every partial redraw to a full one.
 
 - rekta-core: a timer overdue when the loop went to sleep (a frame that took
   longer than the timer's gap) put the loop to sleep until the next event;

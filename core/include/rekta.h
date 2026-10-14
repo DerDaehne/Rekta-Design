@@ -513,8 +513,8 @@ RK_API void rk_tree_on_toggle(rk_view *tree, void (*fn)(rk_view *tree, int item,
 
 /* A split: a list beside its detail. Sideways (the split 760 px wide or more, the window 481 px tall or more) the two
    stand side by side and the handle between them drags the list's width: no pane narrower than pane-min, four tiles
-   wide at first, a double click gives that back. Compact one pane shows at a time: rk_split_show turns to the detail,
-   whose crumb (the title) and Escape turn back. Each pane scrolls itself: give it an rk_scroll where it may be long. */
+   wide at first, a double click gives that back. Compact one pane shows at a time: rk_split_set_detail_shown turns
+   to the detail, whose crumb (the title) and Escape turn back. Each pane scrolls itself: give it an rk_scroll where it may be long. */
 RK_API rk_view *rk_split(rk_view *list, rk_view *detail, const char *title);   /* takes both; title: the list's, for the crumb */
 RK_API void rk_split_set_detail_shown(rk_view *split, bool shown);   /* sideways: a new item's detail slides in; compact: turns */
 RK_API bool rk_split_is_detail_shown(rk_view *split);     /* compact: which pane shows */

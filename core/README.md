@@ -37,9 +37,11 @@ back. `demo --shots DIR` takes the same tour without a screen.
 
 ```sh
 make               # build/librekta.a and build/demo
-make test          # 73 checks and 14 reference images, headless (the comparison needs node)
+make test          # 436 checks and 36 reference images, headless (the comparison needs node)
 make shots         # the demo's tour as PNGs in build/shots
 make sanitize      # tests and demo under AddressSanitizer and UBSan
+make modules       # each source compiled on its own; the unity build only joins them
+make abi           # the shared library exports the header's functions and nothing else
 ```
 
 On Windows, run `build.bat` (or `build.bat test`, `build.bat shared`) from a
@@ -142,7 +144,9 @@ fields and areas with the clipboard and input methods, every script through the
 system's fonts, checkboxes, options, toggles, segments, sliders, steppers, selects, comboboxes and dates, scroll views, pictures, menus, long lists, tables
 that sort, resize and edit, trees, splits, rows the user puts in order, files
 dragged in from the system and a place to drop them, the system's file chooser
-and notifications, pivots along the top or down the side; headless, Wayland and X11 tested here (Wayland is
+and notifications, pivots along the top or down the side, tooltips, views
+disabled with their reason, confirmations, controllers inside another's views,
+and misuse said through a log instead of crashing; headless, Wayland and X11 tested here (Wayland is
 the default where a compositor answers; `RK_PLATFORM=x11` picks X11), Win32 and
 Cocoa built and tested in CI. A reference gallery holds core to the web: the
 same specimens drawn by both (`make gallery`, then `node test/gallery.mjs
