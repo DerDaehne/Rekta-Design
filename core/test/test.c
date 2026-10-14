@@ -2140,6 +2140,246 @@ static void scene_flip(void) {
   done(w);
 }
 
+/* Declared views (rekta_ui.h) ------------------------------------------------------------------------------------- */
+
+typedef struct decl {
+  int count, ids[8], nids, builds, makes, updates, style;
+  bool done, big, host, pressable, controlled;
+  const char *button;
+  char typed[64];
+} decl;
+
+static void decl_count(rk_view *v, void *user) { (void)v; ((decl *)user)->count++; }
+static void decl_typed(rk_view *v, void *user) { decl *s = user; snprintf(s->typed, sizeof s->typed, "%s", rk_field_text(v)); }
+static void decl_item(int i, rk_list_item *out, void *user) { (void)user; static char t[32]; snprintf(t, sizeof t, "item %d", i); out->title = t; }
+static rk_view *decl_make(void *user) { ((decl *)user)->makes++; return rk_list(1000000, decl_item, NULL); }
+static void decl_refresh(rk_view *list, void *user) { ((decl *)user)->updates++; rk_list_set_count(list, 1000000 - ((decl *)user)->count); }
+
+static void decl_build(void *user) {
+  decl *s = user;
+  char n[16];
+  s->builds++;
+  snprintf(n, sizeof n, "%d", s->count);
+  RK_VSTACK() {
+    RK_LABEL("Today", .key = "title", .style = (rk_text_style)s->style);
+    RK_TILES() {
+      RK_TILE(n, .key = "count", .label = "pressed", .status = s->done ? RK_STATUS_SUCCESS : RK_STATUS_INFO, .span = { s->big ? 2 : 1, 1 }, .on_press = decl_count);
+      RK_TILE("51", .label = "icons");
+    }
+    RK_ROWS(.key = "rows") {
+      for (int i = 0; i < s->nids; i++) {
+        snprintf(n, sizeof n, "row %d", s->ids[i]);                /* a local buffer, again and again: copied */
+        RK_ROW(n, .id = (uint64_t)s->ids[i], .on_press = s->pressable ? decl_count : NULL);
+      }
+    }
+    RK_FIELD("Mail", .key = "mail", .hint = s->typed[0] ? "Enter saves it." : "We write once a week.", .input = s->controlled ? s->typed : NULL, .on_change = decl_typed);
+    RK_BUTTON(s->button ? s->button : "count", .key = "button", .on_press = decl_count);
+    if (s->host) RK_HOST(.key = "list", .make = decl_make, .update = decl_refresh, .height = 200);
+  }
+}
+
+static void decl_unclosed(void *user) {
+  (void)user;
+  RK_VSTACK() {
+    RK_LABEL("left open");
+    return;                                                      /* skips the scope's close: said, and closed */
+  }
+}
+
+static rk_view *kid(rk_view *v, int i) { return rk_view_child(v, i); }
+
+static void test_declare(void) {
+  decl s = { .ids = { 1, 2, 3 }, .nids = 3 };
+  rk_window *w = window(800, 760);
+  rk_view *page = rk_ui_view(decl_build, &s);
+  CHECK(s.builds == 1 && rk_view_count(page) == 1, "a declared view is built at once (%d builds)", s.builds);
+  show(w, page, "declared");
+  rk_app_run_for(400);
+  rk_view *t = rk_view_find(page, "count"), *rows = rk_view_find(page, "rows"), *title = rk_view_find(page, "title");
+  rk_view *r1 = kid(rows, 0), *r2 = kid(rows, 1), *r3 = kid(rows, 2), *mail = rk_view_find(page, "mail");
+  CHECK(t && rk__is_tile(t) && rows && rk_view_count(rows) == 3 && title && mail, "the views as declared, found by their keys");
+  CHECK(!strcmp(((tile *)t->state)->value, "0") && ((tile *)t->state)->status == RK_STATUS_INFO, "the tile as declared");
+
+  /* nothing changed: nothing changes */
+  int views = rk__live_views;
+  rk_ui_update(page);
+  CHECK(s.builds == 2 && rk_view_find(page, "count") == t && kid(rows, 1) == r2 && rk__live_views == views && rk__anim_count() == 0,
+        "built again with nothing new: the same views, nothing made, nothing moving (%d views, %u moving)", rk__live_views - views, rk__anim_count());
+
+  /* a new value peeks in, a new status flips, a new span glides */
+  s.count = 5;
+  rk_ui_update(page);
+  CHECK(t->transition == RK_TRANSITION_PEEK + 1 && !strcmp(((tile *)t->state)->value, "5") && !strcmp(((tile *)t->state)->old_value, "0"),
+        "a tile's new value reaches it and peeks in");
+  rk_app_run_for(600);
+  s.done = true;
+  rk_ui_update(page);
+  CHECK(t->transition == RK_TRANSITION_FLIP + 1 && ((tile *)t->state)->status == RK_STATUS_SUCCESS, "a new status flips the tile over");
+  rk_app_run_for(600);
+  float narrow = t->frame.w;
+  s.big = true;
+  rk_ui_update(page);
+  rk_app_run_for(60);
+  CHECK(t->frame.w > narrow + 100 && t->pframe.w > narrow && t->pframe.w < t->frame.w - 1, "a new span glides (%g to %g, drawn at %g)", narrow, t->frame.w, t->pframe.w);
+  rk_app_run_for(600);
+  CHECK(t->pframe.w == t->frame.w && rk__anim_count() == 0, "and comes to rest");
+
+  /* a handler only changes the state; the view is built again after it */
+  int before = s.builds;
+  rk_view_tap(rk_view_find(page, "button"));
+  rk_app_run_for(50);
+  CHECK(s.count == 6 && s.builds == before + 1 && !strcmp(((tile *)t->state)->value, "6"), "after a declared handler the view follows (%d)", s.count);
+  rk_app_run_for(600);
+
+  /* keyed rows: one comes at the top, the others stay who they are */
+  views = rk__live_views;
+  s.ids[0] = 4; s.ids[1] = 1; s.ids[2] = 2; s.ids[3] = 3; s.nids = 4;
+  rk_ui_update(page);
+  rk_view *r4 = kid(rows, 0);
+  CHECK(rk_view_count(rows) == 4 && kid(rows, 1) == r1 && kid(rows, 2) == r2 && kid(rows, 3) == r3 && r4->entering && rk__anim_count() > 0,
+        "a keyed row comes at the top and builds in; the others are the same views");
+  CHECK(!strcmp(((rk__row *)r4->state)->title, "row 4"), "its title, from a buffer used for every row");
+  rk_app_run_for(600);
+  CHECK(!r4->entering && rk__live_views == views + 1, "it settles: one view more (%d)", rk__live_views - views);
+  s.ids[0] = 4; s.ids[1] = 1; s.ids[2] = 3; s.nids = 3;
+  rk_ui_update(page);
+  CHECK(r2->leaving && rk_view_count(rows) == 4, "a row taken out leaves first");
+  rk_app_run_for(600);
+  CHECK(rk_view_count(rows) == 3 && kid(rows, 2) == r3 && rk__live_views == views, "then it is gone, and nothing is left over (%d)", rk__live_views - views);
+  /* moved: 3 to the top; the longest run in order (4, 1) stays put, so only 3 moves */
+  s.pressable = true;
+  rk_ui_update(page);
+  rk_window_focus(w, r1);
+  s.ids[0] = 3; s.ids[1] = 4; s.ids[2] = 1;
+  rk_ui_update(page);
+  CHECK(kid(rows, 0) == r3 && kid(rows, 1) == r4 && kid(rows, 2) == r1 && rk_view_count(rows) == 3, "keyed rows move: the same views in the new order");
+  CHECK(rk_window_focused(w) == r1, "focus stays on its row while the others move");
+  s.ids[0] = 1; s.ids[1] = 4; s.ids[2] = 3;
+  rk_ui_update(page);
+  CHECK(kid(rows, 0) == r1 && kid(rows, 2) == r3 && rk_window_focused(w) == r1, "the focused row itself moves, and keeps focus");
+  rk_app_run_for(600);
+  s.pressable = false;
+  rk_ui_update(page);
+
+  /* a field: what the user typed stays, and so do focus and the caret */
+  rk_window_focus(w, mail);
+  type_text(w, "ada@example");
+  CHECK(!strcmp(s.typed, "ada@example") && !strcmp(((field *)mail->state)->hint, "Enter saves it."), "typing reaches the state; the hint follows it");
+  s.count++;
+  rk_ui_update(page);
+  CHECK(!strcmp(rk_field_text(mail), "ada@example") && rk_window_focused(w) == mail, "a build leaves what was typed, and focus, alone");
+  s.controlled = true;
+  rk_ui_update(page);
+  key(w, RK_KEY_LEFT, 0); key(w, RK_KEY_LEFT, 0);
+  type_text(w, "x");
+  CHECK(!strcmp(s.typed, "ada@exampxle") && !strcmp(rk_field_text(mail), "ada@exampxle") && ((field *)mail->state)->caret == 10, "controlled: the app's text equals the field's, so the caret stays (%d)", ((field *)mail->state)->caret);
+  snprintf(s.typed, sizeof s.typed, "%s", "grace@example.com");
+  rk_ui_update(page);
+  CHECK(!strcmp(rk_field_text(mail), "grace@example.com"), "the app's new text reaches the field");
+  s.controlled = false;
+  rk_ui_update(page);
+
+  /* a property the view takes only when made: a new view in the old one's place, focus with it */
+  rk_view *b1 = rk_view_find(page, "button");
+  rk_window_focus(w, b1);
+  views = rk__live_views;
+  s.button = "count again";
+  rk_ui_update(page);
+  rk_view *b2 = rk_view_find(page, "button");
+  CHECK(b2 && b2 != b1 && rk_view_parent(b2) == rk_view_parent(mail) && rk__live_views == views && rk_window_focused(w) == b2,
+        "a button's new label: a new button in its place, focus moved over, the old one gone");
+  s.style = RK_TEXT_TITLE;
+  rk_ui_update(page);
+  CHECK(rk_view_find(page, "title") != title && kid(rk_view_parent(rows), 0) == rk_view_find(page, "title"), "a label's new style: the same, at the top");
+
+  /* a view the app makes: once, then told at every build; a million rows, a few views */
+  views = rk__live_views;
+  s.host = true;
+  rk_ui_update(page);
+  rk_app_run_for(600);
+  rk_view *list = rk_view_find(page, "list");
+  s.count++;
+  rk_ui_update(page);
+  CHECK(list && rk_view_find(page, "list") == list && s.makes == 1 && s.updates == 2, "a hosted view is made once and updated at each build (%d, %d)", s.makes, s.updates);
+  CHECK(rk__live_views - views < 8, "a million rows stay data: %d views", rk__live_views - views);
+  rk_ui_update(NULL);
+  CHECK(s.updates == 3, "rk_ui_update(NULL) builds every declared view");
+  s.host = false;
+  rk_ui_update(page);
+  rk_app_run_for(600);
+  CHECK(rk__live_views == views && !rk_view_find(page, "list"), "it goes as any view (%d)", rk__live_views - views);
+
+  /* misuse is said */
+  int was = logged;
+  rk_ui_put(RK_UI(RK_UI_LABEL, .text = "nowhere"));
+  CHECK(logged == was + 1, "declaring outside a build is said");
+  rk_view *open = rk_ui_view(decl_unclosed, NULL);
+  CHECK(logged == was + 2 && rk_view_count(open) == 1 && rk_view_count(kid(open, 0)) == 1, "a scope left open is said, and closed (%s)", logged_last);
+  rk_release(open);
+  rk_ui_update(rows);
+  CHECK(logged == was + 3, "updating a view that is not declared is said");
+  done(w);
+  CHECK(ui_roots == NULL, "a declared view goes with its window");
+}
+
+/* The same page, imperative and declared, drawn the same - also while it moves. */
+static int hello_count = 312;
+static rk_view *hello_tile;
+static void hello_press(rk_view *b, void *u) {
+  (void)b; (void)u;
+  char text[16];
+  snprintf(text, sizeof text, "%d", ++hello_count);
+  rk_view_transition(hello_tile, RK_TRANSITION_PEEK);
+  rk_tile_set_stat(hello_tile, text, "finished today");
+}
+static rk_view *hello_imperative(void) {
+  rk_view *page = rk_vstack();
+  rk_add(page, rk_label("Today", RK_TEXT_GROUP));
+  rk_view *tiles = rk_add(page, rk_tile_grid());
+  hello_tile = rk_add(tiles, rk_tile("312", "finished today"));
+  rk_tile_set_status(hello_tile, RK_STATUS_SUCCESS, NULL);
+  rk_view_set_span(hello_tile, 2, 1);
+  rk_add(tiles, rk_tile("0.3", "release notes"));
+  rk_add(page, rk_button("build one", hello_press, NULL));
+  return page;
+}
+static int hello_declared_count = 312;
+static void hello_declared_press(rk_view *b, void *u) { (void)b; (void)u; hello_declared_count++; }
+static void hello_declared(void *user) {
+  char builds[16];
+  (void)user;
+  snprintf(builds, sizeof builds, "%d", hello_declared_count);
+  RK_VSTACK() {
+    RK_LABEL("Today", .style = RK_TEXT_GROUP);
+    RK_TILES() {
+      RK_TILE(builds, .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
+      RK_TILE("0.3", .label = "release notes");
+    }
+    RK_BUTTON("build one", .on_press = hello_declared_press);
+  }
+}
+static bool same_pixels(rk_window *a, rk_window *b) {
+  if (a->fb->w != b->fb->w || a->fb->h != b->fb->h) return false;
+  for (int y = 0; y < a->fb->h; y++) if (memcmp(a->fb->px + (size_t)y * a->fb->stride, b->fb->px + (size_t)y * b->fb->stride, (size_t)a->fb->w * 4)) return false;
+  return true;
+}
+static void test_declare_same_pixels(void) {
+  rk_window *a = window(640, 400), *b = window(640, 400);
+  rk_controller *pa = rk_panorama(), *pb = rk_panorama();
+  rk_panorama_add(pa, "today", hello_imperative(), 0);
+  rk_panorama_add(pb, "today", rk_ui_view(hello_declared, NULL), 0);
+  rk_window_show(a, pa); rk_window_show(b, pb);
+  rk_app_run_for(1200);
+  CHECK(same_pixels(a, b), "hello, declared, draws what hello draws");
+  rk_view_tap(rk_view_find(rk_controller_view(pa), "build one"));
+  rk_view_tap(rk_view_find(rk_controller_view(pb), "build one"));
+  rk_app_run_for(120);
+  CHECK(hello_count == hello_declared_count && same_pixels(a, b), "and the same while the new number peeks in");
+  rk_app_run_for(600);
+  CHECK(same_pixels(a, b), "and when it rests");
+  done(a); done(b);
+}
+
 /* Main ------------------------------------------------------------------------------------------------------------ */
 
 static void launch(void *user) {
@@ -2182,6 +2422,8 @@ static void launch(void *user) {
   test_confirm_secret();
   test_api_rules();
   test_spring();
+  test_declare();
+  test_declare_same_pixels();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */
   scene_type();
