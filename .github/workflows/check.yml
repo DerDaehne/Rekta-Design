@@ -27,6 +27,8 @@ jobs:
         run: npm install --no-save --no-package-lock playwright@1.56.1 && npx playwright install --with-deps chromium
       - name: Click through the demo
         run: node test/smoke.mjs
+      - name: The reference gallery (rekta-core and rekta.css draw the same specimens alike)
+        run: make -C core gallery && node test/gallery.mjs core/build/gallery
 
   core-linux:
     runs-on: ubuntu-latest
@@ -38,19 +40,31 @@ jobs:
         with:
           node-version: 24
       - name: Install Wayland and X11 headers, a headless compositor and a virtual display
-        run: sudo apt-get update -q && sudo apt-get install -y -q pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxext-dev weston xvfb mandoc
+        run: sudo apt-get update -q && sudo apt-get install -y -q pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxext-dev weston xvfb mandoc dbus
       - name: The generated C sources are up to date
         run: node scripts/build.mjs --check
+      - name: Each module compiles on its own (Wayland and X11 alone)
+        run: make -C core modules && make -C core modules WAYLAND=0
       - name: Build for X11 alone
         run: make -C core WAYLAND=0 && make -C core clean
       - name: Build the library and the demo (Wayland, X11 as the fallback)
         run: make -C core
       - name: Tests and reference images
         run: make -C core test
+      - name: The shared library exports the header's functions and nothing else
+        run: make -C core abi
+      - name: Installed, an app builds through pkg-config (shared and static)
+        run: cd core && sh test/install.sh
       - name: The man page is well-formed
         run: mandoc -T lint -W warning core/man/rekta.3
       - name: Tests and the demo script under AddressSanitizer and UBSan
         run: make -C core sanitize
+      - name: Files dropped from another X client (XDND) arrive, filtered
+        run: cd core && sh test/platform/x11.sh
+      - name: The file chooser asks the desktop portal (zenity without one); notifications reach the server
+        run: cd core && sh test/platform/desktop.sh
+      - name: X11 follows Xft.dpi while a window is open
+        run: cd core && sh test/platform/scale.sh
       - name: The demo opens a window and runs (X11)
         run: xvfb-run -a timeout 3 ./core/build/demo || test $? -eq 124
       - name: The demo opens a window and runs (Wayland, under a headless Weston)
@@ -69,10 +83,16 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - name: Each module compiles on its own
+        run: make -C core modules
       - name: Build the library and the demo (Cocoa)
         run: make -C core
       - name: Tests and reference images
         run: make -C core test
+      - name: The shared library exports the header's functions and nothing else
+        run: make -C core abi
+      - name: Installed, an app builds through pkg-config
+        run: (command -v pkg-config || brew install pkgconf) && cd core && sh test/install.sh
 
   core-windows:
     runs-on: windows-latest
@@ -88,4 +108,5 @@ jobs:
         run: |
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do set VS=%%i
           call "%VS%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
-          call core\build.bat test
+          call core\build.bat test || exit /b 1
+          call core\build.bat shared

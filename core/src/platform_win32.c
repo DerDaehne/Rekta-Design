@@ -13,6 +13,9 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <imm.h>
+#include <ole2.h>
+#include <shellapi.h>
+#include <commdlg.h>
 
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED 0x02E0
@@ -25,6 +28,7 @@ typedef struct wwin {
   rk_window *w; HWND hwnd; bool own_frame; const rk_bitmap *last; float scale; int minw, minh;
   RECT caret; bool caret_known;                                /* a field's caret, device pixels: the input method's place */
   int cursor;                                                  /* the pointer's shape over the content */
+  struct drop_target *drop;                                    /* files dragged in (OLE), when ole32 is there */
 } wwin;
 
 static HINSTANCE inst;
@@ -83,7 +87,8 @@ static uint32_t key_of(WPARAM vk) {
     case VK_BACK: return RK_KEY_BACKSPACE; case VK_DELETE: return RK_KEY_DELETE; case VK_BROWSER_BACK: return RK_KEY_BACK;
     default: break;
   }
-  if (vk >= VK_F1 && vk <= VK_F10) return RK_KEY_F1 + (uint32_t)(vk - VK_F1);
+  if (vk >= VK_F1 && vk <= VK_F24) return (rk_key)(RK_KEY_F1 + (vk - VK_F1));
+  if (vk == VK_INSERT) return RK_KEY_INSERT;
   if ((vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9')) return (uint32_t)vk;
   return RK_KEY_NONE;
 }
@@ -342,11 +347,256 @@ static bool w_init(const rk_app_desc *d) {
   return RegisterClassExW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
 }
 
-static void w_shutdown(void) { UnregisterClassW(CLASS, inst); }
+static void note_remove(void);
+static void w_shutdown(void) { note_remove(); UnregisterClassW(CLASS, inst); }
 
 static void dark_frame(wwin *x) {
   BOOL dark = rk__dark();
   if (pDwmSetWindowAttribute) pDwmSetWindowAttribute(x->hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof dark);
+}
+
+/* Files dragged in: an IDropTarget for each window, written out in C, through ole32 and shell32 looked up at run
+   time. Each enter and move asks the window whether a view under the pointer takes the files (a copy) or not; the
+   drop hands it their paths. */
+typedef HRESULT(WINAPI *OleInitialize_t)(LPVOID);
+typedef HRESULT(WINAPI *RegisterDragDrop_t)(HWND, LPDROPTARGET);
+typedef HRESULT(WINAPI *RevokeDragDrop_t)(HWND);
+typedef void(WINAPI *ReleaseStgMedium_t)(LPSTGMEDIUM);
+typedef UINT(WINAPI *DragQueryFileW_t)(HDROP, UINT, LPWSTR, UINT);
+static RegisterDragDrop_t pRegisterDragDrop;
+static RevokeDragDrop_t pRevokeDragDrop;
+static ReleaseStgMedium_t pReleaseStgMedium;
+static DragQueryFileW_t pDragQueryFileW;
+static bool ole_tried;
+static const GUID iid_unknown = { 0x00000000, 0x0000, 0x0000, { 0xC0, 0, 0, 0, 0, 0, 0, 0x46 } };
+static const GUID iid_drop_target = { 0x00000122, 0x0000, 0x0000, { 0xC0, 0, 0, 0, 0, 0, 0, 0x46 } };
+
+typedef struct drop_target { IDropTarget iface; LONG refs; wwin *x; bool files, taken; } drop_target;
+
+static bool has_files(IDataObject *data) {
+  FORMATETC f = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+  return data && data->lpVtbl->QueryGetData(data, &f) == S_OK;
+}
+
+static bool dt_ask(drop_target *t, rk_event_type type, POINTL pt, const char *const *files, int n) {
+  POINT p = { pt.x, pt.y };
+  ScreenToClient(t->x->hwnd, &p);
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.type = type; e.time = rk_app_now();
+  e.position = (rk_point){ p.x / t->x->scale, p.y / t->x->scale };
+  e.files = files; e.nfiles = n;
+  bool r = rk__window_drag(t->x->w, &e);
+  rk__app_request_frame();
+  return r;
+}
+
+static HRESULT STDMETHODCALLTYPE dt_query(IDropTarget *self, REFIID riid, void **out) {
+  if (!memcmp(riid, &iid_unknown, sizeof(GUID)) || !memcmp(riid, &iid_drop_target, sizeof(GUID))) { *out = self; self->lpVtbl->AddRef(self); return S_OK; }
+  *out = NULL;
+  return E_NOINTERFACE;
+}
+static ULONG STDMETHODCALLTYPE dt_addref(IDropTarget *self) { return (ULONG)InterlockedIncrement(&((drop_target *)self)->refs); }
+static ULONG STDMETHODCALLTYPE dt_release(IDropTarget *self) {
+  drop_target *t = (drop_target *)self;
+  LONG n = InterlockedDecrement(&t->refs);
+  if (!n) free(t);
+  return (ULONG)n;
+}
+static HRESULT STDMETHODCALLTYPE dt_enter(IDropTarget *self, IDataObject *data, DWORD keys, POINTL pt, DWORD *effect) {
+  (void)keys;
+  drop_target *t = (drop_target *)self;
+  t->files = has_files(data);
+  t->taken = t->files && t->x && dt_ask(t, RK_EVENT_DRAG_ENTER, pt, NULL, 0);
+  *effect = t->taken ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+  return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE dt_over(IDropTarget *self, DWORD keys, POINTL pt, DWORD *effect) {
+  (void)keys;
+  drop_target *t = (drop_target *)self;
+  t->taken = t->files && t->x && dt_ask(t, RK_EVENT_DRAG_MOVE, pt, NULL, 0);
+  *effect = t->taken ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+  return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE dt_leave(IDropTarget *self) {
+  drop_target *t = (drop_target *)self;
+  POINTL pt = { 0, 0 };
+  if (t->x) dt_ask(t, RK_EVENT_DRAG_LEAVE, pt, NULL, 0);
+  t->taken = false;
+  return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE dt_drop(IDropTarget *self, IDataObject *data, DWORD keys, POINTL pt, DWORD *effect) {
+  (void)keys;
+  drop_target *t = (drop_target *)self;
+  *effect = DROPEFFECT_NONE;
+  if (!t->x || !t->files || !t->taken || !pDragQueryFileW || !pReleaseStgMedium) { if (t->x) dt_ask(t, RK_EVENT_DRAG_LEAVE, pt, NULL, 0); return S_OK; }
+  FORMATETC f = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+  STGMEDIUM m;
+  if (data->lpVtbl->GetData(data, &f, &m) != S_OK) { dt_ask(t, RK_EVENT_DRAG_LEAVE, pt, NULL, 0); return S_OK; }
+  HDROP h = (HDROP)GlobalLock(m.hGlobal);
+  UINT n = h ? pDragQueryFileW(h, 0xFFFFFFFF, NULL, 0) : 0;
+  char **paths = n ? rk__alloc(n * sizeof *paths) : NULL;
+  for (UINT i = 0; i < n; i++) {
+    UINT len = pDragQueryFileW(h, i, NULL, 0);
+    wchar_t *ws = rk__alloc((len + 1) * sizeof *ws);
+    pDragQueryFileW(h, i, ws, len + 1);
+    int k = WideCharToMultiByte(CP_UTF8, 0, ws, -1, NULL, 0, NULL, NULL);
+    paths[i] = rk__alloc(k > 0 ? (size_t)k : 1);
+    if (k > 0) WideCharToMultiByte(CP_UTF8, 0, ws, -1, paths[i], k, NULL, NULL);
+    free(ws);
+  }
+  if (h) GlobalUnlock(m.hGlobal);
+  pReleaseStgMedium(&m);
+  bool took = n && dt_ask(t, RK_EVENT_DROP, pt, (const char *const *)paths, (int)n);
+  if (!n) dt_ask(t, RK_EVENT_DRAG_LEAVE, pt, NULL, 0);
+  rk__free_paths(paths, (int)n);
+  *effect = took ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+  t->taken = false;
+  return S_OK;
+}
+static IDropTargetVtbl dt_vtbl = { dt_query, dt_addref, dt_release, dt_enter, dt_over, dt_leave, dt_drop };
+
+static void drop_attach(wwin *x) {
+  if (!ole_tried) {
+    ole_tried = true;
+    HMODULE ole = LoadLibraryW(L"ole32.dll"), shell = LoadLibraryW(L"shell32.dll");
+    OleInitialize_t init = ole ? (OleInitialize_t)(void (*)(void))GetProcAddress(ole, "OleInitialize") : NULL;
+    if (init && SUCCEEDED(init(NULL))) {
+      pRegisterDragDrop = (RegisterDragDrop_t)(void (*)(void))GetProcAddress(ole, "RegisterDragDrop");
+      pRevokeDragDrop = (RevokeDragDrop_t)(void (*)(void))GetProcAddress(ole, "RevokeDragDrop");
+      pReleaseStgMedium = (ReleaseStgMedium_t)(void (*)(void))GetProcAddress(ole, "ReleaseStgMedium");
+    }
+    pDragQueryFileW = shell ? (DragQueryFileW_t)(void (*)(void))GetProcAddress(shell, "DragQueryFileW") : NULL;
+  }
+  if (!pRegisterDragDrop || !pRevokeDragDrop) return;
+  drop_target *t = rk__alloc(sizeof *t);
+  t->iface.lpVtbl = &dt_vtbl; t->refs = 1; t->x = x;
+  if (pRegisterDragDrop(x->hwnd, &t->iface) == S_OK) x->drop = t; else free(t);
+}
+
+static void drop_detach(wwin *x) {
+  if (!x->drop) return;
+  pRevokeDragDrop(x->hwnd);
+  x->drop->x = NULL;                                           /* OLE may still hold it a moment */
+  x->drop->iface.lpVtbl->Release(&x->drop->iface);
+  x->drop = NULL;
+}
+
+/* Notifications: an icon in the notification area that shows a balloon, which Windows 10 and later turn into a toast.
+   The icon stays while the app runs, so each balloon has it to come from; it goes at shutdown. Its owner is a
+   message-only window, as a notification needs no window of the app's to be open. shell32 is looked up at run time. */
+#ifndef NIIF_RESPECT_QUIET_TIME
+#define NIIF_RESPECT_QUIET_TIME 0x80
+#endif
+typedef BOOL(WINAPI *Shell_NotifyIconW_t)(DWORD, PNOTIFYICONDATAW);
+static Shell_NotifyIconW_t pShell_NotifyIconW;
+static HWND note_owner;
+static bool note_shown;
+
+static void note_remove(void) {
+  if (!note_shown) return;
+  NOTIFYICONDATAW d;
+  memset(&d, 0, sizeof d);
+  d.cbSize = sizeof d; d.hWnd = note_owner; d.uID = 1;
+  pShell_NotifyIconW(NIM_DELETE, &d);
+  note_shown = false;
+  DestroyWindow(note_owner); note_owner = NULL;
+}
+
+static void wide_into(wchar_t *dst, int cap, const char *utf8) {
+  if (!MultiByteToWideChar(CP_UTF8, 0, utf8, -1, dst, cap)) dst[0] = 0;   /* too long for the field: nothing */
+  dst[cap - 1] = 0;
+}
+
+static bool w_notify(const rk_app_desc *app, const char *title, const char *body) {
+  static bool tried;
+  if (!tried) { tried = true; HMODULE shell = LoadLibraryW(L"shell32.dll"); pShell_NotifyIconW = shell ? (Shell_NotifyIconW_t)(void (*)(void))GetProcAddress(shell, "Shell_NotifyIconW") : NULL; }
+  if (!pShell_NotifyIconW) return false;
+  if (!note_owner) note_owner = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, inst, NULL);   /* not ours: proc wants a window */
+  if (!note_owner) return false;
+  NOTIFYICONDATAW d;
+  memset(&d, 0, sizeof d);
+  d.cbSize = sizeof d; d.hWnd = note_owner; d.uID = 1;
+  d.uFlags = NIF_INFO | NIF_ICON | NIF_TIP;
+  d.hIcon = LoadIcon(inst, MAKEINTRESOURCE(1));
+  if (!d.hIcon) d.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+  wide_into(d.szTip, (int)(sizeof d.szTip / sizeof *d.szTip), app->name ? app->name : "");
+  wide_into(d.szInfoTitle, (int)(sizeof d.szInfoTitle / sizeof *d.szInfoTitle), title);
+  wide_into(d.szInfo, (int)(sizeof d.szInfo / sizeof *d.szInfo), *body ? body : " ");   /* empty text hides a balloon */
+  d.dwInfoFlags = NIIF_INFO | NIIF_RESPECT_QUIET_TIME;
+  if (!note_shown) {
+    if (!pShell_NotifyIconW(NIM_ADD, &d)) return false;
+    note_shown = true;
+    d.uVersion = NOTIFYICON_VERSION_4;
+    pShell_NotifyIconW(NIM_SETVERSION, &d);
+    return true;
+  }
+  return pShell_NotifyIconW(NIM_MODIFY, &d) != FALSE;
+}
+
+/* The file chooser: the system's open dialog (comdlg32, looked up at run time), over the window. It is modal, as it
+   is for every Windows app; the answer still comes through the loop, a moment after it closes. */
+typedef BOOL(WINAPI *GetOpenFileNameW_t)(LPOPENFILENAMEW);
+typedef struct chosen_files { void (*done)(void *, const char *const *, int); void *ctx; char **files; int n; } chosen_files;
+static void chooser_answer(void *user) {
+  chosen_files *c = user;
+  c->done(c->ctx, (const char *const *)c->files, c->n);
+  rk__free_paths(c->files, c->n);
+  free(c);
+}
+static char *utf8_of(const wchar_t *ws) {
+  int k = WideCharToMultiByte(CP_UTF8, 0, ws, -1, NULL, 0, NULL, NULL);
+  char *u = rk__alloc(k > 0 ? (size_t)k : 1);
+  if (k > 0) WideCharToMultiByte(CP_UTF8, 0, ws, -1, u, k, NULL, NULL);
+  return u;
+}
+static bool w_choose(void *n, const char *accept, bool multiple, void (*done)(void *, const char *const *, int), void *ctx) {
+  static GetOpenFileNameW_t open_dialog;
+  static bool tried;
+  if (!tried) { tried = true; HMODULE dlg = LoadLibraryW(L"comdlg32.dll"); open_dialog = dlg ? (GetOpenFileNameW_t)(void (*)(void))GetProcAddress(dlg, "GetOpenFileNameW") : NULL; }
+  if (!open_dialog) return false;
+  wwin *x = n;
+  /* the filter: "Accepted files\0*.png;*.jpg\0All files\0*.*\0\0" */
+  char **globs = NULL;
+  int ng = rk__accept_globs(accept, &globs);
+  size_t len = 64;
+  for (int i = 0; i < ng; i++) len += strlen(globs[i]) + 1;
+  wchar_t *filter = rk__alloc(len * sizeof *filter), *f = filter;
+  if (ng) {
+    const wchar_t *name = L"Accepted files";
+    wcscpy(f, name); f += wcslen(name) + 1;
+    for (int i = 0; i < ng; i++) {
+      for (const char *g = globs[i]; *g; g++) *f++ = (wchar_t)(unsigned char)*g;
+      *f++ = i + 1 < ng ? L';' : 0;
+    }
+  }
+  const wchar_t *all = L"All files\0*.*\0";
+  memcpy(f, all, 15 * sizeof *f);                           /* "All files", "*.*" and the list's second 0 */
+  rk__free_paths(globs, ng);
+  DWORD cap = 32768;
+  wchar_t *buf = rk__alloc(cap * sizeof *buf);
+  OPENFILENAMEW o;
+  memset(&o, 0, sizeof o);
+  o.lStructSize = sizeof o; o.hwndOwner = x ? x->hwnd : NULL; o.lpstrFilter = filter; o.lpstrFile = buf; o.nMaxFile = cap;
+  o.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | (multiple ? OFN_ALLOWMULTISELECT : 0);
+  chosen_files *c = rk__alloc(sizeof *c);
+  c->done = done; c->ctx = ctx;
+  if (open_dialog(&o)) {
+    /* one file: its path; several: the folder, then each name, each ended by a 0, the list by two */
+    const wchar_t *first = buf, *next = buf + wcslen(buf) + 1;
+    if (!multiple || !*next) { c->files = rk__alloc(sizeof *c->files); c->files[0] = utf8_of(first); c->n = 1; }
+    else for (; *next; next += wcslen(next) + 1) {
+      size_t l = wcslen(first) + wcslen(next) + 2;
+      wchar_t *full = rk__alloc(l * sizeof *full);
+      wcscpy(full, first); wcscat(full, L"\\"); wcscat(full, next);
+      c->files = realloc(c->files, (size_t)(c->n + 1) * sizeof *c->files);
+      c->files[c->n++] = utf8_of(full);
+      free(full);
+    }
+  }
+  free(filter); free(buf);
+  rk_app_after(0, chooser_answer, c);
+  return true;
 }
 
 static void *w_open(rk_window *w, const rk_window_desc *d) {
@@ -367,10 +617,11 @@ static void *w_open(rk_window *w, const rk_window_desc *d) {
   dark_frame(x);
   SetWindowPos(h, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
   sync_size(x);
+  drop_attach(x);
   return x;
 }
 
-static void w_close(void *n) { wwin *x = n; if (x) { SetWindowLongPtrW(x->hwnd, GWLP_USERDATA, 0); DestroyWindow(x->hwnd); free(x); } }
+static void w_close(void *n) { wwin *x = n; if (x) { drop_detach(x); SetWindowLongPtrW(x->hwnd, GWLP_USERDATA, 0); DestroyWindow(x->hwnd); free(x); } }
 static void w_show(void *n) { wwin *x = n; if (x) { ShowWindow(x->hwnd, SW_SHOW); UpdateWindow(x->hwnd); } }
 static void w_title(void *n, const char *t) { wwin *x = n; if (x) { wchar_t *s = wide(t); SetWindowTextW(x->hwnd, s); free(s); } }
 static void w_present(void *n, const rk_bitmap *fb, const rk_irect *changed, int nchanged) {
@@ -452,5 +703,5 @@ static void w_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "win32", w_init, w_shutdown, w_open, w_close, w_show, w_title, w_present, w_move, w_minimize, w_zoom,
-  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input, w_cursor
+  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input, w_cursor, w_choose, w_notify
 };

@@ -29,14 +29,34 @@ static void hl_settings(bool *dark, bool *reduced, bool *compact) {
   *compact = true;                                             /* as a desktop with a mouse */
 }
 
+/* The headless chooser answers what a test set, a moment later, as a system's would. */
+const char *const *rk__headless_choice; int rk__headless_nchoice;
+typedef struct hl_ask { void (*done)(void *, const char *const *, int); void *ctx; } hl_ask;
+static void hl_answer(void *user) { hl_ask *a = user; a->done(a->ctx, rk__headless_choice, rk__headless_nchoice); free(a); }
+static bool hl_choose(void *native, const char *accept, bool multiple, void (*done)(void *, const char *const *, int), void *ctx) {
+  (void)native; (void)accept; (void)multiple;
+  hl_ask *a = malloc(sizeof *a);
+  if (!a) return false;
+  a->done = done; a->ctx = ctx;
+  rk_app_after(1, hl_answer, a);
+  return true;
+}
+
+char rk__headless_note[512];
+static bool hl_notify(const rk_app_desc *app, const char *title, const char *body) {
+  (void)app;
+  snprintf(rk__headless_note, sizeof rk__headless_note, "%s: %s", title, body);
+  return true;
+}
+
 const rk_platform rk__platform_headless = {
   "headless", hl_init, hl_shutdown, hl_open, hl_close, hl_show, hl_title, hl_present, hl_nop, hl_nop, hl_nop,
-  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose, hl_notify
 };
 
 #if defined(RK_HEADLESS_ONLY)
 const rk_platform rk__platform_native = {
   "headless", hl_init, hl_shutdown, hl_open, hl_close, hl_show, hl_title, hl_present, hl_nop, hl_nop, hl_nop,
-  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose, hl_notify
 };
 #endif

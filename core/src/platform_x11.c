@@ -1,6 +1,7 @@
 /* platform_x11.c: Linux and BSD through Xlib, where no Wayland compositor answers (or with RK_PLATFORM=x11). Pixels go
    up through MIT-SHM (XPutImage where it is missing); text input comes through XIM; the theme and the animation setting
-   come from XSETTINGS, which GNOME, KDE and Xfce all publish; Xft.dpi gives the scale. Another thread wakes the loop
+   come from XSETTINGS, which GNOME, KDE and Xfce all publish; Xft.dpi gives the scale, followed when the desktop
+   changes it (X11 has one for the whole screen: no desktop publishes one per monitor). Another thread wakes the loop
    through a pipe. */
 #include "rk_internal.h"
 #include <X11/Xatom.h>
@@ -20,9 +21,11 @@
 
 typedef struct xwin {
   rk_window *w; Window win; GC gc; XIC ic; int pw, ph; bool maximized;
+  float min_w, min_h;                                        /* logical: the hints follow the scale */
   char *preedit; int plen, pcap;                             /* what the input method composes, on the spot (UTF-8) */
   XPoint spot; bool spot_due, composing;                     /* the caret for the input method, sent between compositions */
   XImage *shm_img; XShmSegmentInfo shm;                      /* the frame in memory the X server reads directly */
+  Window dnd_source; bool dnd_uris, dnd_taken; rk_point dnd_at;   /* files dragged over it (XDND) */
 } xwin;
 
 static Display *dpy;
@@ -35,6 +38,8 @@ static int wake_pipe[2] = { -1, -1 };
 static float dpi_scale = 1;
 static bool use_shm, shm_failed;
 static Atom A_CLIPBOARD, A_TARGETS, A_RK_PASTE;
+static Atom A_XDND_AWARE, A_XDND_ENTER, A_XDND_POSITION, A_XDND_STATUS, A_XDND_LEAVE, A_XDND_DROP, A_XDND_FINISHED;
+static Atom A_XDND_SELECTION, A_XDND_COPY, A_XDND_TYPES, A_URI_LIST, A_RK_DROP;
 static Window clip_win;                                       /* owns the CLIPBOARD selection while we hold it */
 static char *clip_text;
 static Atom A_DELETE, A_PROTOCOLS, A_NET_NAME, A_UTF8, A_MOTIF, A_MOVERESIZE, A_STATE, A_MAX_V, A_MAX_H, A_XS_SEL, A_XS_SETTINGS;
@@ -49,13 +54,18 @@ static double x_now(void) {
   return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
 }
 
+/* The scale from Xft.dpi, read from the root window's resources as they are now (Xlib's copy is from the connect). */
+static bool scale_fixed;                                       /* RK_SCALE set: kept */
 static void read_dpi(void) {
   const char *env = getenv("RK_SCALE");
-  if (env && atof(env) > 0) { dpi_scale = (float)atof(env); return; }
-  char *rms = XResourceManagerString(dpy);
-  if (!rms) return;
+  if (env && atof(env) > 0) { dpi_scale = (float)atof(env); scale_fixed = true; return; }
+  Atom type_got; int format; unsigned long n, after;
+  unsigned char *rms = NULL;
+  if (XGetWindowProperty(dpy, RootWindow(dpy, screen), XA_RESOURCE_MANAGER, 0, 1 << 20, False, XA_STRING, &type_got, &format,
+                         &n, &after, &rms) != Success || !rms) return;
   XrmInitialize();
-  XrmDatabase db = XrmGetStringDatabase(rms);
+  XrmDatabase db = XrmGetStringDatabase((char *)rms);
+  XFree(rms);
   char *type = NULL;
   XrmValue val;
   if (db && XrmGetResource(db, "Xft.dpi", "Xft.Dpi", &type, &val) && val.addr) {
@@ -87,6 +97,12 @@ static bool x_init(const rk_app_desc *d) {
   A_CLIPBOARD = XInternAtom(dpy, "CLIPBOARD", False);
   A_TARGETS = XInternAtom(dpy, "TARGETS", False);
   A_RK_PASTE = XInternAtom(dpy, "_REKTA_PASTE", False);
+  A_XDND_AWARE = XInternAtom(dpy, "XdndAware", False); A_XDND_ENTER = XInternAtom(dpy, "XdndEnter", False);
+  A_XDND_POSITION = XInternAtom(dpy, "XdndPosition", False); A_XDND_STATUS = XInternAtom(dpy, "XdndStatus", False);
+  A_XDND_LEAVE = XInternAtom(dpy, "XdndLeave", False); A_XDND_DROP = XInternAtom(dpy, "XdndDrop", False);
+  A_XDND_FINISHED = XInternAtom(dpy, "XdndFinished", False); A_XDND_SELECTION = XInternAtom(dpy, "XdndSelection", False);
+  A_XDND_COPY = XInternAtom(dpy, "XdndActionCopy", False); A_XDND_TYPES = XInternAtom(dpy, "XdndTypeList", False);
+  A_URI_LIST = XInternAtom(dpy, "text/uri-list", False); A_RK_DROP = XInternAtom(dpy, "_REKTA_DROP", False);
   clip_win = XCreateSimpleWindow(dpy, RootWindow(dpy, screen), 0, 0, 1, 1, 0, 0, 0);
   /* XIM needs a locale the input method knows; like GLFW, take the environment's character type if the app left it at C */
   const char *ctype = setlocale(LC_CTYPE, NULL);
@@ -104,6 +120,7 @@ static bool x_init(const rk_app_desc *d) {
   const char *noshm = getenv("RK_NO_SHM");
   use_shm = XShmQueryExtension(dpy) && !(noshm && *noshm == '1');
   read_dpi();
+  XSelectInput(dpy, RootWindow(dpy, screen), PropertyChangeMask);   /* Xft.dpi changes */
   /* follow XSETTINGS changes: the manager window's property */
   Window mgr = XGetSelectionOwner(dpy, A_XS_SEL);
   if (mgr) XSelectInput(dpy, mgr, PropertyChangeMask);
@@ -135,8 +152,11 @@ static void *x_open(rk_window *w, const rk_window_desc *d) {
   x->win = XCreateWindow(dpy, RootWindow(dpy, screen), 0, 0, (unsigned)x->pw, (unsigned)x->ph, 0, CopyFromParent, InputOutput,
                          CopyFromParent, CWBackPixmap | CWBitGravity | CWEventMask, &a);
   XSetWMProtocols(dpy, x->win, &A_DELETE, 1);
+  Atom xdnd_version = 5;                                       /* files may be dragged in (XDND 5) */
+  XChangeProperty(dpy, x->win, A_XDND_AWARE, XA_ATOM, 32, PropModeReplace, (unsigned char *)&xdnd_version, 1);
   XSizeHints *hints = XAllocSizeHints();
   hints->flags = PMinSize;
+  x->min_w = d->min_width; x->min_h = d->min_height;
   hints->min_width = (int)(d->min_width * dpi_scale); hints->min_height = (int)(d->min_height * dpi_scale);
   XSetWMNormalHints(dpy, x->win, hints);
   XFree(hints);
@@ -392,7 +412,8 @@ static uint32_t key_of(KeySym k) {
     case 0x1008FF26: return RK_KEY_BACK;                      /* XF86XK_Back */
     default: break;
   }
-  if (k >= XK_F1 && k <= XK_F10) return RK_KEY_F1 + (uint32_t)(k - XK_F1);
+  if (k >= XK_F1 && k <= XK_F24) return (rk_key)(RK_KEY_F1 + (k - XK_F1));
+  if (k == XK_Insert) return RK_KEY_INSERT;
   if (k >= XK_a && k <= XK_z) return (uint32_t)('A' + (k - XK_a));
   if (k >= XK_A && k <= XK_Z) return (uint32_t)k;
   if (k >= XK_0 && k <= XK_9) return (uint32_t)k;
@@ -452,8 +473,116 @@ static char *x_clip_get(void) {
   return out;
 }
 
+/* Files dragged in, XDND: Enter says what the source offers (we take text/uri-list), each Position is answered with
+   a Status that takes them or not, as the view under the pointer says; Drop asks for the list, its SelectionNotify
+   hands the files to the window, Finished tells the source. */
+static void xdnd_reply(xwin *x, Atom type, long l1, long l2) {
+  XEvent r;
+  memset(&r, 0, sizeof r);
+  r.xclient.type = ClientMessage; r.xclient.display = dpy; r.xclient.window = x->dnd_source;
+  r.xclient.message_type = type; r.xclient.format = 32;
+  r.xclient.data.l[0] = (long)x->win; r.xclient.data.l[1] = l1;
+  if (type == A_XDND_STATUS) r.xclient.data.l[4] = l2; else r.xclient.data.l[2] = l2;
+  XSendEvent(dpy, x->dnd_source, False, NoEventMask, &r);
+  XFlush(dpy);
+}
+
+static bool xdnd_offers_uris(const XClientMessageEvent *m) {
+  Window src = (Window)m->data.l[0];
+  if (!(m->data.l[1] & 1)) return (Atom)m->data.l[2] == A_URI_LIST || (Atom)m->data.l[3] == A_URI_LIST || (Atom)m->data.l[4] == A_URI_LIST;
+  Atom type; int format; unsigned long n = 0, after; unsigned char *data = NULL;   /* more than three: the list */
+  bool found = false;
+  if (XGetWindowProperty(dpy, src, A_XDND_TYPES, 0, 1024, False, XA_ATOM, &type, &format, &n, &after, &data) == Success && data) {
+    for (unsigned long i = 0; i < n; i++) if (((Atom *)data)[i] == A_URI_LIST) found = true;
+  }
+  if (data) XFree(data);
+  return found;
+}
+
+static void xdnd_message(xwin *x, const XClientMessageEvent *m) {
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.time = rk_app_now();
+  if (m->message_type == A_XDND_ENTER) {
+    x->dnd_source = (Window)m->data.l[0]; x->dnd_uris = xdnd_offers_uris(m); x->dnd_taken = false;
+    return;
+  }
+  if ((Window)m->data.l[0] != x->dnd_source) return;
+  if (m->message_type == A_XDND_POSITION) {
+    int rx = (int)((unsigned long)m->data.l[2] >> 16), ry = (int)(m->data.l[2] & 0xffff), wx = 0, wy = 0;
+    Window child;
+    XTranslateCoordinates(dpy, RootWindow(dpy, screen), x->win, rx, ry, &wx, &wy, &child);
+    x->dnd_at = (rk_point){ wx / x->w->scale, wy / x->w->scale };
+    e.type = RK_EVENT_DRAG_MOVE; e.position = x->dnd_at;
+    x->dnd_taken = x->dnd_uris && rk__window_drag(x->w, &e);
+    xdnd_reply(x, A_XDND_STATUS, x->dnd_taken ? 3 : 2, x->dnd_taken ? (long)A_XDND_COPY : (long)None);   /* 2: every move */
+    rk__app_request_frame();
+  } else if (m->message_type == A_XDND_LEAVE) {
+    e.type = RK_EVENT_DRAG_LEAVE;
+    rk__window_drag(x->w, &e);
+    x->dnd_source = None;
+    rk__app_request_frame();
+  } else if (m->message_type == A_XDND_DROP) {
+    if (!x->dnd_taken) {
+      e.type = RK_EVENT_DRAG_LEAVE;
+      rk__window_drag(x->w, &e);
+      xdnd_reply(x, A_XDND_FINISHED, 0, None);
+      x->dnd_source = None;
+      return;
+    }
+    XConvertSelection(dpy, A_XDND_SELECTION, A_URI_LIST, A_RK_DROP, x->win, (Time)m->data.l[2]);
+    XFlush(dpy);
+  }
+}
+
+static void xdnd_selection(xwin *x, const XSelectionEvent *s) {
+  char **paths = NULL;
+  int n = 0;
+  if (s->property == A_RK_DROP) {
+    Atom type; int format; unsigned long len = 0, after; unsigned char *data = NULL;
+    if (XGetWindowProperty(dpy, x->win, A_RK_DROP, 0, 1 << 24, True, AnyPropertyType, &type, &format, &len, &after, &data) == Success && data)
+      n = rk__uri_list_paths((const char *)data, len, &paths);
+    if (data) XFree(data);
+  }
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.time = rk_app_now(); e.type = RK_EVENT_DROP; e.position = x->dnd_at;
+  e.files = (const char *const *)paths; e.nfiles = n;
+  bool took = n > 0 && rk__window_drag(x->w, &e);
+  if (n == 0) { e.type = RK_EVENT_DRAG_LEAVE; rk__window_drag(x->w, &e); }
+  rk__free_paths(paths, n);
+  xdnd_reply(x, A_XDND_FINISHED, took ? 1 : 0, took ? (long)A_XDND_COPY : (long)None);
+  x->dnd_source = None;
+  rk__app_request_frame();
+}
+
+/* The desktop changed the scale: each window keeps its logical size, in the new number of pixels. */
+static void rescale(void) {
+  float was = dpi_scale;
+  if (scale_fixed) return;
+  read_dpi();
+  if (dpi_scale == was) return;
+  for (int i = 0; i < nwins; i++) {
+    xwin *x = wins[i];
+    float lw = x->pw / was, lh = x->ph / was;
+    XSizeHints *hints = XAllocSizeHints();
+    hints->flags = PMinSize;
+    hints->min_width = (int)(x->min_w * dpi_scale); hints->min_height = (int)(x->min_h * dpi_scale);
+    XSetWMNormalHints(dpy, x->win, hints);
+    XFree(hints);
+    if (!x->maximized) {                                       /* maximized, the pixels stay and it holds more */
+      x->pw = (int)lroundf(lw * dpi_scale); x->ph = (int)lroundf(lh * dpi_scale);
+      XResizeWindow(dpy, x->win, (unsigned)x->pw, (unsigned)x->ph);
+    }
+    rk__window_resized(x->w, x->pw / dpi_scale, x->ph / dpi_scale, dpi_scale);
+  }
+  XFlush(dpy);
+  rk__app_request_frame();
+}
+
 static void handle(XEvent *ev) {
   if (ev->type == PropertyNotify && ev->xproperty.atom == A_XS_SETTINGS) { rk__app_settings_changed(); return; }
+  if (ev->type == PropertyNotify && ev->xproperty.atom == XA_RESOURCE_MANAGER && ev->xproperty.window == RootWindow(dpy, screen)) { rescale(); return; }
   if (ev->type == SelectionRequest) { clip_request(&ev->xselectionrequest); return; }
   if (ev->type == SelectionClear && ev->xselectionclear.window == clip_win) { free(clip_text); clip_text = NULL; return; }
   if (XFilterEvent(ev, None)) return;
@@ -483,7 +612,11 @@ static void handle(XEvent *ev) {
       break;
     }
     case ClientMessage:
-      if ((Atom)ev->xclient.data.l[0] == A_DELETE) rk__window_close_request(w);
+      if (ev->xclient.message_type == A_PROTOCOLS && (Atom)ev->xclient.data.l[0] == A_DELETE) rk__window_close_request(w);
+      else xdnd_message(x, &ev->xclient);
+      break;
+    case SelectionNotify:
+      if (ev->xselection.selection == A_XDND_SELECTION) xdnd_selection(x, &ev->xselection);
       break;
     case FocusIn: if (x->ic) XSetICFocus(x->ic); break;
     case FocusOut: if (x->ic) XUnsetICFocus(x->ic); break;
@@ -604,5 +737,5 @@ static void x_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "x11", x_init, x_shutdown, x_open, x_close, x_show, x_title, x_present, x_move, x_minimize, x_zoom,
-  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, x_text_input, x_cursor
+  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, x_text_input, x_cursor, rk__desktop_choose_files, rk__desktop_notify
 };

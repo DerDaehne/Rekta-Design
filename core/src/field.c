@@ -8,6 +8,10 @@
    submits, Up and Down keep to the column they started from, Home and End keep to the line. Both are the same
    code: a one-line field is a text area with one line that never wraps.
 
+   rk_field_set_options makes it a combobox: a list of the options that contain what is typed floats below the
+   input without taking focus; Down opens it or moves down it, Up moves up, Enter takes the active option, Escape
+   closes it, the pointer chooses too. What is typed need not be an option.
+
    The caret blinks for ten seconds after the last edit and then stays lit, so a field left alone wakes nothing.
    Included after widgets.c. */
 #include "rk_internal.h"
@@ -23,15 +27,18 @@ typedef struct field {
   int rows;                                                /* the lines the input shows; 1 is a one-line field */
   float box_h;                                             /* the input's height for one line; 0: control-height */
   int *starts, nlines, lcap;                               /* where each line begins, as laid out for wrap_w */
-  float wrap_w, goal;                                      /* the width laid out for; Up and Down keep to the goal's x */
+  float wrap_w, goal, drawn_w;                             /* the width laid out for (and last drawn at); Up and Down keep to the goal's x */
   bool stale;                                              /* the text changed since the lines were laid out */
   char *label, *placeholder, *hint; bool error;
+  bool secret;                                             /* a password: dots drawn, nothing copied or read aloud */
+  bool quiet;                                              /* the app is setting the text: its change handler is not told */
   char *preedit;                                           /* what an input method is composing, shown at the caret */
   struct snap { char *text; int caret, anchor; } *undo, *redo; int nundo, ucap, nredo, rcap;   /* the field's own history */
   double typed_at; bool typing;                            /* typing runs together into one step, word by word */
   bool lit, dragging;                                      /* the caret shows; a drag selects */
   uint32_t blink; double edited, last_click;
   rk_view *view;
+  char **options; int noptions; rk_view *suggest; int *shown, nshown;   /* a combobox: the options, the list, which it shows */
   void (*change)(rk_view *, void *); void *change_user;
   void (*submit)(rk_view *, void *); void *submit_user;
 } field;
@@ -69,7 +76,23 @@ static bool word_char(char c) { return ((unsigned char)c & 0x80) || (c >= '0' &&
 static int next_word(const field *f, int i) { while (i < f->len && !word_char(f->text[i])) i++; while (i < f->len && word_char(f->text[i])) i++; return i; }
 static int prev_word(const field *f, int i) { while (i > 0 && !word_char(f->text[i - 1])) i--; while (i > 0 && word_char(f->text[i - 1])) i--; return i; }
 
-static float width(const field *f, int a, int b) { rk_textfmt t = input_fmt(f); return rk__text_width(f->text + a, b - a, &t); }
+#define DOT "\xe2\x80\xa2"                                 /* what a secret field shows for each character */
+static int chars_in(const field *f, int a, int b) { int n = 0; for (int i = a; i < b; i++) n += ((unsigned char)f->text[i] & 0xc0) != 0x80; return n; }
+static float width(const field *f, int a, int b) {
+  rk_textfmt t = input_fmt(f);
+  if (f->secret) return chars_in(f, a, b) * rk__text_width(DOT, -1, &t);
+  return rk__text_width(f->text + a, b - a, &t);
+}
+/* The text from a to b, or as many dots */
+static void draw_run(rk_canvas *c, const field *f, int a, int b, float x, float y, const rk_textfmt *t, rk_color ink) {
+  if (!f->secret) { rk__text_draw(c, f->text + a, b - a, x, y, t, ink); return; }
+  int n = chars_in(f, a, b);
+  char *dots = rk__alloc((size_t)n * 3 + 1);
+  for (int i = 0; i < n; i++) memcpy(dots + i * 3, DOT, 3);
+  rk__text_draw(c, dots, n * 3, x, y, t, ink);
+  free(dots);
+}
+static void tell_access(rk_view *v, const field *f) { rk__setstr(&v->access_value, f->secret ? "" : f->text); }
 
 static void add_line(field *f, int start) { f->starts = rk__grow(f->starts, &f->lcap, f->nlines + 1, sizeof *f->starts); f->starts[f->nlines++] = start; }
 
@@ -86,11 +109,10 @@ static void wrap(rk_view *v, field *f) {
     int hard = nl ? (int)(nl - f->text) : f->len, fit = hard;
     if (inner > 0 && width(f, start, hard) > inner) {
       fit = start;
-      for (int j = start; j < hard;) {                       /* whole words while they fit */
-        int k = j;
-        while (k < hard && f->text[k] == ' ') k++;
-        while (k < hard && f->text[k] != ' ') k++;
-        if (width(f, start, k) > inner) break;
+      for (int j = start; j < hard;) {                       /* whole words (CJK: characters) while they fit */
+        int k = rk__text_next_break(f->text, j, hard), vis = k;
+        while (vis > start && f->text[vis - 1] == ' ') vis--;
+        if (width(f, start, vis) > inner) break;
         fit = j = k;
       }
       if (fit == start) {                                    /* a word wider than the line breaks where it must */
@@ -136,6 +158,7 @@ static int offset_at(rk_view *v, const field *f, rk_point p) {
 }
 
 static void keep_caret_in_sight(rk_view *v, field *f) {
+  if (v->pframe.w <= 2 * PAD) return;                      /* not laid out yet: the draw places it */
   wrap(v, f);
   if (multi(f)) {
     float lh = line_h(f), inner = f->rows * lh, y = line_of(f, f->caret) * lh;
@@ -168,7 +191,7 @@ static void touched(rk_view *v, field *f) {
   f->lit = true;
   f->edited = rk_app_now();
   rk_window *w = rk__view_window(v);
-  if (!f->blink && w && w->focus == v && !rk__reduced()) f->blink = rk_app_after(BLINK_MS, true, blink, f);
+  if (!f->blink && w && w->focus == v && !rk__reduced()) f->blink = rk__after_quiet(BLINK_MS, true, blink, f);
   keep_caret_in_sight(v, f);
   if (w && w->focus == v) tell_input_method(v, f, true);
   rk__view_dirty(v);
@@ -186,7 +209,41 @@ static void blink(void *user) {
 
 static void field_changed(rk_view *v, field *f) {
   touched(v, f);
-  if (f->change) f->change(v, f->change_user);
+  if (f->change && !f->quiet) f->change(v, f->change_user);   /* the user's changes, as a control's */
+}
+
+/* The options: those that contain what is typed (all, when nothing is), the one it is marked. */
+static char fold(char c) { return c >= 'A' && c <= 'Z' ? (char)(c + 32) : c; }   /* ASCII; other letters as they are */
+static bool contains(const char *hay, const char *needle) {
+  size_t n = strlen(needle);
+  for (const char *h = hay; *h; h++) {
+    size_t i = 0;
+    while (i < n && h[i] && fold(h[i]) == fold(needle[i])) i++;
+    if (i == n) return true;
+  }
+  return n == 0;
+}
+static bool same(const char *a, const char *b) { while (*a && fold(*a) == fold(*b)) { a++; b++; } return !*a && !*b; }
+
+static void suggest_chosen(rk_view *menu, int item, void *user);
+
+static void suggest(rk_view *v, field *f, bool open) {
+  if (!f->suggest) return;
+  rk_menu_clear(f->suggest);
+  f->nshown = 0;
+  int mark = -1;
+  for (int i = 0; i < f->noptions; i++) {
+    if (!contains(f->options[i], f->text)) continue;
+    if (same(f->options[i], f->text)) mark = f->nshown;
+    rk_menu_add(f->suggest, f->options[i], NULL, suggest_chosen, f);
+    f->shown[f->nshown++] = i;
+  }
+  rk__menu_mark(f->suggest, mark);
+  rk_window *w = rk__view_window(v);
+  if (!f->nshown || !w || w->focus != v || (!open && !rk__menu_open(f->suggest))) { rk_menu_close(f->suggest); return; }
+  rk_rect r = rk__window_rect(v), box = input_rect(v, f);
+  rk__menu_shape(f->suggest, box.w, -1);
+  rk__menu_show_passive(f->suggest, v, (rk_rect){ r.x + box.x, r.y + box.y, box.w, box.h });
 }
 
 static struct snap snap_now(const field *f) { struct snap s = { rk__strdup(f->text), f->caret, f->anchor }; return s; }
@@ -213,13 +270,24 @@ static void restore(rk_view *v, field *f, struct snap *from, int *nfrom, struct 
   f->text = s.text; f->len = (int)strlen(s.text); f->cap = f->len + 1;
   f->caret = RK_MIN(s.caret, f->len); f->anchor = RK_MIN(s.anchor, f->len);
   f->typing = false; f->stale = true;
-  rk__setstr(&v->access_value, f->text);
+  tell_access(v, f);
   field_changed(v, f);
 }
 
 /* Replaces the selection with s (n bytes): typing, pasting, deleting. */
 static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing);
 static void replace(rk_view *v, field *f, const char *s, int n) { replace_as(v, f, s, n, false); }
+
+static void suggest_chosen(rk_view *menu, int item, void *user) {   /* an option taken: it is the text now, as an edit */
+  (void)menu;
+  field *f = user;
+  if (item < 0 || item >= f->nshown) return;
+  const char *o = f->options[f->shown[item]];
+  int caret = f->caret, anchor = f->anchor;
+  f->anchor = 0; f->caret = f->len;
+  replace(f->view, f, o, (int)strlen(o));
+  if (f->nundo) { f->undo[f->nundo - 1].caret = caret; f->undo[f->nundo - 1].anchor = anchor; }   /* undone: the caret where it was */
+}
 static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing) {
   int lo = sel_lo(f), hi = sel_hi(f);
   if (!n && lo == hi) return;
@@ -239,7 +307,7 @@ static void replace_as(rk_view *v, field *f, const char *s, int n, bool typing) 
   f->text[f->len] = 0;
   f->caret = f->anchor = lo + m;
   f->stale = true; f->goal = -1;
-  rk__setstr(&v->access_value, f->text);
+  tell_access(v, f);
   field_changed(v, f);
 }
 
@@ -261,7 +329,7 @@ static void move_lines(rk_view *v, field *f, int dk, bool extend) {
 
 static void copy_selection(const field *f) {
   int lo = sel_lo(f), hi = sel_hi(f);
-  if (lo == hi) return;
+  if (lo == hi || f->secret) return;                       /* a password never reaches the clipboard */
   char *s = rk__alloc((size_t)(hi - lo) + 1);
   memcpy(s, f->text + lo, (size_t)(hi - lo));
   clip_set(s);
@@ -271,6 +339,13 @@ static void copy_selection(const field *f) {
 static bool field_key(rk_view *v, field *f, const rk_event *e) {
   bool shift = (e->mods & RK_MOD_SHIFT) != 0, word = (e->mods & (RK_MOD_CTRL | RK_MOD_ALT)) != 0, cmd = (e->mods & (RK_MOD_CTRL | RK_MOD_SUPER)) != 0;
   bool sel = f->caret != f->anchor;
+  if (f->suggest && !multi(f)) {                           /* a combobox: the list takes Up, Down, Enter and Escape */
+    bool open = rk__menu_open(f->suggest);
+    if (e->key == RK_KEY_DOWN) { if (open) rk__menu_move(f->suggest, 1); else suggest(v, f, true); return true; }
+    if (e->key == RK_KEY_UP && open) { rk__menu_move(f->suggest, -1); return true; }
+    if (e->key == RK_KEY_ENTER && open && rk__menu_active(f->suggest) >= 0) { rk__menu_choose(f->suggest, rk__menu_active(f->suggest)); return true; }
+    if (e->key == RK_KEY_ESCAPE && open) { rk_menu_close(f->suggest); return true; }
+  }
   switch (e->key) {
     case RK_KEY_LEFT:
       if (sel && !shift) move_to(v, f, sel_lo(f), false);
@@ -328,6 +403,7 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
     case RK_EVENT_TEXT:
       if (!e->text) return false;
       replace_as(v, f, e->text, (int)strlen(e->text), true);
+      suggest(v, f, true);
       return true;
     case RK_EVENT_COMPOSE:
       rk__setstr(&f->preedit, e->text && *e->text ? e->text : NULL);
@@ -365,6 +441,7 @@ static bool field_event(rk_view *v, const rk_event *e, void *st) {
     }
     case RK_EVENT_FOCUS: touched(v, f); return false;
     case RK_EVENT_BLUR:
+      if (f->suggest) rk_menu_close(f->suggest);
       if (f->blink) { rk_app_cancel(f->blink); f->blink = 0; }
       rk__setstr(&f->preedit, NULL);
       tell_input_method(v, f, false);
@@ -383,14 +460,16 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
   if (f->label) { rk_textfmt l = label_fmt(); rk__text_draw(c, f->label, -1, 0, 0, &l, rk_color_of(RK_ROLE_TEXT_HIGH)); }
   /* the input: 1px border in text-medium, the text colour while focused, 2px in error-full for an error */
   float bw = f->error ? 2 : 1, r = rk_metric_of(RK_RADIUS_S);
-  rk_color border = rk_color_of(f->error ? RK_ROLE_ERROR_FULL : focused ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
+  bool off = rk__view_disabled(v);
+  rk_color border = rk_color_of(off ? RK_ROLE_DISABLED : f->error ? RK_ROLE_ERROR_FULL : focused ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM);
   rk_canvas_fill_round_rect(c, box, r, border);
   rk_canvas_fill_round_rect(c, (rk_rect){ box.x + bw, box.y + bw, box.w - 2 * bw, box.h - 2 * bw }, RK_MAX(0.0f, r - bw), rk_color_of(RK_ROLE_BG));
-  if (focused) rk_canvas_stroke_rect(c, (rk_rect){ box.x - 4, box.y - 4, box.w + 8, box.h + 8 }, 2, rk_color_of(RK_ROLE_FOCUS));
+  if (focused) rk__focus_ring(c, box, 4);
   wrap(v, f);
+  if (f->wrap_w != f->drawn_w) { f->drawn_w = f->wrap_w; keep_caret_in_sight(v, f); }   /* a new width: the caret in sight of it */
   rk_textfmt t = input_fmt(f);
   float lh = line_h(f), x0 = box.x + PAD - f->scroll, y0 = box.y + input_pad_y(f) - f->scroll_y;
-  rk_color ink = rk_color_of(RK_ROLE_TEXT);
+  rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
   rk_canvas_push_clip(c, multi(f) ? (rk_rect){ box.x + bw, box.y + bw, box.w - 2 * bw, box.h - 2 * bw } : (rk_rect){ box.x + bw, box.y, box.w - 2 * bw, box.h });
   if (!f->len && f->placeholder) rk__text_draw(c, f->placeholder, -1, box.x + PAD, y0, &t, rk_color_of(RK_ROLE_TEXT_MEDIUM));
   int lo = sel_lo(f), hi = sel_hi(f), ck = line_of(f, f->caret);
@@ -401,14 +480,14 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
     float y = y0 + k * lh;
     if (composing && k == ck) {                              /* composing: the text so far, underlined, at the caret */
       float cx = x0 + width(f, a, f->caret), pw = rk__text_width(f->preedit, -1, &t), ty = y + (lh - t.size) / 2;
-      rk__text_draw(c, f->text + a, f->caret - a, x0, y, &t, ink);
+      draw_run(c, f, a, f->caret, x0, y, &t, ink);
       rk__text_draw(c, f->preedit, -1, cx, y, &t, ink);
       rk_canvas_fill_rect(c, (rk_rect){ cx, ty + t.size + 1, pw, 1 }, ink);
-      rk__text_draw(c, f->text + f->caret, z - f->caret, cx + pw, y, &t, ink);
+      draw_run(c, f, f->caret, z, cx + pw, y, &t, ink);
       rk_canvas_fill_rect(c, (rk_rect){ cx + pw, ty - 2, 1, t.size + 4 }, ink);
       continue;
     }
-    rk__text_draw(c, f->text + a, z - a, x0, y, &t, ink);
+    draw_run(c, f, a, z, x0, y, &t, ink);
     int s0 = RK_MAX(lo, a), s1 = RK_MIN(hi, z);
     bool through = hi > z && z < f->len && f->text[z] == '\n';   /* the selection takes the break: a space's width shows it */
     if (focused && !composing && lo != hi && lo <= z && hi >= a && (s0 < s1 || through)) {
@@ -416,7 +495,7 @@ static void field_draw(rk_view *v, rk_canvas *c, void *st) {
       rk_rect band = multi(f) ? (rk_rect){ xa, y, xb - xa, lh } : (rk_rect){ xa, box.y + 4, xb - xa, box.h - 8 };
       rk_canvas_push_clip(c, band);
       rk_canvas_fill_rect(c, band, rk_color_of(RK_ROLE_ACCENT));
-      rk__text_draw(c, f->text + a, z - a, x0, y, &t, rk_color_of(RK_ROLE_ON_ACCENT));
+      draw_run(c, f, a, z, x0, y, &t, rk_color_of(RK_ROLE_ON_ACCENT));
       rk_canvas_pop_clip(c);
     }
   }
@@ -443,6 +522,9 @@ static void field_destroy(void *st) {
   field *f = st;
   if (f->blink) rk_app_cancel(f->blink);
   snaps_drop(f->undo, &f->nundo); snaps_drop(f->redo, &f->nredo); free(f->undo); free(f->redo);
+  if (f->suggest) { rk_menu_close(f->suggest); rk_release(f->suggest); }
+  for (int i = 0; i < f->noptions; i++) free(f->options[i]);
+  free(f->options); free(f->shown);
   free(f->starts); free(f->text); free(f->label); free(f->placeholder); free(f->hint); free(f->preedit); free(f);
 }
 
@@ -463,17 +545,19 @@ rk_view *rk_field(const char *label, const char *placeholder) {
   return v;
 }
 
-const char *rk_field_text(rk_view *v) { field *f = field_of(v); return f ? f->text : ""; }
+const char *rk_field_text(rk_view *v) { field *f = RK__EXPECT(field_of, v, "a field"); return f ? f->text : ""; }
 
 void rk_field_set_text(rk_view *v, const char *text) {
-  field *f = field_of(v);
+  field *f = RK__EXPECT(field_of, v, "a field");
   if (!f) return;
   f->anchor = 0; f->caret = f->len;
+  f->quiet = true;
   replace(v, f, text ? text : "", text ? (int)strlen(text) : 0);
+  f->quiet = false;
   snaps_drop(f->undo, &f->nundo); snaps_drop(f->redo, &f->nredo);   /* text from the app starts a new history */
 }
 
-void rk_field_set_hint(rk_view *v, const char *hint, bool error) {
+static void set_hint(rk_view *v, const char *hint, bool error) {
   field *f = field_of(v);
   if (!f) return;
   rk__setstr(&f->hint, hint);
@@ -481,12 +565,40 @@ void rk_field_set_hint(rk_view *v, const char *hint, bool error) {
   rk__view_relayout_up(v);
   rk__view_dirty(v);
 }
+/* A hint, or an error - its cause and remedy, marked; NULL takes either away. */
+void rk_field_set_hint(rk_view *v, const char *hint) { set_hint(v, hint, false); }
+void rk_field_set_error(rk_view *v, const char *error) { set_hint(v, error, true); }
 
 void rk_field_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->change = fn; f->change_user = user; } }
 void rk_field_on_submit(rk_view *v, void (*fn)(rk_view *, void *), void *user) { field *f = field_of(v); if (f) { f->submit = fn; f->submit_user = user; } }
 
+void rk_field_set_label(rk_view *v, const char *label) {
+  field *f = RK__EXPECT(field_of, v, "a field");
+  if (!f) return;
+  rk__setstr(&f->label, label);
+  rk__setstr(&v->access_label, label ? label : f->placeholder);
+  rk__view_relayout_up(v);
+}
+
+void rk_field_set_placeholder(rk_view *v, const char *placeholder) {
+  field *f = RK__EXPECT(field_of, v, "a field");
+  if (!f) return;
+  rk__setstr(&f->placeholder, placeholder);
+  if (!f->label) rk__setstr(&v->access_label, placeholder);
+  rk__view_dirty(v);
+}
+
+void rk_field_set_secret(rk_view *v, bool secret) {
+  field *f = RK__EXPECT(field_of, v, "a field");
+  if (!f) return;
+  f->secret = secret;
+  if (secret) rk_field_set_lines(v, 1);                    /* a password is one line */
+  tell_access(v, f);
+  rk__view_relayout_up(v);
+}
+
 void rk_field_set_lines(rk_view *v, int lines) {
-  field *f = field_of(v);
+  field *f = RK__EXPECT(field_of, v, "a field");
   if (!f) return;
   bool was = multi(f);
   f->rows = RK_MAX(1, lines);
@@ -497,9 +609,27 @@ void rk_field_set_lines(rk_view *v, int lines) {
 }
 
 /* A table's cell editor: the input as tall as a row. */
+void rk__field_select_all(rk_view *v) { field *f = field_of(v); if (f) { f->anchor = 0; f->caret = f->len; touched(v, f); } }
+
 void rk__field_set_box_height(rk_view *v, float h) {
   field *f = field_of(v);
   if (!f) return;
   f->box_h = h;
   rk__view_relayout_up(v);
+}
+
+void rk_field_set_options(rk_view *v, const char *const *options, int count) {
+  field *f = RK__EXPECT(field_of, v, "a field");
+  if (!f) return;
+  if (f->suggest) rk_menu_close(f->suggest);
+  for (int i = 0; i < f->noptions; i++) free(f->options[i]);
+  free(f->options); free(f->shown);
+  f->options = NULL; f->shown = NULL; f->noptions = f->nshown = 0;
+  if (count <= 0 || !options) { if (f->suggest) { rk_release(f->suggest); f->suggest = NULL; } v->access = RK_ACCESS_TEXT_FIELD; return; }
+  f->options = rk__alloc((size_t)count * sizeof *f->options);
+  f->shown = rk__alloc((size_t)count * sizeof *f->shown);
+  for (int i = 0; i < count; i++) f->options[i] = rk__strdup(options[i] ? options[i] : "");
+  f->noptions = count;
+  if (!f->suggest) f->suggest = rk_menu();
+  v->access = RK_ACCESS_COMBO_BOX;
 }

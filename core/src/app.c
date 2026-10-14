@@ -16,9 +16,27 @@ static pthread_mutex_t post_lock = PTHREAD_MUTEX_INITIALIZER;
 #define UNLOCK() pthread_mutex_unlock(&post_lock)
 #endif
 
-typedef struct timer { uint32_t id; double due, every; void (*fn)(void *); void *user; } timer;
+/* The main thread: the one rk_app_main runs on. Everything but rk_app_post is called there; a call from another
+   thread is said (once) instead of corrupting the tree quietly. */
+#if defined(_WIN32)
+static DWORD main_thread;
+static bool on_main(void) { return !main_thread || GetCurrentThreadId() == main_thread; }
+static void set_main(void) { main_thread = GetCurrentThreadId(); }
+#else
+static pthread_t main_thread; static bool have_main;
+static bool on_main(void) { return !have_main || pthread_equal(pthread_self(), main_thread); }
+static void set_main(void) { main_thread = pthread_self(); have_main = true; }
+#endif
+void rk__main_thread_only(const char *fn) {
+  static bool said;
+  if (on_main() || said) return;
+  said = true;
+  rk__error("%s called from another thread: only rk_app_post may be (the main thread runs everything else)", fn);
+}
+
+typedef struct timer { uint32_t id; double due, every; void (*fn)(void *); void *user; bool quiet; } timer;   /* quiet: reaches no app code */
 typedef struct post { void (*fn)(void *); void *user; } post;
-typedef struct listener { void (*fn)(void *); void *user; } listener;
+typedef struct listener { uint32_t id; void (*fn)(void *); void *user; } listener;
 
 static const rk_platform *plat;
 static rk_app_desc app;
@@ -36,17 +54,30 @@ double rk_app_now(void) { return rk__platform()->now(); }
 
 /* Timers ---------------------------------------------------------------------------------------------------------- */
 
-uint32_t rk_app_after(double ms, bool repeat, void (*fn)(void *), void *user) {
+/* Timers and change listeners share one run of ids, so rk_app_cancel ends either. */
+static uint32_t new_id(void) { uint32_t id = next_id++; if (!next_id) next_id = 1; return id; }
+
+static uint32_t add_timer(double ms, bool repeat, bool quiet, void (*fn)(void *), void *user) {
   timers = rk__grow(timers, &tcap, ntimers + 1, sizeof *timers);
   timer *t = &timers[ntimers++];
-  t->id = next_id++; if (!next_id) next_id = 1;
+  t->id = new_id();
   t->due = rk_app_now() + RK_MAX(0.0, ms); t->every = repeat ? RK_MAX(1.0, ms) : 0;
-  t->fn = fn; t->user = user;
+  t->fn = fn; t->user = user; t->quiet = quiet;
   return t->id;
+}
+uint32_t rk_app_after(double ms, void (*fn)(void *), void *user) { return add_timer(ms, false, false, fn, user); }
+uint32_t rk_app_every(double ms, void (*fn)(void *), void *user) { return add_timer(ms, true, false, fn, user); }
+/* the library's own timers that reach no app code (a caret's blink, a tooltip's wait): declared views stay as built */
+uint32_t rk__after_quiet(double ms, bool repeat, void (*fn)(void *), void *user) { return add_timer(ms, repeat, true, fn, user); }
+
+bool rk_app_notify(const char *title, const char *body) {
+  const rk_platform *p = rk__platform();
+  return title && *title && p->notify && p->notify(&app, title, body ? body : "");
 }
 
 void rk_app_cancel(uint32_t id) {
   for (int i = 0; i < ntimers; i++) if (timers[i].id == id) { timers[i] = timers[--ntimers]; return; }
+  for (int i = 0; i < nlisteners; i++) if (listeners[i].id == id) { memmove(listeners + i, listeners + i + 1, (size_t)(nlisteners - i - 1) * sizeof *listeners); nlisteners--; return; }
 }
 
 static void run_timers(double now) {
@@ -58,6 +89,7 @@ static void run_timers(double now) {
     if (t.every > 0) timers[at].due = RK_MAX(t.due + t.every, now);
     else timers[at] = timers[--ntimers];
     t.fn(t.user);
+    if (!t.quiet) { rk__ui_dirty(); rk__ui_settle(); }     /* what is declared follows what the timer changed */
   }
 }
 
@@ -86,6 +118,7 @@ static void run_posts(void) {
     nposts--;
     UNLOCK();
     p.fn(p.user);
+    rk__ui_dirty(); rk__ui_settle();
   }
 }
 
@@ -99,6 +132,7 @@ static void changed(bool crossfade) {
     (void)crossfade;
   }
   for (int i = 0; i < nlisteners; i++) listeners[i].fn(listeners[i].user);
+  rk__ui_dirty(); rk__ui_settle();                         /* what is declared may read the look (rk_app_is_dark) */
 }
 
 /* A change of the whole look cross-fades over duration-short, as the web's view transition. */
@@ -115,16 +149,18 @@ void rk_app_set_theme(rk_theme theme) {
 }
 bool rk_app_is_dark(void) { return rk__dark(); }
 void rk_app_set_motion(rk_motion_pref m) { rk__prefs.motion = m; changed(false); }
-bool rk_app_reduced_motion(void) { return rk__reduced(); }
+bool rk_app_is_reduced_motion(void) { return rk__reduced(); }
 void rk_app_set_density(rk_density d) { rk__prefs.density = d; changed(false); }
 void rk_app_set_accent(rk_color light, rk_color dark) {
   look_changes();
   rk__prefs.accent[0] = light; rk__prefs.accent[1] = dark ? dark : light;
   changed(true);
 }
-void rk_app_on_change(void (*fn)(void *), void *user) {
+uint32_t rk_app_on_change(void (*fn)(void *), void *user) {
   listeners = rk__grow(listeners, &lcap, nlisteners + 1, sizeof *listeners);
-  listeners[nlisteners].fn = fn; listeners[nlisteners].user = user; nlisteners++;
+  uint32_t id = new_id();
+  listeners[nlisteners].id = id; listeners[nlisteners].fn = fn; listeners[nlisteners].user = user; nlisteners++;
+  return id;
 }
 
 void rk__app_settings_changed(void) {
@@ -159,6 +195,8 @@ static void step(double max_wait) {
   double now = rk_app_now();
   run_posts();
   run_timers(now);
+  rk__anim_close_blocks();
+  rk__ui_settle();                                         /* anything left to build, before the frame shows it */
   bool paced = rk__platform()->ready != NULL, any_ready = false;
   for (rk_window *w = rk__windows(); w; w = w->next) any_ready |= ready(w);
   /* paced: when a window can take a frame (or none could for a while: motion still moves on, unseen) */
@@ -179,7 +217,8 @@ static void step(double max_wait) {
   } else if (rk__anim_running() || frame_wanted) wait = RK_MIN(RK_MAX(0.0, next_frame - t), next_due() - t);
   else wait = next_due() - t;
   frame_wanted = false;
-  if (!isfinite(wait)) wait = -1;
+  if (!isfinite(wait)) wait = -1;                          /* nothing due: until an event */
+  else if (wait < 0) wait = 0;                             /* overdue (a frame took longer than the timer's gap): at once, never forever */
   if (wait < 0 && rk__headless()) wait = 1000.0 / 60.0;    /* headless never sleeps forever */
   if (max_wait >= 0 && (wait < 0 || wait > max_wait)) wait = max_wait;
   rk__platform()->wait(RK_MAX(wait, wait < 0 ? -1.0 : 0.0));
@@ -190,7 +229,11 @@ void rk__app_window_closed(rk_window *w) {
   if (!rk__windows()) running = false;                     /* the last window closed: the app ends */
 }
 
-void rk_app_stats(rk_stats *s, bool reset) {
+void rk_app_stats_reset(void) { rk__stats(NULL, true); }
+
+void rk_app_stats(rk_stats *s) { rk__stats(s, false); }
+
+void rk__stats(rk_stats *s, bool reset) {
   if (s) {
     rk_stats o;
     memset(&o, 0, sizeof o);
@@ -199,7 +242,7 @@ void rk_app_stats(rk_stats *s, bool reset) {
     o.frames = m->frames; o.animations = rk__anim_count(); o.views = (uint32_t)rk__live_views; o.glyphs = m->glyphs; o.slow = m->slow;
     o.draw_ms = m->draw_ms; o.last_ms = m->last_ms; o.max_ms = m->max_ms; o.pixels = m->pixels;
     o.latency_ms = m->latency_ms; o.max_latency_ms = m->max_latency_ms;
-    memcpy(s, &o, RK_MIN((size_t)s->size, sizeof o));
+    if (RK__SIZED(s, "rk_app_stats", "rk_stats")) memcpy(s, &o, RK_MIN((size_t)s->size, sizeof o));
   }
   if (reset) { double at = rk__meter.input_at; memset(&rk__meter, 0, sizeof rk__meter); rk__meter.input_at = at; }
 }
@@ -214,7 +257,9 @@ void rk_app_run_for(double ms) {
 
 int rk_app_main(const rk_app_desc *desc) {
   memset(&app, 0, sizeof app);
-  if (desc) memcpy(&app, desc, RK_MIN((size_t)desc->size, sizeof app));
+  if (!desc || !RK__SIZED(desc, "rk_app_main", "rk_app_desc")) return 2;   /* nothing to launch: said, not waited on */
+  set_main();
+  memcpy(&app, desc, RK_MIN((size_t)desc->size, sizeof app));
   const char *env = getenv("RK_HEADLESS");
   LOCK_INIT();
   if (app.headless || (env && *env && *env != '0')) {
@@ -250,9 +295,11 @@ int rk_app_main(const rk_app_desc *desc) {
     fprintf(stderr, "rekta: %u frames, %.2f ms a frame on average, %.2f the slowest, %u over 8 ms, %.1f megapixels a frame, %u glyphs\n",
             m->frames, m->draw_ms / m->frames, m->max_ms, m->slow, m->pixels / 1e6 / m->frames, m->glyphs);
   while (rk__windows()) rk_window_close(rk__windows());
-  rk__undo_clear();
   plat->shutdown();
   rk__text_shutdown();
-  free(timers); timers = NULL; ntimers = tcap = 0;
+  free(timers); timers = NULL; ntimers = tcap = 0;     /* nothing stays for a later rk_app_main */
+  free(listeners); listeners = NULL; nlisteners = lcap = 0;
+  LOCK(); free(posts); posts = NULL; nposts = pcap = 0; UNLOCK();
+  launched = false;
   return exit_code;
 }

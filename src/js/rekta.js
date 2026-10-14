@@ -241,24 +241,100 @@ export function press(scope = document) {
 
 // Turn ---------------------------------------------------------------------------------------------------------------
 // The place change as two primitives. leave(place) turns the visible units of a place away, a row at a time, the
-// pressed tile last from its pressed pose, then hides the place. enter(place) shows it and turns it in; its tiles build
-// in unless it is a place you return to. A router (this one, or any other) calls leave, swaps what it renders, then
-// calls enter. finish() ends a running turn in its end state: a navigation is never refused.
+// pressed tile last from its pressed pose, then hides the place. enter(place) shows it and turns its units in, a row
+// at a time. A router (this one, or any other) calls leave, swaps what it renders, then calls enter. finish() ends a
+// running turn in its end state: a navigation is never refused.
+// The units are the parts a place shows: a plain layout box lets its children turn one by one. Each turns in a time
+// that follows its size (heft): a small part turns quicker than a large one, as something light starts and stops
+// sooner than something heavy.
 let turning = null;
-const TURN_PROPS = ['--_rk-turn-origin', '--_rk-turn-oy', '--_rk-turn-delay', '--_rk-turn-perspective', '--_rk-tint'];
+const TURN_PROPS = ['--_rk-turn-origin', '--_rk-turn-oy', '--_rk-turn-delay', '--_rk-turn-duration', '--_rk-turn-perspective', '--_rk-turn-snap', '--_rk-tint'];
+const TURN_WHOLE = '.rk-pivot, a, button, input, select, textarea, label, li, tr, p, h1, h2, h3, h4, h5, h6, table, figure, img, svg, canvas, video, pre, blockquote, hr, [role]:not([role=list], [role=group], [role=region], [role=tabpanel], [role=presentation], [role=none])';
+const clear = (c) => c === 'transparent' || /^rgba\(.*,\s*0\)$/.test(c);
+// a fill, a border or a shadow of its own
+const paints = (el) => {
+  const s = getComputedStyle(el);
+  return !clear(s.backgroundColor) || s.backgroundImage !== 'none' || s.boxShadow !== 'none' || ['Top', 'Right', 'Bottom', 'Left'].some((e) => parseFloat(s[`border${e}Width`]));
+};
+// A part turns as one when it is a tile, a strip, a control, a line of text or anything that shows something of its
+// own (a fill, a border, a shadow); a plain layout box does not, nor a scroller: its parts turn from its edge.
+function turnsWhole(el) {
+  if (el.classList.contains('rk-tile') || !el.children.length || el.matches(TURN_WHOLE)) return true;
+  const s = getComputedStyle(el);
+  if (!/^(block|flex|grid|flow-root)$/.test(s.display)) return true;
+  if (paints(el)) return true;
+  for (const n of el.childNodes) if (n.nodeType === 3 && n.textContent.trim()) return true;
+  return false;
+}
+// A part's time against the token's grows with its area, against a tile's (150 × 150): 0.8 × (area / tile)^0.35,
+// from 0.5 (a line of text, about 0.6) through 0.8 (a tile) and 1.0 (a wide tile) to 1.4 (a table).
+function heft(r) { return Math.min(1.4, Math.max(0.5, 0.8 * Math.pow(Math.max(1, r.width * r.height) / 22500, 0.35))); }
+// Heft sets when a part starts as well as how long it takes: light parts first, heavy ones later, (heft - 0.5) × 6 ×
+// duration-stagger after the turn begins. Parts of one size (heft within 0.05) follow one another in reading order,
+// half a duration-stagger apart, six steps at most: the size leads, the order only sorts what weighs the same.
+function turnStarts(list, at, held) {
+  const step = ms('--rk-duration-stagger'), seen = new Map();
+  return list.map((el) => {
+    const h = heft(at.get(el));
+    if (el === held) return { h, at: 0 };
+    const key = Math.round(h * 20), n = seen.get(key) || 0;
+    seen.set(key, n + 1);
+    return { h, at: (h - 0.5) * 6 * step + Math.min(n, 6) * step / 2 };
+  });
+}
 function turnUnits(place, last) {
   const list = [], vh = innerHeight, vw = innerWidth;
   const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw; };
   (function walk(el) {
     for (const c of el.children) {
       if (c.hidden || !shown(c)) continue;
-      if (c.classList.contains('rk-tile') || !c.querySelector('.rk-tile')) list.push(c); else walk(c);
+      if (turnsWhole(c)) list.push(c); else walk(c);
     }
   })(place);
   const at = new Map(list.map((u) => [u, u.getBoundingClientRect()]));
   list.sort((a, b) => { const p = at.get(a), q = at.get(b); return (Math.round(p.top / 8) - Math.round(q.top / 8)) || (p.left - q.left); });
   if (last && at.has(last)) { list.splice(list.indexOf(last), 1); list.push(last); }
   return { list, at };
+}
+// Each unit turns around the leading edge of the box that clips it, so that edge never cuts it; a unit flush with that
+// box's top turns from its top. A row shares a delay and a perspective; the pressed tile has the last slot to itself.
+// A turning part is a layer, and the compositor rasterises a turned layer from its own top left, rounding within it;
+// the page at rest rounds where things lie on the screen. The two agree only when the layer starts on a whole pixel.
+// A part with a fill or a line of its own is moved onto the pixels its edges will rest on (--_rk-turn-snap). A part
+// that shows only text keeps its text exactly where it is and grows its box up and left to the pixel instead: a
+// negative margin and as much padding, so nothing it holds moves, and its glyphs come out the same either way.
+function alignLayer(el, r) {
+  const dpr = devicePixelRatio || 1, snap = (v) => (Math.round(v * dpr) / dpr - v).toFixed(3);
+  const s = getComputedStyle(el);
+  if (paints(el) || s.display === 'inline') { el.style.setProperty('--_rk-turn-snap', `${snap(r.left)}px, ${snap(r.top)}px`); return [0, 0]; }
+  const fx = r.left - Math.floor(r.left * dpr) / dpr, fy = r.top - Math.floor(r.top * dpr) / dpr;
+  el._rkGrow = [el.style.marginLeft, el.style.paddingLeft, el.style.marginTop, el.style.paddingTop];
+  el.style.marginLeft = `${parseFloat(s.marginLeft) - fx}px`; el.style.paddingLeft = `${parseFloat(s.paddingLeft) + fx}px`;
+  el.style.marginTop = `${parseFloat(s.marginTop) - fy}px`; el.style.paddingTop = `${parseFloat(s.paddingTop) + fy}px`;
+  return [fx, fy];                                                   // how far its box grew up and left
+}
+function unalignLayer(el) {
+  if (!el._rkGrow) return;
+  [el.style.marginLeft, el.style.paddingLeft, el.style.marginTop, el.style.paddingTop] = el._rkGrow;
+  el._rkGrow = null;
+}
+function turnRows(u, place, held) {
+  let slot = -1, key;
+  const slots = [], far = [];
+  u.list.forEach((el, n) => {
+    const r = u.at.get(el);
+    let c = el.parentElement;
+    while (c && c !== place && getComputedStyle(c).overflowX === 'visible') c = c.parentElement;
+    const cr = (c || place).getBoundingClientRect(), k = el === held ? 'P' : Math.round(r.top / 8);
+    if (k !== key) { slot += 1; key = k; far[slot] = 0; }
+    slots.push(slot);
+    far[slot] = Math.max(far[slot], r.right - cr.left);
+    const [gx, gy] = alignLayer(el, r), left = r.left - gx, top = r.top - gy;
+    el.style.setProperty('--_rk-turn-origin', `${cr.left - left}px`);
+    if (Math.abs(top - cr.top) < 2) el.style.setProperty('--_rk-turn-oy', '0px');
+  });
+  u.list.forEach((el, i) => el.style.setProperty('--_rk-turn-perspective', perspective(far[slots[i]])));
+  return { slots };
 }
 function perspective(far) { return Math.round((num('--rk-turnstile-perspective') || 800) + 1.2 * Math.max(0, far)) + 'px'; }
 function arrive(el) {
@@ -287,29 +363,16 @@ export const turn = {
       }
       releasePress(true);
       if (held) held.setAttribute('data-rk-pressed', '');
-      const out = ms('--rk-duration-short'), step = ms('--rk-duration-stagger');
+      const out = ms('--rk-duration-short');
       const u = turnUnits(place, held), kind = back ? 'back-out' : 'out';
-      // Each unit turns around the leading edge of the box that clips it, so that edge never cuts it; a unit flush
-      // with that box's top turns from its top. A row shares a delay and a perspective; the pressed tile has the
-      // last slot to itself.
-      let slot = -1, key;
-      const slots = [], boxes = [], far = [];
-      for (const el of u.list) {
-        const r = u.at.get(el);
-        let c = el.parentElement;
-        while (c && c !== place && getComputedStyle(c).overflowX === 'visible') c = c.parentElement;
-        const cr = (c || place).getBoundingClientRect(), k = el === held ? 'P' : Math.round(r.top / 8);
-        if (k !== key) { slot += 1; key = k; far[slot] = 0; }
-        slots.push(slot); boxes.push(cr);
-        far[slot] = Math.max(far[slot], r.right - cr.left);
-      }
+      turnRows(u, place, held);
+      // the pressed tile goes when the last of the others does, or later
+      const starts = turnStarts(u.list, u.at, held), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
       let end = 0;
       u.list.forEach((el, i) => {
-        const r = u.at.get(el), cr = boxes[i];
-        let at = Math.min(slots[i], el === held ? 10 : 9) * step;
-        el.style.setProperty('--_rk-turn-origin', `${cr.left - r.left}px`);
-        if (Math.abs(r.top - cr.top) < 2) el.style.setProperty('--_rk-turn-oy', '0px');
-        el.style.setProperty('--_rk-turn-perspective', perspective(far[slots[i]]));
+        const h = starts[i].h, d = out * h;
+        let at = el === held ? lastStart : starts[i].at;
+        el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
         if (el === held) {
           at = Math.max(at, hold);
           timers.push(later(() => { if (el.matches(':hover')) el.style.setProperty('--_rk-tint', 'var(--rk-hover)'); el.setAttribute('data-rk-turn', 'pressed'); }, at));
@@ -317,19 +380,19 @@ export const turn = {
           el.style.setProperty('--_rk-turn-delay', `${at}ms`);
           el.setAttribute('data-rk-turn', kind);
         }
-        end = Math.max(end, at);
+        end = Math.max(end, at + 0.75 * d);
       });
       const done = () => {
         timers.forEach(clearTimeout);
         place.hidden = true;
         if (held) held.removeAttribute('data-rk-pressed');
-        for (const el of u.list) { el.removeAttribute('data-rk-turn'); TURN_PROPS.forEach((p) => el.style.removeProperty(p)); }
+        for (const el of u.list) { el.removeAttribute('data-rk-turn'); TURN_PROPS.forEach((p) => el.style.removeProperty(p)); unalignLayer(el); }
         turning = null;
         resolve();
       };
       turning = { finish: done };
-      // The place goes when its last unit is 80% through, all but faded, so the next one follows without a gap.
-      timers.push(later(done, u.list.length ? end + 0.8 * out : 0));
+      // The place goes when its last unit is 75% through, fading, so the next one swings in without a gap.
+      timers.push(later(done, u.list.length ? end : 0));
     });
   },
   enter(place, { back = false, focus = null, arriving = !back } = {}) {
@@ -339,21 +402,41 @@ export const turn = {
       // A place you return to comes back as you left it: no second build-in, no redraw.
       if (arriving) arrive(place);
       else place.getAnimations({ subtree: true }).forEach((a) => { if (a.animationName === 'rk-build-in' || a.animationName === 'rk-draw') a.finish(); });
-      // The new place turns around its leading edge at the middle of the viewport, however tall it is.
-      const r = place.getBoundingClientRect();
-      place.style.setProperty('--_rk-turn-oy', `${Math.round(innerHeight / 2 - r.top)}px`);
-      place.style.setProperty('--_rk-turn-perspective', perspective(r.width));
-      place.setAttribute('data-rk-turn', back ? 'back-in' : 'in');
+      // Its units turn in from the other side, a row at a time, each in its own time.
+      const d0 = ms('--rk-duration-moderate');
+      const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
+      turnRows(u, place, null);
+      let end = 0;
+      const starts = turnStarts(u.list, u.at, null);
+      u.list.forEach((el, i) => {
+        const { h, at } = starts[i], d = d0 * h;
+        el.style.setProperty('--_rk-turn-delay', `${at}ms`);
+        el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
+        el.setAttribute('data-rk-turn', kind);
+        end = Math.max(end, at + d);
+      });
+      // Its parts turned in: that is the build-in, so its tiles do not rise again when the turn lets go of them.
+      if (arriving && u.list.length) place.setAttribute('data-rk-arriving', 'turned');
       if (focus) focus.focus({ preventScroll: true });
+      // Each part is let go when its own motion has really ended, not when a timer or the heaviest part thinks so:
+      // one let go a frame early would jump, one held after it stopped would keep its layer and sharpen a moment
+      // later. The parts fill backwards only, so motion, animation and layer all end in the same frame.
+      let over = false;
+      const release = (el) => { el.removeAttribute('data-rk-turn'); TURN_PROPS.forEach((p) => el.style.removeProperty(p)); unalignLayer(el); };
       const done = () => {
+        if (over) return;
+        over = true;
         clearTimeout(timer);
-        place.removeAttribute('data-rk-turn');
-        place.style.removeProperty('--_rk-turn-oy'); place.style.removeProperty('--_rk-turn-perspective');
+        u.list.forEach(release);
         turning = null;
         resolve();
       };
       turning = { finish: done };
-      const timer = later(done, ms('--rk-duration-moderate'));
+      Promise.all(u.list.map((el) => {
+        const own = el.getAnimations().filter((a) => /^rk-turn-(back-)?in$/.test(a.animationName));
+        return Promise.all(own.map((a) => a.finished)).then(() => { if (!over) release(el); }, () => {});
+      })).then(done);
+      const timer = later(done, end + 250);                      // a part that never animates (hidden meanwhile)
     });
   },
 };
@@ -800,7 +883,7 @@ function pivotFit(strip) {
 // title is always whole on screen, and the one before it too where both fit. One that fits holds still. The titles are
 // still changing size while it glides, so the target is where they end up, not where they are now.
 function pivotGlide(strip, item) {
-  if (!item || strip.hasAttribute('data-rk-fit')) return;
+  if (!item || strip.hasAttribute('data-rk-fit') || getComputedStyle(strip).flexDirection === 'column') return;
   const titles = [...strip.querySelectorAll(':scope > a, :scope > button')], i = titles.indexOf(item);
   if (i < 0) return;
   const style = getComputedStyle(strip), s = parseFloat(style.getPropertyValue('--rk-pivot-scale')) || 0.6;
@@ -817,12 +900,26 @@ function pivotGlide(strip, item) {
   const to = Math.min(max, Math.max(0, left + width - room, Math.min(by, i ? prev : left)));
   animateScroll(strip, to, ms('--rk-duration-pivot-glide'), bezier('--rk-ease-pivot-glide'));
 }
+// A pivot that picks the place (rk-pivot--nav) turns it: the panel in sight turns away, then the next turns in, the
+// way back when its title is earlier in the order. Any other pivot picks a facet: the panel slides in from its side.
+// Down the side (rk-pivot--side) Up and Down pick a title; along the top Left and Right.
 export function pivot(el, { onSelect } = {}) {
   const tabs = () => [...el.querySelectorAll('[role=tab]')];
   const panel = (t) => document.getElementById(t.getAttribute('aria-controls'));
+  let gen = 0;
   function select(i, { focus = false } = {}) {
     const list = tabs(), prev = list.findIndex((t) => t.getAttribute('aria-selected') === 'true');
     if (i === prev || !list[i]) return;
+    if (el.classList.contains('rk-pivot--nav')) {
+      turn.finish();
+      const from = list.map(panel).find((p) => p && !p.hidden), to = panel(list[i]), back = i < prev, mine = ++gen;
+      list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; const p = panel(t); if (p && p !== from) p.hidden = true; });
+      pivotGlide(el, list[i]);
+      if (focus) list[i].focus();
+      (from ? turn.leave(from, { back }) : Promise.resolve()).then(() => { if (mine === gen && to) turn.enter(to, { back }); });
+      if (onSelect) onSelect(i, list[i]);
+      return;
+    }
     list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; const p = panel(t); if (p) p.hidden = k !== i; });
     pivotGlide(el, list[i]);
     const d = ms('--rk-duration-moderate') * 0.75, p = panel(list[i]);
@@ -834,7 +931,8 @@ export function pivot(el, { onSelect } = {}) {
   const key = (e) => {
     const list = tabs(), i = list.indexOf(e.target);
     if (i < 0) return;
-    const to = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: list.length - 1 }[e.key];
+    const down = getComputedStyle(el).flexDirection === 'column';
+    const to = { [down ? 'ArrowDown' : 'ArrowRight']: i + 1, [down ? 'ArrowUp' : 'ArrowLeft']: i - 1, Home: 0, End: list.length - 1 }[e.key];
     if (to === undefined) return;
     e.preventDefault();
     select((to + list.length) % list.length, { focus: true });

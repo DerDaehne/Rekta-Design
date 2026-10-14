@@ -4,8 +4,12 @@
 #   make test       headless tests and the reference images (needs node for the image comparison)
 #   make shots      the demo's script without a screen, as PNGs in build/shots
 #   make sanitize   the tests and the demo script under AddressSanitizer and UBSan
-#   make install    library, header and man page under PREFIX (default /usr/local)
+#   make shared     the shared library: only the RK_API functions are seen from outside (make abi checks it)
+#   make install    both libraries, the header, rekta.pc for pkg-config and the man page under PREFIX (/usr/local)
+#   make gallery    the reference gallery's native half in build/gallery (node test/gallery.mjs holds the web to it)
 #   make perf       the loop under load (resize, a storm of presses, settling), measured at 1x and 2x
+#   make modules    each source compiled on its own: a module says what it uses, the unity build only joins them
+#   make declared   what a declared build costs: rows built, changed, moved, by hand and declared
 # On Windows: build.bat (MSVC) or make with MinGW.
 
 CC ?= cc
@@ -15,28 +19,55 @@ WARN := -std=c99 -Wall -Wextra -Wpedantic
 CFLAGS += $(OPT) $(WARN) -ffp-contract=off
 BUILD := build
 UNAME := $(shell uname -s 2>/dev/null)
-SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h third_party/stb_truetype.h
+SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h include/rekta_test.h third_party/stb_truetype.h third_party/stb_image.h
 WAYLAND ?= 1
+VERSION := $(shell awk '/^.define RK_VERSION_(MAJOR|MINOR|PATCH) /{ v = v (v == "" ? "" : ".") $$3 } END { print v }' include/rekta.h)
+MAJOR := $(word 1,$(subst ., ,$(VERSION)))
+MINOR := $(word 2,$(subst ., ,$(VERSION)))
+# before 1.0 a minor version may break the ABI, so it is part of the soname
+SOVER := $(if $(filter 0,$(MAJOR)),0.$(MINOR),$(MAJOR))
+PIC := -fPIC -fvisibility=hidden -DRK_SHARED -DRK_BUILD
+PREFIX ?= /usr/local
 
 ifeq ($(UNAME),Darwin)
   PLATFORM_OBJ := $(BUILD)/platform_cocoa.o
   LIBS := -framework Cocoa -framework QuartzCore
+  SHLIB := librekta.$(SOVER).dylib
+  SHLINKS := librekta.dylib
+  SHFLAGS = -dynamiclib -install_name @rpath/$(SHLIB) -compatibility_version $(SOVER) -current_version $(VERSION)
 else ifneq (,$(findstring MINGW,$(UNAME))$(findstring MSYS,$(UNAME))$(OS))
   LIBS := -luser32 -lgdi32 -ladvapi32
   EXE := .exe
+  SHLIB := rekta.dll
+  SHFLAGS = -shared -Wl,--out-implib,$(BUILD)/librekta.dll.a
+  PIC := -DRK_SHARED -DRK_BUILD
 else
-  LIBS := -lX11 -lXext -lm -lpthread
+  LIBS := -lX11 -lXext -lm -lpthread -ldl
+  SHLIB := librekta.so.$(VERSION)
+  SHLINKS := librekta.so.$(SOVER) librekta.so
+  SHFLAGS = -shared -Wl,-soname,librekta.so.$(SOVER) -Wl,--no-undefined
   ifeq ($(WAYLAND),1)
     WAYLAND_PC := wayland-client wayland-cursor xkbcommon
     CFLAGS += $(shell pkg-config --cflags $(WAYLAND_PC) 2>/dev/null)
+    PC_LIBS := -lrt $(LIBS)
     LIBS := $(or $(shell pkg-config --libs $(WAYLAND_PC) 2>/dev/null),-lwayland-client -lwayland-cursor -lxkbcommon) -lrt $(LIBS)
   else
     CFLAGS += -DRK_NO_WAYLAND
   endif
 endif
+# the modules this platform compiles (the others are another system's)
+MODULES := $(filter-out src/rekta.c src/platform_win32.c src/platform_x11.c src/platform_wayland.c src/desktop_linux.c,$(wildcard src/*.c))
+ifeq ($(UNAME),Darwin)
+else ifneq (,$(findstring MINGW,$(UNAME))$(findstring MSYS,$(UNAME))$(OS))
+  MODULES += src/platform_win32.c
+else
+  MODULES += src/platform_x11.c src/desktop_linux.c $(if $(WAYLAND_PC),src/platform_wayland.c)
+endif
+# what rekta.pc names itself; the packages it requires bring the rest
+PC_LIBS ?= $(LIBS)
 HEADLESS_LIBS := -lm $(if $(EXE),,-lpthread)
 
-all: $(BUILD)/librekta.a $(BUILD)/demo$(EXE) $(BUILD)/hello$(EXE)
+all: $(BUILD)/librekta.a $(BUILD)/demo$(EXE) $(BUILD)/hello$(EXE) $(BUILD)/navigation$(EXE)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -51,6 +82,29 @@ $(BUILD)/librekta.a: $(BUILD)/rekta.o $(PLATFORM_OBJ)
 	rm -f $@
 	ar rcs $@ $^
 
+$(BUILD)/rekta-pic.o: $(SOURCES) | $(BUILD)
+	$(CC) $(CFLAGS) $(PIC) -c src/rekta.c -o $@
+
+$(BUILD)/platform_cocoa-pic.o: src/platform_cocoa.m src/rk_internal.h include/rekta.h | $(BUILD)
+	$(CC) $(OPT) -fobjc-arc -Wall $(PIC) -c $< -o $@
+
+$(BUILD)/$(SHLIB): $(BUILD)/rekta-pic.o $(PLATFORM_OBJ:.o=-pic.o)
+	$(CC) $(SHFLAGS) $^ $(LDFLAGS) $(LIBS) -o $@
+	for l in $(SHLINKS); do ln -sf $(SHLIB) $(BUILD)/$$l; done
+
+shared: $(BUILD)/$(SHLIB)
+
+# the library's exports are exactly the header's RK_API functions, and a program links against it and runs
+abi: $(BUILD)/$(SHLIB)
+	sh test/abi.sh $(BUILD) $(SHLIB)
+
+# written at each install, as it names PREFIX
+$(BUILD)/rekta.pc: FORCE | $(BUILD)
+	printf '%s\n' 'prefix=$(PREFIX)' 'libdir=$${prefix}/lib' 'includedir=$${prefix}/include' '' \
+	  'Name: rekta' 'Description: Rekta Design for native desktop apps' 'Version: $(VERSION)' \
+	  'Cflags: -I$${includedir}' 'Libs: -L$${libdir} -lrekta' 'Libs.private: $(strip $(PC_LIBS))' \
+	  $(if $(WAYLAND_PC),'Requires.private: $(WAYLAND_PC)') > $@
+
 $(BUILD)/demo$(EXE): demo/demo.c $(BUILD)/librekta.a
 	$(CC) $(CFLAGS) $< $(BUILD)/librekta.a $(LIBS) -o $@
 
@@ -58,8 +112,14 @@ $(BUILD)/demo$(EXE): demo/demo.c $(BUILD)/librekta.a
 $(BUILD)/hello$(EXE): examples/hello.c $(BUILD)/librekta.a
 	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude $< $(BUILD)/librekta.a $(LIBS) -o $@
 
+$(BUILD)/navigation$(EXE): examples/navigation.c $(BUILD)/librekta.a
+	$(CC) $(CFLAGS) -Iinclude $< $(BUILD)/librekta.a $(LIBS) -o $@
+
 $(BUILD)/hello-headless$(EXE): examples/hello.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude -DRK_HEADLESS_ONLY $< src/rekta.c $(HEADLESS_LIBS) -o $@
+
+$(BUILD)/declare_bench$(EXE): test/declare_bench.c $(SOURCES) | $(BUILD)
+	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY test/declare_bench.c src/rekta.c $(HEADLESS_LIBS) -o $@
 
 $(BUILD)/test$(EXE): test/test.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY test/test.c $(HEADLESS_LIBS) -o $@
@@ -72,6 +132,21 @@ test: $(BUILD)/test$(EXE) $(BUILD)/hello-headless$(EXE)
 	node test/compare.mjs test/ref $(BUILD)/test-out
 	$(BUILD)/hello-headless$(EXE)
 	sh test/examples.sh
+
+$(BUILD)/gallery-bin$(EXE): test/gallery.c $(SOURCES) | $(BUILD)
+	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY -Iinclude test/gallery.c src/rekta.c $(HEADLESS_LIBS) -o $@
+
+modules:
+	@for f in $(MODULES); do $(CC) $(CFLAGS) -Werror -fsyntax-only $$f || exit 1; done
+	@echo "$(words $(MODULES)) modules compile on their own"
+
+gallery: $(BUILD)/gallery-bin$(EXE)
+	mkdir -p $(BUILD)/gallery
+	$(BUILD)/gallery-bin$(EXE) $(BUILD)/gallery
+
+# what a declared build costs against the same change made by hand
+declared: $(BUILD)/declare_bench$(EXE)
+	$(BUILD)/declare_bench$(EXE)
 
 shots: $(BUILD)/demo-headless$(EXE)
 	mkdir -p $(BUILD)/shots
@@ -88,13 +163,21 @@ sanitize: | $(BUILD)
 	mkdir -p $(BUILD)/shots-asan
 	$(BUILD)/demo-asan --shots $(BUILD)/shots-asan > /dev/null
 
-PREFIX ?= /usr/local
-install: $(BUILD)/librekta.a
-	install -Dm644 $(BUILD)/librekta.a $(DESTDIR)$(PREFIX)/lib/librekta.a
-	install -Dm644 include/rekta.h $(DESTDIR)$(PREFIX)/include/rekta.h
-	install -Dm644 man/rekta.3 $(DESTDIR)$(PREFIX)/share/man/man3/rekta.3
+install: $(BUILD)/librekta.a $(BUILD)/$(SHLIB) $(BUILD)/rekta.pc
+	mkdir -p $(DESTDIR)$(PREFIX)/lib/pkgconfig $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/share/man/man3
+	cp $(BUILD)/librekta.a $(DESTDIR)$(PREFIX)/lib/
+	cp $(BUILD)/$(SHLIB) $(DESTDIR)$(PREFIX)/lib/
+	for l in $(SHLINKS); do ln -sf $(SHLIB) $(DESTDIR)$(PREFIX)/lib/$$l; done
+ifeq ($(UNAME),Darwin)
+	# installed, it is found where it lies; changing the name means signing again
+	install_name_tool -id $(PREFIX)/lib/$(SHLIB) $(DESTDIR)$(PREFIX)/lib/$(SHLIB)
+	codesign -f -s - $(DESTDIR)$(PREFIX)/lib/$(SHLIB)
+endif
+	cp $(BUILD)/rekta.pc $(DESTDIR)$(PREFIX)/lib/pkgconfig/
+	cp include/rekta.h include/rekta_test.h $(DESTDIR)$(PREFIX)/include/
+	cp man/rekta.3 $(DESTDIR)$(PREFIX)/share/man/man3/
 
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all test shots perf sanitize install clean
+.PHONY: all test modules declared gallery shots perf sanitize shared abi install clean FORCE

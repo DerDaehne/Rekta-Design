@@ -526,7 +526,8 @@ static uint32_t wkey_of(xkb_keysym_t s) {
     case XKB_KEY_XF86Back: return RK_KEY_BACK;
     default: break;
   }
-  if (s >= XKB_KEY_F1 && s <= XKB_KEY_F10) return RK_KEY_F1 + (s - XKB_KEY_F1);
+  if (s >= XKB_KEY_F1 && s <= XKB_KEY_F24) return (rk_key)(RK_KEY_F1 + (s - XKB_KEY_F1));
+  if (s == XKB_KEY_Insert) return RK_KEY_INSERT;
   if (s >= XKB_KEY_a && s <= XKB_KEY_z) return 'A' + (s - XKB_KEY_a);
   if ((s >= XKB_KEY_A && s <= XKB_KEY_Z) || (s >= XKB_KEY_0 && s <= XKB_KEY_9)) return s;
   if (s > 0x20 && s < 0x7f) return s;
@@ -608,12 +609,13 @@ static struct wl_data_device_manager *data_mgr;
 static struct wl_data_device *data_dev;
 static struct wl_data_source *own_source;
 static char *own_text;
-typedef struct offer { struct wl_data_offer *o; const char *mime; } offer;
+typedef struct offer { struct wl_data_offer *o; const char *mime; bool uris; } offer;   /* uris: files on offer */
 static offer *selection;                                       /* the selection on offer, if it has text */
 
 static void offer_mime(void *data, struct wl_data_offer *o, const char *mime) {
   (void)o;
   offer *f = data;
+  if (!strcmp(mime, "text/uri-list")) f->uris = true;
   if (!strcmp(mime, "text/plain;charset=utf-8")) f->mime = "text/plain;charset=utf-8";
   else if (!f->mime && (!strcmp(mime, "UTF8_STRING") || !strcmp(mime, "text/plain"))) f->mime = !strcmp(mime, "UTF8_STRING") ? "UTF8_STRING" : "text/plain";
 }
@@ -629,13 +631,84 @@ static void dd_offer(void *d, struct wl_data_device *dev, struct wl_data_offer *
   f->o = o;
   wl_data_offer_add_listener(o, &offer_listener, f);
 }
-static void dd_enter(void *d, struct wl_data_device *dev, uint32_t s, struct wl_surface *surf, wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *o) {
-  (void)d; (void)dev; (void)s; (void)surf; (void)x; (void)y;
-  if (o) offer_free(wl_data_offer_get_user_data(o));                /* a drag: not taken yet */
+/* Files dragged in: the offer says whether it carries a text/uri-list; each enter and motion asks the window whether
+   a view takes them there and accepts the list (a copy) or nothing. The drop reads the list through a pipe. */
+static offer *dnd;                                              /* the drag over one of our surfaces */
+static wwin *dnd_win;
+static uint32_t dnd_serial;
+static rk_point dnd_at;
+static bool dnd_taken;
+
+static void dnd_ask(rk_event_type type) {
+  if (!dnd || !dnd_win) return;
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.type = type; e.time = rk_app_now(); e.position = dnd_at;
+  dnd_taken = dnd->uris && rk__window_drag(dnd_win->w, &e);
+  wl_data_offer_accept(dnd->o, dnd_serial, dnd_taken ? "text/uri-list" : NULL);
+  if (wl_data_offer_get_version(dnd->o) >= 3)
+    wl_data_offer_set_actions(dnd->o, dnd_taken ? WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY : 0, dnd_taken ? WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY : 0);
+  rk__app_request_frame();
 }
-static void dd_leave(void *d, struct wl_data_device *dev) { (void)d; (void)dev; }
-static void dd_motion(void *d, struct wl_data_device *dev, uint32_t t, wl_fixed_t x, wl_fixed_t y) { (void)d; (void)dev; (void)t; (void)x; (void)y; }
-static void dd_drop(void *d, struct wl_data_device *dev) { (void)d; (void)dev; }
+
+static void dnd_end(void) {
+  if (dnd_win && dnd) {
+    rk_event e;
+    memset(&e, 0, sizeof e);
+    e.size = sizeof e; e.type = RK_EVENT_DRAG_LEAVE; e.time = rk_app_now();
+    rk__window_drag(dnd_win->w, &e);
+  }
+  offer_free(dnd);
+  dnd = NULL; dnd_win = NULL; dnd_taken = false;
+}
+
+static void dd_enter(void *d, struct wl_data_device *dev, uint32_t s, struct wl_surface *surf, wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *o) {
+  (void)d; (void)dev;
+  if (dnd) dnd_end();
+  if (!o) return;
+  dnd = wl_data_offer_get_user_data(o); dnd_win = wfind(surf); dnd_serial = s;
+  dnd_at = (rk_point){ (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y) };
+  dnd_ask(RK_EVENT_DRAG_ENTER);
+}
+static void dd_leave(void *d, struct wl_data_device *dev) { (void)d; (void)dev; dnd_end(); }
+static void dd_motion(void *d, struct wl_data_device *dev, uint32_t t, wl_fixed_t x, wl_fixed_t y) {
+  (void)d; (void)dev; (void)t;
+  dnd_at = (rk_point){ (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y) };
+  dnd_ask(RK_EVENT_DRAG_MOVE);
+}
+static void dd_drop(void *d, struct wl_data_device *dev) {
+  (void)d; (void)dev;
+  if (!dnd || !dnd_win) return;
+  if (!dnd_taken) { dnd_end(); return; }
+  char *text = NULL;
+  size_t n = 0, cap = 0;
+  int fds[2];
+  if (!pipe(fds)) {
+    wl_data_offer_receive(dnd->o, "text/uri-list", fds[1]);
+    close(fds[1]);
+    wl_display_flush(wdpy);
+    for (;;) {                                                  /* the source writes it now; small, so wait for it */
+      if (n + 4096 > cap) { cap = (cap ? cap * 2 : 8192); char *t = realloc(text, cap); if (!t) break; text = t; }
+      ssize_t k = read(fds[0], text + n, cap - n);
+      if (k <= 0) break;
+      n += (size_t)k;
+    }
+    close(fds[0]);
+  }
+  char **paths = NULL;
+  int count = text ? rk__uri_list_paths(text, n, &paths) : 0;
+  free(text);
+  rk_event e;
+  memset(&e, 0, sizeof e);
+  e.size = sizeof e; e.type = RK_EVENT_DROP; e.time = rk_app_now(); e.position = dnd_at;
+  e.files = (const char *const *)paths; e.nfiles = count;
+  if (count) rk__window_drag(dnd_win->w, &e);
+  rk__free_paths(paths, count);
+  if (wl_data_offer_get_version(dnd->o) >= 3) wl_data_offer_finish(dnd->o);
+  if (!count) dnd_end();                                        /* nothing came: the view lets go */
+  else { offer_free(dnd); dnd = NULL; dnd_win = NULL; dnd_taken = false; }
+  rk__app_request_frame();
+}
 static void dd_selection(void *d, struct wl_data_device *dev, struct wl_data_offer *o) {
   (void)d; (void)dev;
   offer_free(selection);
@@ -898,5 +971,5 @@ static void wl_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_wayland = {
   "wayland", wl_init, wl_shutdown, wl_open, wl_close, wl_show, wl_title, wl_present_fb, wl_move, wl_minimize, wl_zoom,
-  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get, wl_text_input, wl_cursor
+  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get, wl_text_input, wl_cursor, rk__desktop_choose_files, rk__desktop_notify
 };

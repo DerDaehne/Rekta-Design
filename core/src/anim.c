@@ -16,8 +16,8 @@ typedef struct anim {
 } anim;
 
 static anim *anims; static int nanims, acap;
-static rk_anim_ctx ctx[16]; static int depth;
-static group *ctx_group[16];
+static rk_anim_ctx *ctx; static int depth, ctx_cap;      /* the open blocks, innermost last; as deep as the app nests */
+static group **ctx_group; static int group_cap;
 
 bool rk__animating_block(void) { return depth > 0; }
 rk_motion rk__current_motion(void) { return depth ? ctx[depth - 1].motion : RK_MOTION_STATE; }
@@ -38,6 +38,16 @@ const float *rk__motion_ease(rk_motion m) {
   return m == RK_MOTION_ENTER ? rk__ease_in : m == RK_MOTION_LEAVE ? rk__ease_out : rk__ease_base;
 }
 
+/* A transform as the ten numbers the animator moves, by name: the public struct's layout is not the animator's. */
+static void xf_pack(const rk_transform *t, float x[10]) {
+  x[0] = t->translate_x; x[1] = t->translate_y; x[2] = t->scale_x; x[3] = t->scale_y; x[4] = t->rotate_x;
+  x[5] = t->rotate_y; x[6] = t->rotate_z; x[7] = t->origin_x; x[8] = t->origin_y; x[9] = t->perspective;
+}
+static rk_transform xf_unpack(const float x[10]) {
+  rk_transform t = { x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9] };
+  return t;
+}
+
 static void apply(anim *a, float t) {
   rk_view *v = a->view;
   float k = a->prop == RK_PROP_CONTENT || a->prop == RK_PROP_TRANSITION ? t : rk__ease(a->ease, t), x[10];
@@ -46,7 +56,7 @@ static void apply(anim *a, float t) {
   switch (a->prop) {
     case RK_PROP_FRAME: v->pframe = (rk_rect){ x[0], x[1], x[2], x[3] }; break;
     case RK_PROP_OPACITY: v->popacity = x[0]; break;
-    case RK_PROP_TRANSFORM: memcpy(&v->ptransform, x, sizeof v->ptransform); break;
+    case RK_PROP_TRANSFORM: v->ptransform = xf_unpack(x); break;
     case RK_PROP_FILL: {
       rk_color c = 0;
       for (int i = 0; i < 4; i++) c |= (rk_color)RK_CLAMP((int)(x[i] + 0.5f), 0, 255) << (24 - 8 * i);
@@ -64,7 +74,7 @@ static void group_done(group *g) {
   if (!g || --g->pending > 0 || !g->committed) return;
   void (*fn)(void *) = g->fn; void *user = g->user;
   free(g);
-  if (fn) fn(user);
+  if (fn) { fn(user); rk__ui_dirty(); }                  /* the app's code may have run (rk_animate_on_done) */
 }
 
 void rk__anim_cancel(rk_view *v, int prop) {
@@ -158,6 +168,13 @@ void rk__animate_spring(rk_view *v, int prop, float target, double settle) {
   rk__app_request_frame();
 }
 
+/* A frame starts: a block the app left open is closed, and said so - its changes would wait forever. */
+void rk__anim_close_blocks(void) {
+  if (!depth) return;
+  rk__warn("rk_animate_begin without rk_animate_commit (%d left open): closed at the frame", depth);
+  while (depth) rk_animate_commit();
+}
+
 bool rk__anim_tick(double now) {
   static anim *finished; static int fcap;
   int nf = 0;
@@ -193,7 +210,8 @@ bool rk__anim_tick(double now) {
 /* Blocks ---------------------------------------------------------------------------------------------------------- */
 
 void rk_animate_begin(rk_motion motion) {
-  if (depth >= RK_COUNT(ctx)) return;
+  ctx = rk__grow(ctx, &ctx_cap, depth + 1, sizeof *ctx);
+  ctx_group = rk__grow(ctx_group, &group_cap, depth + 1, sizeof *ctx_group);
   ctx[depth].motion = motion;
   ctx_group[depth] = NULL;
   depth++;
@@ -207,7 +225,7 @@ void rk_animate_on_done(void (*fn)(void *), void *user) {
 }
 
 void rk_animate_commit(void) {
-  if (!depth) return;
+  if (!depth) { rk__warn("rk_animate_commit without rk_animate_begin"); return; }
   if (depth == 1) rk__layout_pending();                    /* the layout runs inside the block, so it animates */
   group *g = ctx_group[depth - 1];
   depth--;
@@ -217,6 +235,16 @@ void rk_animate_commit(void) {
 /* Frames: the layout's way of placing a view ---------------------------------------------------------------------- */
 
 static void entered(rk_view *v, void *user) { (void)user; v->entering = false; }
+
+void rk__animate_transform_cb(rk_view *v, const rk_transform *from, const rk_transform *to, double duration, double delay, const float *ease,
+                              void (*done)(rk_view *v, void *user), void *user) {
+  float a[10], b[10];
+  xf_pack(from, a); xf_pack(to, b);
+  rk__animate_cb(v, RK_PROP_TRANSFORM, a, b, 10, duration, delay, ease, done, user);
+}
+void rk__animate_transform(rk_view *v, const rk_transform *from, const rk_transform *to, double duration, double delay, const float *ease) {
+  rk__animate_transform_cb(v, from, to, duration, delay, ease, NULL, NULL);
+}
 
 void rk__set_frame(rk_view *v, rk_rect f) {
   bool first = !v->placed;
@@ -233,20 +261,24 @@ void rk__set_frame(rk_view *v, rk_rect f) {
     rk__animate(v, RK_PROP_OPACITY, &o0, &o1, 1, d, 0, rk__ease_in);
     rk_transform t0 = v->transform, t1 = v->transform;
     if (tile) { t0.translate_y += 6; t0.scale_x *= 0.96f; t0.scale_y *= 0.96f; } else t0.translate_y -= 6;
-    rk__animate_cb(v, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_in, entered, NULL);
+    rk__animate_transform_cb(v, &t0, &t1, d, 0, rk__ease_in, entered, NULL);
     return;
   }
-  if (first || !animate) { rk__anim_cancel(v, RK_PROP_FRAME); v->pframe = f; return; }
   rk_rect p = v->pframe;
-  if (fabsf(p.x - f.x) < 0.25f && fabsf(p.y - f.y) < 0.25f && fabsf(p.w - f.w) < 0.25f && fabsf(p.h - f.h) < 0.25f) {
+  bool same = !first && fabsf(p.x - f.x) < 0.25f && fabsf(p.y - f.y) < 0.25f && fabsf(p.w - f.w) < 0.25f && fabsf(p.h - f.h) < 0.25f;
+  if (first || !animate || same) {
     rk__anim_cancel(v, RK_PROP_FRAME);
+    bool moved = first || p.x != f.x || p.y != f.y || p.w != f.w || p.h != f.h;
+    if (moved && !first) rk__view_moved(v);                /* drawn again where it was */
     v->pframe = f;
+    if (moved) { if (v->cls) v->layer_ok = false; rk__view_moved(v); }   /* and where it is */
     return;
   }
   rk_motion m = rk__current_motion();
   double d = rk__motion_duration(RK_MOTION_REFLOW, false);
   double delay = m == RK_MOTION_LEAVE ? rk__motion_duration(RK_MOTION_LEAVE, false) : 0;
-  rk__animate(v, RK_PROP_FRAME, &p.x, &f.x, 4, d, delay, rk__ease_base);
+  float p4[4] = { p.x, p.y, p.w, p.h }, f4[4] = { f.x, f.y, f.w, f.h };
+  rk__animate(v, RK_PROP_FRAME, p4, f4, 4, d, delay, rk__ease_base);
   /* a box that changes size fades its content back in near the end, so text is never seen stretched; a container
      only makes room, its children move on their own */
   if (v->cls && (fabsf(p.w - f.w) > 1 || fabsf(p.h - f.h) > 1)) {
@@ -272,4 +304,15 @@ void rk_view_transition(rk_view *v, rk_transition kind) {
   double d = kind == RK_TRANSITION_CROSSFADE ? rk_duration_of(RK_DURATION_SHORT) : rk_duration_of(RK_DURATION_MODERATE);
   float a = 0, b = 1;
   rk__animate_cb(v, RK_PROP_TRANSITION, &a, &b, 1, d, 0, NULL, transition_done, NULL);
+}
+
+/* A plain tween: from one value to another over a time, on a curve; it carries on from where it is when retargeted. */
+float rk__tween_at(const rk_tween *t, double now) {
+  if (t->dur <= 0 || now >= t->t0 + t->dur) return t->to;
+  float k = (float)((now - t->t0) / t->dur);
+  return t->from + (t->to - t->from) * rk__ease(t->ease, RK_CLAMP(k, 0.0f, 1.0f));
+}
+bool rk__tween_moving(const rk_tween *t, double now) { return t->dur > 0 && now < t->t0 + t->dur; }
+void rk__tween_to(rk_tween *t, double now, float to, double dur, const float *ease) {
+  t->from = rk__tween_at(t, now); t->to = to; t->t0 = now; t->dur = dur; t->ease = ease;
 }

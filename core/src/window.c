@@ -34,6 +34,8 @@ static const rk_class toasts_class = { { sizeof(rk_view_class), "rk_toasts", NUL
 
 static void window_destroy(void *self) {
   rk_window *w = self;
+  rk__tip_hide(w, false);
+  rk__history_free(w);
   if (w->controller) { rk__controller_appear(w->controller, false); rk_release(w->controller); }
   if (w->root) { w->root->window = NULL; rk_release(w->root); }
   rk__bitmap_free(w->own_fb);
@@ -42,8 +44,8 @@ static void window_destroy(void *self) {
 static const rk_type window_type = { "rk_window", window_destroy };
 
 rk_window *rk_window_create(const rk_window_desc *desc) {
-  rk_window_desc d = { sizeof d, "", 1280, 800, 0, 0, false };
-  if (desc) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
+  rk_window_desc d = { sizeof d, "", 1280, 800, 0, 0, false, NULL, NULL, NULL };
+  if (desc && RK__SIZED(desc, "rk_window_create", "rk_window_desc")) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
   if (d.width <= 0) d.width = 1280;
   if (d.height <= 0) d.height = 800;
   if (d.min_width <= 0) d.min_width = rk_metric_of(RK_PANE_MIN);
@@ -61,13 +63,13 @@ rk_window *rk_window_create(const rk_window_desc *desc) {
   rk__view_add(w->root, w->content); rk_release(w->content);
   /* a toast says something happened; a sheet asks, above everything (the web's dialogs are in the top layer) */
   w->toasts = rk__view_create(&toasts_class, NULL); w->toasts->passthrough = true; rk__view_add(w->root, w->toasts); rk_release(w->toasts);
-  w->sheets = rk_view_create(); w->sheets->passthrough = true; rk__view_add(w->root, w->sheets); rk_release(w->sheets);
+  w->sheets = rk__view_create(&rk__sheets_class, NULL); w->sheets->passthrough = true; rk__view_add(w->root, w->sheets); rk_release(w->sheets);
   w->floats = rk_view_create(); w->floats->passthrough = true; rk__view_add(w->root, w->floats); rk_release(w->floats);   /* menus, on top */
   w->native = rk__platform()->open(w, &d);
   if (!w->native && !rk__headless()) { rk_release(w); return NULL; }
-  w->next = open_windows; open_windows = w;
-  rk_retain(w);                                            /* the app keeps an open window alive */
+  w->next = open_windows; open_windows = w;              /* the app holds an open window: the caller's pointer is borrowed */
   w->needs_layout = w->needs_draw = true;
+  if (d.build) rk__ui_window(w, &d);         /* declared: it shows what the build says */
   return w;
 }
 
@@ -90,9 +92,10 @@ static void set_root(rk_window *w, rk_controller *c) {
 
 rk_controller *rk_window_root(rk_window *w) { return w->controller; }
 
-/* Shows the window with root as what it shows (takes the caller's reference); a later call puts another root in. */
+/* Shows the window with root as what it shows (takes the caller's reference); a later call puts another root in. The
+   root it already shows is left as it is: that pointer was borrowed. */
 void rk_window_show(rk_window *w, rk_controller *root) {
-  if (root) { set_root(w, root); rk_release(root); }
+  if (root && root != w->controller) { set_root(w, root); rk_release(root); }
   if (w->shown) return;
   w->shown = true;
   rk__platform()->show(w->native);
@@ -103,6 +106,9 @@ void rk_window_show(rk_window *w, rk_controller *root) {
 void rk_window_close(rk_window *w) {
   if (w->closed) return;
   w->closed = true;
+  rk__tip_hide(w, false);
+  for (int i = w->floats->nkids - 1; i >= 0; i--)          /* an open menu holds its opener, which holds it: let go */
+    if (i < w->floats->nkids && rk__is_menu(w->floats->kids[i])) rk_menu_close(w->floats->kids[i]);
   rk__platform()->close(w->native);
   w->native = NULL;
   rk_window **p = &open_windows;
@@ -113,8 +119,10 @@ void rk_window_close(rk_window *w) {
 }
 
 void rk__window_close_request(rk_window *w) {
-  if (w->should_close && !w->should_close(w, w->close_user)) return;
-  rk_window_close(w);
+  bool closing = !w->should_close || w->should_close(w, w->close_user);
+  if (w->should_close) rk__ui_dirty();                     /* it may have asked (unsaved changes?) */
+  if (closing) rk_window_close(w);
+  rk__ui_settle();
 }
 
 void rk_window_set_title(rk_window *w, const char *title) {
@@ -235,12 +243,28 @@ static bool deep(const rk_transform *t) {
   return t->rotate_x != 0 || t->rotate_y != 0 || t->rotate_z != 0 || fabsf(t->scale_x - 1) > 1e-4f || fabsf(t->scale_y - 1) > 1e-4f;
 }
 
+/* A transform that moves no corner of the view by a quarter of a device pixel looks flat: the view is drawn sharp, as
+   at rest, rather than resampled through a layer. A turn's last frames would otherwise end soft and then sharpen a
+   moment after the motion stopped. */
+static bool seen_deep(const rk_transform *t, float w, float h, float k) {
+  if (!deep(t)) return false;
+  float cx[4] = { 0, w, w, 0 }, cy[4] = { 0, 0, h, h };
+  for (int i = 0; i < 4; i++) {
+    float px, py;
+    project(t, w, h, cx[i], cy[i], &px, &py);
+    if (fabsf(px - cx[i]) * k > 0.25f || fabsf(py - cy[i]) * k > 0.25f) return true;
+  }
+  return false;
+}
+
 static void draw_content(rk_canvas *c, rk_view *v, float x, float y, bool fill);
 
-static void composite_layer(rk_canvas *c, rk_bitmap *layer, rk_view *v, const rk_transform *t, float x, float y, float opacity) {
+/* The layer holds the view's content drawn ox, oy device px into it (where the view starts within its first pixel),
+   so at rest the layer lands on whole pixels and copies exactly what drawing the view directly would give. */
+static void composite_layer(rk_canvas *c, rk_bitmap *layer, rk_view *v, const rk_transform *t, float x, float y, float ox, float oy, float opacity) {
   float k = c->scale, q[8];
-  float w = layer->w / k, h = layer->h / k;
-  float cx[4] = { 0, w, w, 0 }, cy[4] = { 0, 0, h, h };
+  float w = layer->w / k, h = layer->h / k, lx = -ox / k, ly = -oy / k;
+  float cx[4] = { lx, lx + w, lx + w, lx }, cy[4] = { ly, ly, ly + h, ly + h };
   for (int i = 0; i < 4; i++) {
     float px, py;
     project(t, v->pframe.w, v->pframe.h, cx[i], cy[i], &px, &py);
@@ -260,7 +284,7 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
   float k = c->scale;
   rk_transform t = v->ptransform;
   float x = pox + (v->pframe.x + t.translate_x) * k, y = poy + (v->pframe.y + t.translate_y) * k;
-  bool flip = v->transition == RK_TRANSITION_FLIP + 1 && v->snapshot, turned = deep(&t);
+  bool flip = v->transition == RK_TRANSITION_FLIP + 1 && v->snapshot, turned = seen_deep(&t, v->pframe.w, v->pframe.h, k);
   /* outside what this frame draws: skip it (a container that does not clip may still have children reaching in) */
   float pad = turned ? RK_MAX(v->pframe.w, v->pframe.h) * 0.35f * k + 8 : 2;
   rk_irect vb = { (int)floorf(x - pad), (int)floorf(y - pad), (int)ceilf(x + v->pframe.w * k + pad), (int)ceilf(y + v->pframe.h * k + pad) };
@@ -275,7 +299,8 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
     c->alpha = sa;
     return;
   }
-  int lw = (int)ceilf(v->pframe.w * k), lh = (int)ceilf(v->pframe.h * k);
+  float fx = flip ? 0 : x - floorf(x), fy = flip ? 0 : y - floorf(y);
+  int lw = (int)ceilf(v->pframe.w * k + fx), lh = (int)ceilf(v->pframe.h * k + fy);
   if (lw <= 0 || lh <= 0) return;
   if (flip) {
     /* the old look turns away around the horizontal axis; at the half the new one turns in */
@@ -284,7 +309,7 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
     ft.translate_x = ft.translate_y = 0;
     if (tt < 0.5f) {
       ft.rotate_x += -90 * rk__ease(rk__ease_out, tt / 0.5f);
-      composite_layer(c, v->snapshot, v, &ft, x, y, opacity);
+      composite_layer(c, v->snapshot, v, &ft, x, y, 0, 0, opacity);
       return;
     }
     ft.rotate_x += 90 * (1 - rk__ease(rk__ease_in, (tt - 0.5f) / 0.5f));
@@ -292,18 +317,19 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
   }
   /* the layer is drawn again only when what is in it changed: a page that turns is drawn once */
   rk_bitmap *layer = v->layer;
-  if (!layer || layer->w != lw || layer->h != lh || !v->layer_ok || v->layer_gen != rk__layer_gen) {
+  if (!layer || layer->w != lw || layer->h != lh || !v->layer_ok || v->layer_gen != rk__layer_gen || fabsf(v->layer_fx - fx) > 0.01f || fabsf(v->layer_fy - fy) > 0.01f) {
     layer = ensure_layer(&v->layer, lw, lh);
     rk_canvas sub;
     memset(&sub, 0, sizeof sub);
     rk__canvas_init(&sub, layer, k);
-    draw_content(&sub, v, 0, 0, true);
+    draw_content(&sub, v, fx, fy, true);
+    v->layer_fx = fx; v->layer_fy = fy;
     rk__path_free(&sub.path);
     rk__bitmap_changed(layer);
     v->layer_ok = true; v->layer_gen = rk__layer_gen;
   }
-  if (!turned && !flip) rk__composite_at(c->target, rk__canvas_clip(c), layer, (int)lroundf(x), (int)lroundf(y), opacity);   /* a plain fade */
-  else composite_layer(c, layer, v, &t, x, y, opacity);
+  if (!turned && !flip) rk__composite_at(c->target, rk__canvas_clip(c), layer, (int)floorf(x), (int)floorf(y), opacity);   /* a plain fade */
+  else composite_layer(c, layer, v, &t, x, y, fx, fy, opacity);
   if (!v->anims && !v->transition) { rk__bitmap_free(v->layer); v->layer = NULL; }
 }
 
@@ -384,7 +410,7 @@ void rk__window_frame(rk_window *w, double now) {
   static int hud = -1, trace = -1;
   if (hud < 0) { hud = env_on("RK_HUD"); trace = env_on("RK_TRACE"); }
   if (w->closed) return;
-  if (w->needs_layout) { layout_window(w); w->damage_all = true; }
+  if (w->needs_layout) layout_window(w);                     /* what it moved, it damaged (rk__set_frame) */
   if (!w->needs_draw) return;
   w->needs_draw = false;
   double t0 = rk__wall_ms();
@@ -471,7 +497,9 @@ static rk_view *hit_window(rk_window *w, float x, float y) {
 
 static bool dispatch(rk_window *w, rk_view *from, const rk_event *e) {
   rk_event local = *e;
+  bool input = e->type != RK_EVENT_FOCUS && e->type != RK_EVENT_BLUR && e->type != RK_EVENT_POINTER_LEAVE;
   for (rk_view *v = from; v; v = v->parent) {
+    if (input && rk__view_disabled(v)) continue;             /* a disabled view hears no input; what holds it may */
     if (v->cls && v->cls->pub.event) {
       rk_rect r = rk__window_rect(v);
       local.position = (rk_point){ e->position.x - r.x, e->position.y - r.y };
@@ -483,12 +511,15 @@ static bool dispatch(rk_window *w, rk_view *from, const rk_event *e) {
 }
 
 static rk_view *pressable(rk_view *v) {
-  for (; v; v = v->parent) if (v->press != RK_PRESS_NONE || v->on_activate || (v->menu && v->access == RK_ACCESS_BUTTON)) return v;
+  for (; v; v = v->parent) if (v->press != RK_PRESS_NONE || v->on_activate || v->own_activate || (v->menu && v->access == RK_ACCESS_BUTTON)) return rk__view_disabled(v) ? NULL : v;
   return NULL;
 }
 
+/* Focus may land on it: focusable, and enabled - or disabled with a tooltip, its reason. */
+static bool takes_focus(const rk_view *v) { return v->focusable && (!rk__view_disabled(v) || v->tooltip); }
+
 static rk_view *focusable_up(rk_view *v) {
-  for (; v; v = v->parent) if (v->focusable) return v;
+  for (; v; v = v->parent) if (takes_focus(v)) return v;
   return NULL;
 }
 
@@ -510,7 +541,7 @@ static void press_start(rk_window *w, rk_view *v, float px, float py) {
   v->press_x = RK_CLAMP(px, -1.0f, 1.0f); v->press_y = RK_CLAMP(py, -1.0f, 1.0f);
   v->press_since = rk_app_now();
   rk_transform from = v->ptransform, to = press_pose(v);
-  rk__animate(v, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, rk_duration_of(RK_DURATION_PRESS), 0, rk__ease_base);
+  rk__animate_transform(v, &from, &to, rk_duration_of(RK_DURATION_PRESS), 0, rk__ease_base);
 }
 
 static void press_end(rk_window *w, rk_view *v) {
@@ -519,17 +550,19 @@ static void press_end(rk_window *w, rk_view *v) {
   rk_transform from = v->ptransform, to = v->transform;
   /* a quick tap still shows the whole sink before it comes back */
   double left = rk_duration_of(RK_DURATION_PRESS) - (rk_app_now() - v->press_since);
-  rk__animate(v, RK_PROP_TRANSFORM, &from.translate_x, &to.translate_x, 10, rk_duration_of(RK_DURATION_SHORT), RK_MAX(0.0, left), rk__ease_base);
+  rk__animate_transform(v, &from, &to, rk_duration_of(RK_DURATION_SHORT), RK_MAX(0.0, left), rk__ease_base);
 }
 
 static void activate(rk_view *v) {
+  if (rk__view_disabled(v)) return;
   if (v->menu && v->access == RK_ACCESS_BUTTON) { rk_menu_open(v->menu, v); return; }   /* a menu button */
-  if (!v->on_activate) return;
+  if (!v->on_activate && !v->own_activate) return;
   rk_window *w = rk__view_window(v);
   rk_view *was = w ? w->activated : NULL;
   if (w) w->activated = v;
   rk_retain(v);
-  v->on_activate(v, v->activate_user);
+  if (v->own_activate) v->own_activate(v, v->own_data);
+  if (v->on_activate && (v->parent || v->window)) v->on_activate(v, v->activate_user);
   if (w && !w->closed) w->activated = was;
   rk_release(v);
 }
@@ -542,39 +575,44 @@ static void key_release(void *user) {
   free(kp);
 }
 
-static void collect_focus(rk_view *v, rk_view **list, int *n, int max) {
+typedef struct focus_list { rk_view **v; int n, cap; } focus_list;
+static void collect_focus(rk_view *v, focus_list *l) {
   if (v->hidden || v->leaving) return;
-  if (v->focusable && *n < max) list[(*n)++] = v;
-  for (int i = 0; i < v->nkids; i++) collect_focus(v->kids[i], list, n, max);
+  if (takes_focus(v)) { l->v = rk__grow(l->v, &l->cap, l->n + 1, sizeof *l->v); l->v[l->n++] = v; }
+  for (int i = 0; i < v->nkids; i++) collect_focus(v->kids[i], l);
 }
 
 bool rk_window_focus(rk_window *w, rk_view *v) {
-  if (v && !v->focusable) return false;
+  if (v && !takes_focus(v)) return false;
   if (w->focus == v) return true;
   if (v && rk__view_within(v, w->toasts) && !rk__view_within(w->focus, w->toasts)) w->focus_back = w->focus;
-  rk_event e = { sizeof e, RK_EVENT_BLUR, rk_app_now(), { 0, 0 }, 0, 0, 0, 0, 0, NULL };
-  if (w->focus) dispatch(w, w->focus, &e);
+  rk_event e = { sizeof e, RK_EVENT_BLUR, rk_app_now(), { 0, 0 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
+  if (w->focus) { dispatch(w, w->focus, &e); rk__view_dirty(w->focus); }   /* its ring goes */
   w->focus = v;
   e.type = RK_EVENT_FOCUS;
   if (v) dispatch(w, v, &e);
-  rk__window_invalidate(w);
+  rk__tip_focus(w, v);
+  if (v) rk__view_dirty(v);                                 /* and comes here */
   return true;
 }
 
 rk_view *rk_window_focused(rk_window *w) { return w->focus; }
 
 static void focus_step(rk_window *w, int dir) {
-  rk_view *list[1024];
-  int n = 0;
-  collect_focus(w->sheets->nkids ? w->sheets : w->root, list, &n, 1024);   /* the root holds the toasts, last */
-  if (w->sheets->nkids) collect_focus(w->toasts, list, &n, 1024);           /* over a sheet, a toast's action still comes last */
-  if (!n) return;
+  focus_list l = { NULL, 0, 0 };
+  collect_focus(w->sheets->nkids ? w->sheets : w->root, &l);   /* the root holds the toasts, last */
+  if (w->sheets->nkids) collect_focus(w->toasts, &l);           /* over a sheet, a toast's action still comes last */
+  rk_view **list = l.v;
+  int n = l.n;
+  if (!n) { free(list); return; }
   int at = -1;
   for (int i = 0; i < n; i++) if (list[i] == w->focus) at = i;
   int next = at < 0 ? (dir > 0 ? 0 : n - 1) : (at + dir + n) % n;
+  rk_view *to = list[next];
+  free(list);
   w->focus_visible = true;
-  rk_window_focus(w, list[next]);
-  rk__reveal(list[next]);
+  rk_window_focus(w, to);
+  rk__reveal(to);
 }
 
 void rk__window_event(rk_window *w, const rk_event *e) {
@@ -582,8 +620,15 @@ void rk__window_event(rk_window *w, const rk_event *e) {
   if (w->needs_layout) layout_window(w);                         /* a press lands on what the next frame will show */
   double was = rk__meter.input_at;
   if (!was) rk__meter.input_at = rk_app_now();
+  rk_retain(w);
   event(w, e);
+  /* a press, a key, text or a drop may have run the app's handlers: what is declared follows (a move or the wheel
+     reaches only views made by hand, which say so with rk_ui_update) */
+  bool app = e->type != RK_EVENT_POINTER_MOVE && e->type != RK_EVENT_POINTER_ENTER && e->type != RK_EVENT_POINTER_LEAVE &&
+             e->type != RK_EVENT_WHEEL && e->type != RK_EVENT_DRAG_ENTER && e->type != RK_EVENT_DRAG_MOVE && e->type != RK_EVENT_DRAG_LEAVE;
+  if (app) { rk__ui_dirty(); rk__ui_settle(); }
   if (!w->needs_draw && !rk__anim_running()) rk__meter.input_at = was;   /* nothing to show for it */
+  rk_release(w);
 }
 
 /* A press the system took over (moving or resizing the window) ends without activating anything. */
@@ -626,6 +671,7 @@ static void event(rk_window *w, const rk_event *e) {
       w->pointer = e->position;
       rk_view *h = w->capture ? w->capture : hit_window(w, e->position.x, e->position.y);
       w->hover = h;                                            /* nothing is drawn differently under the pointer */
+      if (!w->capture) rk__tip_hover(w, h);                    /* but a tooltip may come */
       dispatch(w, h, e);
       int shape = RK__CURSOR_ARROW;                            /* the move has told the views what lies under it */
       for (rk_view *v = h; v; v = v->parent) if (v->cursor) { shape = v->cursor; break; }
@@ -634,6 +680,7 @@ static void event(rk_window *w, const rk_event *e) {
     }
     case RK_EVENT_POINTER_DOWN: {
       w->pointer = e->position;
+      rk__tip_hide(w, true);
       rk_view *h = hit_window(w, e->position.x, e->position.y);
       if (w->floats->nkids && (!h || h->parent != w->floats)) {    /* a press outside a menu closes it, and goes on */
         rk__menus_close(w);
@@ -684,6 +731,7 @@ static void event(rk_window *w, const rk_event *e) {
         break;
       }
       rk_view *f = w->focus;
+      if (e->key == RK_KEY_ESCAPE && w->tip) { rk__tip_hide(w, true); break; }   /* Escape first takes the tooltip away */
       if (e->key == RK_KEY_F10 && (e->mods & RK_MOD_SHIFT)) {        /* Shift+F10: the focused view's context menu, below it */
         rk_view *t = f;
         while (t && !(t->menu && t->access != RK_ACCESS_BUTTON)) t = t->parent;
@@ -694,7 +742,7 @@ static void event(rk_window *w, const rk_event *e) {
         press_start(w, f, 0, 0);
         key_press *kp = rk__alloc(sizeof *kp);
         kp->w = w; kp->v = rk_retain(f);
-        rk_app_after(rk_duration_of(RK_DURATION_PRESS), false, key_release, kp);
+        rk_app_after(rk_duration_of(RK_DURATION_PRESS), key_release, kp);
         break;
       }
       rk_view *to = f;
@@ -703,8 +751,106 @@ static void event(rk_window *w, const rk_event *e) {
       dispatch(w, to ? to : w->root, e);
       break;
     }
-    case RK_EVENT_WHEEL: dispatch(w, hit_window(w, e->position.x, e->position.y), e); break;
+    case RK_EVENT_WHEEL: rk__tip_hide(w, true); dispatch(w, hit_window(w, e->position.x, e->position.y), e); break;
+    case RK_EVENT_DRAG_ENTER: case RK_EVENT_DRAG_MOVE: case RK_EVENT_DRAG_LEAVE: case RK_EVENT_DROP: rk__window_drag(w, e); break;
     default: dispatch(w, w->focus ? w->focus : w->root, e); break;
+  }
+}
+
+/* Files dragged over the window: on every move the view under the pointer, or the nearest parent, that answers
+   DRAG_MOVE with true takes them; the one before hears DRAG_LEAVE. The drop goes to the one that took them there. */
+static void drag_leave(rk_window *w) {
+  rk_view *t = w->drag_over;
+  w->drag_over = NULL;
+  if (!t || !t->cls || !t->cls->pub.event) return;
+  rk_event e = { sizeof e, RK_EVENT_DRAG_LEAVE, rk_app_now(), { 0, 0 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
+  t->cls->pub.event(t, &e, t->state);
+}
+
+static rk_view *drag_taker(rk_window *w, const rk_event *e) {
+  rk_event m = *e;
+  m.type = RK_EVENT_DRAG_MOVE;
+  for (rk_view *v = hit_window(w, e->position.x, e->position.y); v; v = v->parent) {
+    if (!v->cls || !v->cls->pub.event) continue;
+    rk_rect r = rk__window_rect(v);
+    m.position = (rk_point){ e->position.x - r.x, e->position.y - r.y };
+    if (v->cls->pub.event(v, &m, v->state)) return v;
+  }
+  return NULL;
+}
+
+/* A text/uri-list, as X11 and Wayland hand dropped files over: one URI a line, comments after #; the local file:
+   URIs as paths, percent-decoded. Returns how many; *out and its strings are malloc'd (rk__free_paths). */
+static int hexval(int c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; }
+int rk__uri_list_paths(const char *text, size_t n, char ***out) {
+  int count = 0, cap = 0;
+  char **paths = NULL;
+  for (size_t i = 0; i < n;) {
+    size_t e = i;
+    while (e < n && text[e] != '\n' && text[e] != '\r') e++;
+    const char *line = text + i;
+    size_t len = e - i;
+    i = e;
+    while (i < n && (text[i] == '\n' || text[i] == '\r')) i++;
+    if (!len || line[0] == '#' || len < 7 || strncmp(line, "file://", 7)) continue;
+    const char *p = line + 7, *end = line + len;
+    if (p < end && *p != '/') {                              /* a host: only localhost is this machine for sure */
+      if (end - p < 10 || strncmp(p, "localhost/", 10)) continue;
+      p += 9;
+    }
+    char *path = rk__alloc((size_t)(end - p) + 1), *q = path;
+    for (; p < end; p++) {
+      if (*p == '%' && end - p >= 3 && hexval(p[1]) >= 0 && hexval(p[2]) >= 0) { *q++ = (char)(hexval(p[1]) * 16 + hexval(p[2])); p += 2; }
+      else *q++ = *p;
+    }
+    *q = 0;
+    paths = rk__grow(paths, &cap, count + 1, sizeof *paths);
+    paths[count++] = path;
+  }
+  *out = paths;
+  return count;
+}
+void rk__free_paths(char **paths, int n) { for (int i = 0; i < n; i++) free(paths[i]); free(paths); }
+
+/* The system's file chooser, for this window. */
+typedef struct choosing { rk_window *w; void (*chosen)(rk_window *, const char *const *, int, void *); void *user; } choosing;
+static void chooser_done(void *ctx, const char *const *files, int n) {
+  choosing *c = ctx;
+  if (c->chosen) c->chosen(c->w, files, n, c->user);
+  rk_release(c->w);
+  free(c);
+}
+bool rk_window_choose_files(rk_window *w, const char *accept, rk_choose choose, void (*chosen)(rk_window *w, const char *const *files, int n, void *user), void *user) {
+  bool multiple = choose == RK_CHOOSE_MANY;
+  const rk_platform *p = rk__platform();
+  if (!w || w->closed || !p->choose_files) return false;
+  choosing *c = rk__alloc(sizeof *c);
+  c->w = rk_retain(w); c->chosen = chosen; c->user = user;
+  if (p->choose_files(w->native, accept, multiple, chooser_done, c)) return true;
+  rk_release(w); free(c);
+  return false;
+}
+
+bool rk__window_drag(rk_window *w, const rk_event *e) {
+  rk__layout_pending();
+  switch (e->type) {
+    case RK_EVENT_DRAG_ENTER: case RK_EVENT_DRAG_MOVE: {
+      rk_view *t = drag_taker(w, e);
+      if (t != w->drag_over) { drag_leave(w); w->drag_over = t; }
+      return t != NULL;
+    }
+    case RK_EVENT_DRAG_LEAVE: drag_leave(w); return false;
+    case RK_EVENT_DROP: {
+      rk_view *t = drag_taker(w, e);                         /* where it is let go, which may not be where it last moved */
+      if (t != w->drag_over) drag_leave(w);
+      w->drag_over = NULL;
+      if (!t) return false;
+      rk_event d = *e;
+      rk_rect r = rk__window_rect(t);
+      d.position = (rk_point){ e->position.x - r.x, e->position.y - r.y };
+      return t->cls->pub.event(t, &d, t->state);
+    }
+    default: return false;
   }
 }
 

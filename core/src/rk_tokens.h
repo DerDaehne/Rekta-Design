@@ -5,20 +5,20 @@
 #define RK_TOKENS_VERSION "0.2.0"
 
 /* [theme: light, dark][rk_role], 0xRRGGBBAA */
-static const rk_color rk_tok_colors[2][RK_ROLE_COUNT] = {
+static const rk_color rk_tok_colors[2][RK__ROLE_COUNT] = {
   { 0x00000000u, 0xffffffffu, 0xeeeff2ffu, 0xe4e5e9ffu, 0x010205ffu, 0xd8d8dbffu, 0x6b6d70ffu, 0x535457ffu, 0x010205ffu, 0xffffffffu, 0x2762ecffu, 0xd3e1ffffu, 0x7da1f4ffu, 0x007b5dffu, 0xe1fff2ffu, 0x61caa6ffu, 0xa37e00ffu, 0xfff4d2ffu, 0xf8d866ffu, 0xaa0013ffu, 0xffe2e4ffu, 0xc86065ffu, 0x1a44eaffu, 0x9495982eu, 0x949598ffu, 0x010205abu, 0xffffffd1u },
   { 0x00000000u, 0x0e0e12ffu, 0x212225ffu, 0x2a2b2fffu, 0xfbfcffffu, 0x404044ffu, 0x88898cffu, 0xafb0b3ffu, 0xfbfcffffu, 0x0e0e12ffu, 0x178bffffu, 0x04294effu, 0x244592ffu, 0x00ce9dffu, 0x003324ffu, 0x337a62ffu, 0xf7cb47ffu, 0x362b0affu, 0x6e5900ffu, 0xfc4040ffu, 0x3a0f0fffu, 0x76171fffu, 0x178bffffu, 0x9495982eu, 0x7e7f82ffu, 0x262629abu, 0x0e0e12d1u }
 };
 
 /* [density: comfortable, compact][rk_metric], logical px */
-static const float rk_tok_metrics[2][RK_METRIC_COUNT] = {
+static const float rk_tok_metrics[2][RK__METRIC_COUNT] = {
   { 4.0f, 8.0f, 16.0f, 32.0f, 48.0f, 4.0f, 8.0f, 12.0f, 2.0f, 150.0f, 56.0f, 44.0f, 240.0f, 44.0f, 44.0f, 16.0f },
   { 4.0f, 8.0f, 16.0f, 32.0f, 48.0f, 4.0f, 8.0f, 12.0f, 2.0f, 150.0f, 56.0f, 44.0f, 240.0f, 32.0f, 32.0f, 12.0f }
 };
 
 /* [rk_duration], ms; the first RK_TOK_MOTION_COUNT are motion (0 under reduced motion), the rest wall-clock timings */
 #define RK_TOK_MOTION_COUNT 8
-static const float rk_tok_durations[RK_DURATION_COUNT] = { 100.0f, 250.0f, 400.0f, 600.0f, 30.0f, 150.0f, 500.0f, 220.0f, 5000.0f, 100.0f, 500.0f, 500.0f };
+static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.0f, 600.0f, 30.0f, 150.0f, 500.0f, 220.0f, 5000.0f, 100.0f, 500.0f, 500.0f };
 
 /* Type sizes as min, max and the share of the hosting width that moves between them (_VW); fixed sizes have _VW 0. */
 #define RK_TOK_WEIGHT_LIGHT 300

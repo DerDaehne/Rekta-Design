@@ -47,23 +47,11 @@ rk_irect rk__irect_meet(rk_irect a, rk_irect b) {
   return r;
 }
 
-/* s over d, s scaled by cov (0..256). */
-static inline uint32_t over(uint32_t d, uint32_t s, uint32_t cov) {
-  if (cov >= 256) {
-    if ((s >> 24) == 255) return s;
-  } else {
-    uint32_t rb = ((s & 0x00ff00ffu) * cov >> 8) & 0x00ff00ffu, ag = (((s >> 8) & 0x00ff00ffu) * cov >> 8) & 0x00ff00ffu;
-    s = rb | (ag << 8);
-  }
-  uint32_t inv = 256 - (s >> 24);
-  uint32_t rb = ((d & 0x00ff00ffu) * inv >> 8) & 0x00ff00ffu, ag = (((d >> 8) & 0x00ff00ffu) * inv >> 8) & 0x00ff00ffu;
-  return s + (rb | (ag << 8));
-}
 
 static void span(rk_bitmap *b, int y, int x0, int x1, uint32_t pm, uint32_t cov) {
   uint32_t *row = b->px + (size_t)y * b->stride;
   if (cov >= 256 && (pm >> 24) == 255) { for (int x = x0; x < x1; x++) row[x] = pm; return; }
-  for (int x = x0; x < x1; x++) row[x] = over(row[x], pm, cov);
+  for (int x = x0; x < x1; x++) row[x] = rk__over(row[x], pm, cov);
 }
 
 /* Rectangles: solid inside, the fraction of each edge pixel covered at the border. */
@@ -197,6 +185,30 @@ void rk__path_stroke(rk_path *p, const float *xy, int n, bool closed, float widt
 static float *acc_buf;
 static int acc_cap;
 
+/* An edge's share of a row's coverage, from x = a to c (a <= c, both inside the row) over the height d (signed by
+   its direction): each cell gets the area to the right of the edge within it, the cell after the rest. */
+static void cover(float *row, int w, float a, float c, float d) {
+  int a0 = (int)a, c1 = (int)ceilf(c);
+  if (c1 <= a0 + 1) {
+    float xm = 0.5f * (a + c) - a0;
+    row[a0] += d - d * xm;
+    if (a0 + 1 < w) row[a0 + 1] += d * xm;
+    return;
+  }
+  float s = 1.0f / (c - a), af = a - a0, a0v = 0.5f * s * (1 - af) * (1 - af);
+  float cf = c - c1 + 1, amv = 0.5f * s * cf * cf;
+  row[a0] += d * a0v;
+  if (c1 == a0 + 2) row[a0 + 1] += d * (1 - a0v - amv);
+  else {
+    float a1 = s * (1.5f - af);
+    row[a0 + 1] += d * (a1 - a0v);
+    for (int k = a0 + 2; k < c1 - 1; k++) row[k] += d * s;
+    float a2 = a1 + (c1 - a0 - 3) * s;
+    row[c1 - 1] += d * (1 - a2 - amv);
+  }
+  if (c1 < w) row[c1] += d * amv;
+}
+
 void rk__path_fill(rk_bitmap *b, rk_irect clip, const rk_path *p, uint32_t pm) {
   if (!p->nends || !(pm >> 24)) return;
   clip = rk__irect_meet(clip, (rk_irect){ 0, 0, b->w, b->h });
@@ -208,8 +220,8 @@ void rk__path_fill(rk_bitmap *b, rk_irect clip, const rk_path *p, uint32_t pm) {
   rk_irect box = { (int)floorf(minx), (int)floorf(miny), (int)ceilf(maxx), (int)ceilf(maxy) };
   rk_irect r = rk__irect_meet(box, clip);
   if (rk__irect_empty(r)) return;
-  /* columns from the clip's left edge (points further left are pulled onto it, which keeps the coverage to the
-     right), rows only where drawn */
+  /* columns from the clip's left edge (what lies further left counts as standing on it, which keeps the coverage to
+     the right), rows only where drawn */
   int ox = r.x0, oy = r.y0, w = r.x1 - r.x0 + 2, h = r.y1 - r.y0;
   int need = w * h;
   if (need > acc_cap) { free(acc_buf); acc_cap = need; acc_buf = rk__alloc((size_t)acc_cap * sizeof(float)); }
@@ -231,25 +243,22 @@ void rk__path_fill(rk_bitmap *b, rk_irect clip, const rk_path *p, uint32_t pm) {
       for (int y = (int)y0; y < (int)ceilf(y1) && y < h; y++) {
         float *row = acc_buf + (size_t)y * w;
         float dy = RK_MIN((float)y + 1, y1) - RK_MAX((float)y, y0), xn = x + dxdy * dy, d = dy * dir;
-        float a = RK_CLAMP(RK_MIN(x, xn), 0.0f, xmax), c = RK_CLAMP(RK_MAX(x, xn), 0.0f, xmax);
-        int a0 = (int)a, c1 = (int)ceilf(c);
-        if (c1 <= a0 + 1) {
-          float xm = 0.5f * (a + c) - a0;
-          row[a0] += d - d * xm;
-          if (a0 + 1 < w) row[a0 + 1] += d * xm;
-        } else {
-          float s = 1.0f / (c - a), af = a - a0, a0v = 0.5f * s * (1 - af) * (1 - af);
-          float cf = c - c1 + 1, amv = 0.5f * s * cf * cf;
-          row[a0] += d * a0v;
-          if (c1 == a0 + 2) row[a0 + 1] += d * (1 - a0v - amv);
-          else {
-            float a1 = s * (1.5f - af);
-            row[a0 + 1] += d * (a1 - a0v);
-            for (int k = a0 + 2; k < c1 - 1; k++) row[k] += d * s;
-            float a2 = a1 + (c1 - a0 - 3) * s;
-            row[c1 - 1] += d * (1 - a2 - amv);
-          }
-          if (c1 < w) row[c1] += d * amv;
+        /* split where the edge crosses the clip's left edge or the right end, so a part outside counts as an edge
+           standing at the border (all its coverage to the right) and the part inside keeps its slope: clamped as one,
+           a slanted edge across the border would cover the first pixel wrongly, and a part redrawn would not match
+           the whole */
+        float ts[4] = { 0, 1, 1, 1 };
+        int nt = 1;
+        if (xn != x) {
+          float t0 = (0 - x) / (xn - x), t1 = (xmax - x) / (xn - x);
+          if (t0 > 0 && t0 < 1) ts[nt++] = t0;
+          if (t1 > 0 && t1 < 1) ts[nt++] = t1;
+          if (nt == 3 && ts[1] > ts[2]) { float t = ts[1]; ts[1] = ts[2]; ts[2] = t; }
+        }
+        ts[nt] = 1;
+        for (int k = 0; k < nt; k++) {
+          float pa = x + (xn - x) * ts[k], pc = x + (xn - x) * ts[k + 1];
+          cover(row, w, RK_CLAMP(RK_MIN(pa, pc), 0.0f, xmax), RK_CLAMP(RK_MAX(pa, pc), 0.0f, xmax), d * (ts[k + 1] - ts[k]));
         }
         x = xn;
       }
@@ -264,7 +273,7 @@ void rk__path_fill(rk_bitmap *b, rk_irect clip, const rk_path *p, uint32_t pm) {
       sum += row[x];
       float cov = fabsf(sum);
       if (cov < 0.002f) continue;
-      out[x] = over(out[x], pm, cov >= 1 ? 256u : (uint32_t)(cov * 256.0f + 0.5f));
+      out[x] = rk__over(out[x], pm, cov >= 1 ? 256u : (uint32_t)(cov * 256.0f + 0.5f));
     }
   }
 }
@@ -276,7 +285,7 @@ void rk__blit_mask(rk_bitmap *b, rk_irect clip, int x, int y, const uint8_t *mas
   for (int py = r.y0; py < r.y1; py++) {
     const uint8_t *m = mask + (size_t)(py - y) * stride - x;
     uint32_t *row = b->px + (size_t)py * b->stride;
-    for (int px = r.x0; px < r.x1; px++) if (m[px]) row[px] = over(row[px], pm, m[px] + (m[px] >> 7));
+    for (int px = r.x0; px < r.x1; px++) if (m[px]) row[px] = rk__over(row[px], pm, m[px] + (m[px] >> 7));
   }
 }
 
@@ -289,7 +298,7 @@ void rk__composite_at(rk_bitmap *dst, rk_irect clip, const rk_bitmap *src, int x
   for (int py = r.y0; py < r.y1; py++) {
     const uint32_t *s = src->px + (size_t)(py - y) * src->stride - x;
     uint32_t *d = dst->px + (size_t)py * dst->stride;
-    for (int px = r.x0; px < r.x1; px++) if (s[px]) d[px] = over(d[px], s[px], a);
+    for (int px = r.x0; px < r.x1; px++) if (s[px]) d[px] = rk__over(d[px], s[px], a);
   }
 }
 
@@ -322,20 +331,6 @@ static inline uint32_t lerp_px(uint32_t a, uint32_t b, uint32_t t) {   /* t 0..2
   uint32_t rb = (((a & 0x00ff00ffu) * (256 - t) + (b & 0x00ff00ffu) * t) >> 8) & 0x00ff00ffu;
   uint32_t ag = ((((a >> 8) & 0x00ff00ffu) * (256 - t) + ((b >> 8) & 0x00ff00ffu) * t) >> 8) & 0x00ff00ffu;
   return rb | (ag << 8);
-}
-
-static inline uint32_t sample(const rk_bitmap *s, float u, float v) {
-  u -= 0.5f; v -= 0.5f;
-  int x = (int)floorf(u), y = (int)floorf(v);
-  uint32_t fx = (uint32_t)((u - x) * 256.0f), fy = (uint32_t)((v - y) * 256.0f);
-  if (x >= 0 && y >= 0 && x + 1 < s->w && y + 1 < s->h) {      /* inside: no edge checks */
-    const uint32_t *p = s->px + (size_t)y * s->stride + x;
-    return lerp_px(lerp_px(p[0], p[1], fx), lerp_px(p[s->stride], p[s->stride + 1], fx), fy);
-  }
-  #define PX(X, Y) (((X) < 0 || (Y) < 0 || (X) >= s->w || (Y) >= s->h) ? 0u : s->px[(size_t)(Y) * s->stride + (X)])
-  uint32_t top = lerp_px(PX(x, y), PX(x + 1, y), fx), bot = lerp_px(PX(x, y + 1), PX(x + 1, y + 1), fx);
-  #undef PX
-  return lerp_px(top, bot, fy);
 }
 
 /* The quad's extent along one scanline: where its edges cross height y (it is convex: the image of a square under a
@@ -428,7 +423,7 @@ static void comp_rows(void *ctx, int row0, int row1) {
           s = lerp_px(lerp_px(PX(sx, sy), PX(sx + 1, sy), fx), lerp_px(PX(sx, sy + 1), PX(sx + 1, sy + 1), fx), fy);
           #undef PX
         }
-        if (s) d[x] = over(d[x], s, cov * alpha >> 8);
+        if (s) d[x] = rk__over(d[x], s, cov * alpha >> 8);
       }
     }
   }

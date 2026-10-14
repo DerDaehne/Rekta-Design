@@ -74,7 +74,8 @@
   transition: background-color var(--rk-duration-short) var(--rk-ease-base), transform var(--rk-duration-short) var(--rk-ease-base);
 }
 /* Build-in plays on arrival only (first paint, or a place a tile opened): a re-render never replays it. */
-[data-rk-arriving] .rk-tile { animation: rk-build-in var(--rk-duration-moderate) var(--rk-ease-in) calc(min(var(--rk-i, 0), 10) * var(--rk-duration-stagger)) backwards; }
+/* A place that turned in has built itself already: its tiles do not rise a second time. */
+[data-rk-arriving]:where(:not([data-rk-arriving='turned'])) .rk-tile { animation: rk-build-in var(--rk-duration-moderate) var(--rk-ease-in) calc(min(var(--rk-i, 0), 10) * var(--rk-duration-stagger)) backwards; }
 a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-user-drag: none; }
 .rk-tile:focus-visible { outline: 2px solid currentColor; outline-offset: -5px; }
 .rk-tile-word { position: absolute; top: 10px; right: 12px; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); }
@@ -144,6 +145,17 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-pivot--nav > a, .rk-pivot--nav > button { font-size: var(--rk-font-size-nav-active); }
 .rk-pivot > [aria-current], .rk-pivot > [aria-selected='true'] { --_rk-s: 1; color: var(--rk-text-primary); }
 /* A strip whose titles all fit does not glide; its titles only change size. */
+/* Down the side (rk-pivot--side in an rk-side): the titles as a list beside the facets, as tabs are in a browser
+   either way. One size; the title in sight steps in by space-m and darkens over duration-pivot-size, the one before
+   steps back: the motion says which was picked. Compact, it is the strip along the top again. */
+.rk-side { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--rk-space-xl); align-items: start; }
+.rk-pivot--side { flex-direction: column; align-items: flex-start; gap: var(--rk-space-xs); overflow: visible; padding-inline-end: var(--rk-space-m); }
+.rk-pivot--side > :is(a, button) {
+  --_rk-s: 1; --_rk-step: 0px; font-size: var(--rk-font-size-pivot-active); margin: 0; transform: translateX(var(--_rk-step));
+  transition: transform var(--rk-duration-pivot-size) ease-in-out, color var(--rk-duration-pivot-size) ease-in-out;
+}
+.rk-pivot--side > :is([aria-current], [aria-selected='true']) { --_rk-step: var(--rk-space-m); }
+.rk-pivot--side > :is([aria-current], [aria-selected='true']):dir(rtl) { --_rk-step: calc(-1 * var(--rk-space-m)); }
 
 /* Buttons and switches ------------------------------------------------------------------------------------------- */
 /* Primary takes the accent slot (ink by default). Height follows the density: 44px for touch, 32px for a fine pointer. */
@@ -160,7 +172,29 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rk-space-s); }
 /* A checkbox or radio with its label; a group of them goes in .rk-choices. */
 .rk-switch { display: inline-flex; align-items: center; gap: var(--rk-space-s); min-height: var(--rk-control-height); font-weight: var(--rk-font-weight-semibold); cursor: pointer; }
-.rk-switch input { width: 20px; height: 20px; margin: 0; accent-color: var(--rk-accent); }
+/* Drawn by Rekta, as rekta-core draws it, the same in every browser: a 20px square with a 2px frame; checked, the
+   accent with an on-accent mark (on the label, as inputs take no pseudo-elements everywhere). A radio is a ring, and
+   checked an accent ring around an accent dot. Pressed, the hover fill around it; never a hover tint. */
+.rk-switch { position: relative; }
+.rk-switch input {
+  -webkit-appearance: none; appearance: none; flex: none; width: 20px; height: 20px; margin: 0;
+  border: 2px solid var(--rk-text-primary); border-radius: 0; background: transparent; color: inherit; cursor: inherit;
+}
+.rk-switch input[type='radio'] { border-radius: 50%; }
+.rk-switch input:checked { border-color: var(--rk-accent); background-color: var(--rk-accent); }
+.rk-switch input[type='radio']:checked { background: radial-gradient(circle, var(--rk-accent) 0 4.5px, transparent 5.5px); }
+.rk-switch:has(> input[type='checkbox']:first-child:checked)::before {
+  content: ''; position: absolute; left: 0; top: 50%; width: 20px; height: 20px; margin-top: -10px; pointer-events: none;
+  background-color: var(--rk-on-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10l3.5 3.5L15 6.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") center / 20px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10l3.5 3.5L15 6.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") center / 20px no-repeat;
+}
+.rk-switch:active input:not(:disabled):not(:checked) { background-color: var(--rk-hover); box-shadow: 0 0 0 4px var(--rk-hover); }
+.rk-switch:has(> input:disabled) { color: var(--rk-disabled); cursor: not-allowed; }
+.rk-switch input:disabled { border-color: var(--rk-disabled); }
+.rk-switch input[type='checkbox']:disabled:checked { background-color: var(--rk-disabled); }
+.rk-switch input[type='radio']:disabled:checked { background-image: radial-gradient(circle, var(--rk-disabled) 0 4.5px, transparent 5.5px); }
+@media (forced-colors: active) { .rk-switch input { forced-color-adjust: auto; -webkit-appearance: auto; appearance: auto; } .rk-switch::before { display: none; } }
 .rk-choices { display: flex; flex-wrap: wrap; gap: 0 var(--rk-space-l); margin: 0; padding: 0; border: 0; min-width: 0; }
 .rk-choices > legend { padding: 0; margin-bottom: var(--rk-space-xs); }
 
@@ -807,27 +841,57 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 }
 
 /* Place change --------------------------------------------------------------------------------------------------- */
-/* A tile that links to another view turns the place around its leading edge (Metro's turnstile). Leaving, each unit
-   in view swings toward the viewer over duration-short as it fades, top to bottom, a row at a time, duration-stagger
-   apart; the pressed tile keeps its press and goes last, from its pressed pose. The new place swings in from
-   turnstile-angle over duration-moderate and its tiles build in. Back runs the other way round. rekta.js sets
-   data-rk-turn and the unit's --_rk-turn-origin, --_rk-turn-oy, --_rk-turn-delay and --_rk-turn-perspective. */
+/* A tile that links to another view turns the place around its leading edge (Metro's turnstile), a page turned in a
+   book. Leaving, each part in view swings toward the viewer, gathering speed, by --_rk-turn-out; it stays whole for
+   the first 40% of its time, so the swing reads, then fades. The pressed tile keeps its press and goes last, from its
+   pressed pose. Arriving, each part of the new place swings in from --_rk-turn-in, fast at first, whole after the
+   first third. Each part's heft grows with its area: a line of text about 0.6, a tile 0.8, a wide tile 1.0, a table
+   up to 1.4. It sets both when the part starts, (heft - 0.5) x 6 x duration-stagger after the turn begins, and how
+   long it takes, the token's time (duration-short leaving, duration-moderate arriving) x heft: light parts go first
+   and quickest, heavy ones later and slower, as a light thing starts and stops sooner than a heavy one. Parts that
+   weigh the same follow one another in reading order, half a duration-stagger apart, six steps at most. An arriving part lands with a trace of speed left and fills backwards
+   only, so its motion, its animation and its layer end in the same frame: nothing settles afterwards. Back runs the
+   other way round. rekta.js sets data-rk-turn and the part's --_rk-turn-origin, --_rk-turn-oy, --_rk-turn-delay,
+   --_rk-turn-duration and --_rk-turn-perspective. */
+:root { --_rk-turn-out: 60deg; --_rk-turn-in: 70deg; --_rk-ease-turn-out: cubic-bezier(0.35, 0, 0.65, 0.6); --_rk-ease-turn-in: cubic-bezier(0.22, 0.9, 0.6, 0.98); }
 [data-rk-turn='out'], [data-rk-turn='back-out'], [data-rk-turn='pressed'] {
   transform-origin: var(--_rk-turn-origin, 0px) var(--_rk-turn-oy, 50%); pointer-events: none;
-  animation: rk-turn-out var(--rk-duration-short) var(--rk-ease-out) var(--_rk-turn-delay, 0ms) both;
+  animation: rk-turn-out var(--_rk-turn-duration, var(--rk-duration-short)) var(--_rk-ease-turn-out) var(--_rk-turn-delay, 0ms) both;
 }
 [data-rk-turn='back-out'] { animation-name: rk-turn-back-out; }
 [data-rk-turn='pressed'] { animation-name: rk-turn-pressed; }
-[data-rk-turn='in'], [data-rk-turn='back-in'] { transform-origin: 0 var(--_rk-turn-oy, 50%); animation: rk-turn-in var(--rk-duration-moderate) var(--rk-ease-out) both; }
-[data-rk-turn='back-in'] { animation-name: rk-turn-back-in; }
-@keyframes rk-turn-out { to { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(calc(-1 * var(--rk-turnstile-angle))); } }
-@keyframes rk-turn-back-out { to { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(var(--rk-turnstile-angle)); } }
+/* doubled, so a tile's build-in gives way to its turn */
+[data-rk-turn][data-rk-turn='in'], [data-rk-turn][data-rk-turn='back-in'] {
+  transform-origin: var(--_rk-turn-origin, 0px) var(--_rk-turn-oy, 50%);
+  animation: rk-turn-in var(--_rk-turn-duration, var(--rk-duration-moderate)) var(--_rk-ease-turn-in) var(--_rk-turn-delay, 0ms) backwards;
+}
+[data-rk-turn][data-rk-turn='back-in'] { animation-name: rk-turn-back-in; }
+@keyframes rk-turn-out {
+  from { transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(0deg); }
+  40% { opacity: 1; }
+  to { opacity: 0; transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(calc(-1 * var(--_rk-turn-out))); }
+}
+@keyframes rk-turn-back-out {
+  from { transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(0deg); }
+  40% { opacity: 1; }
+  to { opacity: 0; transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(var(--_rk-turn-out)); }
+}
 @keyframes rk-turn-pressed {
   from { transform-origin: 50% 50%; }
-  to { opacity: 0; transform-origin: var(--_rk-turn-origin, 0px) var(--_rk-turn-oy, 50%); transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateX(0deg) rotateY(calc(-1 * var(--rk-turnstile-angle))) scale(1); }
+  40% { opacity: 1; }
+  to { opacity: 0; transform-origin: var(--_rk-turn-origin, 0px) var(--_rk-turn-oy, 50%); transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateX(0deg) rotateY(calc(-1 * var(--_rk-turn-out))) scale(1); }
 }
-@keyframes rk-turn-in { from { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(var(--rk-turnstile-angle)); } }
-@keyframes rk-turn-back-in { from { opacity: 0; transform: perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(calc(-1 * var(--rk-turnstile-angle))); } }
+/* the end keeps the snap: the last frames sit on the pixels the part rests on */
+@keyframes rk-turn-in {
+  from { opacity: 0; transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(var(--_rk-turn-in)); }
+  35% { opacity: 1; }
+  to { transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(0deg); }
+}
+@keyframes rk-turn-back-in {
+  from { opacity: 0; transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(calc(-1 * var(--_rk-turn-in))); }
+  35% { opacity: 1; }
+  to { transform: translate(var(--_rk-turn-snap, 0px)) perspective(var(--_rk-turn-perspective, var(--rk-turnstile-perspective))) rotateY(0deg); }
+}
 
 /* Input-dependent rules ------------------------------------------------------------------------------------------ */
 /* Hover tints only where hover exists: on touch they would stick after a tap. */
@@ -894,6 +958,13 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 }
 /* Compact viewport: toasts rise from the app bar. */
 @media (max-width: 759.98px), (max-height: 480px) {
+  .rk-side { grid-template-columns: minmax(0, 1fr); row-gap: var(--rk-space-m); }
+  .rk-pivot--side { flex-direction: row; align-items: baseline; gap: var(--rk-space-l); overflow-x: auto; padding-inline-end: 0; }
+  .rk-pivot--side > :is(a, button) {
+    --_rk-s: var(--rk-pivot-scale, 0.6); transform: scale(var(--_rk-s)); margin-inline-end: calc(var(--_rk-w, 0px) * (var(--_rk-s) - 1));
+    transition: transform var(--rk-duration-pivot-size) ease-in-out, margin-inline-end var(--rk-duration-pivot-size) ease-in-out, color var(--rk-duration-short) var(--rk-ease-base);
+  }
+  .rk-pivot--side > :is([aria-current], [aria-selected='true']) { --_rk-s: 1; }
   .rk-toasts { --_rk-from: 12px; inset: auto 0 calc(var(--rk-appbar-height) + env(safe-area-inset-bottom) + var(--rk-space-s)); top: auto; }
   @supports (anchor-name: --a) { .rk-toasts { top: auto; } }
 }

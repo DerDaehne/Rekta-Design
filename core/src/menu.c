@@ -6,13 +6,17 @@
    hint at the end, hairlines between groups, a group's label. Keys: Up and Down (wrapping), Home and End, a letter
    jumps to the next item starting with it, Enter or Space chooses, Escape closes and gives focus back, Tab closes and
    moves on; a press outside closes. A choice closes the menu and then runs the item's handler; an item with a check
-   toggles and stays open. The menu is one view that draws its rows; it floats in the window's top layer. */
+   toggles and stays open. The menu is one view that draws its rows; it floats in the window's top layer.
+
+   For the controls built on it (rk_select, a field's suggestions): an item can carry a check mark without a box (the
+   chosen option), the menu can be at least as wide as its opener and start at an item, and it can float without
+   taking focus - the field it belongs to keeps typing and moves the active row itself. */
 #include "rk_internal.h"
 
 enum { ITEM, SEPARATOR, LABEL };
 
 typedef struct menu_item {
-  int kind, check;                                         /* check: -1 no square, 0 empty, 1 filled */
+  int kind, check;                                         /* check: -1 no square, 0 empty, 1 filled, 2 a mark: the chosen option */
   bool disabled;
   char *label, *key;
   void (*fn)(rk_view *menu, int item, void *user); void *user;
@@ -24,6 +28,9 @@ typedef struct menu {
   bool hover;                                              /* the pointer is on it: the active row shows as hovered */
   rk_view *from;                                           /* what opened it; focus goes back there */
   rk_view *view;
+  float min_w; int prefer;                                 /* at least this wide; the item it starts at (-1: the first) */
+  bool passive;                                            /* floats without focus: its opener moves the active row */
+  void (*opening)(rk_view *menu, void *user); void *opening_user;   /* declare.c: fill it now */
 } menu;
 
 static float pad_y(void) { return rk_metric_of(RK_SPACE_XS); }
@@ -49,7 +56,7 @@ static rk_size menu_measure(rk_view *v, rk_size avail, void *st) {
     w = RK_MAX(w, iw);
     h += item_h(it);
   }
-  return (rk_size){ RK_CLAMP(ceilf(w + 2 * side), 192.0f, 384.0f), h };
+  return (rk_size){ RK_MAX(m->min_w, RK_CLAMP(ceilf(w + 2 * side), 192.0f, 384.0f)), h };
 }
 
 static void menu_draw(rk_view *v, rk_canvas *c, void *st) {
@@ -58,7 +65,7 @@ static void menu_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_canvas_fill_round_rect(c, (rk_rect){ 0, 0, W, H }, r, rk_color_of(RK_ROLE_TEXT_MEDIUM));
   rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, H - 2 }, r - 1, rk_color_of(RK_ROLE_BG));
   rk_window *w = rk__view_window(v);
-  bool keys = w && w->focus == v && w->focus_visible;
+  bool keys = (w && w->focus == v && w->focus_visible) || m->passive;
   bool squares = false;
   for (int i = 0; i < m->n; i++) if (m->items[i].check >= 0) squares = true;
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0), k = rk__textfmt(RK_TEXT_META, 0), l = rk__textfmt(RK_TEXT_LABEL, 0);
@@ -70,11 +77,14 @@ static void menu_draw(rk_view *v, rk_canvas *c, void *st) {
     else if (it->kind == LABEL) rk__text_draw(c, it->label, -1, side, y + rk_metric_of(RK_SPACE_S), &l, rk_color_of(RK_ROLE_TEXT_HIGH));
     else {
       if (i == m->active && (m->hover || keys) && !it->disabled) rk_canvas_fill_rect(c, (rk_rect){ 1, y, W - 2, h }, rk_color_of(RK_ROLE_HOVER));
-      if (i == m->active && keys) rk_canvas_stroke_rect(c, (rk_rect){ 1, y, W - 2, h }, 2, rk_color_of(RK_ROLE_FOCUS));
+      if (i == m->active && keys) rk__focus_ring(c, (rk_rect){ 1, y, W - 2, h }, 0);
       rk_color ink = rk_color_of(it->disabled ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
       float x = side;
       if (squares) {
-        if (it->check >= 0) {
+        if (it->check == 2) {                                 /* the chosen option: a mark, no box */
+          rk_point mark[3] = { { x, y + h / 2 - 1 }, { x + 3.5f, y + h / 2 + 2.5f }, { x + 10, y + h / 2 - 4 } };
+          rk_canvas_polyline(c, mark, 3, 2, ink);
+        } else if (it->check >= 0) {
           rk_rect sq = { x, y + (h - 10) / 2, 10, 10 };
           if (it->check) rk_canvas_fill_rect(c, sq, ink); else rk_canvas_stroke_rect(c, sq, 1, ink);
         }
@@ -110,7 +120,7 @@ static void choose(rk_view *v, menu *m, int i) {
   if (i < 0 || i >= m->n || !choosable(&m->items[i]) || m->items[i].disabled) return;
   menu_item *it = &m->items[i];
   void (*fn)(rk_view *, int, void *) = it->fn; void *user = it->user;
-  if (it->check >= 0) { it->check = !it->check; rk__view_dirty(v); if (fn) fn(v, i, user); return; }   /* a check: stays open */
+  if (it->check == 0 || it->check == 1) { it->check = !it->check; rk__view_dirty(v); if (fn) fn(v, i, user); return; }   /* a check: stays open */
   rk_retain(v);
   rk_view *from = m->from ? rk_retain(m->from) : NULL;
   close_menu(v, true);
@@ -169,7 +179,7 @@ static menu *menu_of(rk_view *v) { return v && v->cls == &menu_class ? v->state 
 
 rk_view *rk_menu(void) {
   menu *m = rk__alloc(sizeof *m);
-  m->active = -1;
+  m->active = -1; m->prefer = -1;
   rk_view *v = rk__view_create(&menu_class, m);
   m->view = v;
   v->focusable = true; v->draws_focus = true;                /* the active row shows focus, not the whole menu */
@@ -194,25 +204,27 @@ int rk_menu_add(rk_view *v, const char *label, const char *key, void (*fn)(rk_vi
   return m->n - 1;
 }
 
-void rk_menu_add_separator(rk_view *v) { menu *m = menu_of(v); if (m) { add_item(m, SEPARATOR, NULL); rk__view_relayout_up(v); } }
-void rk_menu_add_label(rk_view *v, const char *label) { menu *m = menu_of(v); if (m) { add_item(m, LABEL, label); rk__view_relayout_up(v); } }
+void rk_menu_add_separator(rk_view *v) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m) { add_item(m, SEPARATOR, NULL); rk__view_relayout_up(v); } }
+void rk_menu_add_label(rk_view *v, const char *label) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m) { add_item(m, LABEL, label); rk__view_relayout_up(v); } }
 
-void rk_menu_set_check(rk_view *v, int i, int check) {
-  menu *m = menu_of(v);
+void rk_menu_set_check(rk_view *v, int i, rk_checkmark check) {
+  menu *m = RK__EXPECT(menu_of, v, "a menu");
   if (!m || i < 0 || i >= m->n) return;
-  m->items[i].check = check < 0 ? -1 : check ? 1 : 0;
+  m->items[i].check = check == RK_CHECKMARK_ON ? 1 : check == RK_CHECKMARK_OFF ? 0 : -1;
   rk__view_relayout_up(v); rk__view_dirty(v);
 }
-int rk_menu_check(rk_view *v, int i) { menu *m = menu_of(v); return m && i >= 0 && i < m->n ? m->items[i].check : -1; }
-void rk_menu_set_disabled(rk_view *v, int i, bool disabled) { menu *m = menu_of(v); if (m && i >= 0 && i < m->n) { m->items[i].disabled = disabled; rk__view_dirty(v); } }
-rk_view *rk_menu_opener(rk_view *v) { menu *m = menu_of(v); return m ? m->from : NULL; }
+rk_checkmark rk_menu_check(rk_view *v, int i) { menu *m = RK__EXPECT(menu_of, v, "a menu"); int c = m && i >= 0 && i < m->n ? m->items[i].check : -1; return c < 0 ? RK_CHECKMARK_NONE : c ? RK_CHECKMARK_ON : RK_CHECKMARK_OFF; }
+void rk_menu_set_enabled(rk_view *v, int i, bool enabled) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m && i >= 0 && i < m->n) { m->items[i].disabled = !enabled; rk__view_dirty(v); } }
+rk_view *rk_menu_opener(rk_view *v) { menu *m = RK__EXPECT(menu_of, v, "a menu"); return m ? m->from : NULL; }
 
 /* Opens it in the window's top layer at a rect's bottom left (above it where there is no room below), on screen. */
-static void open_by(rk_view *v, rk_view *from, rk_rect at, bool keys) {
+static void open_by(rk_view *v, rk_view *from, rk_rect at, bool keys, bool passive) {
   menu *m = menu_of(v);
   rk_window *w = from ? rk__view_window(from) : NULL;
   if (!m || !w) return;
+  m->passive = passive; v->focusable = !passive;
   if (v->parent) rk_menu_close(v);
+  if (m->opening) m->opening(v, m->opening_user);          /* declared: its items, as they are now */
   rk_retain(from); rk_release(m->from); m->from = from;    /* held while it is open */
   rk_size s = menu_measure(v, (rk_size){ INFINITY, INFINITY }, m);
   float gap = rk_metric_of(RK_SPACE_XS), edge = rk_metric_of(RK_SPACE_M);
@@ -224,28 +236,31 @@ static void open_by(rk_view *v, rk_view *from, rk_rect at, bool keys) {
   rk__view_add(w->floats, v);
   rk_view_set_frame(v, (rk_rect){ x, y, s.w, s.h });
   rk__layout_pending();
-  w->focus_visible = keys;
-  rk_window_focus(w, v);
-  if (keys) menu_step(v, m, 1);
+  if (!m->passive) {
+    w->focus_visible = keys;
+    rk_window_focus(w, v);
+  }
+  if (m->prefer >= 0 && m->prefer < m->n && choosable(&m->items[m->prefer])) m->active = m->prefer;
+  else if (keys) menu_step(v, m, 1);
   /* it comes in from the opener's side: a fade and a 4px shift over duration-float */
   float o0 = 0, o1 = 1;
   rk_transform t0 = v->transform, t1 = v->transform;
   t0.translate_y = above ? 4 : -4;
   double d = rk_duration_of(RK_DURATION_FLOAT);
   rk__animate(v, RK_PROP_OPACITY, &o0, &o1, 1, d, 0, rk__ease_in);
-  rk__animate(v, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_in);
+  rk__animate_transform(v, &t0, &t1, d, 0, rk__ease_in);
 }
 
 void rk_menu_open(rk_view *v, rk_view *from) {
   if (!from) return;
   rk_window *w = rk__view_window(from);
-  open_by(v, from, rk__window_rect(from), w && w->focus_visible);
+  open_by(v, from, rk__window_rect(from), w && w->focus_visible, false);
 }
 
 void rk_menu_open_at(rk_view *v, rk_view *from, rk_point p) {
   if (!from) return;
   rk_rect r = rk__window_rect(from);
-  open_by(v, from, (rk_rect){ r.x + p.x, r.y + p.y, 0, 0 }, false);
+  open_by(v, from, (rk_rect){ r.x + p.x, r.y + p.y, 0, 0 }, false, false);
 }
 
 /* It leaves at once; focus goes back to what opened it unless it is moving elsewhere. */
@@ -272,3 +287,47 @@ void rk__menus_close(rk_window *w) {
     if (menu_of(v)) close_menu(v, false); else rk__view_detach(v);
   }
 }
+
+/* For the controls built on a menu --------------------------------------------------------------------------------- */
+
+void rk__menu_mark(rk_view *v, int chosen) {
+  menu *m = menu_of(v);
+  if (!m) return;
+  for (int i = 0; i < m->n; i++) if (m->items[i].kind == ITEM) m->items[i].check = i == chosen ? 2 : -1;
+  if (chosen < 0 && m->n) m->items[0].check = -1;
+  rk__view_dirty(v);
+}
+
+void rk__menu_shape(rk_view *v, float min_w, int prefer) { menu *m = menu_of(v); if (m) { m->min_w = min_w; m->prefer = prefer; } }
+
+void rk_menu_clear(rk_view *v) {
+  menu *m = RK__EXPECT(menu_of, v, "a menu");
+  if (!m) return;
+  for (int i = 0; i < m->n; i++) { free(m->items[i].label); free(m->items[i].key); }
+  m->n = 0; m->active = -1;
+  rk__view_relayout_up(v);
+}
+
+/* Floats below from without taking focus; from moves the active row and chooses. */
+void rk__menu_show_passive(rk_view *v, rk_view *from, rk_rect below) {
+  menu *m = menu_of(v);
+  rk_window *w = from ? rk__view_window(from) : NULL;
+  if (!m || !w || !m->n) return;
+  bool was = v->parent != NULL;
+  if (!was) {
+    open_by(v, from, below, false, true);
+    m->active = m->prefer >= 0 && m->prefer < m->n ? m->prefer : -1;
+  } else {                                                 /* open already: its size follows its items */
+    rk_size sz = menu_measure(v, (rk_size){ INFINITY, INFINITY }, m);
+    rk_view_set_frame(v, (rk_rect){ v->frame.x, v->frame.y, sz.w, sz.h });
+    if (m->active >= m->n) m->active = -1;
+  }
+  rk__view_dirty(v);
+}
+
+bool rk__menu_open(rk_view *v) { return v && v->parent != NULL; }
+bool rk__is_menu(rk_view *v) { return menu_of(v) != NULL; }
+void rk__menu_on_open(rk_view *v, void (*fn)(rk_view *, void *), void *user) { menu *m = menu_of(v); if (m) { m->opening = fn; m->opening_user = user; } }
+void rk__menu_move(rk_view *v, int dir) { menu *m = menu_of(v); if (m && m->n) { m->hover = false; menu_step(v, m, dir); } }
+int rk__menu_active(rk_view *v) { menu *m = menu_of(v); return m ? m->active : -1; }
+void rk__menu_choose(rk_view *v, int i) { menu *m = menu_of(v); if (m) choose(v, m, i); }

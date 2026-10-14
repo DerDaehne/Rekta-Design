@@ -2,9 +2,11 @@
    title bar, so Rekta's title bar sits beside the system's traffic lights; pixels go up as a CALayer's contents; the
    theme follows the effective appearance and the motion setting the accessibility display options. While a field
    has focus, keys go through the text input system (NSTextInputClient): an input method's composing text is shown
-   by the field, underlined, and what it commits is typed; dead keys compose the same way. */
+   by the field, underlined, and what it commits is typed; dead keys compose the same way. Notifications go through
+   UNUserNotificationCenter, loaded at run time, and only from an app bundle, which it needs. */
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <UserNotifications/UserNotifications.h>
 #include "rk_internal.h"
 
 @class RKView;
@@ -28,7 +30,8 @@ static uint32_t key_of(NSEvent *e) {
     case 0x33: return RK_KEY_BACKSPACE; case 0x75: return RK_KEY_DELETE;
     case 0x7A: return RK_KEY_F1; case 0x78: return RK_KEY_F1 + 1; case 0x63: return RK_KEY_F1 + 2; case 0x76: return RK_KEY_F1 + 3;
     case 0x60: return RK_KEY_F1 + 4; case 0x61: return RK_KEY_F1 + 5; case 0x62: return RK_KEY_F1 + 6; case 0x64: return RK_KEY_F1 + 7;
-    case 0x65: return RK_KEY_F1 + 8; case 0x6D: return RK_KEY_F1 + 9;
+    case 0x65: return RK_KEY_F1 + 8; case 0x6D: return RK_KEY_F1 + 9; case 0x67: return RK_KEY_F11; case 0x6F: return RK_KEY_F12;
+    case 0x72: return RK_KEY_INSERT;                          /* Help, where Insert is on a PC keyboard */
     default: break;
   }
   NSString *s = e.charactersIgnoringModifiers.uppercaseString;
@@ -64,6 +67,49 @@ static NSString *plain(id s) { return [s isKindOfClass:[NSAttributedString class
   ev.size = sizeof ev; ev.type = type; ev.time = rk_app_now(); ev.button = b; ev.mods = mods_of(e.modifierFlags);
   ev.position = (rk_point){ (float)p.x, (float)p.y };
   rk__window_event(self.owner->w, &ev);
+}
+/* Files dragged in (NSDraggingDestination): each enter and update asks the window whether a view under the pointer
+   takes them (a copy) or not; the drop hands it their paths. */
+static NSDictionary *files_only(void) { return @{ NSPasteboardURLReadingFileURLsOnlyKey: @YES }; }
+- (NSDragOperation)drag:(id<NSDraggingInfo>)info type:(rk_event_type)type {
+  if (!self.owner) return NSDragOperationNone;
+  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+  BOOL files = [info.draggingPasteboard canReadObjectForClasses:@[ [NSURL class] ] options:files_only()];
+  rk_event ev;
+  memset(&ev, 0, sizeof ev);
+  ev.size = sizeof ev; ev.type = type; ev.time = rk_app_now(); ev.position = (rk_point){ (float)p.x, (float)p.y };
+  BOOL taken = files && rk__window_drag(self.owner->w, &ev);
+  rk__app_request_frame();
+  return taken ? NSDragOperationCopy : NSDragOperationNone;
+}
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info { return [self drag:info type:RK_EVENT_DRAG_ENTER]; }
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)info { return [self drag:info type:RK_EVENT_DRAG_MOVE]; }
+- (void)draggingExited:(id<NSDraggingInfo>)info {
+  (void)info;
+  if (!self.owner) return;
+  rk_event ev;
+  memset(&ev, 0, sizeof ev);
+  ev.size = sizeof ev; ev.type = RK_EVENT_DRAG_LEAVE; ev.time = rk_app_now();
+  rk__window_drag(self.owner->w, &ev);
+  rk__app_request_frame();
+}
+- (BOOL)prepareForDragOperation:(id<NSDraggingInfo>)info { (void)info; return YES; }
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)info {
+  if (!self.owner) return NO;
+  NSArray *urls = [info.draggingPasteboard readObjectsForClasses:@[ [NSURL class] ] options:files_only()];
+  int n = (int)urls.count;
+  char **paths = n ? rk__alloc((size_t)n * sizeof *paths) : NULL;
+  for (int i = 0; i < n; i++) paths[i] = rk__strdup(((NSURL *)urls[(NSUInteger)i]).fileSystemRepresentation);
+  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+  rk_event ev;
+  memset(&ev, 0, sizeof ev);
+  ev.size = sizeof ev; ev.type = n ? RK_EVENT_DROP : RK_EVENT_DRAG_LEAVE; ev.time = rk_app_now();
+  ev.position = (rk_point){ (float)p.x, (float)p.y };
+  ev.files = (const char *const *)paths; ev.nfiles = n;
+  BOOL took = rk__window_drag(self.owner->w, &ev) && n;
+  rk__free_paths(paths, n);
+  rk__app_request_frame();
+  return took;
 }
 - (void)mouseDown:(NSEvent *)e { [self pointer:e type:RK_EVENT_POINTER_DOWN button:0]; }
 - (void)mouseUp:(NSEvent *)e { [self pointer:e type:RK_EVENT_POINTER_UP button:0]; }
@@ -219,6 +265,7 @@ static void *c_open(rk_window *w, const rk_window_desc *d) {
     view.wantsLayer = YES;
     view.layer.contentsGravity = kCAGravityTopLeft;
     view.owner = x;
+    [view registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
     win.contentView = view;
     RKDelegate *del = [RKDelegate new];
     del.owner = x;
@@ -341,9 +388,79 @@ static double c_refresh(void) {
   return 60;
 }
 
+/* The file chooser: an open panel as a sheet on the window; the extensions come from the filter. */
+static bool c_choose(void *n, const char *accept, bool multiple, void (*done)(void *, const char *const *, int), void *ctx) {
+  cwin *x = n;
+  NSOpenPanel *panel = [NSOpenPanel openPanel];
+  panel.canChooseFiles = YES; panel.canChooseDirectories = NO; panel.allowsMultipleSelection = multiple;
+  char **globs = NULL;
+  int ng = rk__accept_globs(accept, &globs);
+  if (ng) {
+    NSMutableArray *types = [NSMutableArray array];
+    for (int i = 0; i < ng; i++) [types addObject:[NSString stringWithUTF8String:globs[i] + 2]];   /* "*.png" -> "png" */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    panel.allowedFileTypes = types;                          /* by extension, as the filter is written */
+#pragma clang diagnostic pop
+  }
+  rk__free_paths(globs, ng);
+  void (^answer)(NSModalResponse) = ^(NSModalResponse r) {
+    NSArray *urls = r == NSModalResponseOK ? panel.URLs : @[];
+    int count = (int)urls.count;
+    char **paths = count ? rk__alloc((size_t)count * sizeof *paths) : NULL;
+    for (int i = 0; i < count; i++) paths[i] = rk__strdup(((NSURL *)urls[(NSUInteger)i]).fileSystemRepresentation);
+    done(ctx, (const char *const *)paths, count);
+    rk__free_paths(paths, count);
+  };
+  if (x && x->win) [panel beginSheetModalForWindow:x->win completionHandler:answer];
+  else [panel beginWithCompletionHandler:answer];
+  return true;
+}
+
+/* Notifications: shown while the app is in front too, as the app asked for them. */
+@interface RKNotes : NSObject <UNUserNotificationCenterDelegate>
+@end
+@implementation RKNotes
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center willPresentNotification:(UNNotification *)note
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))show {
+  (void)center; (void)note;
+  if (@available(macOS 11.0, *)) show(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList);
+  else show(UNNotificationPresentationOptionAlert);
+}
+@end
+
+static bool c_notify(const rk_app_desc *app, const char *title, const char *body) {
+  (void)app;
+  static RKNotes *notes;
+  static Class center_class, content_class, request_class;
+  if (!notes) {
+    if (!NSBundle.mainBundle.bundleIdentifier) return false;   /* outside a bundle the center throws */
+    [[NSBundle bundleWithPath:@"/System/Library/Frameworks/UserNotifications.framework"] load];
+    center_class = NSClassFromString(@"UNUserNotificationCenter");
+    content_class = NSClassFromString(@"UNMutableNotificationContent");
+    request_class = NSClassFromString(@"UNNotificationRequest");
+    if (!center_class || !content_class || !request_class) return false;
+    notes = [RKNotes new];
+    [center_class currentNotificationCenter].delegate = notes;
+  }
+  UNUserNotificationCenter *center = [center_class currentNotificationCenter];
+  NSString *t = [NSString stringWithUTF8String:title] ?: @"", *b = [NSString stringWithUTF8String:body] ?: @"";
+  Class content = content_class, request = request_class;
+  [center requestAuthorizationWithOptions:UNAuthorizationOptionAlert | UNAuthorizationOptionSound
+                        completionHandler:^(BOOL granted, NSError *error) {
+    (void)error;
+    if (!granted) return;                                    /* the person said no once; the system remembers */
+    UNMutableNotificationContent *c = [content new];
+    c.title = t; c.body = b;
+    [center addNotificationRequest:[request requestWithIdentifier:NSUUID.UUID.UUIDString content:c trigger:nil]
+             withCompletionHandler:nil];
+  }];
+  return true;
+}
+
 static void c_resize(void *n, float w, float h) { cwin *x = n; if (x && !x->win.zoomed) [x->win setContentSize:NSMakeSize(w, h)]; }
 
 const rk_platform rk__platform_native = {
   "cocoa", c_init, c_shutdown, c_open, c_close, c_show, c_title, c_present, c_move, c_minimize, c_zoom,
-  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, c_text_input, c_cursor
+  c_wait, c_wake, c_now, c_settings, c_resize, NULL, c_refresh, NULL, c_clip_set, c_clip_get, c_text_input, c_cursor, c_choose, c_notify
 };
