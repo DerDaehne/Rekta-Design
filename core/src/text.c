@@ -310,7 +310,8 @@ static void cache_clear(void) {
 }
 
 /* The faces moved or changed: what was remembered about them goes. */
-void rk__text_forget(void) { cache_clear(); memset(cp_cache, 0, sizeof cp_cache); cp_cached = 0; }
+void rk__text_forget(void) {
+  rk__measure_gen++;                                       /* every width may differ now */ cache_clear(); memset(cp_cache, 0, sizeof cp_cache); cp_cached = 0; }
 
 void rk__text_shutdown(void) {
   rk__text_forget();

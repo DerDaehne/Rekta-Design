@@ -244,11 +244,14 @@ void rk__set_frame(rk_view *v, rk_rect f) {
     rk__animate_cb(v, RK_PROP_TRANSFORM, &t0.translate_x, &t1.translate_x, 10, d, 0, rk__ease_in, entered, NULL);
     return;
   }
-  if (first || !animate) { rk__anim_cancel(v, RK_PROP_FRAME); v->pframe = f; return; }
   rk_rect p = v->pframe;
-  if (fabsf(p.x - f.x) < 0.25f && fabsf(p.y - f.y) < 0.25f && fabsf(p.w - f.w) < 0.25f && fabsf(p.h - f.h) < 0.25f) {
+  bool same = !first && fabsf(p.x - f.x) < 0.25f && fabsf(p.y - f.y) < 0.25f && fabsf(p.w - f.w) < 0.25f && fabsf(p.h - f.h) < 0.25f;
+  if (first || !animate || same) {
     rk__anim_cancel(v, RK_PROP_FRAME);
+    bool moved = first || p.x != f.x || p.y != f.y || p.w != f.w || p.h != f.h;
+    if (moved && !first) rk__view_moved(v);                /* drawn again where it was */
     v->pframe = f;
+    if (moved) { if (v->cls) v->layer_ok = false; rk__view_moved(v); }   /* and where it is */
     return;
   }
   rk_motion m = rk__current_motion();

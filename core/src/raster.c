@@ -197,6 +197,30 @@ void rk__path_stroke(rk_path *p, const float *xy, int n, bool closed, float widt
 static float *acc_buf;
 static int acc_cap;
 
+/* An edge's share of a row's coverage, from x = a to c (a <= c, both inside the row) over the height d (signed by
+   its direction): each cell gets the area to the right of the edge within it, the cell after the rest. */
+static void cover(float *row, int w, float a, float c, float d) {
+  int a0 = (int)a, c1 = (int)ceilf(c);
+  if (c1 <= a0 + 1) {
+    float xm = 0.5f * (a + c) - a0;
+    row[a0] += d - d * xm;
+    if (a0 + 1 < w) row[a0 + 1] += d * xm;
+    return;
+  }
+  float s = 1.0f / (c - a), af = a - a0, a0v = 0.5f * s * (1 - af) * (1 - af);
+  float cf = c - c1 + 1, amv = 0.5f * s * cf * cf;
+  row[a0] += d * a0v;
+  if (c1 == a0 + 2) row[a0 + 1] += d * (1 - a0v - amv);
+  else {
+    float a1 = s * (1.5f - af);
+    row[a0 + 1] += d * (a1 - a0v);
+    for (int k = a0 + 2; k < c1 - 1; k++) row[k] += d * s;
+    float a2 = a1 + (c1 - a0 - 3) * s;
+    row[c1 - 1] += d * (1 - a2 - amv);
+  }
+  if (c1 < w) row[c1] += d * amv;
+}
+
 void rk__path_fill(rk_bitmap *b, rk_irect clip, const rk_path *p, uint32_t pm) {
   if (!p->nends || !(pm >> 24)) return;
   clip = rk__irect_meet(clip, (rk_irect){ 0, 0, b->w, b->h });
@@ -208,8 +232,8 @@ void rk__path_fill(rk_bitmap *b, rk_irect clip, const rk_path *p, uint32_t pm) {
   rk_irect box = { (int)floorf(minx), (int)floorf(miny), (int)ceilf(maxx), (int)ceilf(maxy) };
   rk_irect r = rk__irect_meet(box, clip);
   if (rk__irect_empty(r)) return;
-  /* columns from the clip's left edge (points further left are pulled onto it, which keeps the coverage to the
-     right), rows only where drawn */
+  /* columns from the clip's left edge (what lies further left counts as standing on it, which keeps the coverage to
+     the right), rows only where drawn */
   int ox = r.x0, oy = r.y0, w = r.x1 - r.x0 + 2, h = r.y1 - r.y0;
   int need = w * h;
   if (need > acc_cap) { free(acc_buf); acc_cap = need; acc_buf = rk__alloc((size_t)acc_cap * sizeof(float)); }
@@ -231,25 +255,22 @@ void rk__path_fill(rk_bitmap *b, rk_irect clip, const rk_path *p, uint32_t pm) {
       for (int y = (int)y0; y < (int)ceilf(y1) && y < h; y++) {
         float *row = acc_buf + (size_t)y * w;
         float dy = RK_MIN((float)y + 1, y1) - RK_MAX((float)y, y0), xn = x + dxdy * dy, d = dy * dir;
-        float a = RK_CLAMP(RK_MIN(x, xn), 0.0f, xmax), c = RK_CLAMP(RK_MAX(x, xn), 0.0f, xmax);
-        int a0 = (int)a, c1 = (int)ceilf(c);
-        if (c1 <= a0 + 1) {
-          float xm = 0.5f * (a + c) - a0;
-          row[a0] += d - d * xm;
-          if (a0 + 1 < w) row[a0 + 1] += d * xm;
-        } else {
-          float s = 1.0f / (c - a), af = a - a0, a0v = 0.5f * s * (1 - af) * (1 - af);
-          float cf = c - c1 + 1, amv = 0.5f * s * cf * cf;
-          row[a0] += d * a0v;
-          if (c1 == a0 + 2) row[a0 + 1] += d * (1 - a0v - amv);
-          else {
-            float a1 = s * (1.5f - af);
-            row[a0 + 1] += d * (a1 - a0v);
-            for (int k = a0 + 2; k < c1 - 1; k++) row[k] += d * s;
-            float a2 = a1 + (c1 - a0 - 3) * s;
-            row[c1 - 1] += d * (1 - a2 - amv);
-          }
-          if (c1 < w) row[c1] += d * amv;
+        /* split where the edge crosses the clip's left edge or the right end, so a part outside counts as an edge
+           standing at the border (all its coverage to the right) and the part inside keeps its slope: clamped as one,
+           a slanted edge across the border would cover the first pixel wrongly, and a part redrawn would not match
+           the whole */
+        float ts[4] = { 0, 1, 1, 1 };
+        int nt = 1;
+        if (xn != x) {
+          float t0 = (0 - x) / (xn - x), t1 = (xmax - x) / (xn - x);
+          if (t0 > 0 && t0 < 1) ts[nt++] = t0;
+          if (t1 > 0 && t1 < 1) ts[nt++] = t1;
+          if (nt == 3 && ts[1] > ts[2]) { float t = ts[1]; ts[1] = ts[2]; ts[2] = t; }
+        }
+        ts[nt] = 1;
+        for (int k = 0; k < nt; k++) {
+          float pa = x + (xn - x) * ts[k], pc = x + (xn - x) * ts[k + 1];
+          cover(row, w, RK_CLAMP(RK_MIN(pa, pc), 0.0f, xmax), RK_CLAMP(RK_MAX(pa, pc), 0.0f, xmax), d * (ts[k + 1] - ts[k]));
         }
         x = xn;
       }

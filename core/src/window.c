@@ -404,7 +404,7 @@ void rk__window_frame(rk_window *w, double now) {
   static int hud = -1, trace = -1;
   if (hud < 0) { hud = env_on("RK_HUD"); trace = env_on("RK_TRACE"); }
   if (w->closed) return;
-  if (w->needs_layout) { layout_window(w); w->damage_all = true; }
+  if (w->needs_layout) layout_window(w);                     /* what it moved, it damaged (rk__set_frame) */
   if (!w->needs_draw) return;
   w->needs_draw = false;
   double t0 = rk__wall_ms();
@@ -581,12 +581,12 @@ bool rk_window_focus(rk_window *w, rk_view *v) {
   if (w->focus == v) return true;
   if (v && rk__view_within(v, w->toasts) && !rk__view_within(w->focus, w->toasts)) w->focus_back = w->focus;
   rk_event e = { sizeof e, RK_EVENT_BLUR, rk_app_now(), { 0, 0 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
-  if (w->focus) dispatch(w, w->focus, &e);
+  if (w->focus) { dispatch(w, w->focus, &e); rk__view_dirty(w->focus); }   /* its ring goes */
   w->focus = v;
   e.type = RK_EVENT_FOCUS;
   if (v) dispatch(w, v, &e);
   rk__tip_focus(w, v);
-  rk__window_invalidate(w);
+  if (v) rk__view_dirty(v);                                 /* and comes here */
   return true;
 }
 

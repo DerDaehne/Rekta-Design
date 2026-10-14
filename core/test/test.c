@@ -436,6 +436,70 @@ static void test_limits(void) {
   done(w);
 }
 
+/* Damage is honest: after each change, what the frames drew piece by piece is what drawing everything shows. And a
+   label's new text draws about the label, not the window. */
+static int damage_lies(rk_window *w) {
+  rk_app_run_for(1500);                                     /* every motion ends; the frames drew only their damage */
+  rk_bitmap *b = w->fb;
+  size_t n = (size_t)b->h * b->stride;
+  uint32_t *was = rk__alloc(n * sizeof *was);
+  memcpy(was, b->px, n * sizeof *was);
+  w->needs_draw = true; w->damage_all = true;
+  rk__window_frame(w, rk_app_now());
+  int off = 0;
+  for (int y = 0; y < b->h; y++) for (int x = 0; x < b->w; x++) {
+    uint32_t p = b->px[(size_t)y * b->stride + x], q = was[(size_t)y * b->stride + x];
+    int d = 0;
+    for (int k = 0; k < 32; k += 8) d = RK_MAX(d, abs((int)((p >> k) & 255) - (int)((q >> k) & 255)));
+    if (d > 8) off++;
+  }
+  free(was);
+  return off;
+}
+
+static void test_damage(void) {
+  rk_window *w = window(800, 500);
+  rk_view *page = col(12, 16);
+  rk_view *title = rk_add(page, rk_label("Builds", RK_TEXT_TITLE));
+  rk_view *row = rk_add(page, rk_row());
+  rk_view *a = rk_add(row, rk_button("one", NULL, NULL));
+  rk_view *bt = rk_add(row, rk_button("two", NULL, NULL));
+  rk_view *rows = rk_add(page, rk_rows());
+  rk_rows_add(rows, "first", "1", RK_STATUS_NONE);
+  rk_view *seg = rk_add(page, rk_segments((const char *const[]){ "all", "failed", "waiting" }, 3, 0));
+  rk_view *note = rk_add(page, rk_label("a note", RK_TEXT_BODY));
+  show(w, page, "damage");
+  CHECK(damage_lies(w) == 0, "at rest: nothing stale");
+  rk_stats st;
+  memset(&st, 0, sizeof st); st.size = sizeof st;
+  rk_app_stats(&st, true);
+  rk_label_set_text(note, "a longer note now");
+  rk_app_run_for(100);
+  rk_app_stats(&st, false);
+  CHECK(st.pixels < 800.0 * 500 / 10, "a label's new text draws about the label (%.0f of %d pixels)", st.pixels, 800 * 500);
+  CHECK(damage_lies(w) == 0, "a label's new text: nothing stale (%d)", damage_lies(w));
+  rk_label_set_text(title, "Builds and releases");
+  CHECK(damage_lies(w) == 0, "a title that grows: nothing stale");
+  rk_view_set_hidden(a, true);
+  CHECK(damage_lies(w) == 0, "a button hidden, the other moves over: nothing stale");
+  rk_view_set_hidden(a, false);
+  CHECK(damage_lies(w) == 0, "and shown again");
+  rk_rows_add(rows, "second", "2", RK_STATUS_INFO);
+  CHECK(damage_lies(w) == 0, "a row added, what is below moves down: nothing stale");
+  rk_view_remove(rk_view_child(rows, 0));
+  CHECK(damage_lies(w) == 0, "a row removed: nothing stale");
+  rk_control_set_value(seg, 2);
+  CHECK(damage_lies(w) == 0, "segments: nothing stale");
+  w->focus_visible = true;
+  rk_window_focus(w, bt);
+  CHECK(damage_lies(w) == 0, "a focus ring: nothing stale");
+  rk_window_key(w, RK_KEY_TAB);
+  CHECK(damage_lies(w) == 0, "focus moves on: nothing stale");
+  rk_view_set_enabled(bt, false);
+  CHECK(damage_lies(w) == 0, "disabled: nothing stale");
+  done(w);
+}
+
 static void test_api(void) {
   int before = rk__live_views;
   rk_window *w = window(600, 400);
@@ -1858,6 +1922,7 @@ static void launch(void *user) {
   test_notify();
   test_enabled();
   test_limits();
+  test_damage();
   test_spring();
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */

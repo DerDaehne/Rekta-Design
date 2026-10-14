@@ -85,10 +85,17 @@ static void damage(rk_view *v) {
   rk__window_damage(w, r);
 }
 
+/* The view changed its size or content: the layout runs again before the next frame. Only what changed is drawn
+   again - the view where it was now, and (rk__set_frame) every view where it was and where it lands. */
+uint32_t rk__measure_gen = 1;
+
 void rk__view_relayout_up(rk_view *v) {
+  rk__measure_gen++;                                       /* what was measured may measure differently now */
   for (rk_view *p = v; p; p = p->parent) p->needs_layout = true;
   rk_window *w = rk__view_window(v);
-  if (w) { w->needs_layout = true; rk__window_invalidate(w); }
+  if (!w) return;
+  if (!w->needs_layout) { w->needs_layout = true; rk__app_request_frame(); }
+  if (v->placed) rk__view_dirty(v);
 }
 
 void rk__view_detach(rk_view *v) {
@@ -101,6 +108,7 @@ void rk__view_detach(rk_view *v) {
   }
   v->parent = NULL;
   rk_window *w = rk__view_window(p);
+  if (w && v->placed) rk__window_damage(w, (rk_rect){ rk__window_rect(p).x + v->pframe.x - 8, rk__window_rect(p).y + v->pframe.y - 8, v->pframe.w + 16, v->pframe.h + 16 });
   if (w) {
     for (rk_view *f = w->focus; f; f = f->parent) if (f == v) { w->focus = NULL; break; }
     for (rk_view *f = w->focus_back; f; f = f->parent) if (f == v) { w->focus_back = NULL; break; }
@@ -374,7 +382,18 @@ static grid tile_grid(rk_view *v, float width, rk_rect *out) {
   return g;
 }
 
+static rk_size measure(rk_view *v, rk_size avail);
+
+/* A stack measures a child, then lays it out, which measures its children again: the same question in the same layout
+   pass is answered once. */
 rk_size rk__measure(rk_view *v, rk_size avail) {
+  if (v->measured_gen == rk__measure_gen && v->measured_for.w == avail.w && v->measured_for.h == avail.h) return v->measured;
+  rk_size s = measure(v, avail);
+  v->measured_gen = rk__measure_gen; v->measured_for = avail; v->measured = s;
+  return s;
+}
+
+static rk_size measure(rk_view *v, rk_size avail) {
   rk_size s = { 0, 0 };
   rk_insets p = v->padding;
   float iw = avail.w - p.left - p.right, ih = avail.h - p.top - p.bottom;

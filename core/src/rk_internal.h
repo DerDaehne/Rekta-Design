@@ -177,6 +177,7 @@ struct rk_view {
   rk_layout layout; rk_insets padding; float gap; rk_align main, cross;
   float grow, fixed_w, fixed_h, min_w, min_h; int span_c, span_r;
   bool needs_layout;
+  uint32_t measured_gen; rk_size measured_for, measured;  /* the last measure, while nothing changed since */
   /* behaviour */
   rk_press press;
   void (*on_activate)(rk_view *view, void *user); void *activate_user;
@@ -200,7 +201,8 @@ struct rk_view {
 };
 
 extern const rk_type rk__view_type;
-extern uint32_t rk__layer_gen;                             /* bumped when everything is drawn again */
+extern uint32_t rk__layer_gen;
+extern uint32_t rk__measure_gen;                          /* bumped by every change a size may follow */                             /* bumped when everything is drawn again */
 extern int rk__live_views;                                 /* views alive: tests check nothing is left over */
 rk_view *rk__view_create(const rk_class *cls, void *state);
 void rk__view_dirty(rk_view *v);                           /* redraw its window */
