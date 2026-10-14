@@ -2,7 +2,7 @@
    rows in a window: the CPU time of each change alone (the frames between changes run, uncounted). Headless.
    Usage: declare_bench [repeats] */
 #include "../include/rekta_test.h"
-#include "../include/rekta_ui.h"
+#include "../include/rekta.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

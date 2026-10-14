@@ -247,7 +247,7 @@ void rk_split_set_detail_shown(rk_view *v, bool detail) {
   if (detail == s->detail_shown) return;
   s->going = detail;
   double wait = rk__turn_away(s->turn, v, !detail);
-  if (wait > 0) s->timer = rk_app_after(wait, split_arrive, s); else split_arrive(s);
+  if (wait > 0) s->timer = rk__after_quiet(wait, false, split_arrive, s); else split_arrive(s);
 }
 
 bool rk_split_is_sideways(rk_view *v) { split *s = RK__EXPECT(split_of, v, "a split"); return s && s->sideways; }

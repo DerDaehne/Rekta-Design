@@ -95,7 +95,7 @@ void rk__tip_hover(rk_window *w, rk_view *v) {
   if (w->tip_timer) rk_app_cancel(w->tip_timer);
   tip_wait *tw = rk__alloc(sizeof *tw);
   tw->w = w; tw->owner = rk_retain(owner);
-  w->tip_timer = rk_app_after(wait, waited, tw);
+  w->tip_timer = rk__after_quiet(wait, false, waited, tw);
 }
 
 /* Focus came to v from the keyboard: its tooltip at once. */

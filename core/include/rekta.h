@@ -1,5 +1,9 @@
 /* rekta.h: Rekta Design core, native views for desktop apps (Windows, macOS, Linux).
  *
+ * Start with "Declared UI" below: a build function says what a window shows, from the app's state, and the library
+ * keeps the screen in step. The view tree and controllers it stands on are public too - for views of your own and
+ * for anything the declarations do not reach.
+ *
  * The ABI rules (docs/core.md):
  *   - C99. Functions rk_noun_verb, types rk_noun, constants RK_NOUN.
  *   - Value types cross by value and never change layout. Units are logical pixels.
@@ -160,6 +164,8 @@ typedef struct rk_window_desc {
   float width, height;                             /* content size; 0: 1280 × 800 */
   float min_width, min_height;                     /* 0: pane-min × 320 */
   bool system_frame;                               /* keep the system's title bar instead of Rekta's */
+  void (*build)(void *user);                       /* declares what it shows (see Declared UI); NULL: rk_window_show */
+  void *user;                                      /* build's */
 } rk_window_desc;
 
 RK_API rk_window *rk_window_create(const rk_window_desc *desc);   /* an open window lives until closed */
@@ -626,6 +632,222 @@ RK_API void rk_animate_begin(rk_motion motion);    /* blocks nest; the innermost
 RK_API void rk_animate_on_done(void (*fn)(void *user), void *user);
 RK_API void rk_animate_commit(void);
 RK_API void rk_view_transition(rk_view *view, rk_transition transition);   /* call before changing the view */
+
+/* Declared UI -----------------------------------------------------------------------------------------------------
+ *
+ * The way to build with Rekta. A build function says what a window shows now, from the app's state, top to bottom;
+ * the library makes the views, and after anything that may have changed the state it builds again and changes only
+ * what differs - with the design's motion: a tile's new value peeks in, a new status turns it over, what comes builds
+ * in, what goes leaves and the rest close up, a new size or order glides, a place opened turns.
+ *
+ *     static struct { int finished; bool asking; } app = { 312 };
+ *
+ *     static void build_one(rk_view *button, void *user) { app.finished++; }     // only the state: the screen follows
+ *
+ *     static void today(void *user) {
+ *       char n[16];
+ *       snprintf(n, sizeof n, "%d", app.finished);
+ *       RK_PANORAMA() RK_SECTION("today") {
+ *         RK_TILES() RK_TILE(n, .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
+ *         RK_BUTTON("build one", .on_press = build_one);
+ *       }
+ *     }
+ *
+ *     rk_window_create(&(rk_window_desc){ .size = sizeof(rk_window_desc), .title = "My tool", .build = today });
+ *
+ * The rules:
+ *   - It builds again after every handler, timer, post and press or key the library dispatches, before the next frame.
+ *     State changed anywhere else - a custom view's own event, code before rk_app_main - calls rk_ui_update().
+ *   - Bind a value (.on = &app.wifi) and the user's change is written there; or give it (.value) and hear .on_change.
+ *     The library sets what the declaration changed, never what the user changed: typing is never overwritten.
+ *   - Who a view is: its .key (or .id) among its siblings, else its place among the unkeyed siblings of its kind. Give
+ *     a key to everything that comes and goes in a list, so it keeps its focus, text and motion.
+ *   - Strings and arrays are copied or compared when a macro runs: a local buffer is fine. Bound pointers and .user
+ *     are kept: they live as long as the view.
+ *   - A scope ({ ... } after a container) ends at its brace: no return, break or goto out of it.
+ *   - A field 0 is the default: the design's gap, the kind's size, no tooltip, enabled. rk_ui grows only at its end.
+ *   - Controllers stay underneath: RK_PLACES, RK_PIVOT, RK_PANORAMA and sheets declare them, RK_HOST puts any view
+ *     made by hand (a custom view), and rk_ui_view() puts a declared view into a tree made by hand.
+ */
+
+typedef enum rk_ui_kind {
+  RK_UI_NONE,
+  /* views that hold views, declared in a scope */
+  RK_UI_VSTACK, RK_UI_HSTACK, RK_UI_TILES, RK_UI_ROWS, RK_UI_SCROLL, RK_UI_SPLIT,
+  /* views */
+  RK_UI_LABEL, RK_UI_BUTTON, RK_UI_TILE, RK_UI_ROW, RK_UI_ICON, RK_UI_PROGRESS, RK_UI_IMAGE, RK_UI_SPACER,
+  RK_UI_FIELD, RK_UI_CHECK, RK_UI_TOGGLE, RK_UI_CHOICES, RK_UI_SEGMENTS, RK_UI_SLIDER, RK_UI_STEPPER, RK_UI_SELECT,
+  RK_UI_DATE, RK_UI_DROP,
+  /* collections: a list and a table are data-driven; a tree's items and a table's columns are declared */
+  RK_UI_LIST, RK_UI_TABLE, RK_UI_COLUMN, RK_UI_TREE, RK_UI_ITEM,
+  RK_UI_SEPARATOR, RK_UI_HEADING,                                /* in a menu (.menu) */
+  /* navigation */
+  RK_UI_PANORAMA, RK_UI_SECTION, RK_UI_PIVOT, RK_UI_PAGE, RK_UI_PLACES, RK_UI_PLACE, RK_UI_SHEET, RK_UI_CONFIRM,
+  RK_UI_HOST,                                                    /* a view made by hand: .make once, .update at each build */
+  RK_UI_KIND_FORCE32 = 0x7fffffff
+} rk_ui_kind;
+
+/* What a change of content shows. AUTO: a tile's new value peeks in and a new status turns it over; the rest change
+   in place. A new .pulse plays the change again with nothing else new. */
+typedef enum rk_ui_change { RK_UI_AUTO, RK_UI_IN_PLACE, RK_UI_PEEK, RK_UI_FLIP, RK_UI_CROSSFADE, RK_UI_CHANGE_FORCE32 = 0x7fffffff } rk_ui_change;
+
+typedef struct rk_day { int year, month, day; } rk_day;   /* a date; year 0: none */
+#define RK_NO_GAP (-1.0f)                                  /* .gap: none at all (0 is the design's) */
+
+typedef struct rk_ui {
+  uint32_t size;                                   /* sizeof(rk_ui): the macros set it */
+  rk_ui_kind kind;
+  const char *key;                                 /* who it is among its siblings; also its name for rk_view_find */
+  uint64_t id;                                     /* or a number for who it is (0: none) */
+
+  /* what it says */
+  const char *text;                                /* the macro's first argument: a label's text, a button's, a tile's value,
+                                                      a row's or an item's title, the label of a field, a check or a toggle,
+                                                      the title of a section, page, place, sheet, column or drop, an
+                                                      image's path, a confirmation's question, a split's list (its crumb) */
+  const char *label;                               /* a tile's: what the value counts; a confirmation's word above it */
+  const char *meta;                                /* a row's or an item's; a tile's status word */
+  const char *message;                             /* a tile's; a confirmation's line under the question */
+  const char *hint, *error;                        /* a field's (an error takes the hint's place); a drop's hint */
+  const char *placeholder;                         /* a field's */
+  const char *icon;                                /* a button's; an icon's name */
+  const char *shortcut;                            /* a menu item's key hint: "Ctrl+E" */
+  const char *tooltip;
+  const char *accept;                              /* a drop's filter: ".png,.jpg", "image/" with a star */
+  const char *ok, *cancel;                         /* a confirmation's answers: "ok", "cancel" */
+
+  /* how it looks */
+  rk_text_style style;                             /* a label's */
+  rk_role color;                                   /* a label's, an icon's */
+  rk_role fill;                                    /* any view's background */
+  rk_button_kind button;
+  rk_status status;                                /* a tile's, a row's, an item's */
+  uint32_t rules;                                  /* RK_RULE_TOP | RK_RULE_BOTTOM */
+  rk_fit fit;                                      /* an image's */
+  bool side;                                       /* a pivot's titles down the leading side */
+  bool cancel_is_safe;                             /* a confirmation: cancel is the primary answer */
+
+  /* what the app gives it */
+  float progress;                                  /* a progress bar's, 0..1; a tile's bar when above 0 */
+  bool busy;                                       /* a progress bar with no end known */
+  const float *series; int nseries;                /* a tile's sparkline */
+  const char *const *options; int count;           /* choices, segments, a select, a field's suggestions; count: also a
+                                                      list's or a table's rows */
+  double value;                                    /* given, not bound: 0 or 1, the chosen option (-1: none), the number,
+                                                      a date as yyyymmdd, a pivot's page - set when it changes */
+  double min, max, step;                           /* a slider's or a stepper's (0 and 0: 0 to 100) */
+  const char *input;                               /* a field's text, given, not bound */
+  rk_checkmark check;                              /* a menu item's square, given */
+  int lines;                                       /* a field's: more than 1 makes it a text area */
+  bool secret;                                     /* a field's: a password */
+  const void *data; size_t data_size;              /* an image's bytes, instead of a path */
+
+  /* bound: the user's change is written here, then it builds again */
+  bool *on;                                        /* a check, a toggle; a menu item's square */
+  int *chosen;                                     /* choices, segments, a select; a pivot's page; the item a list or a
+                                                      table shows; a menu item is checked when *chosen == .value */
+  double *number;                                  /* a slider, a stepper */
+  rk_day *day;                                     /* a date */
+  char *buffer; size_t buffer_size;                /* a field's text, cut to fit */
+  bool *open;                                      /* a place, a sheet, a confirmation, a split's detail, a branch; the
+                                                      user's back, Escape or crumb writes false */
+
+  /* layout */
+  struct { int columns, rows; } span;              /* in RK_TILES; 0: 1 */
+  float width, height;                             /* fixed; 0: natural. A column's or a section's width */
+  float grow;                                      /* a weight in a stack; 0: the kind's (1 for lists, splits, places) */
+  float gap;                                       /* a container's; 0: the design's, RK_NO_GAP: none */
+  rk_insets padding;
+  rk_align align, cross;                           /* a stack's, along and across; AUTO: the kind's */
+  uint32_t flags;                                  /* a column's: RK_COLUMN_NUMERIC | SORTABLE | EDITABLE */
+  bool disabled;                                   /* greyed, takes nothing; its tooltip says why */
+
+  /* behaviour: callbacks get .user, or the user the build was given when it is NULL */
+  void *user;
+  void (*on_press)(rk_view *view, void *user);     /* activated: a button, a tile, a row, an item; a confirmation's ok */
+  void (*on_change)(rk_view *view, void *user);    /* the user changed its value, its text, a list's selection, a page */
+  void (*on_submit)(rk_view *view, void *user);    /* Enter in a field */
+  void (*on_close)(rk_view *view, void *user);     /* the user closed a place, a sheet, a split's detail; cancel */
+  void (*on_select)(rk_view *view, int index, void *user);   /* a list's or a table's item shown */
+  void (*menu)(void *user);                        /* declares the menu it opens: RK_ITEM, RK_SEPARATOR, RK_HEADING */
+  void (*item)(int index, rk_list_item *out, void *user);   /* a list's row, while it is drawn */
+  uint64_t (*item_key)(int index, void *user);     /* a list's or a table's: who an item is, so a selection follows it */
+  const char *(*cell)(int row, int column, void *user);     /* a table's */
+  void (*on_sort)(rk_view *table, int column, rk_sort sort, void *user);
+  const char *(*on_edit)(rk_view *table, int row, int column, const char *value, void *user);   /* NULL takes it */
+  void (*on_move)(rk_view *rows, int from, int to, void *user);   /* rows the user puts in order */
+  void (*on_files)(rk_view *drop, const char *const *taken, int ntaken, const char *const *refused, int nrefused, void *user);
+  rk_view *(*make)(void *user);                    /* RK_HOST: makes its view (a reference), once */
+  void (*update)(rk_view *view, void *user);       /* RK_HOST: at every build */
+
+  /* the work it can skip, the motion it can play */
+  uint32_t version;                                /* a scope with the same non-zero version as last time is not built
+                                                      again; a list's or a table's: its rows are drawn again only when it
+                                                      changes (0: at every build) */
+  uint32_t pulse;                                  /* a new one plays its change again */
+  rk_ui_change change;
+} rk_ui;
+
+/* A window built from a declaration is made by rk_window_create (rk_window_desc.build). Elsewhere, a declared view
+   in a tree made by hand: build runs now and after anything that may change the state; user is borrowed. It holds
+   views - places, pivots, panoramas and sheets go in a window's build. */
+RK_API rk_view *rk_ui_view(void (*build)(void *user), void *user);
+RK_API void rk_ui_update(rk_view *view);           /* the state changed where the library cannot see: build again. NULL: all */
+/* What the macros call, only inside a build: open a view whose content follows until rk_ui_close (false: the content
+   is not built - its version is the same, or it is not open); put a view whole. */
+RK_API bool rk_ui_open(const rk_ui *ui);
+RK_API void rk_ui_close(void);
+RK_API void rk_ui_put(const rk_ui *ui);
+
+/* The macros (C99; from C++ fill an rk_ui and call the functions). A view's first argument is what it says, the rest
+   are fields by name: RK_TILE("12", .label = "builds today", .status = RK_STATUS_SUCCESS). One that holds views takes a
+   scope after it: RK_VSTACK(.gap = RK_NO_GAP) { ... }. */
+#define RK_UI(kind_, ...) (&(const rk_ui){ .size = sizeof(rk_ui), .kind = (kind_), __VA_ARGS__ })
+#define RK_UI_SCOPE(node) for (int rk_ui_once_ = rk_ui_open(node); rk_ui_once_; rk_ui_once_ = (rk_ui_close(), 0))
+
+#define RK_VSTACK(...)   RK_UI_SCOPE(RK_UI(RK_UI_VSTACK, __VA_ARGS__))
+#define RK_HSTACK(...)   RK_UI_SCOPE(RK_UI(RK_UI_HSTACK, __VA_ARGS__))
+#define RK_TILES(...)    RK_UI_SCOPE(RK_UI(RK_UI_TILES, __VA_ARGS__))
+#define RK_ROWS(...)     RK_UI_SCOPE(RK_UI(RK_UI_ROWS, __VA_ARGS__))       /* holds RK_ROW */
+#define RK_SCROLL(...)   RK_UI_SCOPE(RK_UI(RK_UI_SCROLL, __VA_ARGS__))
+#define RK_SPLIT(...)    RK_UI_SCOPE(RK_UI(RK_UI_SPLIT, .text = __VA_ARGS__))   /* two views: the list, then its detail */
+
+#define RK_LABEL(...)    rk_ui_put(RK_UI(RK_UI_LABEL, .text = __VA_ARGS__))
+#define RK_BUTTON(...)   rk_ui_put(RK_UI(RK_UI_BUTTON, .text = __VA_ARGS__))
+#define RK_TILE(...)     rk_ui_put(RK_UI(RK_UI_TILE, .text = __VA_ARGS__))
+#define RK_ROW(...)      rk_ui_put(RK_UI(RK_UI_ROW, .text = __VA_ARGS__))
+#define RK_ICON(...)     rk_ui_put(RK_UI(RK_UI_ICON, .icon = __VA_ARGS__))
+#define RK_PROGRESS(...) rk_ui_put(RK_UI(RK_UI_PROGRESS, __VA_ARGS__))
+#define RK_IMAGE(...)    rk_ui_put(RK_UI(RK_UI_IMAGE, .text = __VA_ARGS__))
+#define RK_SPACER(...)   rk_ui_put(RK_UI(RK_UI_SPACER, __VA_ARGS__))
+#define RK_FIELD(...)    rk_ui_put(RK_UI(RK_UI_FIELD, .text = __VA_ARGS__))
+#define RK_CHECK(...)    rk_ui_put(RK_UI(RK_UI_CHECK, .text = __VA_ARGS__))
+#define RK_TOGGLE(...)   rk_ui_put(RK_UI(RK_UI_TOGGLE, .text = __VA_ARGS__))
+#define RK_CHOICES(...)  rk_ui_put(RK_UI(RK_UI_CHOICES, __VA_ARGS__))
+#define RK_SEGMENTS(...) rk_ui_put(RK_UI(RK_UI_SEGMENTS, __VA_ARGS__))
+#define RK_SLIDER(...)   rk_ui_put(RK_UI(RK_UI_SLIDER, __VA_ARGS__))
+#define RK_STEPPER(...)  rk_ui_put(RK_UI(RK_UI_STEPPER, __VA_ARGS__))
+#define RK_SELECT(...)   rk_ui_put(RK_UI(RK_UI_SELECT, __VA_ARGS__))
+#define RK_DATE(...)     rk_ui_put(RK_UI(RK_UI_DATE, __VA_ARGS__))
+#define RK_DROP(...)     rk_ui_put(RK_UI(RK_UI_DROP, .text = __VA_ARGS__))
+
+#define RK_LIST(...)     rk_ui_put(RK_UI(RK_UI_LIST, __VA_ARGS__))
+#define RK_TABLE(...)    RK_UI_SCOPE(RK_UI(RK_UI_TABLE, __VA_ARGS__))      /* holds RK_COLUMN */
+#define RK_COLUMN(...)   rk_ui_put(RK_UI(RK_UI_COLUMN, .text = __VA_ARGS__))
+#define RK_TREE(...)     RK_UI_SCOPE(RK_UI(RK_UI_TREE, __VA_ARGS__))       /* holds RK_ITEM */
+#define RK_ITEM(...)     RK_UI_SCOPE(RK_UI(RK_UI_ITEM, .text = __VA_ARGS__))   /* in a tree it may hold items; in a menu */
+#define RK_SEPARATOR(...) rk_ui_put(RK_UI(RK_UI_SEPARATOR, __VA_ARGS__))
+#define RK_HEADING(...)  rk_ui_put(RK_UI(RK_UI_HEADING, .text = __VA_ARGS__))
+
+#define RK_PANORAMA(...) RK_UI_SCOPE(RK_UI(RK_UI_PANORAMA, __VA_ARGS__))   /* holds RK_SECTION */
+#define RK_SECTION(...)  RK_UI_SCOPE(RK_UI(RK_UI_SECTION, .text = __VA_ARGS__))
+#define RK_PIVOT(...)    RK_UI_SCOPE(RK_UI(RK_UI_PIVOT, __VA_ARGS__))      /* holds RK_PAGE */
+#define RK_PAGE(...)     RK_UI_SCOPE(RK_UI(RK_UI_PAGE, .text = __VA_ARGS__))
+#define RK_PLACES(...)   RK_UI_SCOPE(RK_UI(RK_UI_PLACES, __VA_ARGS__))     /* holds RK_PLACE: the open ones, in order */
+#define RK_PLACE(...)    RK_UI_SCOPE(RK_UI(RK_UI_PLACE, .text = __VA_ARGS__))
+#define RK_SHEET(...)    RK_UI_SCOPE(RK_UI(RK_UI_SHEET, .text = __VA_ARGS__))
+#define RK_CONFIRM(...)  rk_ui_put(RK_UI(RK_UI_CONFIRM, .text = __VA_ARGS__))
+#define RK_HOST(...)     rk_ui_put(RK_UI(RK_UI_HOST, __VA_ARGS__))
 
 /* Drawing (custom views) ------------------------------------------------------------------------------------------ */
 

@@ -9,7 +9,7 @@
 #   make gallery    the reference gallery's native half in build/gallery (node test/gallery.mjs holds the web to it)
 #   make perf       the loop under load (resize, a storm of presses, settling), measured at 1x and 2x
 #   make modules    each source compiled on its own: a module says what it uses, the unity build only joins them
-#   make declared   the demo's tiles built imperatively and with declared views (rekta_ui.h): pictures and costs compared
+#   make declared   what a declared build costs: rows built, changed, moved, by hand and declared
 # On Windows: build.bat (MSVC) or make with MinGW.
 
 CC ?= cc
@@ -19,7 +19,7 @@ WARN := -std=c99 -Wall -Wextra -Wpedantic
 CFLAGS += $(OPT) $(WARN) -ffp-contract=off
 BUILD := build
 UNAME := $(shell uname -s 2>/dev/null)
-SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h include/rekta_test.h include/rekta_ui.h third_party/stb_truetype.h third_party/stb_image.h
+SOURCES := $(wildcard src/*.c src/*.h src/wayland/*) include/rekta.h include/rekta_test.h third_party/stb_truetype.h third_party/stb_image.h
 WAYLAND ?= 1
 VERSION := $(shell awk '/^.define RK_VERSION_(MAJOR|MINOR|PATCH) /{ v = v (v == "" ? "" : ".") $$3 } END { print v }' include/rekta.h)
 MAJOR := $(word 1,$(subst ., ,$(VERSION)))
@@ -67,7 +67,7 @@ endif
 PC_LIBS ?= $(LIBS)
 HEADLESS_LIBS := -lm $(if $(EXE),,-lpthread)
 
-all: $(BUILD)/librekta.a $(BUILD)/demo$(EXE) $(BUILD)/hello$(EXE) $(BUILD)/hello_declarative$(EXE) $(BUILD)/navigation$(EXE)
+all: $(BUILD)/librekta.a $(BUILD)/demo$(EXE) $(BUILD)/hello$(EXE) $(BUILD)/navigation$(EXE)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -112,24 +112,11 @@ $(BUILD)/demo$(EXE): demo/demo.c $(BUILD)/librekta.a
 $(BUILD)/hello$(EXE): examples/hello.c $(BUILD)/librekta.a
 	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude $< $(BUILD)/librekta.a $(LIBS) -o $@
 
-$(BUILD)/hello_declarative$(EXE): examples/hello_declarative.c $(BUILD)/librekta.a
-	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude $< $(BUILD)/librekta.a $(LIBS) -o $@
-
 $(BUILD)/navigation$(EXE): examples/navigation.c $(BUILD)/librekta.a
 	$(CC) $(CFLAGS) -Iinclude $< $(BUILD)/librekta.a $(LIBS) -o $@
 
 $(BUILD)/hello-headless$(EXE): examples/hello.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude -DRK_HEADLESS_ONLY $< src/rekta.c $(HEADLESS_LIBS) -o $@
-
-$(BUILD)/hello_declarative-headless$(EXE): examples/hello_declarative.c $(SOURCES) | $(BUILD)
-	$(CC) $(CFLAGS) -Wno-unused-parameter -Iinclude -DRK_HEADLESS_ONLY $< src/rekta.c $(HEADLESS_LIBS) -o $@
-
-# the demo's tiles, built twice: imperatively and with declared views (same shell, tour and benchmark)
-$(BUILD)/tiles_imperative$(EXE): demo/tiles_imperative.c demo/tiles_shell.h $(SOURCES) | $(BUILD)
-	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY demo/tiles_imperative.c src/rekta.c $(HEADLESS_LIBS) -o $@
-
-$(BUILD)/tiles_declarative$(EXE): demo/tiles_declarative.c demo/tiles_shell.h $(SOURCES) | $(BUILD)
-	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY demo/tiles_declarative.c src/rekta.c $(HEADLESS_LIBS) -o $@
 
 $(BUILD)/declare_bench$(EXE): test/declare_bench.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY test/declare_bench.c src/rekta.c $(HEADLESS_LIBS) -o $@
@@ -140,11 +127,10 @@ $(BUILD)/test$(EXE): test/test.c $(SOURCES) | $(BUILD)
 $(BUILD)/demo-headless$(EXE): demo/demo.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY demo/demo.c src/rekta.c $(HEADLESS_LIBS) -o $@
 
-test: $(BUILD)/test$(EXE) $(BUILD)/hello-headless$(EXE) $(BUILD)/hello_declarative-headless$(EXE)
+test: $(BUILD)/test$(EXE) $(BUILD)/hello-headless$(EXE)
 	$(BUILD)/test$(EXE) $(BUILD)/test-out
 	node test/compare.mjs test/ref $(BUILD)/test-out
 	$(BUILD)/hello-headless$(EXE)
-	$(BUILD)/hello_declarative-headless$(EXE)
 	sh test/examples.sh
 
 $(BUILD)/gallery-bin$(EXE): test/gallery.c $(SOURCES) | $(BUILD)
@@ -158,14 +144,8 @@ gallery: $(BUILD)/gallery-bin$(EXE)
 	mkdir -p $(BUILD)/gallery
 	$(BUILD)/gallery-bin$(EXE) $(BUILD)/gallery
 
-# the declared tiles against the imperative ones: the same tour, picture by picture, and what an update costs
-declared: $(BUILD)/tiles_imperative$(EXE) $(BUILD)/tiles_declarative$(EXE) $(BUILD)/declare_bench$(EXE)
-	mkdir -p $(BUILD)/tiles-imperative $(BUILD)/tiles-declarative
-	$(BUILD)/tiles_imperative$(EXE) --shots $(BUILD)/tiles-imperative > /dev/null
-	$(BUILD)/tiles_declarative$(EXE) --shots $(BUILD)/tiles-declarative > /dev/null
-	-node test/compare.mjs $(BUILD)/tiles-imperative $(BUILD)/tiles-declarative
-	$(BUILD)/tiles_imperative$(EXE) --bench 300
-	$(BUILD)/tiles_declarative$(EXE) --bench 300
+# what a declared build costs against the same change made by hand
+declared: $(BUILD)/declare_bench$(EXE)
 	$(BUILD)/declare_bench$(EXE)
 
 shots: $(BUILD)/demo-headless$(EXE)
@@ -194,7 +174,7 @@ ifeq ($(UNAME),Darwin)
 	codesign -f -s - $(DESTDIR)$(PREFIX)/lib/$(SHLIB)
 endif
 	cp $(BUILD)/rekta.pc $(DESTDIR)$(PREFIX)/lib/pkgconfig/
-	cp include/rekta.h include/rekta_test.h include/rekta_ui.h $(DESTDIR)$(PREFIX)/include/
+	cp include/rekta.h include/rekta_test.h $(DESTDIR)$(PREFIX)/include/
 	cp man/rekta.3 $(DESTDIR)$(PREFIX)/share/man/man3/
 
 clean:

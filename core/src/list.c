@@ -623,3 +623,11 @@ float rk_table_column_width(rk_view *v, int column) {
 
 void rk_table_on_edit(rk_view *v, const char *(*fn)(rk_view *, int, int, const char *, void *), void *user) { list *l = list_of(v); if (l) { l->commit = fn; l->commit_user = user; } }
 void rk_table_edit(rk_view *v, int row, int column) { list *l = RK__EXPECT(list_of, v, "a list or a table"); if (l) edit_start(v, l, row, column); }
+
+/* A declared list or table that leaves (declare.c): it draws no rows and tells nothing any more. */
+void rk__list_detach(rk_view *v) {
+  list *l = list_of(v);
+  if (!l) return;
+  rk_list_set_count(v, 0);
+  l->key = NULL; l->show = NULL; l->change = NULL; l->sort = NULL; l->commit = NULL;
+}

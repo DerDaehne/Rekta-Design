@@ -191,7 +191,7 @@ static void touched(rk_view *v, field *f) {
   f->lit = true;
   f->edited = rk_app_now();
   rk_window *w = rk__view_window(v);
-  if (!f->blink && w && w->focus == v && !rk__reduced()) f->blink = rk_app_every(BLINK_MS, blink, f);
+  if (!f->blink && w && w->focus == v && !rk__reduced()) f->blink = rk__after_quiet(BLINK_MS, true, blink, f);
   keep_caret_in_sight(v, f);
   if (w && w->focus == v) tell_input_method(v, f, true);
   rk__view_dirty(v);

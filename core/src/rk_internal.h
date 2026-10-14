@@ -58,6 +58,7 @@ typedef struct rk_object { uint32_t magic; int refs; const rk_type *type; } rk_o
 void *rk__new(const rk_type *type, size_t size);          /* zeroed, one reference */
 void *rk__alloc(size_t size);                              /* zeroed; aborts when memory runs out */
 void *rk__grow(void *p, int *cap, int need, size_t item);  /* a growable array */
+void *rk__realloc(void *p, size_t size);                  /* aborts when memory runs out, as rk__alloc */
 char *rk__strdup(const char *s);
 void rk__setstr(char **dst, const char *src);
 
@@ -245,6 +246,7 @@ struct rk_view {
   float press_x, press_y; int pressed;                     /* -1..1 from the centre; 1 pressed, 2 letting go */
   double press_since;
   int index_hint;                                          /* build-in order */
+  uint32_t ui_mark;                                        /* declare.c: one of the views a node arranges */
 };
 
 extern const rk_type rk__view_type;
@@ -377,6 +379,13 @@ rk_controller *rk__confirm(rk_controller *presenter, const rk_confirm_desc *desc
 /* A controller that only holds another (a declared window's host): what it holds counts as held by its parent, so a
    pivot in it still picks the place. */
 void rk__controller_set_transparent(rk_controller *c, bool transparent);
+bool rk__controller_presented(rk_controller *sheet);      /* shown over its presenter now */
+void rk__controller_unembed(rk_controller *child);        /* undoes rk_controller_embed */
+void rk__list_detach(rk_view *list);                      /* a list that leaves: no rows, no handlers */
+void rk__drop_detach(rk_view *drop);
+uint32_t rk__after_quiet(double ms, bool repeat, void (*fn)(void *), void *user);   /* a timer that reaches no app code */
+void rk__ui_settle(void);                                 /* after a callback: every declared view builds again */
+void rk__ui_window(rk_window *w, void (*build)(void *user), void *user);   /* a window built from a declaration */
 struct turn;                                               /* a place change, for views that turn as places do */
 struct turn *rk__turn_new(void);
 void rk__turn_free(struct turn *t);
@@ -404,6 +413,7 @@ void rk__menu_mark(rk_view *menu, int chosen);              /* a mark on the cho
 void rk__menu_shape(rk_view *menu, float min_w, int prefer);
 void rk__menu_show_passive(rk_view *menu, rk_view *from, rk_rect below);   /* below: in the window */
 bool rk__menu_open(rk_view *menu);
+bool rk__is_menu(rk_view *v);
 void rk__menu_move(rk_view *menu, int dir);
 int rk__menu_active(rk_view *menu);
 void rk__menu_choose(rk_view *menu, int item);                    /* focus inside it goes back to where it came from */

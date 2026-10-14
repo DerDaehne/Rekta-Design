@@ -39,6 +39,12 @@ void *rk__grow(void *p, int *cap, int need, size_t item) {
   return q;
 }
 
+void *rk__realloc(void *p, size_t size) {
+  void *q = realloc(p, size ? size : 1);
+  if (!q) { fputs("rekta: out of memory\n", stderr); abort(); }
+  return q;
+}
+
 char *rk__strdup(const char *s) {
   if (!s) return NULL;
   size_t n = strlen(s) + 1;

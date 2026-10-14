@@ -484,7 +484,7 @@ static void toast_leave(void *st) {
   toast *t = st;
   t->timer = 0;
   rk_window *w = rk__view_window(t->view);
-  if (w && (rk__view_within(w->focus, t->view) || rk__view_within(w->hover, t->view))) { t->timer = rk_app_after(TOAST_HOLD_MS, toast_leave, t); return; }
+  if (w && (rk__view_within(w->focus, t->view) || rk__view_within(w->hover, t->view))) { t->timer = rk__after_quiet(TOAST_HOLD_MS, false, toast_leave, t); return; }
   go(t);
 }
 
@@ -532,7 +532,7 @@ rk_view *rk__toast_create(const char *message, const char *action, void (*on_act
     rk_view_on_activate(b, toast_act, t);
     rk__view_add(v, b); rk_release(b);
   }
-  t->timer = rk_app_after(rk_duration_of(RK_TIMING_TOAST), toast_leave, t);
+  t->timer = rk__after_quiet(rk_duration_of(RK_TIMING_TOAST), false, toast_leave, t);
   return v;
 }
 

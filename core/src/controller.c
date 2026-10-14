@@ -21,11 +21,32 @@ struct rk_controller {
   rk__heard heard;                                         /* places, a pivot, a sheet: what the user did */
 };
 
+static void strip_relevel(rk_controller *c);
 static void tell(rk_controller *c, int index) { if (c->heard.fn) c->heard.fn(c, index, c->heard.user); }
 void rk__places_hear(rk_controller *c, rk__heard h) { c->heard = h; }
 void rk__pivot_hear(rk_controller *c, rk__heard h) { c->heard = h; }
 void rk__sheet_hear(rk_controller *c, rk__heard h) { c->heard = h; }
-void rk__controller_set_transparent(rk_controller *c, bool t) { c->transparent = t; }
+void rk__controller_set_transparent(rk_controller *c, bool t) {
+  if (c->transparent == t) return;
+  c->transparent = t;
+  for (int i = 0; i < c->nembedded; i++) strip_relevel(c->embedded[i]);
+  if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar);
+}
+bool rk__controller_presented(rk_controller *c) { return c && c->presenter; }
+/* Let go of a controller held in another's views: it disappears, and its owner holds it no more. */
+void rk__controller_unembed(rk_controller *child) {
+  rk_controller *owner = child ? child->parent : NULL;
+  if (!owner) return;
+  for (int i = 0; i < owner->nembedded; i++) if (owner->embedded[i] == child) {
+    memmove(owner->embedded + i, owner->embedded + i + 1, (size_t)(owner->nembedded - i - 1) * sizeof *owner->embedded);
+    owner->nembedded--;
+    child->parent = NULL;
+    rk__controller_appear(child, false);
+    child->window = NULL;
+    rk_release(child);
+    return;
+  }
+}
 static rk_controller *stands_for(rk_controller *c) { return c->transparent && c->nembedded == 1 ? c->embedded[0] : NULL; }
 static rk_controller *holder(rk_controller *c) {           /* the parent, looking through a transparent host */
   rk_controller *up = c->parent;
@@ -35,8 +56,8 @@ static rk_controller *holder(rk_controller *c) {           /* the parent, lookin
 
 static void controller_destroy(void *self) {
   rk_controller *c = self;
-  if (c->sheet) rk_release(c->sheet);
-  for (int i = 0; i < c->nembedded; i++) rk_release(c->embedded[i]);
+  if (c->sheet) { c->sheet->presenter = NULL; rk_release(c->sheet); }
+  for (int i = 0; i < c->nembedded; i++) { c->embedded[i]->parent = NULL; rk_release(c->embedded[i]); }   /* held by no one now */
   free(c->embedded);
   if (c->impl_free) c->impl_free(c->impl);
   if (c->view) { c->view->controller = NULL; rk_release(c->view); }
@@ -111,7 +132,6 @@ void rk__controller_appear(rk_controller *c, bool appear) {
   if (appear) for (int i = 0; i < c->nembedded; i++) rk__controller_appear(c->embedded[i], true);
 }
 
-static void strip_relevel(rk_controller *c);
 /* A controller inside another's views, as UIKit's child view controllers: the owner holds it, gives it its window and
    tells it when it appears and goes; a sheet it presents is shown. Returns the child's view, a reference to add where
    it goes in the owner's views. */
@@ -153,7 +173,7 @@ static void places_free(void *p) {
   if (pl->leaving_owned) rk_release(pl->leaving);
   for (int i = 0; i < pl->fcap; i++) rk_release(pl->focus_return[i]);
   free(pl->focus_return);
-  for (int i = 0; i < pl->n; i++) rk_release(pl->stack[i]);
+  for (int i = 0; i < pl->n; i++) { pl->stack[i]->parent = NULL; rk_release(pl->stack[i]); }
   turn_release(&pl->out);
   free(pl->stack); free(pl->out.units); free(pl);
 }
@@ -174,7 +194,7 @@ static void places_layout(rk_view *v, void *st) {
   float side = rk_metric_of(compact ? RK_SPACE_M : RK_SPACE_XL), l = rk_metric_of(RK_SPACE_L);
   for (int i = 0; i < v->nkids; i++) {
     rk_view *k = v->kids[i];
-    bool page = k->controller && k->controller->kind == K_PLAIN;
+    bool page = k->controller && k->controller->kind == K_PLAIN && !stands_for(k->controller);
     rk_insets in = page ? (rk_insets){ l, side, l, side } : (rk_insets){ 0, 0, 0, 0 };
     rk__set_frame(k, (rk_rect){ in.left, in.top, RK_MAX(0.0f, v->frame.w - in.left - in.right), RK_MAX(0.0f, v->frame.h - in.top - in.bottom) });
   }
@@ -278,7 +298,7 @@ static void plan_free(plan *p) { free(p->slots); free(p->reach); free(p->hs); fr
 static plan turn_gather(turn *t, rk_view *place, rk_view *pressed) {
   turn_release(t);
   collect_units(place, t);
-  qsort(t->units, (size_t)t->n, sizeof *t->units, unit_order);
+  if (t->n > 1) qsort(t->units, (size_t)t->n, sizeof *t->units, unit_order);
   for (int i = 0; i < t->n; i++) if (t->units[i] == pressed) {
     memmove(t->units + i, t->units + i + 1, (size_t)(t->n - i - 1) * sizeof *t->units);
     t->units[t->n - 1] = pressed;
@@ -717,7 +737,7 @@ static void scroller_show(scroller *s) {   /* the bar shows, and takes the point
   s->bar = true;
   s->rail->passthrough = false;
   if (s->hide) rk_app_cancel(s->hide);
-  s->hide = rk_app_after(900, scroller_hide, s);
+  s->hide = rk__after_quiet(900, false, scroller_hide, s);
   rk__view_dirty(s->rail);
 }
 static void scroller_to(scroller *s, float to, double settle) {
@@ -982,7 +1002,7 @@ static void pivot_free(void *st) {
   pivot *p = st;
   if (p->timer) rk_app_cancel(p->timer);
   turn_release(&p->out);
-  for (int i = 0; i < p->n; i++) rk_release(p->facets[i]);
+  for (int i = 0; i < p->n; i++) { p->facets[i]->parent = NULL; rk_release(p->facets[i]); }
   free(p->out.units); free(p->facets); free(p);
 }
 

@@ -225,3 +225,5 @@ rk_view *rk_drop(const char *title, const char *hint, const char *accept,
   v->own_activate = drop_activate; v->press = RK_PRESS_FLAT;   /* its own: an app's handler may come too */
   return v;
 }
+
+void rk__drop_detach(rk_view *v) { if (v && v->cls == &drop_class) ((drop_zone *)v->state)->files = NULL; }   /* declare.c */

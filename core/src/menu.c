@@ -324,6 +324,7 @@ void rk__menu_show_passive(rk_view *v, rk_view *from, rk_rect below) {
 }
 
 bool rk__menu_open(rk_view *v) { return v && v->parent != NULL; }
+bool rk__is_menu(rk_view *v) { return menu_of(v) != NULL; }
 void rk__menu_move(rk_view *v, int dir) { menu *m = menu_of(v); if (m && m->n) { m->hover = false; menu_step(v, m, dir); } }
 int rk__menu_active(rk_view *v) { menu *m = menu_of(v); return m ? m->active : -1; }
 void rk__menu_choose(rk_view *v, int i) { menu *m = menu_of(v); if (m) choose(v, m, i); }

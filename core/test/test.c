@@ -2173,7 +2173,7 @@ static void scene_flip(void) {
   done(w);
 }
 
-/* Declared views (rekta_ui.h) ------------------------------------------------------------------------------------- */
+/* Declared UI -------------------------------------------------------------------------------------------------------- */
 
 typedef struct decl {
   int count, ids[8], nids, builds, makes, updates, style, menus;
@@ -2190,7 +2190,7 @@ static rk_view *decl_make(void *user) { ((decl *)user)->makes++; return rk_list(
 static void decl_refresh(rk_view *list, void *user) { ((decl *)user)->updates++; rk_list_set_count(list, 1000000 - ((decl *)user)->count); }
 
 static void decl_sounds(rk_view *v, void *user) { ((decl *)user)->sounds = rk_control_value(v) != 0; }
-static rk_view *decl_menu(void *user) { ((decl *)user)->menus++; rk_view *m = rk_menu(); rk_menu_add(m, "resize", NULL, NULL, NULL); return m; }
+static void decl_menu(void *user) { ((decl *)user)->menus++; RK_ITEM("resize"); }
 
 static void decl_build(void *user) {
   decl *s = user;
@@ -2208,7 +2208,7 @@ static void decl_build(void *user) {
       RK_CHECK("Mine", .key = "mine");                                                      /* the user keeps it */
       RK_ICON("bell", .key = "bell");
     }
-    RK_PROGRESS(.key = "bar", .progress = &s->progress);
+    RK_PROGRESS(.key = "bar", .progress = s->progress);
     RK_ROWS(.key = "rows") {
       for (int i = 0; i < s->nids; i++) {
         snprintf(n, sizeof n, "row %d", s->ids[i]);                /* a local buffer, again and again: copied */
@@ -2244,9 +2244,9 @@ static void test_declare(void) {
   CHECK(!strcmp(((tile *)t->state)->value, "0") && ((tile *)t->state)->status == RK_STATUS_INFO, "the tile as declared");
 
   /* nothing changed: nothing changes */
-  int views = rk__live_views;
+  int views = rk__live_views, b0 = s.builds;
   rk_ui_update(page);
-  CHECK(s.builds == 2 && rk_view_find(page, "count") == t && kid(rows, 1) == r2 && rk__live_views == views && rk__anim_count() == 0,
+  CHECK(s.builds == b0 + 1 && rk_view_find(page, "count") == t && kid(rows, 1) == r2 && rk__live_views == views && rk__anim_count() == 0,
         "built again with nothing new: the same views, nothing made, nothing moving (%d views, %u moving)", rk__live_views - views, rk__anim_count());
 
   /* a new value peeks in, a new status flips, a new span glides */
@@ -2271,7 +2271,7 @@ static void test_declare(void) {
   int before = s.builds;
   rk_view_tap(rk_view_find(page, "button"));
   rk_app_run_for(50);
-  CHECK(s.count == 6 && s.builds == before + 1 && !strcmp(((tile *)t->state)->value, "6"), "after a declared handler the view follows (%d)", s.count);
+  CHECK(s.count == 6 && s.builds > before && !strcmp(((tile *)t->state)->value, "6"), "after a declared handler the view follows (%d)", s.count);
   rk_app_run_for(600);
 
   /* keyed rows: one comes at the top, the others stay who they are */
@@ -2329,11 +2329,11 @@ static void test_declare(void) {
   s.button = "count again";
   rk_ui_update(page);
   rk_view *b2 = rk_view_find(page, "button");
-  CHECK(b2 && b2 != b1 && rk_view_parent(b2) == rk_view_parent(mail) && rk__live_views == views && rk_window_focused(w) == b2,
-        "a button's new label: a new button in its place, focus moved over, the old one gone");
+  CHECK(b2 == b1 && !strcmp(((button *)b2->state)->label, "count again") && rk__live_views == views && rk_window_focused(w) == b2,
+        "a button's new label reaches the same button, focus and all");
   s.style = RK_TEXT_TITLE;
   rk_ui_update(page);
-  CHECK(rk_view_find(page, "title") != title && kid(rk_view_parent(rows), 0) == rk_view_find(page, "title"), "a label's new style: the same, at the top");
+  CHECK(rk_view_find(page, "title") == title && ((label *)title->state)->style == RK_TEXT_TITLE, "a label's new style: the same label");
 
   /* a view the app makes: once, then told at every build; a million rows, a few views */
   views = rk__live_views;
@@ -2360,7 +2360,10 @@ static void test_declare(void) {
   s.sounds = false; s.progress = 0.5f;
   rk_ui_update(page);
   CHECK(rk_control_value(sounds) == 0 && rk_control_value(mine) == 1 && bar->value == 0.5f, "the app's value reaches its toggle, the progress bar glides to its own");
-  CHECK(s.menus == 1 && kid(rk_view_parent(t), 1)->menu && rk__is_object(rk_view_find(page, "bell"), &rk__view_type), "a menu is made once, for its tile; an icon is declared too");
+  rk_view *menu = kid(rk_view_parent(t), 1)->menu;
+  rk_ui_update(page);
+  CHECK(menu && kid(rk_view_parent(t), 1)->menu == menu && s.menus > 1 && rk__is_object(rk_view_find(page, "bell"), &rk__view_type),
+        "a menu is declared at each build, its view made once; an icon is declared too");
   rk_app_run_for(400);
 
   /* misuse is said */
@@ -2434,6 +2437,256 @@ static void test_declare_same_pixels(void) {
   done(a); done(b);
 }
 
+
+/* Declared windows: bound values, navigation, collections, menus ---------------------------------------------------- */
+
+typedef struct dform {
+  bool wifi, agree; int size, changes, ticks; double volume, count; rk_day day; char name[16];
+} dform;
+static const char *const dsizes[] = { "small", "medium", "large" };
+static void dform_changed(rk_view *v, void *u) { (void)v; ((dform *)u)->changes++; }
+static void dform_tick(void *u) { dform *f = u; f->count = 7; f->ticks++; }
+static void dform_build(void *user) {
+  dform *f = user;
+  RK_TOGGLE("Wi-Fi", .key = "wifi", .on = &f->wifi, .on_change = dform_changed);
+  RK_SEGMENTS(.key = "size", .options = dsizes, .count = 3, .chosen = &f->size);
+  RK_SLIDER(.key = "volume", .min = 0, .max = 10, .step = 1, .number = &f->volume);
+  RK_STEPPER(.key = "count", .min = 0, .max = 9, .step = 1, .number = &f->count);
+  RK_DATE(.key = "day", .day = &f->day);
+  RK_FIELD("Name", .key = "name", .buffer = f->name, .buffer_size = sizeof f->name);
+  RK_CHECK("I agree", .key = "agree", .on = &f->agree);
+  RK_BUTTON("go", .key = "go", .disabled = !f->agree, .tooltip = f->agree ? NULL : "agree first");
+}
+
+static rk_view *in_window(rk_window *w, const char *name) { return rk_view_find(w->root, name); }
+
+static void test_declared_bindings(void) {
+  dform f = { .day = { 2026, 10, 14 } };
+  rk_window_desc d = { .size = sizeof d, .title = "form", .width = 800, .height = 900, .build = dform_build, .user = &f };
+  rk_window *w = rk_window_create(&d);
+  rk_app_run_for(300);
+  rk_view *wifi = in_window(w, "wifi"), *size = in_window(w, "size"), *vol = in_window(w, "volume"), *count = in_window(w, "count");
+  rk_view *day = in_window(w, "day"), *name = in_window(w, "name"), *agree = in_window(w, "agree"), *go = in_window(w, "go");
+  CHECK(wifi && size && vol && count && day && name && agree && go && rk_window_root(w), "a window built from a declaration shows it");
+  int y, m, dd;
+  CHECK(rk_date_value(day, &y, &m, &dd) && y == 2026 && m == 10 && dd == 14, "a bound date shows the app's day");
+  rk_view_tap(wifi);
+  rk_app_run_for(50);
+  CHECK(f.wifi && f.changes == 1 && rk_control_value(wifi) == 1, "the user's change is written where it is bound, then told");
+  f.wifi = false;
+  rk_ui_update(NULL);
+  CHECK(rk_control_value(wifi) == 0, "the app's change to a bound value reaches the view");
+  rk_window_focus(w, size); key(w, RK_KEY_RIGHT, 0);
+  rk_window_focus(w, vol); key(w, RK_KEY_RIGHT, 0); key(w, RK_KEY_RIGHT, 0);
+  CHECK(f.size == 1 && f.volume == 2, "segments and a slider write their choice and number (%d, %g)", f.size, f.volume);
+  rk_window_focus(w, day); key(w, RK_KEY_UP, 0);
+  CHECK(f.day.year != 2026 || f.day.month != 10 || f.day.day != 14, "a date writes the day the user picks (%d-%d-%d)", f.day.year, f.day.month, f.day.day);
+  rk_window_focus(w, name);
+  type_text(w, "Ada Lovelace Byron");
+  CHECK(!strcmp(f.name, "Ada Lovelace By") && !strcmp(rk_field_text(name), "Ada Lovelace By"), "a bound field's text is cut to fit its buffer, and so is the field (%s)", rk_field_text(name));
+  CHECK(!rk_view_is_enabled(go) && go->tooltip, "a declared view is disabled with its reason");
+  rk_view_tap(agree);
+  rk_app_run_for(50);
+  CHECK(f.agree && rk_view_is_enabled(go) && !go->tooltip, "and enabled when the state says so");
+  rk_app_after(10, dform_tick, &f);
+  rk_app_run_for(40);
+  CHECK(f.ticks == 1 && rk_control_value(count) == 7, "after the app's timer the view follows, with no call for it");
+  done(w);
+  rk_app_run_for(50);
+}
+
+typedef struct dnav { int tab, closes, deleted, kept, opens; bool detail, sheet, asking; } dnav;
+static void dnav_open(rk_view *v, void *u) { (void)v; dnav *n = u; n->detail = true; n->opens++; }
+static void dnav_close(rk_view *v, void *u) { (void)v; ((dnav *)u)->closes++; }
+static void dnav_delete(rk_view *v, void *u) { (void)v; ((dnav *)u)->deleted++; }
+static void dnav_keep(rk_view *v, void *u) { (void)v; ((dnav *)u)->kept++; }
+static void dnav_build(void *user) {
+  dnav *n = user;
+  RK_PLACES() {
+    RK_PLACE("home") {
+      RK_PIVOT(.key = "pivot", .chosen = &n->tab) {
+        RK_PAGE("today") { RK_BUTTON("open", .key = "open", .on_press = dnav_open); }
+        RK_PAGE("later") { RK_LABEL("later", .key = "later"); }
+      }
+    }
+    RK_PLACE("detail", .open = &n->detail, .on_close = dnav_close) {
+      RK_LABEL("the detail", .key = "detail");
+      RK_SHEET("note", .open = &n->sheet) { RK_LABEL("a note", .key = "note"); }
+    }
+  }
+  RK_CONFIRM("Delete it?", .open = &n->asking, .ok = "delete", .on_press = dnav_delete, .on_close = dnav_keep);
+}
+
+static rk_controller *places_of(rk_window *w) {
+  rk_controller *c = rk_window_root(w);
+  return c && c->nembedded == 1 ? c->embedded[0] : NULL;
+}
+
+static void test_declared_navigation(void) {
+  dnav n = { 0 };
+  rk_window_desc d = { .size = sizeof d, .title = "nav", .width = 900, .height = 600, .build = dnav_build, .user = &n };
+  rk_window *w = rk_window_create(&d);
+  rk_app_run_for(600);
+  rk_controller *places = places_of(w);
+  rk_view *pv = in_window(w, "pivot");
+  CHECK(places && places->kind == K_PLACES && rk_places_depth(places) == 1 && pv, "declared places start at their first place");
+  CHECK(pv && pv->controller && ((strip *)((pivot *)pv->controller->impl)->strip->state)->nav, "a pivot alone in a place is the place: its titles take the nav level");
+  rk_view_tap(in_window(w, "open"));
+  rk_app_run_for(1500);
+  CHECK(n.opens == 1 && rk_places_depth(places) == 2 && in_window(w, "detail") && rk__view_visible(in_window(w, "detail")), "a place opened by the state turns in");
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_app_run_for(1500);
+  CHECK(!n.detail && n.closes == 1 && rk_places_depth(places) == 1, "Escape goes back: the binding is written false and on_close told");
+  n.detail = true;
+  rk_ui_update(NULL);
+  rk_app_run_for(1500);
+  n.sheet = true;
+  rk_ui_update(NULL);
+  rk_app_run_for(400);
+  CHECK(rk_places_depth(places) == 2 && w->sheets->nkids > 0 && in_window(w, "note"), "a sheet comes down when the state opens it");
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_app_run_for(400);
+  CHECK(!n.sheet && rk_places_depth(places) == 2, "Escape takes the sheet away and writes its binding; the place stays");
+  n.detail = false;
+  rk_ui_update(NULL);
+  rk_app_run_for(1500);
+  CHECK(rk_places_depth(places) == 1 && n.closes == 1, "the app closes a place: it turns back, and on_close is not told");
+  n.tab = 1;
+  rk_ui_update(NULL);
+  rk_app_run_for(1500);
+  CHECK(rk_pivot_selected(pv->controller) == 1, "a bound page is shown");
+  rk_view *strip_v = ((pivot *)pv->controller->impl)->strip;
+  rk_window_focus(w, strip_v);
+  key(w, RK_KEY_LEFT, 0);
+  rk_app_run_for(1500);
+  CHECK(n.tab == 0 && rk_pivot_selected(pv->controller) == 0, "the user's page is written back (%d)", n.tab);
+  n.asking = true;
+  rk_ui_update(NULL);
+  rk_app_run_for(400);
+  rk_view *del = rk_view_find(w->sheets, "delete");
+  CHECK(del != NULL, "a confirmation asks when the state says so");
+  if (del) rk_view_tap(del);
+  rk_app_run_for(400);
+  CHECK(!n.asking && n.deleted == 1 && n.kept == 0, "its ok runs on_press and closes it");
+  n.asking = true;
+  rk_ui_update(NULL);
+  rk_app_run_for(400);
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_app_run_for(400);
+  CHECK(!n.asking && n.kept == 1, "Escape is cancel: on_close");
+  done(w);
+  rk_app_run_for(50);
+}
+
+typedef struct dcoll { int n, shown, sort, sorted, opened; bool third, hidden, src_open, swap, docs, can_export; } dcoll;
+static void dcoll_item(int i, rk_list_item *out, void *u) { (void)u; static char t[32]; snprintf(t, sizeof t, "item %d", i); out->title = t; }
+static const char *dcoll_cell(int r, int c, void *u) { (void)u; static char t[32]; snprintf(t, sizeof t, "%d:%d", r, c); return t; }
+static void dcoll_sort(rk_view *v, int c, rk_sort s, void *u) { (void)v; (void)c; (void)s; ((dcoll *)u)->sorted++; }
+static void dcoll_open(rk_view *v, void *u) { (void)v; ((dcoll *)u)->opened++; }
+static void dcoll_menu(void *u) {
+  dcoll *c = u;
+  RK_HEADING("sort by");
+  RK_ITEM("name", .chosen = &c->sort, .value = 0);
+  RK_ITEM("size", .chosen = &c->sort, .value = 1);
+  RK_SEPARATOR();
+  RK_ITEM("hidden files", .on = &c->hidden);
+  RK_ITEM("export", .shortcut = "Ctrl+E", .disabled = !c->can_export);
+}
+static void dcoll_build(void *user) {
+  dcoll *c = user;
+  RK_HSTACK(.align = RK_ALIGN_START) {
+    RK_LIST(.key = "list", .count = c->n, .item = dcoll_item, .chosen = &c->shown, .width = 200, .height = 200);
+    RK_TABLE(.key = "table", .count = c->n, .cell = dcoll_cell, .on_sort = dcoll_sort, .width = 300, .height = 200) {
+      RK_COLUMN("name");
+      RK_COLUMN("size", .flags = RK_COLUMN_NUMERIC | RK_COLUMN_SORTABLE);
+      if (c->third) RK_COLUMN("note");
+    }
+    RK_TREE(.key = "tree", .width = 200) {
+      if (c->swap && c->docs) RK_ITEM("docs", .key = "docs");
+      RK_ITEM("src", .key = "src", .open = &c->src_open) {
+        RK_ITEM("main.c", .key = "main.c", .on_press = dcoll_open);
+        RK_ITEM("view.c", .key = "view.c", .meta = "12 KB");
+      }
+      if (!c->swap && c->docs) RK_ITEM("docs", .key = "docs");
+    }
+    RK_BUTTON("more", .key = "more", .menu = dcoll_menu);
+  }
+}
+
+static void test_declared_collections(void) {
+  dcoll c = { .n = 50, .shown = -1, .docs = true };
+  rk_window_desc d = { .size = sizeof d, .title = "collections", .width = 1000, .height = 500, .build = dcoll_build, .user = &c };
+  rk_window *w = rk_window_create(&d);
+  rk_app_run_for(400);
+  rk_view *lv = in_window(w, "list"), *tv = in_window(w, "table"), *tree = in_window(w, "tree"), *more = in_window(w, "more");
+  CHECK(lv && tv && tree && more && ((list *)tv->state)->ncols == 2, "a list, a table with its declared columns, a tree, a button with a menu");
+  c.shown = 3;
+  rk_ui_update(NULL);
+  CHECK(rk_list_is_selected(lv, 3) && rk_list_selection_count(lv) == 1, "a list shows the bound item");
+  c.third = true;
+  rk_ui_update(NULL);
+  CHECK(in_window(w, "table") == tv && ((list *)tv->state)->ncols == 3, "a column added: the same table");
+  c.third = false;
+  rk_ui_update(NULL);
+  rk_view *tv2 = in_window(w, "table");
+  CHECK(tv2 && tv2 != tv && ((list *)tv2->state)->ncols == 2, "a column taken out: the table made again, once");
+  CHECK(!strcmp(rk_tree_title(tree, 0), "src") && !strcmp(rk_tree_title(tree, 1), "main.c") && rk_tree_parent(tree, 1) == 0, "a tree's declared items");
+  c.src_open = true;
+  rk_ui_update(NULL);
+  CHECK(rk_tree_is_open(tree, 0), "a bound branch opens");
+  rk_window_focus(w, tree);
+  key(w, RK_KEY_LEFT, 0);
+  rk_app_run_for(50);
+  CHECK(!c.src_open && !rk_tree_is_open(tree, 0), "the user closes it: written back");
+  c.docs = false;
+  rk_ui_update(NULL);
+  CHECK(in_window(w, "tree") == tree && rk_tree_title(tree, 3) == NULL, "an item taken out goes from the same tree");
+  c.docs = true; c.swap = true;
+  rk_ui_update(NULL);
+  rk_view *tree2 = in_window(w, "tree");
+  CHECK(tree2 && !strcmp(rk_tree_title(tree2, 0), "docs") && !strcmp(rk_tree_title(tree2, 1), "src"), "items in a new order: the tree made again in it");
+  rk_view *menu = more->menu;
+  CHECK(menu && rk_menu_check(menu, 1) == RK_CHECKMARK_ON && rk_menu_check(menu, 2) == RK_CHECKMARK_OFF && rk_menu_check(menu, 4) == RK_CHECKMARK_OFF,
+        "a declared menu: a choice checked where it is bound, a square for a bound flag");
+  rk_view_tap(more);
+  rk_app_run_for(300);
+  key(w, RK_KEY_DOWN, 0); key(w, RK_KEY_DOWN, 0);
+  key(w, RK_KEY_ENTER, 0);
+  rk_app_run_for(300);
+  CHECK(c.sort == 1 && rk_menu_check(menu, 2) == RK_CHECKMARK_ON && rk_menu_check(menu, 1) == RK_CHECKMARK_OFF, "picking a choice writes it, and the marks follow (%d)", c.sort);
+  done(w);
+  rk_app_run_for(50);
+}
+
+typedef struct dskip { int builds, inner; uint32_t version; int pulse; } dskip;
+static void dskip_build(void *u) {
+  dskip *s = u;
+  s->builds++;
+  RK_VSTACK(.version = s->version) {
+    s->inner++;
+    RK_TILES() RK_TILE("1", .key = "tile", .label = "stays", .status = RK_STATUS_SUCCESS, .pulse = (uint32_t)s->pulse);
+  }
+}
+static void test_declared_skip(void) {
+  dskip s = { .version = 1 };
+  rk_window *w = window(400, 300);
+  rk_view *v = rk_ui_view(dskip_build, &s);
+  show(w, v, "skip");
+  rk_app_run_for(300);
+  int inner = s.inner;
+  rk_ui_update(v);
+  CHECK(s.inner == inner && rk_view_find(v, "tile"), "a scope with the same version is not built again; what it holds stays");
+  s.version = 2;
+  rk_ui_update(v);
+  CHECK(s.inner == inner + 1, "a new version builds it");
+  rk_view *t = rk_view_find(v, "tile");
+  s.pulse = 1; s.version = 3;
+  rk_ui_update(v);
+  CHECK(t->transition == RK_TRANSITION_FLIP + 1, "a new pulse turns a tile over with nothing else new");
+  rk_app_run_for(600);
+  done(w);
+}
+
 /* Main ------------------------------------------------------------------------------------------------------------ */
 
 static void launch(void *user) {
@@ -2477,8 +2730,12 @@ static void launch(void *user) {
   test_setters();
   test_api_rules();
   test_spring();
-  test_declare();
-  test_declare_same_pixels();
+  { int lv = rk__live_views; test_declare(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare: %d views more\n", rk__live_views - lv); }
+  { int lv = rk__live_views; test_declare_same_pixels(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare_same_pixels: %d views more\n", rk__live_views - lv); }
+  { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }
+  { int lv = rk__live_views; test_declared_navigation(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_navigation: %d views more\n", rk__live_views - lv); }
+  { int lv = rk__live_views; test_declared_collections(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_collections: %d views more\n", rk__live_views - lv); }
+  { int lv = rk__live_views; test_declared_skip(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_skip: %d views more\n", rk__live_views - lv); }
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */
   scene_type();

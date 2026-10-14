@@ -34,7 +34,7 @@ void rk__main_thread_only(const char *fn) {
   rk__error("%s called from another thread: only rk_app_post may be (the main thread runs everything else)", fn);
 }
 
-typedef struct timer { uint32_t id; double due, every; void (*fn)(void *); void *user; } timer;
+typedef struct timer { uint32_t id; double due, every; void (*fn)(void *); void *user; bool quiet; } timer;   /* quiet: reaches no app code */
 typedef struct post { void (*fn)(void *); void *user; } post;
 typedef struct listener { uint32_t id; void (*fn)(void *); void *user; } listener;
 
@@ -57,16 +57,18 @@ double rk_app_now(void) { return rk__platform()->now(); }
 /* Timers and change listeners share one run of ids, so rk_app_cancel ends either. */
 static uint32_t new_id(void) { uint32_t id = next_id++; if (!next_id) next_id = 1; return id; }
 
-static uint32_t add_timer(double ms, bool repeat, void (*fn)(void *), void *user) {
+static uint32_t add_timer(double ms, bool repeat, bool quiet, void (*fn)(void *), void *user) {
   timers = rk__grow(timers, &tcap, ntimers + 1, sizeof *timers);
   timer *t = &timers[ntimers++];
   t->id = new_id();
   t->due = rk_app_now() + RK_MAX(0.0, ms); t->every = repeat ? RK_MAX(1.0, ms) : 0;
-  t->fn = fn; t->user = user;
+  t->fn = fn; t->user = user; t->quiet = quiet;
   return t->id;
 }
-uint32_t rk_app_after(double ms, void (*fn)(void *), void *user) { return add_timer(ms, false, fn, user); }
-uint32_t rk_app_every(double ms, void (*fn)(void *), void *user) { return add_timer(ms, true, fn, user); }
+uint32_t rk_app_after(double ms, void (*fn)(void *), void *user) { return add_timer(ms, false, false, fn, user); }
+uint32_t rk_app_every(double ms, void (*fn)(void *), void *user) { return add_timer(ms, true, false, fn, user); }
+/* the library's own timers that reach no app code (a caret's blink, a tooltip's wait): declared views stay as built */
+uint32_t rk__after_quiet(double ms, bool repeat, void (*fn)(void *), void *user) { return add_timer(ms, repeat, true, fn, user); }
 
 bool rk_app_notify(const char *title, const char *body) {
   const rk_platform *p = rk__platform();
@@ -87,6 +89,7 @@ static void run_timers(double now) {
     if (t.every > 0) timers[at].due = RK_MAX(t.due + t.every, now);
     else timers[at] = timers[--ntimers];
     t.fn(t.user);
+    if (!t.quiet) rk__ui_settle();                         /* what is declared follows what the timer changed */
   }
 }
 
@@ -115,6 +118,7 @@ static void run_posts(void) {
     nposts--;
     UNLOCK();
     p.fn(p.user);
+    rk__ui_settle();
   }
 }
 
@@ -128,6 +132,7 @@ static void changed(bool crossfade) {
     (void)crossfade;
   }
   for (int i = 0; i < nlisteners; i++) listeners[i].fn(listeners[i].user);
+  if (nlisteners) rk__ui_settle();
 }
 
 /* A change of the whole look cross-fades over duration-short, as the web's view transition. */
