@@ -36,9 +36,7 @@ const specimens = {
   'drop': '<label class="rk-drop"><input type="file" multiple><b>Drop files here</b><span>or choose them</span></label>',
 };
 // where the web leaves a part to the browser, its colours are the browser's: the other checks still hold
-const browserDrawn = {
-  'check-off-dark': 'the checkbox is the browser\'s own (accent-color only), and Chromium fills an unchecked one in dark',
-};
+const browserDrawn = {};
 function toggle(on) {
   return `<label class="rk-toggle"><span class="rk-toggle-label">feed</span><input type="checkbox"${on ? ' checked' : ''}>` +
     '<span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>';

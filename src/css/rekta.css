@@ -172,7 +172,29 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rk-space-s); }
 /* A checkbox or radio with its label; a group of them goes in .rk-choices. */
 .rk-switch { display: inline-flex; align-items: center; gap: var(--rk-space-s); min-height: var(--rk-control-height); font-weight: var(--rk-font-weight-semibold); cursor: pointer; }
-.rk-switch input { width: 20px; height: 20px; margin: 0; accent-color: var(--rk-accent); }
+/* Drawn by Rekta, as rekta-core draws it, the same in every browser: a 20px square with a 2px frame; checked, the
+   accent with an on-accent mark (on the label, as inputs take no pseudo-elements everywhere). A radio is a ring, and
+   checked an accent ring around an accent dot. Pressed, the hover fill around it; never a hover tint. */
+.rk-switch { position: relative; }
+.rk-switch input {
+  -webkit-appearance: none; appearance: none; flex: none; width: 20px; height: 20px; margin: 0;
+  border: 2px solid var(--rk-text-primary); border-radius: 0; background: transparent; color: inherit; cursor: inherit;
+}
+.rk-switch input[type='radio'] { border-radius: 50%; }
+.rk-switch input:checked { border-color: var(--rk-accent); background-color: var(--rk-accent); }
+.rk-switch input[type='radio']:checked { background: radial-gradient(circle, var(--rk-accent) 0 4.5px, transparent 5.5px); }
+.rk-switch:has(> input[type='checkbox']:first-child:checked)::before {
+  content: ''; position: absolute; left: 0; top: 50%; width: 20px; height: 20px; margin-top: -10px; pointer-events: none;
+  background-color: var(--rk-on-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10l3.5 3.5L15 6.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") center / 20px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10l3.5 3.5L15 6.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") center / 20px no-repeat;
+}
+.rk-switch:active input:not(:disabled):not(:checked) { background-color: var(--rk-hover); box-shadow: 0 0 0 4px var(--rk-hover); }
+.rk-switch:has(> input:disabled) { color: var(--rk-disabled); cursor: not-allowed; }
+.rk-switch input:disabled { border-color: var(--rk-disabled); }
+.rk-switch input[type='checkbox']:disabled:checked { background-color: var(--rk-disabled); }
+.rk-switch input[type='radio']:disabled:checked { background-image: radial-gradient(circle, var(--rk-disabled) 0 4.5px, transparent 5.5px); }
+@media (forced-colors: active) { .rk-switch input { forced-color-adjust: auto; -webkit-appearance: auto; appearance: auto; } .rk-switch::before { display: none; } }
 .rk-choices { display: flex; flex-wrap: wrap; gap: 0 var(--rk-space-l); margin: 0; padding: 0; border: 0; min-width: 0; }
 .rk-choices > legend { padding: 0; margin-bottom: var(--rk-space-xs); }
 
