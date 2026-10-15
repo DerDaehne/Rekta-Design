@@ -16,14 +16,17 @@ Rectangle {
     // Animations off in System Settings: every change lands at once.
     readonly property bool still: Kirigami.Units.longDuration <= 1
     readonly property real progress: Math.min(stage, 5) / 5
+    // Logical pixels for a 1080-line screen; a larger one that is not scaled gets the mark larger.
+    readonly property real k: Math.max(1, Math.min(width / 1920, height / 1080))
+    readonly property int t: Math.round(6 * k)   // the line's height, and the square's side
 
     Item {
         id: mark
         anchors.centerIn: parent
-        width: 216
-        height: 6 + 15 + 6   // the square, the gap above the line (88/36 of its height, as in the icon), the line
+        width: Math.round(216 * root.k)
+        height: root.t + Math.round(root.t * 88 / 36) + root.t   // the square, the gap (88/36 of the line, as in the icon), the line
 
-        Rectangle { id: track; y: parent.height - height; width: parent.width; height: 6; color: "@track@" }
+        Rectangle { id: track; y: parent.height - height; width: parent.width; height: root.t; color: "@track@" }
         Rectangle {
             y: track.y
             width: track.width * root.progress
@@ -36,8 +39,8 @@ Rectangle {
         }
         Rectangle {
             x: parent.width - width
-            width: 6
-            height: 6
+            width: root.t
+            height: root.t
             color: "@done@"
             opacity: root.stage >= 5 ? 1 : 0
             Behavior on opacity {

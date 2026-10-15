@@ -51,7 +51,7 @@ function inkAlpha(name) {
   });
   return f3((per[0] + per[1]) / 2);
 }
-const LOW = inkAlpha('text-contrast-low'), MEDIUM = inkAlpha('text-contrast-medium'), HIGH = inkAlpha('text-contrast-high');
+const LOW = inkAlpha('text-contrast-low'), HIGH = inkAlpha('text-contrast-high');
 const SURFACE = inkAlpha('surface');
 const hover = T.themes.dark.hover;                              // one translucent grey for both themes
 const HOVER = { color: solid(hover), op: f3(alphaOf(hover)) };
@@ -209,24 +209,64 @@ function colorScheme(id, label, c, comp) {
 const SCHEME_STYLE = '<style type="text/css" id="current-color-scheme">.ColorScheme-Text{color:#232629}.ColorScheme-Background{color:#eff0f1}'
   + '.ColorScheme-Highlight{color:#3daee9}.ColorScheme-ViewText{color:#232629}.ColorScheme-ViewBackground{color:#fcfcfc}'
   + '.ColorScheme-ButtonText{color:#232629}.ColorScheme-ButtonBackground{color:#eff0f1}.ColorScheme-ButtonFocus{color:#3daee9}'
+  + '.ColorScheme-ButtonHover{color:#93cee9}.ColorScheme-ViewHover{color:#93cee9}'
   + '.ColorScheme-NeutralText{color:#f67400}.ColorScheme-PositiveText{color:#27ae60}.ColorScheme-NegativeText{color:#da4453}</style>\n';
 const ink = (op = 1) => ({ cls: 'ColorScheme-Text', op });
 const ground = (op = 1) => ({ cls: 'ColorScheme-Background', op });
 const focusRing = { cls: 'ColorScheme-ButtonFocus', op: 1 };
+// text-contrast-medium exactly: the colour schemes set every DecorationHover to it (an accent colour would replace it).
+const medium = { cls: 'ColorScheme-ButtonHover' }, viewMedium = { cls: 'ColorScheme-ViewHover' };
 const named = (prefix) => (cell) => (prefix ? `${prefix}-${cell}` : cell);
 const sheet = () => new Sheet(SCHEME_STYLE);
 
 // Popups, menus, tooltips and desktop widgets: a floating surface, the ground with a 1px edge and radius-s, no shadow.
 function floating(shadow = false) {
-  const s = sheet().frame(named(''), all(radius.s), [{ fill: ground(), r: radius.s }, { ring: ink(MEDIUM), r: radius.s }])
+  const s = sheet().frame(named(''), all(radius.s), [{ fill: ground(), r: radius.s }, { ring: medium, r: radius.s }])
     .margins('', radius.s)
     .frame(named('mask'), all(radius.s), [{ fill: { color: '#000' }, r: radius.s }]);
   if (shadow) s.frame(named('shadow'), all(1), []).margins('shadow', 0);  // asked for by name; nothing to draw
   return s.doc();
 }
 // Panels: flush to the screen edge, a hairline on the sides that face the desktop. Glass where KWin blurs behind it.
+// "thick" only lends a thick panel (a dock) its inner spacing; the margins are Breeze's, so nothing reflows.
 const panel = (op) => sheet().frame(named(''), all(1), [{ fill: ground(op) }, { ring: ink(LOW) }]).margins('', 4)
+  .frame(named('thick'), all(1), [{ fill: ground(op) }, { ring: ink(LOW) }]).margins('thick', 8)
   .frame(named('mask'), all(1), [{ fill: { color: '#000' } }]).doc();
+
+// The arrows in Plasma's popups (a combo box, a menu): chevrons of the icon set.
+const arrows = () => ['up', 'down', 'left', 'right'].reduce((s, dir) => s.el(`${dir}-arrow`, 14, 14, (x, y) => icon(`chevron-${dir}`, x, y, 14, 14, 14, ink(), 1.5)), sheet()).doc();
+
+// Busy: Metro's dots on a circle, fading behind the first one; Plasma turns the element. Stopped, they stand still and grey.
+function busyWidget() {
+  const dots = (x, y, op) => [0, 1, 2, 3, 4].map((i) => {
+    const a = (-90 - 24 * i) * Math.PI / 180, cx = x + 18 + 13 * Math.cos(a), cy = y + 18 + 13 * Math.sin(a);
+    return `<rect x="${f3(cx - 2)}" y="${f3(cy - 2)}" width="4" height="4"${paint(ink(op(i)))}/>`;
+  }).join('');
+  return sheet().el('busywidget', 36, 36, (x, y) => dots(x, y, (i) => f3(1 - i * 0.2)))
+    .el('stopped', 36, 36, (x, y) => dots(x, y, () => HIGH)).doc();
+}
+
+// The pager (and the desktop-change OSD): desktops as hairline boxes; the current one takes the selection grey and an ink
+// edge, the one under the pointer the hover overlay.
+const pager = () => sheet()
+  .frame(named('normal'), all(1), [{ ring: ink(LOW) }])
+  .frame(named('hover'), all(1), [{ fill: HOVER }, { ring: medium }])
+  .frame(named('active'), all(1), [{ fill: { cls: 'ColorScheme-Highlight' } }, { ring: ink() }]).doc();
+
+// Round action buttons (RoundButton, Dial): squares with radius-s, as every Rekta button; Plasma picks a size by name.
+function actionButton() {
+  const s = sheet(), r = radius.s;
+  for (const [size, prefix] of [[32, ''], [24, '24-24-'], [22, '22-22-'], [16, '16-16-']]) {
+    const box = (layers) => (x, y) => layers.map(([kind, p]) => kind === 'fill'
+      ? `<path d="${pathOf([roundRect(x, y, x + size, y + size, r)], 0, 0)}"${paint(p)}/>`
+      : `<path d="${pathOf([roundRect(x, y, x + size, y + size, r), roundRect(x + 2, y + 2, x + size - 2, y + size - 2, r - 2)], 0, 0)}" fill-rule="evenodd"${paint(p)}/>`).join('');
+    s.el(`${prefix}normal`, size, size, box([['ring', ink()]]))
+      .el(`${prefix}hover`, size, size, box([['fill', HOVER], ['ring', ink()]]))
+      .el(`${prefix}pressed`, size, size, box([['fill', PRESS], ['ring', ink()]]))
+      .el(`${prefix}focus`, size, size, box([['ring', focusRing]]));
+  }
+  return s.doc();
+}
 
 function plasmaButton() {
   const r = radius.s, s = sheet();
@@ -245,7 +285,7 @@ function plasmaButton() {
 function plasmaLineEdit() {
   const r = radius.s, s = sheet();
   s.el('hint-focus-over-base', 2, 2);
-  s.frame(named('base'), all(r), [{ fill: { cls: 'ColorScheme-ViewBackground' }, r }, { ring: { cls: 'ColorScheme-ViewText', op: MEDIUM }, r }]).margins('base', 6);
+  s.frame(named('base'), all(r), [{ fill: { cls: 'ColorScheme-ViewBackground' }, r }, { ring: viewMedium, r }]).margins('base', 6);
   s.frame(named('hover'), all(r), [{ ring: { cls: 'ColorScheme-ViewText', op: HIGH }, r }]).margins('hover', 0);
   s.frame(named('focus'), all(r), [{ ring: { cls: 'ColorScheme-ViewText' }, r }]).margins('focus', 0);
   // Keyboard focus: the ink edge and a 2px focus ring 2px outside it.
@@ -276,12 +316,12 @@ function listItem() {
 function tasks() {
   const s = sheet(), edges = { '': 'bottom', north: 'top', west: 'left', east: 'right' };
   const states = {
-    normal: (e) => [{ side: e, w: 2, paint: ink(MEDIUM) }],
+    normal: (e) => [{ side: e, w: 2, paint: medium }],
     minimized: (e) => [{ side: e, w: 2, paint: ink(LOW) }],
     focus: (e) => [{ fill: ink(SURFACE) }, { side: e, w: 2, paint: ink() }],
     attention: (e) => [{ fill: { cls: 'ColorScheme-NeutralText', op: LOW } }, { side: e, w: 2, paint: { cls: 'ColorScheme-NeutralText' } }],
     progress: () => [{ fill: { cls: 'ColorScheme-ButtonFocus', op: LOW } }],
-    hover: (e) => [{ fill: HOVER }, { side: e, w: 2, paint: ink(MEDIUM) }],
+    hover: (e) => [{ fill: HOVER }, { side: e, w: 2, paint: medium }],
   };
   for (const st of ['normal', 'minimized', 'focus', 'attention']) states[`${st}-hover`] = (e) => [{ fill: HOVER }, ...states[st](e)];
   for (const [dir, edge] of Object.entries(edges)) {
@@ -314,7 +354,7 @@ const plasmoidHeading = () => sheet().el('hint-stretch-borders', 2, 2)
 function scrollBar() {
   const s = sheet().el('hint-scrollbar-size', 6, 6), inset = (p) => s.hint(`${p}-hint-top-inset`, 3, 6).hint(`${p}-hint-bottom-inset`, 3, 6)
     .hint(`${p}-hint-left-inset`, 6, 3).hint(`${p}-hint-right-inset`, 6, 3);
-  s.frame(named('slider'), all(3), [{ fill: ink(MEDIUM) }]); inset('slider');
+  s.frame(named('slider'), all(3), [{ fill: medium }]); inset('slider');
   s.frame(named('mouseover-slider'), all(3), [{ fill: ink(HIGH) }]); inset('mouseover-slider');
   for (const p of ['background-vertical', 'background-horizontal']) { s.frame(named(p), all(3), []); inset(p); }
   return s.doc();
@@ -390,6 +430,9 @@ function plasmaStyle() {
     'widgets/plasmoidheading': plasmoidHeading(), 'widgets/scrollbar': scrollBar(), 'widgets/slider': slider(),
     'widgets/bar_meter_horizontal': progress(), 'widgets/checkmarks': checkmarks(), 'widgets/radiobutton': radioButton(),
     'widgets/switch': switchSvg(), 'widgets/menubaritem': menuBarItem(), 'widgets/frame': frames(), 'widgets/line': line(),
+    'widgets/arrows': arrows(), 'widgets/busywidget': busyWidget(), 'widgets/pager': pager(), 'widgets/actionbutton': actionButton(),
+    // The outline KWin shows where a window will tile, and translucent desktop widgets: a floating surface too.
+    'widgets/translucentbackground': floating(true),
   };
   for (const [f, svg] of Object.entries(files)) write(`${dir}/${f}.svg`, svg);
   // Without blur (translucent/), without compositing (opaque/) and for an opaque panel (solid/): never see-through.
@@ -414,12 +457,17 @@ function aurorae(id, c, label) {
     .frame(named('decoration'), { t: TITLE, r: 1, b: 1, l: 1 }, deco(c['text-contrast-medium']))
     .frame(named('decoration-inactive'), { t: TITLE, r: 1, b: 1, l: 1 }, deco(c['text-contrast-low']))
     .frame(named('mask'), { t: TITLE, r: 1, b: 1, l: 1 }, [{ fill: { color: '#000' } }]);
+  // Maximized, Aurorae draws only a centre, over the whole window (measured in KWin 6.7), the title being its top. Tiled from
+  // the top, a centre as tall as the title puts the hairline on the title's last row; under the window it only repeats.
+  s.hint('hint-tile-center', 1, 1);
+  for (const id of ['decoration-maximized-center', 'decoration-maximized-inactive-center'])
+    s.el(id, 8, TITLE, (x, y) => `<rect x="${x}" y="${y}" width="8" height="${TITLE - 1}"${paint(col(c.bg))}/><rect x="${x}" y="${y + TITLE - 1}" width="8" height="1"${paint(col(c['text-contrast-low']))}/>`);
   write(`${dir}/decoration.svg`, s.doc());
   const h = TITLE - 2, states = {
     active: [c['text-primary']], inactive: [c['text-contrast-medium']], hover: [c['text-primary'], HOVER], pressed: [c['text-primary'], PRESS],
     deactivated: [c.disabled], 'hover-inactive': [c['text-primary'], HOVER], 'pressed-inactive': [c['text-primary'], PRESS], 'deactivated-inactive': [c.disabled],
   };
-  for (const [file, ic] of Object.entries({ close: 'close', maximize: 'window', restore: 'window', minimize: 'minus', alldesktops: 'pin', keepabove: 'up', keepbelow: 'down', shade: 'chevron-up', help: 'info' })) {
+  for (const [file, ic] of Object.entries({ close: 'close', maximize: 'window', restore: 'copy', minimize: 'minus', alldesktops: 'pin', keepabove: 'up', keepbelow: 'down', shade: 'chevron-up', help: 'info' })) {
     const b = new Sheet();
     for (const [st, [fg, bg]] of Object.entries(states))
       b.el(`${st}-center`, BUTTON, h, (x, y) => (bg ? `<rect x="${x}" y="${y}" width="${BUTTON}" height="${h}"${paint(bg)}/>` : '') + icon(ic, x, y, BUTTON, h, 20, col(fg)));
@@ -474,12 +522,13 @@ function kvantum(c, dark) {
   }
   indicators('carrow', 'chevron-down', 10, undefined, 1.5);
 
-  // Fields and combo boxes: a 1px edge 2px in, radius-tile; with focus, the edge turns ink inside a 2px focus ring.
-  const t = radius.tile, field = (edge, extra = []) => [{ fill: GROUND, d: 2, r: t }, { ring: edge, d: 2, r: t }, ...extra];
-  const focused = field(INK, [{ ring: FOCUS, w: 2, r: t + 2 }]);
-  states('lineedit', all(4), { normal: field(MED), focused, disabled: field(DIS) });
-  states('combo', all(4), { normal: field(MED), focused: field(INK), pressed: focused, toggled: focused, disabled: field(DIS) });
-  states('spin', all(4), { normal: field(MED), focused: field(INK, [{ fill: HOVER, d: 3, r: t - 1 }]), pressed: field(INK, [{ fill: PRESS, d: 3, r: t - 1 }]), toggled: field(INK), disabled: field(DIS) });
+  // Fields and combo boxes: a 1px edge 2px in with radius-s, as on the web; with focus, the edge turns ink inside a 2px focus
+  // ring. The frame is 6px so the ring's corner fits it.
+  const FB = r + 2, field = (edge, extra = []) => [{ fill: GROUND, d: 2, r }, { ring: edge, d: 2, r }, ...extra];
+  const focused = field(INK, [{ ring: FOCUS, w: 2, r: r + 2 }]);
+  states('lineedit', all(FB), { normal: field(MED), focused, disabled: field(DIS) });
+  states('combo', all(FB), { normal: field(MED), focused: field(INK), pressed: focused, toggled: focused, disabled: field(DIS) });
+  states('spin', all(FB), { normal: field(MED), focused: field(INK, [{ fill: HOVER, d: 3, r: r - 1 }]), pressed: field(INK, [{ fill: PRESS, d: 3, r: r - 1 }]), toggled: field(INK), disabled: field(DIS) });
   for (const [n, ic] of [['plus', 'plus'], ['minus', 'minus'], ['up', 'chevron-up'], ['down', 'chevron-down']]) indicators(`spin-${n}`, ic, 10, undefined, 1.5);
 
   // Checkboxes and radio buttons: a 2px ink edge; checked, the box fills with ink and the check is cut out of it. In menus, as
@@ -630,12 +679,12 @@ function kvantum(c, dark) {
     ToolbarButton: { inherits: 'PanelButtonTool', 'frame.element': 'tbutton', 'interior.element': 'tbutton', ...text() },
     Dock: { inherits: 'PanelButtonCommand', frame: false, interior: false, 'indicator.element': 'dock', ...text() },
     DockTitle: { inherits: 'PanelButtonCommand', frame: false, interior: false, ...text(HIGHc, INK), 'text.bold': true, ...margins(4, 4, 8, 8) },
-    IndicatorSpinBox: { inherits: 'PanelButtonCommand', ...fr(4), 'frame.element': 'spin', 'interior.element': 'spin', 'indicator.element': 'spin', 'indicator.size': 10, focusFrame: false, ...text() },
+    IndicatorSpinBox: { inherits: 'PanelButtonCommand', ...fr(FB), 'frame.element': 'spin', 'interior.element': 'spin', 'indicator.element': 'spin', 'indicator.size': 10, focusFrame: false, ...text() },
     RadioButton: { inherits: 'PanelButtonCommand', frame: false, 'interior.element': 'radio', focusFrame: false, ...text(), 'text.bold': false, ...margins(2, 2, 6, 6), min_height: 0 },
     CheckBox: { inherits: 'PanelButtonCommand', frame: false, 'interior.element': 'checkbox', focusFrame: false, ...text(), 'text.bold': false, ...margins(2, 2, 6, 6), min_height: 0 },
     Focus: { inherits: 'PanelButtonCommand', frame: true, 'frame.element': 'focus', ...fr(2), interior: false, 'frame.patternsize': 0 },
     GenericFrame: { inherits: 'PanelButtonCommand', ...fr(1), 'frame.element': 'common', interior: false, focusFrame: false, ...text() },
-    LineEdit: { inherits: 'PanelButtonCommand', ...fr(4), 'frame.element': 'lineedit', 'interior.element': 'lineedit', focusFrame: false, ...text(), 'text.bold': false, ...margins(4, 4, 8, 8) },
+    LineEdit: { inherits: 'PanelButtonCommand', ...fr(FB), 'frame.element': 'lineedit', 'interior.element': 'lineedit', focusFrame: false, ...text(), 'text.bold': false, ...margins(2, 2, 6, 6) },
     ToolbarLineEdit: { inherits: 'LineEdit', 'frame.element': 'lineedit', 'interior.element': 'lineedit' },
     DropDownButton: { inherits: 'PanelButtonCommand', 'indicator.element': 'arrow-down' },
     IndicatorArrow: { 'indicator.element': 'arrow', 'indicator.size': 10 },
@@ -666,7 +715,7 @@ function kvantum(c, dark) {
     MenuBar: { inherits: 'PanelButtonCommand', frame: false, 'frame.element': 'menubar', interior: false, ...text() },
     MenuBarItem: { inherits: 'PanelButtonCommand', ...fr(r), 'frame.element': 'menubaritem', 'interior.element': 'menubaritem', focusFrame: false, ...text(), 'text.bold': false, ...margins(2, 2, 8, 8), min_height: 0 },
     TitleBar: { inherits: 'PanelButtonCommand', frame: false, interior: true, 'interior.element': 'titlebar', 'indicator.element': 'mdi', 'indicator.size': 12, ...text(HIGHc, INK), 'text.bold': true, 'text.italic': false },
-    ComboBox: { inherits: 'PanelButtonCommand', ...fr(4), 'frame.element': 'combo', 'interior.element': 'combo', 'indicator.element': 'carrow', focusFrame: false, ...text(), 'text.bold': false, ...margins(4, 4, 8, 8) },
+    ComboBox: { inherits: 'PanelButtonCommand', ...fr(FB), 'frame.element': 'combo', 'interior.element': 'combo', 'indicator.element': 'carrow', focusFrame: false, ...text(), 'text.bold': false, ...margins(2, 2, 6, 6) },
     Menu: { inherits: 'PanelButtonCommand', ...fr(r), 'frame.element': 'menu', 'interior.element': 'menu', ...text(), 'text.bold': false, 'text.shadow': false, 'frame.expansion': 0 },
     GroupBox: { inherits: 'GenericFrame', frame: false, interior: false, ...text(), 'text.bold': true, 'text.margin': 0, 'frame.expansion': 0 },
     ToolTip: { inherits: 'GenericFrame', ...fr(r), 'frame.element': 'tooltip', interior: true, 'interior.element': 'tooltip', ...text(GROUND), 'text.margin': true, 'text.margin.top': 2, 'text.margin.bottom': 2, 'text.margin.left': 4, 'text.margin.right': 4, 'frame.expansion': 0 },
@@ -701,7 +750,8 @@ function wallpaperSvg(c, W, H, light) {
 function wallpaper() {
   const dir = 'wallpapers/Rekta';
   write(`${dir}/metadata.json`, JSON.stringify({ KPlugin: { Authors: [{ Name: AUTHOR }], Id: 'Rekta', License: 'CC-BY-4.0', Name: 'Rekta' } }, null, 2) + '\n');
-  for (const [W, H] of [[3840, 2160], [2560, 1600], [5120, 2160], [5120, 1440], [2160, 3840]]) {
+  // 16:9 (4K, 5K), 16:10, 3:2, 4:3, 5:4, 21:9, 32:9, and upright 9:16 and 10:16: Plasma picks the closest.
+  for (const [W, H] of [[3840, 2160], [5120, 2880], [2560, 1600], [3000, 2000], [2880, 2160], [2560, 2048], [5120, 2160], [5120, 1440], [2160, 3840], [1600, 2560]]) {
     render(wallpaperSvg(T.themes.light, W, H, true), W, H, `${dir}/contents/images/${W}x${H}.png`);
     render(wallpaperSvg(T.themes.dark, W, H, false), W, H, `${dir}/contents/images_dark/${W}x${H}.png`);
   }
@@ -735,21 +785,42 @@ function lookAndFeel(id, label, c, light) {
   const dir = `plasma/look-and-feel/${id}`, variant = light ? 'Light' : 'Dark';
   write(`${dir}/metadata.json`, JSON.stringify({
     KPackageStructure: 'Plasma/LookAndFeel',
-    KPlugin: { Authors: [{ Name: AUTHOR }], Category: '', Description: `Rekta Design, ${light ? 'light' : 'dark'}: the colour scheme, the Plasma Style, the title bar, the Kvantum style, a splash and a wallpaper`, Id: id, License: 'MIT', Name: label, Version: pkg.version, Website: SITE },
+    KPlugin: { Authors: [{ Name: AUTHOR }], Category: '', Description: `Rekta Design, ${light ? 'light' : 'dark'}: the colour scheme, the Plasma Style, the title bar, the Kvantum style, the window switcher, the logout screen, a splash and a wallpaper`, Id: id, License: 'MIT', Name: label, Version: pkg.version, Website: SITE },
   }, null, 2) + '\n');
   write(`${dir}/contents/defaults`, [
     `[kdeglobals][KDE]\nwidgetStyle=${light ? 'kvantum' : 'kvantum-dark'}`,
     `[kdeglobals][General]\nColorScheme=Rekta${variant}`,
     '[plasmarc][Theme]\nname=rekta',
     '[Wallpaper]\nImage=Rekta',
-    `[kwinrc][org.kde.kdecoration2]\nlibrary=org.kde.kwin.aurorae\ntheme=__aurorae__svg__Rekta${variant}`,
+    // Tiny: Aurorae raises a 1px edge to 4px at the "Normal" border size.
+    `[kwinrc][org.kde.kdecoration2]\nlibrary=org.kde.kwin.aurorae\ntheme=__aurorae__svg__Rekta${variant}\nBorderSize=Tiny`,
+    `[kwinrc][WindowSwitcher]\nLayoutName=${id}`,
     `[ksplashrc][KSplash]\nEngine=KSplashQML\nTheme=${id}`,
   ].join('\n\n') + '\n');
   write(`${dir}/contents/splash/Splash.qml`, fill(readFileSync(join(root, 'kde', 'splash', 'Splash.qml'), 'utf8'), {
     bg: solid(c.bg), track: solid(c['text-contrast-low']), ink: solid(c['text-primary']), done: solid(c['status-success-full']),
     moderate: ms('moderate'), short: ms('short'), 'ease-base': qmlEase('base'), 'ease-in': qmlEase('in'),
   }));
+  const look = {
+    bg: solid(c.bg), ink: solid(c['text-primary']), high: solid(c['text-contrast-high']), low: solid(c['text-contrast-low']),
+    focus: solid(c.focus), accent: solid(c.accent), 'on-accent': solid(c['on-accent']), hover: HOVER.color, hoverOpacity: HOVER.op,
+    glass: f3(alphaOf(c.glass)), moderate: ms('moderate'), stagger: ms('stagger'), 'ease-in': qmlEase('in'),
+  };
+  write(`${dir}/contents/logout/Logout.qml`, fill(readFileSync(join(root, 'kde', 'logout', 'Logout.qml'), 'utf8'), look));
+  copy('kde/logout/timer.js', `${dir}/contents/logout/timer.js`);
+  write(`${dir}/contents/windowswitcher/WindowSwitcher.qml`, fill(readFileSync(join(root, 'kde', 'windowswitcher', 'WindowSwitcher.qml'), 'utf8'), look));
   render(previewSvg(c, light), 600, 375, `${dir}/contents/previews/preview.png`);
+  // Plasma reads these by name; a PNG under the .jpg name loads all the same.
+  render(previewSvg(c, light), 1600, 1000, `${dir}/contents/previews/fullscreenpreview.jpg`);
+  render(splashPreviewSvg(c), 600, 375, `${dir}/contents/previews/splash.png`);
+}
+
+// The splash at its last step: the line full, the square over its end.
+function splashPreviewSvg(c) {
+  const W = 1600, H = 1000, t = 12, w = 432, x = (W - w) / 2, y = H / 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${solid(c.bg)}"/>`
+    + `<rect x="${x}" y="${y}" width="${w}" height="${t}" fill="${solid(c['text-primary'])}"/>`
+    + `<rect x="${x + w - t}" y="${y - Math.round(t * 88 / 36) - t}" width="${t}" height="${t}" fill="${solid(c['status-success-full'])}"/></svg>`;
 }
 
 // The login screen: Barlow ships with it, its colours come from theme.conf (both themes; variant picks one).
@@ -757,7 +828,7 @@ function sddm() {
   const dir = 'sddm/themes/rekta', keys = ['bg', 'surface', 'text-primary', 'text-contrast-low', 'text-contrast-medium', 'text-contrast-high',
     'accent', 'on-accent', 'focus', 'disabled', 'status-error-full', 'status-warning-full', 'status-success-full'];
   const colours = Object.fromEntries(['light', 'dark'].flatMap((t) => keys.map((k) => [`${t}_${k.replace(/-/g, '_')}`, solid(T.themes[t][k])])));
-  write(`${dir}/theme.conf`, ini({ General: { variant: 'dark', ...colours, hover: solid(hover), hoverOpacity: HOVER.op } }));
+  write(`${dir}/theme.conf`, ini({ General: { variant: 'dark', reducedMotion: false, ...colours, hover: solid(hover), hoverOpacity: HOVER.op } }));
   write(`${dir}/metadata.desktop`, ini({
     SddmGreeterTheme: {
       Name: 'Rekta', Description: 'Rekta Design: the ground, a pivot of users, one field', Author: AUTHOR, License: 'MIT', Type: 'sddm-theme',
@@ -765,7 +836,8 @@ function sddm() {
     },
   }));
   write(`${dir}/Main.qml`, fill(readFileSync(join(root, 'kde', 'sddm', 'Main.qml'), 'utf8'), {
-    press: ms('press'), short: ms('short'), moderate: ms('moderate'), float: ms('float'), stagger: ms('stagger'),
+    press: ms('press'), short: ms('short'), moderate: ms('moderate'), float: ms('float'), stagger: ms('stagger'), busy: ms('busy'),
+    'busy-delay': T.timing['duration-busy-delay'],
     'ease-base': qmlEase('base'), 'ease-in': qmlEase('in'), 'ease-out': qmlEase('out'),
     'icon-chevron-up': ICONS['chevron-up'].shapes[0].attrs.d, 'icon-check': ICONS.check.shapes[0].attrs.d,
   }));
