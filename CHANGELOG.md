@@ -56,6 +56,10 @@ apps change as follows (`man rekta` has the whole API):
 
 ### Added
 
+- **Rekta for KDE Plasma 6.** `scripts/build-kde.mjs` builds, from the tokens, two global themes (Rekta Light,
+  Rekta Dark) with their colour schemes, a Plasma Style, an Aurorae title bar after rekta-core's, a Kvantum style
+  for Qt apps, a splash, a wallpaper and an SDDM login screen; the flake packages them as `rekta-kde`. See
+  `kde/README.md`.
 - **rekta-core: declared UI.** A window given `rk_window_desc.build` (with
   `.user`, and `.on_key` for keys nothing focused takes) calls it to know what
   to show: macros for every view, collection, menu and controller (`RK_TILE`,
