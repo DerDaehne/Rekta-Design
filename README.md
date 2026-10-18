@@ -100,15 +100,16 @@ on every push to `main` (and by hand).
 ## Status
 
 **0.3: everything data-heavy desktop and web apps need, on the web and
-natively.** 0.2 laid the foundation: one token source for every platform,
-the component stylesheet and a framework-free behaviour script, with
-routes and back, window-size classes, density and a keyboard model. 0.3
-adds rekta-core, native views in C with a declared UI, and on the web data states, menus, context menus and
-tooltips, tables with Metro selection, columns and editing, trees, long
-lists, splits, a command palette, search and filters, forms and every
-input, the live contract and an undo history, charts, meters and
-progress, an icon set, the title bar of an installed app, and installing
-and offline. Next: date ranges, a notification centre, rich text. See
+natively.** 0.2 laid the foundation: one token source for every
+platform, the component stylesheet and a framework-free behaviour
+script, with routes and back, window-size classes, density and a
+keyboard model. 0.3 adds rekta-core, native views in C with a declared
+UI, and on the web data states, menus, context menus and tooltips,
+tables with Metro selection, columns and editing, trees, long lists,
+splits, a command palette, search and filters, forms and every input,
+the live contract and an undo history, charts, meters and progress, an
+icon set, the title bar of an installed app, and installing and offline.
+Next: date ranges, a notification centre, rich text. See
 [CHANGELOG.md](CHANGELOG.md).
 
 ## License
