@@ -71,6 +71,7 @@ them:
 | `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it. Removed once the build-in is over, so a re-render never replays it. |
 | `data-rk-phase` | a toast, the banner | `leaving` while it goes; `clear` on the banner when no state stands. |
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
+| `data-rk-measured` | a pivot | `rekta.js` has measured its titles: inactive ones shrink by a scale that animates, instead of the stylesheet's measure-free font-size. |
 | `data-rk-wide` | a pivot and its facets' parent | The facets show side by side (`pivot()`, from `size.pivot-wide` up). |
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
 | `data-rk-pending` | a button | Its action is running (`pending()`). |

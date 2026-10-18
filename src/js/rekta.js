@@ -866,6 +866,11 @@ function stripWheel(e) {
 // the page so fluid sizes and window-size classes stay right.
 function pivotScale(strip) {
   if (!strip.getClientRects().length) return;
+  // Measuring is not a change to show: from the stylesheet's measure-free sizes (font-size) to the scale the first time,
+  // and a new width after a resize or a font load, apply at once.
+  const titles = [...strip.querySelectorAll(':scope > a, :scope > button')];
+  for (const el of titles) el.style.transition = 'none';
+  strip.setAttribute('data-rk-measured', '');
   const probe = document.createElement('span');
   probe.style.cssText = 'position:absolute;visibility:hidden;font-size:var(--_rk-inactive)';
   strip.appendChild(probe);
@@ -873,7 +878,9 @@ function pivotScale(strip) {
   const inactive = parseFloat(getComputedStyle(probe).fontSize), active = item ? parseFloat(getComputedStyle(item).fontSize) : inactive;
   probe.remove();
   if (inactive && active) strip.style.setProperty('--rk-pivot-scale', (inactive / active).toFixed(3));
-  for (const el of strip.querySelectorAll(':scope > a, :scope > button')) if (el.offsetWidth) el.style.setProperty('--_rk-w', `${el.offsetWidth}px`);
+  for (const el of titles) if (el.offsetWidth) el.style.setProperty('--_rk-w', `${el.offsetWidth}px`);
+  void strip.offsetWidth;
+  for (const el of titles) el.style.transition = '';
 }
 function pivotFit(strip) {
   const items = [...strip.querySelectorAll(':scope > a, :scope > button')];

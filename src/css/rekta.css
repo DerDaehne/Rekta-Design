@@ -154,6 +154,12 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-pivot--nav { --_rk-inactive: var(--rk-font-size-nav-inactive); }
 .rk-pivot--nav > a, .rk-pivot--nav > button { font-size: var(--rk-font-size-nav-active); }
 .rk-pivot > [aria-current], .rk-pivot > [aria-selected='true'] { --_rk-s: 1; color: var(--rk-text-primary); }
+/* Until rekta.js has measured the titles (data-rk-measured), or without it: inactive titles take the smaller size as a
+   font-size instead of a scale, so every gap is space-l with nothing measured. Only the scale animates; the script
+   switches to it when it measures. */
+.rk-pivot:not(.rk-pivot--side, [data-rk-measured]) > :is(a, button):not([aria-current], [aria-selected='true']) {
+  --_rk-s: 1; font-size: var(--_rk-inactive); transform: none; margin-inline-end: 0;
+}
 /* A strip whose titles all fit does not glide; its titles only change size. */
 /* Down the side (rk-pivot--side in an rk-side): the titles as a list beside the facets, as tabs are in a browser
    either way. One size; the title in sight steps in by space-m and darkens over duration-pivot-size, the one before
@@ -985,6 +991,9 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
     transition: transform var(--rk-duration-pivot-size) ease-in-out, margin-inline-end var(--rk-duration-pivot-size) ease-in-out, color var(--rk-duration-short) var(--rk-ease-base);
   }
   .rk-pivot--side > :is([aria-current], [aria-selected='true']) { --_rk-s: 1; }
+  .rk-pivot--side:not([data-rk-measured]) > :is(a, button):not([aria-current], [aria-selected='true']) {
+    --_rk-s: 1; font-size: var(--_rk-inactive); transform: none; margin-inline-end: 0;
+  }
   .rk-toasts { --_rk-from: 12px; inset: auto 0 calc(var(--rk-appbar-height) + env(safe-area-inset-bottom) + var(--rk-space-s)); top: auto; }
   @supports (anchor-name: --a) { .rk-toasts { top: auto; } }
 }
