@@ -12,9 +12,12 @@
      the app bar; :root stops scrolling while a .rk-sheet is open; [data-status] sets only internal --_rk-* properties,
      inert outside Rekta's components; the root's data-theme, data-density, data-motion and data-rk-titlebar
      switches; the view-transition timing, only while rekta.js marks the root data-rk-crossfade.
-   - Hide with the hidden attribute: Rekta's display rules never override it.
+   - Hide with the hidden attribute: inside .rk it wins over every display rule, Rekta's and the page's (!important).
+     data-rk-reveal on the element is the way out: hidden stays (for the script, for a page without CSS) and the
+     page's own display applies.
    - Public hooks a page may set: --rk-i (build-in index of a tile, 0-10), --rk-sec-w (width of a panorama section),
-     --rk-split-w (width of a split's list pane; rekta.js writes it while the handle is dragged).
+     --rk-split-w (width of a split's list pane; rekta.js writes it while the handle is dragged), --rk-toast-left (what
+     is left of a toast's undo window, 1 to 0; toaster() writes it).
      Public hooks rekta.js writes and a page may read: --rk-banner-h, --rk-pivot-h, --rk-pivot-scale.
      Everything named --_rk-* is internal.
    - State that rekta.js writes lives in data-rk-* attributes (data-rk-pressed, data-rk-phase, data-rk-turn,
@@ -33,7 +36,7 @@
   -webkit-text-size-adjust: 100%;
 }
 .rk *, .rk *::before, .rk *::after { box-sizing: border-box; }
-.rk[hidden], .rk [hidden]:not([hidden="until-found"]) { display: none !important; }
+.rk[hidden], .rk [hidden]:not([hidden="until-found"], [data-rk-reveal]) { display: none !important; }
 .rk :where(h1, h2, h3, p, ul, ol) { margin: 0; }
 .rk :where(a) { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; transition: text-decoration-thickness var(--rk-duration-short) var(--rk-ease-base); }
 .rk :focus-visible { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
@@ -575,7 +578,22 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-ab svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .rk-ab-back { order: -1; }
 .rk-ab[data-rk-overflow] { display: none; }
-.rk-ab-status { display: inline-flex; flex: none; align-items: center; gap: var(--rk-space-s); margin-right: auto; font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); white-space: nowrap; }
+.rk-ab-status { display: inline-flex; flex: none; align-items: center; gap: var(--rk-space-s); margin-inline-end: auto; font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); white-space: nowrap; }
+/* The middle, between the live state and the controls: the product's own short line (a key waiting for its second
+   key, a mode). It takes the room the controls leave and gives it up first: it cuts its text before any control moves
+   into "more", and shows nothing a user needs that is not said elsewhere too. */
+.rk-ab-mid {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high);
+}
+.rk-appbar:has(> .rk-ab-more:not([hidden])) > .rk-ab-mid { display: none; }   /* the bar is full: it has given way */
+/* "more" opens its menu above the bar at the bar's trailing edge. rekta.js places it as it places every floating
+   surface; this holds without the script. */
+.rk-float.rk-ab-menu { inset: auto var(--rk-space-m) calc(var(--rk-appbar-height) + env(safe-area-inset-bottom) + var(--rk-space-xs)) auto; --_rk-from: 4px; }
+@supports (anchor-name: --a) {
+  .rk-ab-more { anchor-name: --rk-ab-more; }
+  .rk-float.rk-ab-menu { position-anchor: --rk-ab-more; inset: auto anchor(right) calc(anchor(top) + var(--rk-space-xs)) auto; }
+}
 .rk-pulse { width: 8px; height: 8px; flex: none; background: var(--rk-status-success-full); animation: rk-pulse var(--rk-duration-pulse) ease-in-out infinite; }
 .rk-appbar[data-rk-state='paused'] .rk-pulse { background: var(--rk-status-warning-full); animation: none; }
 .rk-appbar[data-rk-state='halted'] .rk-pulse { background: var(--rk-status-error-full); animation: none; }
@@ -825,11 +843,12 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-toast-act:active { background-color: var(--rk-hover); }
 .rk-toast-act:focus-visible { outline: 2px solid currentColor; outline-offset: -10px; }
 .rk-toast-count { min-width: 1ch; font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; }
-/* The undo window: 2px, inset space-xs, anchored under the action. rekta.js steps --_rk-left from 1 to 0 once a
-   second with the figure; each step glides like a live bar. */
+/* The undo window: 2px, inset space-xs, anchored under the action. --rk-toast-left (a public hook, 1 to 0) is how much
+   of the window is left: toaster() steps it once a second with the figure, a page without the script may set it; each
+   step glides like a live bar. */
 .rk-toast-line {
   position: absolute; inset: auto var(--rk-space-xs) var(--rk-space-xs); border-top: 2px solid; pointer-events: none;
-  transform: scaleX(var(--_rk-left, 1)); transform-origin: right;
+  transform: scaleX(var(--rk-toast-left, 1)); transform-origin: right;
   transition: transform var(--rk-duration-long) var(--rk-ease-in);
 }
 .rk-toast-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -991,6 +1010,12 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
     transition: transform var(--rk-duration-pivot-size) ease-in-out, margin-inline-end var(--rk-duration-pivot-size) ease-in-out, color var(--rk-duration-short) var(--rk-ease-base);
   }
   .rk-pivot--side > :is([aria-current], [aria-selected='true']) { --_rk-s: 1; }
+  /* The banner on a phone: the state's word (with its time under it) and the sentence share a line, the action goes
+     under them; the tile-unit minimums would stack all three. */
+  .rk-banner { gap: var(--rk-space-s) var(--rk-space-m); padding-block: var(--rk-space-s); }
+  .rk-banner-live > * { flex-wrap: nowrap; gap: var(--rk-space-m); }
+  .rk-banner-head { min-width: 0; }
+  .rk-banner-msg { flex: 1 1 0; min-width: 0; }
   .rk-pivot--side:not([data-rk-measured]) > :is(a, button):not([aria-current], [aria-selected='true']) {
     --_rk-s: 1; font-size: var(--_rk-inactive); transform: none; margin-inline-end: 0;
   }

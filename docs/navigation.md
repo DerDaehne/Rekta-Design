@@ -145,12 +145,25 @@ text and then closes. Entries are grouped (places, sections, items,
 commands) and a command shows its key. Commands say what they will do
 now ("resume intake" while paused).
 
+### The middle of the bar
+
+Between the live state and the controls, `.rk-ab-mid` holds a product's
+own short line: a key waiting for its second key ("g, then a place"), a
+mode ("Alt only"), a count. One line, `xs`, secondary colour, no
+controls. It takes the room the controls leave and is the first to give
+it up: it cuts its text with an ellipsis before any control moves into
+"more", and is gone while "more" shows, so it shows nothing a user needs that is not said elsewhere too
+(a key hint is also in the command's tooltip and the palette).
+
 ### When the bar is full
 
 Controls that do not fit move into "more", the least important first
 (`data-rk-priority`), and its menu repeats their words. Back, the live
 state and a selection's controls never move. Nothing is hidden for good:
-every control is reachable at every width.
+every control is reachable at every width. The menu rises from the bar
+at its trailing edge (`.rk-ab-menu`: `rekta.css` places it, anchored to
+`.rk-ab-more` where the browser has anchor positioning); its keys are
+those of every floating surface ([states.md](states.md#floating-surfaces)).
 
 ## Tooltips
 

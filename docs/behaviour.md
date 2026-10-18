@@ -39,7 +39,14 @@ plain Node, so this cannot break unnoticed.
   adds or removes a class itself. Everything the script writes is a
   `data-rk-*` attribute, a `--_rk-*` property (internal), one of the
   public hooks below, or `hidden`.
-- **Hide with `hidden`.** Rekta's display rules never override it.
+- **Hide with `hidden`.** Inside an `.rk` root, `hidden` wins over every
+  `display` rule, Rekta's and the page's alike: `rekta.css` sets
+  `display: none !important` on it, so no layout of Rekta's can show a
+  hidden element by accident. A page that has to show an element that
+  carries `hidden` (server-rendered facets shown side by side until the
+  script takes over, say) adds `data-rk-reveal`: `hidden` stays, for the
+  script and for assistive technology reading the attribute, and the
+  page's own `display` applies. `hidden="until-found"` is left alone.
 - **Timings are tokens.** Every duration comes from a `--rk-duration-*`
   token as it applies at that moment, so reduced motion (each motion
   duration `0s`) makes every step instant and never skips one.
@@ -112,6 +119,7 @@ them:
 | `--rk-banner-h` | `banner()` | `scroll-padding`, the sticky strip, toasts without anchor positioning. |
 | `--rk-pivot-h` | `panorama()` | `scroll-padding` under a sticky section strip. |
 | `--rk-pivot-scale` | `pivot()`, `panorama()` | The inactive pivot titles' scale. |
+| `--rk-toast-left` | `toaster()`, or the page | What is left of a toast's undo window, 1 to 0: the countdown line under its action. A page without the script sets it with the figure. |
 
 ### Events
 
@@ -315,7 +323,10 @@ Returns `{ show, open, dismiss(), destroy }`.
 
 `el` is the `.rk-banner`, mounted once with two live regions
 (`[role=alert]`, `[role=status]`) and an optional `.rk-actions` remedy
-button.
+button. Sideways, the word, the sentence and the action stand in a row
+on the tile grid's widths; compact, the word (its time under it) and the
+sentence share a line and the action goes under them, about 105px on a
+375px phone.
 
 - `states`: `{ name: { word, status, alert, text, action, since, until, on, off } }`.
   `status` is the fill; `alert: true` only for a halt; `on` and `off`

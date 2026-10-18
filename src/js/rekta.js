@@ -1055,12 +1055,12 @@ export function toaster(region) {
       btn.addEventListener('click', () => { leave(false); act.run(); });
     }
     say(msg, text, !!undo);
-    const paint = () => { if (count) { count.textContent = left; el.style.setProperty('--_rk-left', left / WIN); } };
+    const paint = () => { if (count) { count.textContent = left; el.style.setProperty('--rk-toast-left', left / WIN); } };
     const tick = () => {
       timer = 0;
       if (!undo) { leave(false); return; }
       left -= 1;
-      if (left <= 0) { el.style.setProperty('--_rk-left', 0); leave(false); return; }
+      if (left <= 0) { el.style.setProperty('--rk-toast-left', 0); leave(false); return; }
       paint(); hold();
     };
     function hold() {
@@ -1280,12 +1280,13 @@ export async function pending(button, work, { label } = {}) {
 // there is no room below; it never leaves the viewport. data-rk-side says which side it took.
 export function place(el, anchor) {
   const a = anchor.getBoundingClientRect(), gap = 4, edge = num('--rk-space-s') || 8;
-  el.style.left = '0px'; el.style.top = '0px';
+  el.style.left = '0px'; el.style.top = '0px'; el.style.right = 'auto'; el.style.bottom = 'auto';   /* over a stylesheet's own placement */
   const w = el.offsetWidth, h = el.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
   const below = vh - a.bottom - gap - edge, above = a.top - gap - edge;
   const side = h <= below || below >= above ? 'below' : 'above';
   const top = side === 'below' ? a.bottom + gap : Math.max(edge, a.top - gap - h);
-  const left = Math.min(Math.max(edge, a.left), Math.max(edge, vw - w - edge));
+  // From the control's leading edge; one too near the trailing edge for that opens from its trailing edge instead.
+  const left = a.left + w <= vw - edge ? Math.max(edge, a.left) : Math.max(edge, Math.min(a.right, vw - edge) - w);
   el.style.left = `${Math.round(left)}px`; el.style.top = `${Math.round(top)}px`;
   el.dataset.rkSide = side;
 }
