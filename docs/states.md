@@ -63,7 +63,8 @@ From bottom to top:
 | `layer.appbar` | The app bar |
 | `layer.banner` | The status banner |
 | `layer.toast` | The toast region |
-| Top layer | Sheets (modal dialogs), floating surfaces (popovers), in the order they opened |
+| `layer.float` | Floating surfaces (menus, lists) where the browser has no popover top layer |
+| Top layer | Sheets (modal dialogs), floating surfaces (popovers, where the browser has them), in the order they opened |
 
 - One modal at a time. A floating surface may open from inside a sheet;
   it sits above it.

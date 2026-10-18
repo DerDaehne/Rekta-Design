@@ -88,7 +88,7 @@ Controls and rows have two heights, picked by the pointer:
 | Compact | A fine pointer (mouse, trackpad) and no touch screen | 32px (`density.compact.*`) |
 
 The user can choose either (a setting with "by pointer", "comfortable"
-and "compact"). The app bar stays 48px in both; touch targets on a touch
+and "compact"). The app bar stays 56px high (`size.appbar-height`) with 48px controls in both; touch targets on a touch
 screen never drop below 44px.
 
 ## Breakpoints

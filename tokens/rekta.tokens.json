@@ -432,7 +432,7 @@
           },
           "viewport": 0.042
         },
-        "$description": "Level 1: the place you are at, in the top-level nav."
+        "$description": "Navigation title: the place you are at, in the top-level nav. Large and light (typography.md)."
       },
       "nav-inactive": {
         "$type": "fluidDimension",
@@ -462,7 +462,7 @@
           },
           "viewport": 0.026
         },
-        "$description": "Level 2: the active facet within a place."
+        "$description": "Navigation title: the active facet within a place. Large and light (typography.md)."
       },
       "pivot-inactive": {
         "$type": "fluidDimension",
@@ -507,7 +507,7 @@
           },
           "viewport": 0.028
         },
-        "$description": "Level 3: a record's own bold title (e.g. a ticket)."
+        "$description": "The one bold main title of a screen, such as a record's own (level 2 of the title hierarchy in typography.md)."
       }
     },
     "line-height": {
@@ -712,7 +712,7 @@
     }
   },
   "motion": {
-    "$description": "Every transition has one meaning (see the motion table in README.md). Under reduced motion every motion.duration becomes 0: transitions go instant, never skipped. timing.* is wall time and stays.",
+    "$description": "Every transition has one meaning (see the motion table in docs/motion.md). Under reduced motion every motion.duration becomes 0: transitions go instant, never skipped. timing.* is wall time and stays.",
     "duration": {
       "press": {
         "$type": "duration",

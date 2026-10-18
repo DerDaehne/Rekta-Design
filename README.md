@@ -111,17 +111,12 @@ progress, an icon set, the title bar of an installed app, and installing
 and offline. Next: date ranges, a notification centre, rich text. See
 [CHANGELOG.md](CHANGELOG.md).
 
-## Repo
-
-This repo may be made public later; until then, treat it as a draft.
-
 ## License
 
 - **Code, design tokens, scripts, CSS and JavaScript** (`tokens/`,
   `src/`, `scripts/`, `site/` source, `test/`, everything generated in
   `dist/`): [MIT](LICENSE).
-- **Documentation and images** (this README and `docs/`, including
-  `docs/images/`): [CC BY 4.0](LICENSE-docs). Suggested attribution:
+- **Documentation** (this README and `docs/`): [CC BY 4.0](LICENSE-docs). Suggested attribution:
   "Rekta Design by DerDaehne, CC BY 4.0".
 - **Barlow** (bundled with the site in `site/fonts/barlow/`): SIL Open
   Font License 1.1, see [`site/fonts/barlow/OFL.txt`](site/fonts/barlow/OFL.txt).
