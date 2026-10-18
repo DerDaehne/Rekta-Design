@@ -101,6 +101,20 @@ in a banner) but maps each onto one of these colours and never reuses a
 word for two states. A status is never decoration: no status colour for
 emphasis, selection, branding or a chart series.
 
+## Product slots
+
+A product has two colour slots of its own, both set per theme:
+
+- **The accent** (`--rk-accent`, `--rk-on-accent`): its one hue, for the
+  primary button, checked controls and a selected item.
+- **A domain colour code** (`--rk-series-1` to `-8`): colours its users
+  already read as information, such as heart-rate zones, for small data
+  marks only ([data.md](data.md#a-domains-colour-code)). Never text,
+  never a tile; 3:1 on the ground; apart under colour blindness.
+  `build.mjs --check-product` checks a product's values.
+
+Everything else is the design's ([platforms.md](platforms.md#product-overrides)).
+
 ## Selection and floating surfaces
 
 - **Selected items** take the `accent` fill with `on-accent` text and a

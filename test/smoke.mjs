@@ -182,6 +182,19 @@ ok(wide.jumped && wide.followed, 'its strip jumps to a facet and follows the scr
 ok(wide.tabbed, 'Tab from the strip goes into the facet chosen', JSON.stringify(wide));
 ok(wide.narrow, 'below it, one facet at a time again', JSON.stringify(wide));
 
+// A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.
+const codes = await p.evaluate(() => {
+  const want = getComputedStyle(document.documentElement).getPropertyValue('--rk-series-2').trim();
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const tag = document.querySelector('.rk-tag[data-rk-code="2"]');
+  const box = document.createElement('div'); box.style.width = '400px'; document.body.append(box);
+  const ch = Rekta.chart(box, { type: 'line', labels: ['a', 'b', 'c'], series: [{ label: 'heart rate', values: [120, 140, 135], code: 2 }], table: false });
+  const line = box.querySelector('.rk-line[data-rk-code="2"]'), out = { want: rgb(want), tag: getComputedStyle(tag, '::before').backgroundColor, tagText: getComputedStyle(tag).color, line: line ? getComputedStyle(line).stroke : null, ink: rgb('var(--rk-text-primary)') };
+  ch.destroy(); box.remove();
+  return out;
+});
+ok(codes.tag === codes.want && codes.line === codes.want && codes.tagText === codes.ink, 'a domain colour code marks the tag and the chart line, never the text', JSON.stringify(codes));
+
 // rekta.js in German (?lang=de): its words from the catalogue, its numbers in the locale; none of its English shows.
 {
   const de = await open({}, '?lang=de');
@@ -462,8 +475,8 @@ await p.click('#tile-notes'); await p.waitForTimeout(400);
 ok((await sheetTitle(p)) === 'Leave without saving?', 'leaving with changes asks', await sheetTitle(p));
 await p.keyboard.press('Escape'); await p.waitForTimeout(400);
 ok(await visible(p, 'home') && (await p.inputValue('#a-name')) === 'sea-2', 'Escape keeps editing');
-await p.click('#tile-notes'); await p.waitForTimeout(400); await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(TURN);
-ok(await visible(p, 'notes') && (await p.inputValue('#a-name')) === 'sea', 'discard leaves and puts the form back', await p.inputValue('#a-name'));
+await p.click('#tile-notes'); await p.waitForTimeout(400); await p.click('dialog[open] button[value=ok]');
+ok(await until(p, () => visible(p, 'notes'), TURN * 2) && (await p.inputValue('#a-name')) === 'sea', 'discard leaves and puts the form back', await p.inputValue('#a-name'));
 await p.keyboard.press('Escape'); await p.waitForTimeout(TURN);
 await go(p, 'feedback');
 await p.check('#s-readonly'); await p.waitForTimeout(300);
@@ -558,7 +571,10 @@ await p.click('#reset'); await p.waitForTimeout(300); await p.click('#sheet butt
 ok((await toast(p)).startsWith('Demo reset') && (await text(p, '#presses')) === '0', 'reset restores the demo');
 
 // Tokens: a table in a split; the current token in the address; selection; filters in the address; the divider.
+// (Places in the app bar, as a phone app has them: the router marks the place you are at.)
+await p.evaluate(() => { const n = document.createElement('nav'); n.className = 'rk-ab-places'; n.id = 'probe-places'; n.innerHTML = `<a class="rk-ab" href="${location.pathname}" aria-current="page">home</a><a class="rk-ab" href="#tokens">tokens</a>`; document.querySelector('#bar').append(n); });
 await p.evaluate(() => window.site.router.navigate('tokens')); await p.waitForTimeout(TURN);
+ok(await p.evaluate(() => { const [h, t] = document.querySelectorAll('#probe-places a'); const r = t.getAttribute('aria-current') === 'page' && !h.hasAttribute('aria-current'); document.querySelector('#probe-places').remove(); return r; }), 'places in the app bar: the router marks the one you are at');
 ok((await p.evaluate(() => document.querySelectorAll('#tok-body tr').length)) === count, 'every token has a row');
 const hist = await p.evaluate(() => history.length);
 await p.click('#tok-body tr[data-name="focus"] th a'); await p.waitForTimeout(500);

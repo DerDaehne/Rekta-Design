@@ -64,6 +64,29 @@ apps change as follows (`man rekta` has the whole API):
   product's own (`docs/platforms.md`): the accent per theme, the toast and
   stale timings, the tile unit, `size.pivot-wide`, density as a user
   setting, and what must not be overridden.
+- **rekta.js speaks the product's language.** Every word it shows or says
+  comes from `Rekta.strings` (English by default; `start({ locale,
+  strings })`, `setStrings()`, `setLocale()`), chart figures and live
+  times follow the locale (`number()`, `locale()`), and a German catalogue
+  ships as `rekta.strings.de.js` (`?lang=de` in the showcase). `--check`
+  fails on a phrase written outside the catalogue.
+- **A domain's colour code.** A product may set `--rk-series-1` to `-8`
+  per theme for colours its users already read as information (heart-rate
+  zones, say): small marks only, never text or a tile; `chart()` series
+  take `code: N`, `.rk-tag[data-rk-code]` a coded square;
+  `build.mjs --check-product` holds the values to 3:1 and to colour-blind
+  separation. The showcase shows five heart-rate zones.
+- **Places in the app bar on a phone** (`.rk-ab-places`, opt-in, up to
+  five): the top-level places in the thumb's reach, commands in "more",
+  back first, the router marking the place you are in.
+- **Facets side by side** keep the chosen one while it is whole in sight,
+  and Tab from the strip goes into it.
+- **Smaller additions:** `.rk-ab-mid` (the app bar's middle), `.rk-statement`
+  (a statement block on the ground), the message tile's length limit,
+  `--rk-toast-left` (the countdown line, public), `data-rk-reveal` (the way
+  out of `hidden`), `data-rk-measured`, a row sparkline's colour and size.
+- `rekta.js` imports without a DOM, so pages that render on the server can
+  import it; `--check` imports it in plain Node.
 - `build.mjs --check` reports the statuses' separation under tritanopia
   (not a failure; `docs/accessibility.md` says why), and fails when the
   version in `package.json`, `rekta.js`, rekta-core, the flake and the
@@ -557,6 +580,15 @@ apps change as follows (`man rekta` has the whole API):
 
 ### Fixed
 
+- A pivot without `rekta.js` keeps even gaps between its titles (they were
+  32, 155, 56px), and measuring no longer animates the margins.
+- The app bar's "more" menu is placed by the stylesheet too, and opens from
+  its control's trailing edge with the script; on a phone the status
+  banner takes 105px instead of 182px.
+- The docs now agree with the code on building in after a turn, the
+  arrival window, new data in charts, the next item in the same place, and
+  the wide pivot's keys; toasts stay below sheets and there is one control
+  size per density, both documented.
 - Secondary text inside a status tile or banner (a meta, a facts line, an
   age, a stale value) fell below AA, to 1.9:1 on the light error tile; it
   now takes the primary text colour there.

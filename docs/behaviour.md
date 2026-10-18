@@ -667,8 +667,10 @@ button after it shows and applies waiting updates. Returns `{ update, beat, offl
 ### `chart(el, { type, labels, series, unit, min, max, height, summary, table })`
 
 A line (`type: 'line'`) or bar (`'bars'`) chart drawn as SVG at `el`'s
-width, redrawn when it changes. `series` is `[{ label, values }]`; the
-first is ink, a second grey. Ticks are round and compact (`unit` follows
+width, redrawn when it changes. `series` is `[{ label, values, code }]`;
+the first is ink, a second grey, and a series with `code: N` (1 to 8)
+draws in the product's domain colour `--rk-series-N`, its legend key and
+markers too ([data.md](data.md#a-domains-colour-code)). Ticks are round and compact (`unit` follows
 each value); bars start at zero, lines at `min` or the data's lowest.
 Two series get a legend (`.rk-legend`); lines get end labels when wide
 enough and clear of each other; bars label their peak. Hover, or ← →

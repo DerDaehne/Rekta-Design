@@ -134,9 +134,33 @@ The live status is a square and a word, and the word is always visible
 colour is never the only signal.
 
 In the compact window-size class, a "back" control is the leading item
-in the same bar, within the thumb's reach, hidden at the top place. It is
-the one navigational concession the bottom bar makes; everywhere else,
-navigation lives in the pivot and the crumb, not the app bar.
+in the same bar, within the thumb's reach, hidden at the top place.
+Otherwise navigation lives in the pivot and the crumb, not the app bar,
+with one opt-in exception below.
+
+### Places in the bar (compact)
+
+On a phone the top-level places of an app with few of them (up to five,
+with short words; four read best on a 360px phone) may sit in the app
+bar instead of the strip at the top, in the thumb's reach:
+`<nav class="rk-ab-places">` in the `.rk-appbar`, one `a.rk-ab` per place
+with an icon over a lowercase word.
+
+- **Only compact.** The bar decides by its own width, below 760px; wider,
+  `.rk-ab-places` is not shown and the pivot holds the places as always.
+  A landscape phone (wide but short) keeps the pivot.
+- **Where you are:** the place you are in is in `text-primary`, the
+  others in `text-contrast-medium`; `aria-current="page"` marks it, and
+  `places()` keeps the mark on the bar's links. On a place below it (a
+  detail), the place you came from stays marked, and choosing it goes
+  back to its top.
+- **Back** stays the leading item, before the places.
+- **Commands** all move into "more" (`appbar()` does it while the places
+  show); the live state stays, its square over its word.
+- **A selection** takes the bar over as always: the places step aside
+  while the selection's commands show.
+- The strip at the top is then the product's to leave out on compact (it
+  would say the same twice); sideways it is the navigation.
 
 ### Go to
 

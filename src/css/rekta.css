@@ -505,6 +505,18 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-legend { display: flex; flex-wrap: wrap; gap: var(--rk-space-xs) var(--rk-space-m); margin: 0; padding: 0; list-style: none; font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
 .rk-legend > li { display: inline-flex; align-items: center; gap: 6px; }
 .rk-legend i { flex: none; background: var(--_rk-series); }
+/* A product's domain colour code (docs/data.md): series.code N draws in --rk-series-N, ink until the product sets it.
+   Small marks only: a line, a bar, a legend key, a tag's square, a zone. Never text, never a tile fill. */
+.rk-chart [data-rk-code='1'], .rk-tag[data-rk-code='1'] { --_rk-series: var(--rk-series-1, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='2'], .rk-tag[data-rk-code='2'] { --_rk-series: var(--rk-series-2, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='3'], .rk-tag[data-rk-code='3'] { --_rk-series: var(--rk-series-3, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='4'], .rk-tag[data-rk-code='4'] { --_rk-series: var(--rk-series-4, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='5'], .rk-tag[data-rk-code='5'] { --_rk-series: var(--rk-series-5, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='6'], .rk-tag[data-rk-code='6'] { --_rk-series: var(--rk-series-6, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='7'], .rk-tag[data-rk-code='7'] { --_rk-series: var(--rk-series-7, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='8'], .rk-tag[data-rk-code='8'] { --_rk-series: var(--rk-series-8, var(--rk-text-primary)); }
+.rk-tag[data-rk-code]::before { background: var(--_rk-series); }
+.rk-chart-dot[data-rk-code], .rk-bar[data-rk-code][data-rk-hot] { fill: var(--_rk-series); }
 .rk-key-line { width: 14px; height: 2px; }
 .rk-key-box { width: 10px; height: 10px; }
 .rk-chart-table > summary { width: max-content; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-high); cursor: pointer; }
@@ -1045,6 +1057,26 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 }
 /* The live state's word shows at every width. */
 .rk-ab-status .rk-ab-k { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
+
+/* Places in the bar (docs/navigation.md): opt-in, compact only, up to five. The bar decides by its own width, so a
+   pane-sized bar (a preview, a narrow window) behaves as a phone's. The top-level places sit in the thumb's reach,
+   each an icon over a word; the one you are in is in text-primary. The live state stacks the same way, its word still
+   shown; every command moves into "more" (appbar()); back stays first; a selection takes the bar over. Sideways the
+   places are not in the bar: the pivot holds them. */
+.rk-appbar { container: rk-appbar / inline-size; }
+.rk-ab-places { display: none; }
+@container rk-appbar (max-width: 759.98px) {
+  .rk-ab-places { display: flex; flex: 1 1 auto; min-width: 0; align-self: stretch; }
+  .rk-ab-places > .rk-ab {
+    flex: 1 1 0; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; padding: 0 2px;
+    font-size: var(--rk-font-size-xxs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-medium); text-decoration: none;
+  }
+  .rk-ab-places > .rk-ab > :not(svg) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rk-ab-places > .rk-ab[aria-current] { color: var(--rk-text-primary); }
+  .rk-appbar:has(> .rk-ab-places) > .rk-ab-status { flex-direction: column; justify-content: center; gap: 4px; min-width: 48px; margin-inline-end: 0; font-size: var(--rk-font-size-xxs); }
+  .rk-appbar:has(> .rk-ab-places) > .rk-ab-more { flex-direction: column; justify-content: center; gap: 2px; font-size: var(--rk-font-size-xxs); }
+  .rk-appbar[data-rk-selecting] > .rk-ab-places { display: none; }
+}
 /* Narrow place: table rows stack. Check (if any), main cell and status on the first line, the other cells as
    "label value" below, labelled from data-label (rekta.js fills it from the head). The head becomes a row of sort
    buttons. Decided by the place's width, not the viewport's height: a wide, short window still has room. */

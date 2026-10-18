@@ -2,7 +2,36 @@
 
 Data is quiet until it matters. Rekta draws it in **ink and grey**: no
 series palette, no rainbow, no status colour for a line that is not a
-status.
+status. The one exception is a domain's own colour code (below).
+
+## A domain's colour code
+
+Some domains have colours their users already read as information:
+heart-rate zones from cool to warm, the fixed colours the common
+training platforms give power and heart rate, a transit network's line
+colours. Recolouring them in ink and grey would hide what they say. For
+these, and only these, a product sets a code of up to eight colours,
+`--rk-series-1` to `--rk-series-8`, per theme (the selectors are those of
+the accent, [platforms.md](platforms.md#product-overrides)).
+
+- **Small marks only:** a line, a bar, a zone, a legend key, a tag's
+  square (`.rk-tag[data-rk-code="N"]`). Never a tile fill, never a large
+  area, and **text is never drawn in a code colour**: the label beside
+  the mark says what it is.
+- **3:1 against the ground and the surface**, in each theme.
+- **Apart under colour blindness:** every pair at least 0.09 (OKLab)
+  under protanopia and deuteranopia, as the status tiles are; tritanopia
+  is reported.
+- **Both themes**, the same codes.
+- `chart()` draws a series in its code with `{ label, values, code: N }`;
+  without a value set, a code falls back to ink.
+- `node scripts/build.mjs --check-product product.css` checks the values
+  a product sets against these rules; `--check` holds the showcase's own
+  example (five heart-rate zones) to them.
+
+A code is not a way round "three series become small multiples": it is
+for colours with a meaning the users bring with them, not for telling
+arbitrary series apart.
 
 ## Charts
 

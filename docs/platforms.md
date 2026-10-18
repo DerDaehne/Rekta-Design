@@ -86,6 +86,7 @@ rekta-core, call the setter.
 | `timing.stale` | `--rk-duration-stale` | When live data without an update counts as stale. A live region's own `stale` option wins. | the token, fixed |
 | `size.tile-unit`, `size.tile-unit-ultrawide` | `--rk-tile-unit`, `--rk-tile-unit-ultrawide` | The tile grid's cell, below and from 2560px. Set both: from 2560px the stylesheet sets the first from the second. | the token, fixed |
 | `size.pivot-wide` | `--rk-pivot-wide` | From what width a pivot shows its facets side by side; 0 never. May differ per pivot. | not yet |
+| a domain colour code (no token: a product slot) | `--rk-series-1` to `-8` | Colours its users already read, such as heart-rate zones, for small data marks; per theme, as the accent. Checked with `build.mjs --check-product`. | not yet |
 | density | `data-density` on the root | Not a token to override but a setting for the user: `Rekta.prefs` writes it (`auto`, `comfortable`, `compact`). | `rk_app_set_density` |
 
 The accent is set per theme, with the selectors `rekta.tokens.css`

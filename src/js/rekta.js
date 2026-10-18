@@ -553,7 +553,12 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
   let current = home, item = null, params = '', index = 0, below = null, pushedItem = false, busy = Promise.resolve();
   const watchers = new Map();
   const backButtons = () => document.querySelectorAll('.rk-ab-back[data-rk-back], .rk-titlebar [data-rk-back]');
-  const showBack = () => backButtons().forEach((b) => { b.hidden = current === home && index === 0; });
+  // Places in the app bar (.rk-ab-places): the one you are in is marked; on a place below it, the one you came from.
+  const showBack = () => {
+    backButtons().forEach((b) => { b.hidden = current === home && index === 0; });
+    const bar = [...document.querySelectorAll('.rk-ab-places a[href]')], here = bar.find((a) => nameOf(a.href) === current);
+    if (here) bar.forEach((a) => { if (a === here) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  };
   const rk = () => (history.state && history.state.rk) || {};
   function snapshot(opener) {
     const el = byName(current), prev = rk();
@@ -2005,11 +2010,15 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
     }));
   }
   const fits = () => el.scrollWidth <= el.clientWidth + 1;
+  const placesShown = () => { const p = el.querySelector(':scope > .rk-ab-places'); return !!p && getComputedStyle(p).display !== 'none'; };
   function layout() {
     if (el.hasAttribute('data-rk-selecting')) return;
     el.querySelectorAll(':scope > [data-rk-overflow]').forEach((c) => c.removeAttribute('data-rk-overflow'));
     more.hidden = true;
-    if (!fits()) {
+    if (placesShown()) {                                 /* the places hold the bar: every command is in "more" */
+      const all = candidates();
+      if (all.length) { more.hidden = false; all.forEach((c) => c.setAttribute('data-rk-overflow', '')); }
+    } else if (!fits()) {
       more.hidden = false;
       for (const c of candidates()) { if (fits()) break; c.setAttribute('data-rk-overflow', ''); }
     }
@@ -2801,6 +2810,8 @@ export function live(region, { stale = 0, age = region.querySelector('.rk-age'),
 // value at that point in a tooltip (and to screen readers); a table of the same numbers follows it. Lines draw in and
 // bars grow from the baseline once, when first drawn.
 const SVGNS = 'http://www.w3.org/2000/svg';
+// A series in a product's domain colour code (series.code: 1 to 8, --rk-series-N; docs/data.md).
+const code = (s) => (s.code ? { 'data-rk-code': String(Math.max(1, Math.min(8, Math.round(+s.code) || 1))) } : {});
 const svgEl = (tag, attrs = {}, parent = null) => { const e = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
 function niceTicks(lo, hi, count = 4) {
   if (hi === lo) hi = lo + 1;
@@ -2852,7 +2863,7 @@ export function chart(el, opts = {}) {
       o.series.forEach((s, si) => s.values.forEach((v, i) => {
         if (!Number.isFinite(v)) return;
         const bx = x(i) - (k * w + (k - 1) * 2) / 2 + si * (w + 2), by = Math.min(y(v), y0), bh = Math.max(1, Math.abs(y0 - y(v)));
-        const r = svgEl('rect', { x: bx, y: by, width: w, height: bh, class: `rk-bar rk-s${si}`, 'data-i': i }, marks);
+        const r = svgEl('rect', { x: bx, y: by, width: w, height: bh, class: `rk-bar rk-s${si}`, 'data-i': i, ...code(s) }, marks);
         if (motion) { r.setAttribute('data-rk-grow', ''); r.style.cssText = `animation-delay:${Math.min(i, 10) * ms('--rk-duration-stagger')}ms`; }
         if (si === 0 && v > peak.v) peak = { v, x: bx + w / 2, y: by, i };
       }));
@@ -2862,7 +2873,7 @@ export function chart(el, opts = {}) {
       o.series.forEach((s, si) => {
         const pts = s.values.map((v, i) => (Number.isFinite(v) ? [x(i), y(v)] : null));
         const d = pts.reduce((acc, p, i) => (p ? `${acc}${acc && pts[i - 1] ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}` : acc), '');
-        svgEl('path', { d, class: `rk-line rk-s${si}`, pathLength: '1', ...(motion ? { 'data-rk-draw': '' } : {}) }, marks);
+        svgEl('path', { d, class: `rk-line rk-s${si}`, pathLength: '1', ...code(s), ...(motion ? { 'data-rk-draw': '' } : {}) }, marks);
         const lastI = s.values.length - 1;
         if (Number.isFinite(s.values[lastI])) endYs.push({ si, y: y(s.values[lastI]), label: s.label });
       });
@@ -2873,7 +2884,7 @@ export function chart(el, opts = {}) {
     geo = { x, y, n, band, left, right, W, top, ph, bars, hot };
     svgEl('rect', { x: left, y: top, width: pw, height: ph, class: 'rk-chart-hit' }, svg);
     legend.hidden = o.series.length < 2;
-    legend.replaceChildren(...o.series.map((s, si) => { const li = document.createElement('li'); li.innerHTML = `<i class="rk-key-${bars ? 'box' : 'line'} rk-s${si}"></i>`; li.append(s.label); return li; }));
+    legend.replaceChildren(...o.series.map((s, si) => { const li = document.createElement('li'); li.innerHTML = `<i class="rk-key-${bars ? 'box' : 'line'} rk-s${si}"${s.code ? ` data-rk-code="${+s.code}"` : ''}></i>`; li.append(s.label); return li; }));
     if (o.table) {
       details.hidden = false;
       details.innerHTML = '<summary></summary><table class="rk-table"><thead><tr><th scope="col"></th></tr></thead><tbody></tbody></table>';
@@ -2897,7 +2908,7 @@ export function chart(el, opts = {}) {
     if (bars) { svg.querySelectorAll(`.rk-bar[data-i="${i}"]`).forEach((b) => b.setAttribute('data-rk-hot', '')); anchor = svg.querySelector(`.rk-bar[data-i="${i}"]`); }
     else {
       anchor = svgEl('line', { x1: x(i), x2: x(i), y1: top, y2: top + ph, class: 'rk-chart-cross' }, hot);
-      o.series.forEach((s, si) => { if (Number.isFinite(s.values[i])) svgEl('circle', { cx: x(i), cy: y(s.values[i]), r: 4, class: `rk-chart-dot rk-s${si}` }, hot); });
+      o.series.forEach((s, si) => { if (Number.isFinite(s.values[i])) svgEl('circle', { cx: x(i), cy: y(s.values[i]), r: 4, class: `rk-chart-dot rk-s${si}`, ...code(s) }, hot); });
     }
     const text = `${o.labels[i]} · ${o.series.map((s) => `${o.series.length > 1 ? `${s.label} ` : ''}${Number.isFinite(s.values[i]) ? fmt(s.values[i]) : tx('noValue')}`).join(' · ')}`;
     if (anchor) showTip(anchor, text);

@@ -269,7 +269,7 @@ function check(tokens) {
   for (const g of ['color']) walk(tokens.color.light, ['color', 'light'], (p) => defined.add(tokenName(p)));
   for (const g of ['typography', 'spacing', 'radius', 'size', 'motion', 'timing', 'layer', 'breakpoint']) walk(tokens[g], [g], (p) => defined.add(tokenName(p)));
   walk(tokens.density.comfortable, ['density', 'comfortable'], (p) => defined.add(tokenName(p)));
-  const HOOKS = new Set(['i', 'v', 'titlebar-controls', 'sec-w', 'split-w', 'banner-h', 'pivot-scale', 'pivot-h', 'toast-left']);
+  const HOOKS = new Set(['i', 'v', 'titlebar-controls', 'sec-w', 'split-w', 'banner-h', 'pivot-scale', 'pivot-h', 'toast-left', ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `series-${n}`)]);
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }
@@ -310,6 +310,48 @@ function check(tokens) {
   // The classic script must parse as one, with every export on window.Rekta.
   try { new Function(toGlobal(js)); } catch (e) { problems.push(`rekta.global.js does not parse: ${e.message}`); }
   return problems;
+}
+
+// A product's own values, checked against the same rules as Rekta's (docs/data.md): the domain colour codes it sets
+// (--rk-series-N, per theme) must hold 3:1 against the ground and surface, stay 0.09 apart under red-green colour
+// blindness (tritan reported), be set in both themes, and never colour text.
+//   node scripts/build.mjs --check-product product.css
+export function checkProduct(css, file = 'product CSS') {
+  const problems = [], notes = [], t = buildTokensJson(loadTokens(), 'check'), codes = { light: {}, dark: {} };
+  // Walk the rules: a declaration is dark when a selector or @media around it says dark.
+  const stack = [];
+  let buf = '';
+  for (const ch of css.replace(/\/\*[\s\S]*?\*\//g, '')) {
+    if (ch === '{') { stack.push(buf.trim()); buf = ''; }
+    else if (ch === '}') { scan(buf); buf = ''; stack.pop(); }
+    else if (ch === ';') { scan(buf); buf = ''; }
+    else buf += ch;
+  }
+  function scan(decl) {
+    const m = /^\s*--rk-series-(\d+)\s*:\s*(.+?)\s*$/.exec(decl);
+    if (m) {
+      const ctx = stack.join(' '), theme = /dark/.test(ctx) && !/data-theme=["']?light["']?\]\s*$/.test(stack[stack.length - 1] || '') ? 'dark' : 'light';
+      codes[theme][+m[1]] = m[2];
+    }
+    if (/^\s*(color|-webkit-text-fill-color)\s*:.*var\(--rk-series-/.test(decl)) problems.push(`${file}: text drawn in a series colour (${decl.trim()}); codes are for small marks only`);
+  }
+  for (const theme of ['light', 'dark']) {
+    const c = t.themes[theme], set = codes[theme], ns = Object.keys(set).map(Number).sort((x, y) => x - y);
+    const other = codes[theme === 'light' ? 'dark' : 'light'];
+    for (const n of Object.keys(other)) if (!(n in set)) problems.push(`${file}: --rk-series-${n} is set for ${theme === 'light' ? 'dark' : 'light'} but not for ${theme}`);
+    for (const n of ns) {
+      if (n < 1 || n > 8) problems.push(`${file}: --rk-series-${n} is outside 1 to 8`);
+      let col; try { col = parse(set[n]); } catch { problems.push(`${file}: ${theme} --rk-series-${n} is not a colour the check reads (hex or rgb): ${set[n]}`); continue; }
+      const hex = toHex8(col);
+      for (const bg of ['bg', 'surface']) { const r = contrast(hex, c[bg]); if (r < 3) problems.push(`${file}: ${theme} --rk-series-${n} ${set[n]} on ${bg} is ${r.toFixed(2)}:1, needs 3:1`); }
+    }
+    for (let i = 0; i < ns.length; i += 1) for (let j = i + 1; j < ns.length; j += 1) {
+      let a, b; try { a = toHex8(parse(set[ns[i]])); b = toHex8(parse(set[ns[j]])); } catch { continue; }
+      for (const kind of ['protan', 'deutan']) { const d = distance(a, b, kind); if (d < 0.09) problems.push(`${file}: ${theme} --rk-series-${ns[i]} and -${ns[j]} are ${d.toFixed(3)} apart under ${kind}, need 0.09`); }
+      const d = distance(a, b, 'tritan'); if (d < 0.09) notes.push(`${file}: ${theme} --rk-series-${ns[i]} and -${ns[j]} are ${d.toFixed(3)} apart under tritan`);
+    }
+  }
+  return { problems, notes, count: Object.keys(codes.light).length + Object.keys(codes.dark).length };
 }
 
 // Icons: src/icons/*.svg (20 × 20, stroke 1.6, square ends) become one sprite of <symbol id="rk-i-NAME"> for the web
@@ -387,11 +429,22 @@ export function checkAll() {
       if (now !== text) problems.push(`core/src/${file} is out of date: run node scripts/build.mjs`);
     }
   } catch (e) { problems.push(`the C target: ${e.message}`); }
+  // The showcase sets a domain colour code as a product would: it is held to the same rules.
+  const site = checkProduct(readFileSync(join(root, 'site', 'site.css'), 'utf8'), 'site/site.css');
+  problems.push(...site.problems); notes.push(...site.notes);
   return problems;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  if (process.argv.includes('--check')) {
+  const productAt = process.argv.indexOf('--check-product');
+  if (productAt > 0) {
+    const file = process.argv[productAt + 1];
+    if (!file) { console.error('usage: node scripts/build.mjs --check-product product.css'); process.exit(2); }
+    const r = checkProduct(readFileSync(file, 'utf8'), file);
+    for (const n of r.notes) console.log(`  i ${n}`);
+    if (r.problems.length) { console.error(r.problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
+    console.log(r.count ? `✓ ${file}: ${r.count} domain colour values pass: 3:1 on the ground, apart under colour blindness, both themes, no text` : `✓ ${file}: no domain colour values (--rk-series-N) to check`);
+  } else if (process.argv.includes('--check')) {
     const problems = checkAll();
     if (problems.length) { console.error(problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
     console.log('✓ tokens and stylesheet pass: contrast, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
