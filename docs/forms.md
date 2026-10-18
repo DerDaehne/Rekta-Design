@@ -86,6 +86,24 @@ How much an action asks depends on what it costs to take back:
 Prefer making an action undoable over asking about it. A sheet never
 asks "Are you sure?": it names the action and its consequence.
 
+## One size of control
+
+Rekta has one control height per density, `control-height`: 44px where
+a touch screen is present, 32px with a fine pointer only. There is no
+small button and no small field, on purpose:
+
+- **Touch.** A smaller control on a touch screen would fall below
+  `size.touch-target` (44px); one that only looks smaller, with an
+  invisible larger hit area, overlaps its neighbours in a row of them.
+- **Calm.** Size does not rank controls; the kind does. A secondary
+  action is a quiet button (`.rk-btn--quiet`), not a smaller one.
+- **Density is the lever.** A user or a product that wants more on the
+  screen picks the compact density, and every control shrinks together.
+
+For actions on each row of a list, use a quiet icon button at the row's
+height, the row's context menu (right click, long press, the menu key),
+or the selection mode's app bar for several rows at once.
+
 ## Disabled controls say why
 
 A control that cannot act now stays visible and says why in a hint next
@@ -93,3 +111,10 @@ to it ("Archive needs at least one done job."), linked to it, so the
 reason is read with it. It stays focusable (`aria-disabled`), unlike a
 native `disabled` control, which a keyboard user could not reach to
 hear the reason. No tooltips: they do not exist on touch.
+
+`disable(control, reason)` does this: it writes the reason into a
+`.rk-hint.rk-why` placed right after the control and linked by
+`aria-describedby` (the control's `data-rk-why` names it, so a page can
+place the hint itself), and `disable(control, false)` takes it away. In
+a `.rk-actions` row the hint takes the rest of the row beside the
+buttons (`.rk-actions > .rk-why`).

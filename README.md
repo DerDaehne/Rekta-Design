@@ -47,7 +47,7 @@ web and a native core, and each one is usable without the next:
 |---|---|---|
 | **Tokens** | `tokens/rekta.tokens.json` (source, [DTCG](https://tr.designtokens.org/format/)), `dist/rekta.tokens.json` (resolved, platform-neutral), `dist/rekta.tokens.css` (`--rk-` custom properties) | Every platform. Another party can implement Rekta for WinUI, Qt, SwiftUI, Compose, Flutter or anything else from these: see [docs/platforms.md](docs/platforms.md). |
 | **Icons** | `src/icons/*.svg` (source), `dist/rekta.icons.svg` (a sprite), `dist/rekta.icons.json` (the shapes as data) | Every platform: 51 icons on a 20px grid, stroke 1.6, square ends. See [docs/shell.md](docs/shell.md). |
-| **Components** | `dist/rekta.css`, `dist/rekta.fonts.css` with `dist/fonts/` | The web: tiles, rows, tags, buttons, fields and every input, pivots, panoramas, the app bar and title bar, sheets, toasts, the status banner, menus and context menus, tooltips, tables, trees, long lists, splits, charts, meters, progress. Classes `.rk-*`, nothing global. |
+| **Components** | `dist/rekta.css`, `dist/rekta.fonts.css` with `dist/fonts/` | The web: tiles, rows, tags, buttons, fields and every input, pivots, panoramas, the app bar and title bar, sheets, toasts, the status banner, menus and context menus, tooltips, tables, trees, long lists, splits, charts, meters, progress. Classes `.rk-*`; the few rules on the root are listed in [behaviour.md](docs/behaviour.md#rules-on-the-root). |
 | **Native core** | `core/` (`include/rekta.h`, `src/rekta.c`): C99, no dependency beyond the system; `nix run` starts its demo | Desktop apps on Windows, macOS and Linux without web technology: the same tokens, icons and motion, views and controllers composed as in UIKit, a software renderer that draws the same pixels everywhere. See [core/README.md](core/README.md) and [docs/core.md](docs/core.md). |
 | **Behaviour** | `dist/rekta.js` (ES module), `dist/rekta.global.js` (classic script, `window.Rekta`) | The web, with any framework or none: press, the turnstile, routes and back, the panorama's wheel and keyboard, pivots, toasts and an undo history, the banner, live regions, menus, selection, tables, trees, long lists, sorting by hand, forms and inputs, charts, tooltips, the title bar, installing and offline. See [docs/behaviour.md](docs/behaviour.md). |
 
@@ -99,29 +99,25 @@ on every push to `main` (and by hand).
 
 ## Status
 
-**0.2: tokens, components and behaviour.** The foundation is in place:
-one token source for every platform, the component stylesheet and a
-framework-free behaviour script, with routes and back, window-size
-classes, density and a keyboard model. Unreleased: everything data-heavy
-desktop and web apps need: data states, menus, context menus and
-tooltips, tables with Metro selection, columns and editing, trees, long
-lists, splits, a command palette, search and filters, forms and every
-input, the live contract and an undo history, charts, meters and
-progress, an icon set, the title bar of an installed app, and installing
-and offline. Next: date ranges, a notification centre, rich text. See
+**0.3: everything data-heavy desktop and web apps need, on the web and
+natively.** 0.2 laid the foundation: one token source for every
+platform, the component stylesheet and a framework-free behaviour
+script, with routes and back, window-size classes, density and a
+keyboard model. 0.3 adds rekta-core, native views in C with a declared
+UI, and on the web data states, menus, context menus and tooltips,
+tables with Metro selection, columns and editing, trees, long lists,
+splits, a command palette, search and filters, forms and every input,
+the live contract and an undo history, charts, meters and progress, an
+icon set, the title bar of an installed app, and installing and offline.
+Next: date ranges, a notification centre, rich text. See
 [CHANGELOG.md](CHANGELOG.md).
-
-## Repo
-
-This repo may be made public later; until then, treat it as a draft.
 
 ## License
 
 - **Code, design tokens, scripts, CSS and JavaScript** (`tokens/`,
   `src/`, `scripts/`, `site/` source, `test/`, everything generated in
   `dist/`): [MIT](LICENSE).
-- **Documentation and images** (this README and `docs/`, including
-  `docs/images/`): [CC BY 4.0](LICENSE-docs). Suggested attribution:
+- **Documentation** (this README and `docs/`): [CC BY 4.0](LICENSE-docs). Suggested attribution:
   "Rekta Design by DerDaehne, CC BY 4.0".
 - **Barlow** (bundled with the site in `site/fonts/barlow/`): SIL Open
   Font License 1.1, see [`site/fonts/barlow/OFL.txt`](site/fonts/barlow/OFL.txt).

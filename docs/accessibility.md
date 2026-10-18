@@ -66,7 +66,12 @@ reach.
 - **Contrast is checked, not assumed.** See [colour.md](colour.md) and
   `node scripts/build.mjs --check`, which fails the build when a text,
   mark, focus or soft pair drops below its minimum, or when two statuses
-  come closer than 0.09 (OKLab) under protanopia or deuteranopia.
+  come closer than 0.09 (OKLab) under protanopia or deuteranopia. Under
+  tritanopia (blue-yellow, far rarer) light info and success come to
+  about 0.07: the check reports the measured distances on every build
+  instead of failing, because pulling those two apart would cost the
+  calm hues the tiles depend on, and the word on each tile already says
+  which is which.
 - **Errors state cause and remedy together**, at the point of the error
   — not just "something went wrong," and not in a location disconnected
   from the control that caused it.

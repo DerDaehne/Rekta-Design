@@ -4,21 +4,23 @@ Rekta Design — provenance notice
    Some colour, spacing, radius, motion and focus values in
    tokens/rekta.tokens.json are derived from the Porsche Design
    System's source code (styles/scss/lib), which is published under the
-   Apache License 2.0. Only numeric/colour *values* were taken; no code,
-   no build tooling, and no files from that project are included here.
+   Apache License 2.0. Values only: numbers and colours were taken; no
+   source code, no build tooling, no assets and no files from that project
+   are included here.
 
    Porsche Design System source: https://github.com/porsche-design-system/porsche-design-system
    Licence: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
 
 2. Typeface
-   The type-scale examples and screenshots in docs/images/ use Barlow,
-   licensed under the SIL Open Font License 1.1.
+   The showcase and rekta-core use Barlow, licensed under the SIL Open
+   Font License 1.1.
 
    Barlow: https://github.com/jpt/barlow
    Licence: SIL Open Font License 1.1 (https://scripts.sil.org/OFL)
 
    The showcase site bundles Barlow as woff2 files in site/fonts/barlow/,
-   together with the full licence text (site/fonts/barlow/OFL.txt).
+   rekta-core as TrueType files in core/fonts/, each together with the
+   full licence text (site/fonts/barlow/OFL.txt, core/fonts/OFL.txt).
    Projects adopting Rekta Design choose their own typeface and may or
    may not use Barlow.
 

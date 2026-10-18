@@ -27,13 +27,108 @@ For a remembered theme with no flash, restore the prefs before first
 paint: load `rekta.global.js` in `<head>` and call
 `Rekta.prefs.restore()` there.
 
+**Server rendering.** Importing `rekta.js` touches no DOM, so a page
+that renders on the server (SvelteKit, Next.js, Astro, Nuxt) can import
+it at the top of a module. Call its functions only in the browser, in a
+mount hook or an effect. `node scripts/build.mjs --check` imports it in
+plain Node, so this cannot break unnoticed.
+
+## Words and numbers
+
+Every word `rekta.js` shows or says (a toast's undo, a chart's name, a
+live region's age, a sortable item's announcements) comes from one
+catalogue, `Rekta.strings`, English by default. Numbers in charts and
+times in live regions follow a locale.
+
+```js
+import * as Rekta from './rekta.js';
+import { de } from './rekta.strings.de.js';      // or rekta.strings.de.global.js: window.RektaStrings.de
+Rekta.start({ locale: 'de', strings: de });
+Rekta.setStrings({ selected: (n) => `${n} markiert` });   // any word on its own, later too
+```
+
+- `start({ locale, strings })`, `setLocale(tag)`, `setStrings(partial)`
+  (`setStrings(null)` gives back the English words). A value is a string
+  or a function of the arguments below; a word changed later is used the
+  next time it is shown.
+- `locale()` is the locale in use: the one set, else the document's
+  `lang`, else the browser's. `number(v)` formats a figure the way charts
+  do: compact from a thousand up (1.2K in English, 1234,5 and 2,5 Mio. in
+  German), the locale's separators below.
+- A German catalogue ships as `dist/rekta.strings.de.js` (and the classic
+  `rekta.strings.de.global.js`); the showcase uses it at `?lang=de`.
+- `--check` fails when a phrase in `rekta.js` is written outside the
+  catalogue, and when a shipped catalogue lacks a word or has one the
+  script does not use.
+
+Words a caller passes in (a confirm's `ok`, a guard's `what`, a banner
+state's `word`) are the caller's, in its own language.
+
+| Key | Used by | English |
+|---|---|---|
+| `undo` | `toaster()` | “undo” |
+| `redo` | `undoStack()` | “redo” |
+| `ok` | `confirm()` | “ok” |
+| `cancel` | `confirm()` | “cancel” |
+| `live` | `banner()` | “live” |
+| `since` | `banner()` | “since” |
+| `any` | `menu() summary` | “any” |
+| `field` | `form()` | “field” |
+| `noValue` | `chart()` | “no value” |
+| `reload` | `pwa()` | “reload” |
+| `undoWindow` | `toaster()` | (5, true) → “, 5 seconds to undo” |
+| `bannerStill` | `banner()` | ("Paused", "halted") → “Paused. The banner keeps showing “halted” until that ends.” |
+| `chosen` | `menu() summary` | ("status", "failed") → “status: failed” |
+| `selected` | `select()` | (3) → “3 selected” |
+| `columnWidth` | `table()` | ("status") → “width of status” |
+| `cellRefused` | `table() edit` | “That value was not taken.” |
+| `paletteEmpty` | `palette()` | ("xyz") → “Nothing to go to or run matches “xyz”.” |
+| `saveFailed` | `form()` | “Could not save. Try again.” |
+| `guardWhat` | `guard()` | “This form” |
+| `guardKicker` | `guard()` | “unsaved” |
+| `guardTitle` | `guard()` | “Leave without saving?” |
+| `guardText` | `guard()` | ("This form", 2) → “This form has 2 unsaved changes.” |
+| `guardDiscard` | `guard()` | “discard changes” |
+| `guardKeep` | `guard()` | “keep editing” |
+| `move` | `sortable()` | ("Build") → “move Build” |
+| `nothingToUndo` | `undoStack()` | “Nothing to undo.” |
+| `undone` | `undoStack()` | ("archive 3 jobs") → “Undone: archive 3 jobs” |
+| `justNow` | `live()` | “just now” |
+| `secondsAgo` | `live()` | (12) → “12 s ago” |
+| `minutesAgo` | `live()` | (4) → “4 min ago” |
+| `at` | `live()` | ("14:02") → “at 14:02” |
+| `updated` | `live()` | ("just now") → “updated just now” |
+| `heldUpdated` | `live()` | ("just now") → “held while you look · updated just now” |
+| `staleFor` | `live()` | (40, 0, "14:02") → “stale · no update for 40 s” |
+| `offlineSince` | `live()` | ("4 min ago") → “offline · last update 4 min ago” |
+| `updatesWaiting` | `live()` | (2) → “2 updates waiting · show” |
+| `chartName` | `chart()` | ("line", ["requests"], "Mon", "Sun") → “Line chart of requests, Mon to Sun. Use the arrow keys to read each value; a table follows.” |
+| `chartNumbers` | `chart()` | “show the numbers” |
+| `installed` | `pwa()` | “Installed. It opens in a window of its own.” |
+| `newVersion` | `pwa()` | “A new version is ready.” |
+| `noMatch` | `combobox()` | ("xyz") → “Nothing matches “xyz”.” |
+| `nothingYet` | `combobox()` | “Nothing to choose yet.” |
+| `needAttention` | `form()` | (2) → “2 fields need attention” |
+| `pickedUp` | `sortable()` | ("Build", 2, 4) → “Build picked up, position 2 of 4. ↑ ↓ to move, Space to put down, Escape to put back.” |
+| `putDown` | `sortable()` | ("Build", 3, 4) → “Build put down at position 3 of 4.” |
+| `putBack` | `sortable()` | ("Build") → “Build put back.” |
+| `position` | `sortable()` | ("Build", 3, 4) → “Build: position 3 of 4.” |
+| `loadFailed` | `combobox()` | “Could not load the choices. Type to try again.” |
+
 ## The contract
 
 - **Classes are yours.** Rekta defines only `.rk-*` classes and never
   adds or removes a class itself. Everything the script writes is a
   `data-rk-*` attribute, a `--_rk-*` property (internal), one of the
   public hooks below, or `hidden`.
-- **Hide with `hidden`.** Rekta's display rules never override it.
+- **Hide with `hidden`.** Inside an `.rk` root, `hidden` wins over every
+  `display` rule, Rekta's and the page's alike: `rekta.css` sets
+  `display: none !important` on it, so no layout of Rekta's can show a
+  hidden element by accident. A page that has to show an element that
+  carries `hidden` (server-rendered facets shown side by side until the
+  script takes over, say) adds `data-rk-reveal`: `hidden` stays, for the
+  script and for assistive technology reading the attribute, and the
+  page's own `display` applies. `hidden="until-found"` is left alone.
 - **Timings are tokens.** Every duration comes from a `--rk-duration-*`
   token as it applies at that moment, so reduced motion (each motion
   duration `0s`) makes every step instant and never skips one.
@@ -42,15 +137,31 @@ paint: load `rekta.global.js` in `<head>` and call
   carries it; a tag, tile or banner without its own `data-status` stays
   neutral inside a status row.
 
+### Rules on the root
+
+`rekta.css` styles `.rk-*` classes. A few rules reach further, on
+purpose, and a page that composes Rekta with its own CSS should know
+them:
+
+| Rule | Why |
+|---|---|
+| `:root { scroll-padding-block: … }` | Anchors and focus scroll clear of the banner and section strip above (`--rk-banner-h`, `--rk-pivot-h`) and the app bar below. |
+| `:root:has(dialog.rk-sheet[open])` | The page under an open sheet stops scrolling, and keeps its scrollbar's room so nothing shifts. |
+| `[data-status='…']` | Sets only the internal `--_rk-fill`, `--_rk-mark` and `--_rk-soft`, which nothing outside Rekta's components reads. |
+| `:root[data-theme]`, `[data-density]`, `[data-motion]`, `[data-rk-titlebar]` | The switches `prefs` and the installed app's title bar write on the root. |
+| `:root[data-rk-crossfade]::view-transition-old(root)` and `-new(root)` | Rekta's cross-fade timing, only while `crossfade()` (or a theme change through `prefs`) runs its own view transition: an app's own root view transitions keep their timing. |
+
 ### State the script writes
 
 | Attribute | On | Meaning |
 |---|---|---|
 | `data-rk-pressed` | a tile, a `[data-rk-press]` item | Being pressed, or held for the rest of `duration-press` after a quick tap. |
 | `data-rk-turn` | units of a place, or the place | `out`, `back-out`, `pressed` while leaving; `in`, `back-in` while arriving. |
-| `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it. Removed once the build-in is over, so a re-render never replays it. |
+| `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it; `turned` after a place turn, where only sparklines draw. Removed once the build-in is over (`duration-moderate` + 10 × `duration-stagger` + `duration-long` + 50ms), so a re-render never replays it. A page without the script may set and remove it itself, with the same value and window. |
 | `data-rk-phase` | a toast, the banner | `leaving` while it goes; `clear` on the banner when no state stands. |
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
+| `data-rk-measured` | a pivot | `rekta.js` has measured its titles: inactive ones shrink by a scale that animates, instead of the stylesheet's measure-free font-size. |
+| `data-rk-wide` | a pivot and its facets' parent | The facets show side by side (`pivot()`, from `size.pivot-wide` up). |
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
@@ -90,6 +201,7 @@ paint: load `rekta.global.js` in `<head>` and call
 | `--rk-banner-h` | `banner()` | `scroll-padding`, the sticky strip, toasts without anchor positioning. |
 | `--rk-pivot-h` | `panorama()` | `scroll-padding` under a sticky section strip. |
 | `--rk-pivot-scale` | `pivot()`, `panorama()` | The inactive pivot titles' scale. |
+| `--rk-toast-left` | `toaster()`, or the page | What is left of a toast's undo window, 1 to 0: the countdown line under its action. A page without the script sets it with the figure. |
 
 ### Events
 
@@ -219,7 +331,18 @@ Returns `{ current, item, params, below, navigate(name, { replace, pressed }), o
 ### `panorama(el, { pivot })`
 
 `el` is a `.rk-panorama` of `.rk-sec` sections; `pivot` is an optional
-`.rk-pivot` of `#section` links. Sideways:
+`.rk-pivot` of `#section` links. The panorama takes focus (`tabindex="0"`)
+so the keys can scroll it, which makes it a landmark: `panorama()` gives
+it `role="region"` when it has no role, and the page must give it a name,
+`aria-label` or `aria-labelledby` (the place's title). Without one a
+screen reader announces a nameless group, and `panorama()` warns in the
+console.
+
+```html
+<div class="rk-panorama" aria-labelledby="home-title"> … </div>
+```
+
+Sideways:
 
 - One wheel gesture (events less than `duration-wheel-latch` apart)
   latches to one scroller: to the section under the pointer if it can
@@ -246,7 +369,21 @@ Returns `{ goTo(sectionOrId, { focus, instant }), current, destroy }`.
 `el` is a `.rk-pivot[role=tablist]` of `[role=tab]` buttons with
 `aria-controls`. A click or ← → Home End selects a facet; the strip
 glides by the facet's place in the order (the ones before it stay in reach) and the panel slides in from its side. Facets
-add nothing to history. Returns `{ select(index, { focus }), destroy }`.
+add nothing to history.
+
+Wide: when the panels share a parent at least `--rk-pivot-wide` wide
+(`size.pivot-wide`, 1300px; 0 never), every facet shows, side by side as
+panorama sections sized in tile units, and both the pivot and that parent
+get `data-rk-wide`. The strip stays visible as a jump list: a title (a
+click, or ← → Home End with focus staying on the strip) glides its facet
+to the leading edge over `duration-pivot-glide`, Tab moves focus into the
+facet chosen, and the title follows the facet at the leading edge as the
+user scrolls. Narrower, it
+is one facet at a time again, the one last chosen. A pivot that picks the
+place (`.rk-pivot--nav`) never goes wide. The threshold is the product's
+to pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.
+
+Returns `{ select(index, { focus }), wide, destroy }`.
 
 ### `toaster(region)`
 
@@ -270,7 +407,10 @@ Returns `{ show, open, dismiss(), destroy }`.
 
 `el` is the `.rk-banner`, mounted once with two live regions
 (`[role=alert]`, `[role=status]`) and an optional `.rk-actions` remedy
-button.
+button. Sideways, the word, the sentence and the action stand in a row
+on the tile grid's widths; compact, the word (its time under it) and the
+sentence share a line and the action goes under them, about 105px on a
+375px phone.
 
 - `states`: `{ name: { word, status, alert, text, action, since, until, on, off } }`.
   `status` is the fill; `alert: true` only for a halt; `on` and `off`
@@ -527,8 +667,10 @@ button after it shows and applies waiting updates. Returns `{ update, beat, offl
 ### `chart(el, { type, labels, series, unit, min, max, height, summary, table })`
 
 A line (`type: 'line'`) or bar (`'bars'`) chart drawn as SVG at `el`'s
-width, redrawn when it changes. `series` is `[{ label, values }]`; the
-first is ink, a second grey. Ticks are round and compact (`unit` follows
+width, redrawn when it changes. `series` is `[{ label, values, code }]`;
+the first is ink, a second grey, and a series with `code: N` (1 to 8)
+draws in the product's domain colour `--rk-series-N`, its legend key and
+markers too ([data.md](data.md#a-domains-colour-code)). Ticks are round and compact (`unit` follows
 each value); bars start at zero, lines at `min` or the data's lowest.
 Two series get a legend (`.rk-legend`); lines get end labels when wide
 enough and clear of each other; bars label their peak. Hover, or ← →

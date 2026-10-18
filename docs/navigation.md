@@ -51,11 +51,17 @@ level (`nav-active`, `nav-inactive`); compact, where it sticks to the
 top, it takes the facet level (`pivot-active`, `pivot-inactive`), so it
 holds less of a small screen. The sections below it start with their
 own heading; a kicker repeating the strip's title would say it twice. Above a width threshold
-(1300px in the source prototype — a project adopting Rekta Design can pick
-its own, it is not one of the four structural breakpoints), a pivot may
-render all its facets side by side as a panorama instead of one at a
-time, with the pivot strip still present below them for narrower
-viewports or as a jump list.
+(`size.pivot-wide`, 1300px — a product picks its own, it is not one of
+the four structural breakpoints), a pivot renders all its facets side by
+side as panorama sections instead of one at a time. Its strip stays
+visible above them, always: it is the jump list and the marker of where
+you are, and it follows the scroll. Keys: on the strip, ← → Home End pick
+a title and glide its facet to the leading edge, focus staying on the
+title; Tab goes into the facet chosen (not the first one in the page),
+and Tab on from there moves through that facet and then the next. A
+facet scrolled into view by wheel or touch becomes the chosen title.
+`pivot()` does this on the web (see [behaviour.md](behaviour.md)); a
+pivot that picks the place never does.
 
 ### Along the top or down the side
 
@@ -128,9 +134,33 @@ The live status is a square and a word, and the word is always visible
 colour is never the only signal.
 
 In the compact window-size class, a "back" control is the leading item
-in the same bar, within the thumb's reach, hidden at the top place. It is
-the one navigational concession the bottom bar makes; everywhere else,
-navigation lives in the pivot and the crumb, not the app bar.
+in the same bar, within the thumb's reach, hidden at the top place.
+Otherwise navigation lives in the pivot and the crumb, not the app bar,
+with one opt-in exception below.
+
+### Places in the bar (compact)
+
+On a phone the top-level places of an app with few of them (up to five,
+with short words; four read best on a 360px phone) may sit in the app
+bar instead of the strip at the top, in the thumb's reach:
+`<nav class="rk-ab-places">` in the `.rk-appbar`, one `a.rk-ab` per place
+with an icon over a lowercase word.
+
+- **Only compact.** The bar decides by its own width, below 760px; wider,
+  `.rk-ab-places` is not shown and the pivot holds the places as always.
+  A landscape phone (wide but short) keeps the pivot.
+- **Where you are:** the place you are in is in `text-primary`, the
+  others in `text-contrast-medium`; `aria-current="page"` marks it, and
+  `places()` keeps the mark on the bar's links. On a place below it (a
+  detail), the place you came from stays marked, and choosing it goes
+  back to its top.
+- **Back** stays the leading item, before the places.
+- **Commands** all move into "more" (`appbar()` does it while the places
+  show); the live state stays, its square over its word.
+- **A selection** takes the bar over as always: the places step aside
+  while the selection's commands show.
+- The strip at the top is then the product's to leave out on compact (it
+  would say the same twice); sideways it is the navigation.
 
 ### Go to
 
@@ -144,12 +174,25 @@ text and then closes. Entries are grouped (places, sections, items,
 commands) and a command shows its key. Commands say what they will do
 now ("resume intake" while paused).
 
+### The middle of the bar
+
+Between the live state and the controls, `.rk-ab-mid` holds a product's
+own short line: a key waiting for its second key ("g, then a place"), a
+mode ("Alt only"), a count. One line, `xs`, secondary colour, no
+controls. It takes the room the controls leave and is the first to give
+it up: it cuts its text with an ellipsis before any control moves into
+"more", and is gone while "more" shows, so it shows nothing a user needs that is not said elsewhere too
+(a key hint is also in the command's tooltip and the palette).
+
 ### When the bar is full
 
 Controls that do not fit move into "more", the least important first
 (`data-rk-priority`), and its menu repeats their words. Back, the live
 state and a selection's controls never move. Nothing is hidden for good:
-every control is reachable at every width.
+every control is reachable at every width. The menu rises from the bar
+at its trailing edge (`.rk-ab-menu`: `rekta.css` places it, anchored to
+`.rk-ab-more` where the browser has anchor positioning); its keys are
+those of every floating surface ([states.md](states.md#floating-surfaces)).
 
 ## Tooltips
 

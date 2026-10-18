@@ -1,4 +1,4 @@
-# Builds the demo site (Rekta Board) on dist/ and deploys it to GitHub Pages: on every push to main, and by hand.
+# Builds the showcase on dist/ and deploys it to GitHub Pages: on every push to main, and by hand.
 # A run from another branch deploys only if the github-pages environment allows that branch.
 name: pages
 

@@ -62,6 +62,28 @@ const TURN = 1300;
 for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 844, 'light'], [390, 844, 'dark'], [844, 390, 'light']]) {
   const p = await open({ viewport: { width: w, height: h }, colorScheme: scheme, hasTouch: w < 760 || h < 481 });
   ok(!(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `${w}x${h} ${scheme}: no horizontal overflow`);
+  if (w === 1440) {
+    // Secondary text composed into a status fill (a meta, facts, an age, a stale value) keeps AA: --check sees token
+    // pairs only, so the selectors that combine them are measured here.
+    const worst = await p.evaluate(() => {
+      const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+      let low = { r: 99, what: '' };
+      for (const st of ['info', 'success', 'warning', 'error']) {
+        const host = document.createElement('div');
+        host.innerHTML = `<div class="rk-tile" data-status="${st}"><span class="rk-meta">m</span><span class="rk-facts">f</span><span class="rk-age">a</span><span data-rk-live="stale"><b data-rk-value>v</b></span></div>`
+          + `<div class="rk-banner" data-status="${st}"><span class="rk-meta">m</span><span class="rk-facts">f</span></div>`;
+        document.body.append(host);
+        for (const fill of host.children) for (const el of fill.querySelectorAll('*')) {
+          const r = ratio(getComputedStyle(el).color, getComputedStyle(fill).backgroundColor);
+          if (r < low.r) low = { r, what: `${el.className || el.tagName} on ${fill.className} ${st}` };
+        }
+        host.remove();
+      }
+      return low;
+    });
+    ok(worst.r >= 4.5, `${scheme}: secondary text on every status fill clears AA`, `${worst.what} ${worst.r.toFixed(2)}:1`);
+  }
   await p.screenshot({ path: join(shots, `rest-${w}x${h}-${scheme}.png`) });
   await p.close();
 }
@@ -133,6 +155,62 @@ await go(p, 'panorama');
 await p.click('#tab-2'); await p.waitForTimeout(500);
 ok(await p.evaluate(() => !document.querySelector('#facet-2').hidden && document.querySelector('#facet-0').hidden), 'a facet shows its panel');
 ok(/sideways · 1440/.test(await text(p, '#env-class')), 'the environment reads out', await text(p, '#env-class'));
+// A pivot whose facets' container is wider than size.pivot-wide shows them side by side, its strip a jump list.
+const wide = await p.evaluate(async () => {
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:0;top:0;width:1300px;z-index:-1';
+  box.innerHTML = '<div class="rk-pivot" role="tablist" aria-label="w" style="--rk-pivot-wide: 900px">'
+    + [0, 1, 2, 3].map((i) => `<button role="tab" id="wt${i}" aria-controls="wf${i}" aria-selected="${i === 0}">facet ${i}</button>`).join('') + '</div>'
+    + '<div id="wfs">' + [0, 1, 2, 3].map((i) => `<div role="tabpanel" id="wf${i}" ${i ? 'hidden' : ''}><p>${'text '.repeat(40)}</p></div>`).join('') + '</div>';
+  document.body.append(box);
+  const pv = Rekta.pivot(box.firstChild), wfs = box.querySelector('#wfs'), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const shown = () => [...wfs.children].filter((x) => !x.hidden).length;
+  const out = { wide: pv.wide, shown: shown(), flex: getComputedStyle(wfs).display };
+  box.querySelector('#wt2').click(); await wait(700);
+  out.jumped = wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true';
+  box.querySelector('#wt2').focus(); box.querySelector('#wt2').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+  out.tabbed = document.activeElement && document.activeElement.id === 'wf2';
+  wfs.scrollTo({ left: 0, behavior: 'instant' }); await wait(200);
+  out.followed = box.querySelector('#wt0').getAttribute('aria-selected') === 'true';
+  box.style.width = '700px'; await wait(200);
+  out.narrow = !pv.wide && shown() === 1;
+  pv.destroy(); box.remove();
+  return out;
+});
+ok(wide.wide && wide.shown === 4 && wide.flex === 'flex', 'a pivot above size.pivot-wide shows every facet side by side', JSON.stringify(wide));
+ok(wide.jumped && wide.followed, 'its strip jumps to a facet and follows the scroll', JSON.stringify(wide));
+ok(wide.tabbed, 'Tab from the strip goes into the facet chosen', JSON.stringify(wide));
+ok(wide.narrow, 'below it, one facet at a time again', JSON.stringify(wide));
+
+// A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.
+const codes = await p.evaluate(() => {
+  const want = getComputedStyle(document.documentElement).getPropertyValue('--rk-series-2').trim();
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const tag = document.querySelector('.rk-tag[data-rk-code="2"]');
+  const box = document.createElement('div'); box.style.width = '400px'; document.body.append(box);
+  const ch = Rekta.chart(box, { type: 'line', labels: ['a', 'b', 'c'], series: [{ label: 'heart rate', values: [120, 140, 135], code: 2 }], table: false });
+  const line = box.querySelector('.rk-line[data-rk-code="2"]'), out = { want: rgb(want), tag: getComputedStyle(tag, '::before').backgroundColor, tagText: getComputedStyle(tag).color, line: line ? getComputedStyle(line).stroke : null, ink: rgb('var(--rk-text-primary)') };
+  ch.destroy(); box.remove();
+  return out;
+});
+ok(codes.tag === codes.want && codes.line === codes.want && codes.tagText === codes.ink, 'a domain colour code marks the tag and the chart line, never the text', JSON.stringify(codes));
+
+// rekta.js in German (?lang=de): its words from the catalogue, its numbers in the locale; none of its English shows.
+{
+  const de = await open({}, '?lang=de');
+  await de.waitForTimeout(800);
+  const seen = await de.evaluate(() => {
+    // What rekta.js itself writes: live ages, a table's column handles, a chart's table of numbers, sortable grips.
+    const own = [...document.querySelectorAll('.rk-age, .rk-chart-table > summary, .rk-live-more')].map((e) => e.textContent)
+      .concat([...document.querySelectorAll('th > [role=separator][aria-label], [data-rk-grip][aria-label], .rk-grip[aria-label]')].map((e) => e.getAttribute('aria-label')))
+      .filter(Boolean);
+    const english = own.filter((x) => /\b(updated|ago|just now|show the numbers|width of|move|position|waiting)\b/.test(x));
+    return { english, count: own.length, sample: own.slice(0, 4), number: Rekta.number(1234.5), locale: Rekta.locale() };
+  });
+  ok(seen.count > 2 && seen.english.length === 0, 'in German, what rekta.js writes is German', JSON.stringify(seen));
+  ok(seen.locale === 'de' && seen.number === '1234,5', 'and its numbers follow the locale', JSON.stringify(seen));
+  await de.close();
+}
 
 // Motion: reorder, toast, reduce motion.
 await go(p, 'motion');
@@ -397,8 +475,8 @@ await p.click('#tile-notes'); await p.waitForTimeout(400);
 ok((await sheetTitle(p)) === 'Leave without saving?', 'leaving with changes asks', await sheetTitle(p));
 await p.keyboard.press('Escape'); await p.waitForTimeout(400);
 ok(await visible(p, 'home') && (await p.inputValue('#a-name')) === 'sea-2', 'Escape keeps editing');
-await p.click('#tile-notes'); await p.waitForTimeout(400); await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(TURN);
-ok(await visible(p, 'notes') && (await p.inputValue('#a-name')) === 'sea', 'discard leaves and puts the form back', await p.inputValue('#a-name'));
+await p.click('#tile-notes'); await p.waitForTimeout(400); await p.click('dialog[open] button[value=ok]');
+ok(await until(p, () => visible(p, 'notes'), TURN * 2) && (await p.inputValue('#a-name')) === 'sea', 'discard leaves and puts the form back', await p.inputValue('#a-name'));
 await p.keyboard.press('Escape'); await p.waitForTimeout(TURN);
 await go(p, 'feedback');
 await p.check('#s-readonly'); await p.waitForTimeout(300);
@@ -475,6 +553,12 @@ const btnH = () => p.evaluate(() => Math.round(document.querySelector('#reset').
 ok((await btnH()) === 32, 'fine pointer: compact controls', await btnH());
 await p.check('input[name=density][value=comfortable]'); await p.waitForTimeout(200);
 ok((await btnH()) === 44, 'comfortable: 44px controls', await btnH());
+const fade = await p.evaluate(async () => {           /* Rekta's view-transition timing only while its own runs */
+  const root = document.documentElement, done = Rekta.crossfade(() => {}), during = root.hasAttribute('data-rk-crossfade');
+  await done;
+  return { during, after: root.hasAttribute('data-rk-crossfade'), vt: typeof document.startViewTransition === 'function' };
+});
+ok(!fade.vt || (fade.during && !fade.after), 'the root carries data-rk-crossfade only while Rekta cross-fades', JSON.stringify(fade));
 await p.check('input[name=density][value=auto]'); await p.check('input[name=theme][value=system]'); await p.check('input[name=accent][value=ink]');
 ok((await p.evaluate(() => JSON.parse(localStorage.getItem('rekta-prefs')).theme)) === 'system', 'prefs remembered');
 
@@ -487,7 +571,10 @@ await p.click('#reset'); await p.waitForTimeout(300); await p.click('#sheet butt
 ok((await toast(p)).startsWith('Demo reset') && (await text(p, '#presses')) === '0', 'reset restores the demo');
 
 // Tokens: a table in a split; the current token in the address; selection; filters in the address; the divider.
+// (Places in the app bar, as a phone app has them: the router marks the place you are at.)
+await p.evaluate(() => { const n = document.createElement('nav'); n.className = 'rk-ab-places'; n.id = 'probe-places'; n.innerHTML = `<a class="rk-ab" href="${location.pathname}" aria-current="page">home</a><a class="rk-ab" href="#tokens">tokens</a>`; document.querySelector('#bar').append(n); });
 await p.evaluate(() => window.site.router.navigate('tokens')); await p.waitForTimeout(TURN);
+ok(await p.evaluate(() => { const [h, t] = document.querySelectorAll('#probe-places a'); const r = t.getAttribute('aria-current') === 'page' && !h.hasAttribute('aria-current'); document.querySelector('#probe-places').remove(); return r; }), 'places in the app bar: the router marks the one you are at');
 ok((await p.evaluate(() => document.querySelectorAll('#tok-body tr').length)) === count, 'every token has a row');
 const hist = await p.evaluate(() => history.length);
 await p.click('#tok-body tr[data-name="focus"] th a'); await p.waitForTimeout(500);

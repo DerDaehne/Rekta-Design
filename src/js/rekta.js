@@ -46,18 +46,85 @@
      combobox   a field with a list of choices that filters as you type
      stepper    a number field between − and +, repeating while held
      drop       a zone that takes dropped or chosen files
-     start      the defaults for a page: prefs, press, sheets, steppers, sliders, switches, arrival build-in
+     strings    every word the script shows or says, English unless a product sets its own; locale() and number()
+     start      the defaults for a page: prefs, press, sheets, steppers, sliders, switches, arrival build-in, words
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
-export const version = '0.2.0';
+export const version = '0.3.0';
 
 // Tokens -------------------------------------------------------------------------------------------------------------
-const docEl = document.documentElement;
-function css(name, el = docEl) { return getComputedStyle(el).getPropertyValue(name).trim(); }
+// The document's root, looked up when used: importing the module touches no DOM, so it loads during server rendering.
+const docEl = () => document.documentElement;
+function css(name, el = docEl()) { return getComputedStyle(el).getPropertyValue(name).trim(); }
 function ms(name, el) { const v = css(name, el); return (parseFloat(v) || 0) * (/ms$/.test(v) ? 1 : 1000); }
 function num(name, el) { return parseFloat(css(name, el)) || 0; }
 // A length token in px, whatever unit it is written in (rem follows the root's font size).
-function px(name, el) { const v = css(name, el), n = parseFloat(v) || 0; return /rem$/.test(v) ? n * (parseFloat(getComputedStyle(docEl).fontSize) || 16) : n; }
+function px(name, el) { const v = css(name, el), n = parseFloat(v) || 0; return /rem$/.test(v) ? n * (parseFloat(getComputedStyle(docEl()).fontSize) || 16) : n; }
+
+// Words and numbers -------------------------------------------------------------------------------------------------
+// Every word rekta.js shows or says comes from strings, English by default. start({ locale, strings }) or
+// setStrings({ ... }) replaces any of them: a value is a string, or a function of the same arguments returning one.
+// Numbers and times follow the locale (start's, else the document's lang, else the browser's).
+// rk-strings-begin
+export const strings = {
+  undo: 'undo', redo: 'redo', ok: 'ok', cancel: 'cancel', live: 'live', since: 'since', any: 'any', field: 'field',
+  noValue: 'no value', reload: 'reload',
+  undoWindow: (seconds, again) => `, ${seconds} seconds to${again ? ' undo' : ''}`,
+  bannerStill: (event, word) => `${event}. The banner keeps showing “${word}” until that ends.`,
+  chosen: (summary, chosen) => `${summary}: ${chosen}`,
+  selected: (n) => `${n} selected`,
+  columnWidth: (column) => `width of ${column}`,
+  cellRefused: 'That value was not taken.',
+  paletteEmpty: (query) => `Nothing to go to or run matches “${query}”.`,
+  saveFailed: 'Could not save. Try again.',
+  guardWhat: 'This form',
+  guardKicker: 'unsaved',
+  guardTitle: 'Leave without saving?',
+  guardText: (what, n) => `${what} has ${n === 1 ? '1 unsaved change' : `${n} unsaved changes`}.`,
+  guardDiscard: 'discard changes',
+  guardKeep: 'keep editing',
+  move: (item) => `move ${item}`,
+  nothingToUndo: 'Nothing to undo.',
+  undone: (what) => `Undone: ${what}`,
+  justNow: 'just now',
+  secondsAgo: (s) => `${s} s ago`,
+  minutesAgo: (m) => `${m} min ago`,
+  at: (time) => `at ${time}`,
+  updated: (ago) => `updated ${ago}`,
+  heldUpdated: (ago) => `held while you look · updated ${ago}`,
+  staleFor: (s, m, time) => `stale · no update for ${s < 60 ? `${s} s` : m < 60 ? `${m} min` : `since ${time}`}`,
+  offlineSince: (ago) => `offline · last update ${ago}`,
+  updatesWaiting: (n) => (n === 1 ? '1 update waiting · show' : `${n} updates waiting · show`),
+  chartName: (type, series, from, to) => `${type === 'bars' ? 'Bar' : 'Line'} chart of ${series.join(' and ')}, ${from} to ${to}. Use the arrow keys to read each value; a table follows.`,
+  chartNumbers: 'show the numbers',
+  installed: 'Installed. It opens in a window of its own.',
+  newVersion: 'A new version is ready.',
+  noMatch: (query) => `Nothing matches “${query}”.`,
+  nothingYet: 'Nothing to choose yet.',
+  needAttention: (n) => (n === 1 ? '1 field needs attention' : `${n} fields need attention`),
+  pickedUp: (item, at, of) => `${item} picked up, position ${at} of ${of}. ↑ ↓ to move, Space to put down, Escape to put back.`,
+  putDown: (item, at, of) => `${item} put down at position ${at} of ${of}.`,
+  putBack: (item) => `${item} put back.`,
+  position: (item, at, of) => (item ? `${item}: position ${at} of ${of}.` : `position ${at} of ${of}`),
+  loadFailed: 'Could not load the choices. Type to try again.',
+};
+// rk-strings-end
+const DEFAULT_STRINGS = { ...strings };
+let localeSet = '';
+// setStrings(partial): replaces those words; setStrings(null) gives back the English ones.
+export function setStrings(partial) { if (partial === null) Object.assign(strings, DEFAULT_STRINGS); else Object.assign(strings, partial); }
+export function setLocale(tag) { localeSet = tag || ''; }
+export function locale() { return localeSet || (typeof document !== 'undefined' && document.documentElement.lang) || (typeof navigator !== 'undefined' && navigator.language) || 'en'; }
+function tx(key, ...args) { const v = strings[key]; return typeof v === 'function' ? v(...args) : v === undefined ? key : String(v); }
+// number(v): a figure for a chart, a tooltip or a table: compact from a thousand up (1.2K, 1200 in German), in the
+// locale's digits and separators.
+export function number(v, { compact = true } = {}) {
+  if (!Number.isFinite(v)) return String(v);
+  const big = compact && Math.abs(v) >= 1e3;
+  try { return new Intl.NumberFormat(locale(), big ? { notation: 'compact', maximumFractionDigits: 1 } : { maximumFractionDigits: 2 }).format(v); }
+  catch { return String(+v.toFixed(2)); }
+}
+function clock(date) { try { return new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' }).format(date); } catch { return date.toTimeString().slice(0, 5); } }
 function bezier(name) {
   const m = /cubic-bezier\(([^)]+)\)/.exec(css(name));
   const [x1, y1, x2, y2] = m ? m[1].split(',').map(Number) : [0.25, 0.1, 0.25, 1];
@@ -101,16 +168,16 @@ export const prefs = {
   key: 'rekta-prefs',
   read() { try { return JSON.parse(localStorage.getItem(this.key) || '{}'); } catch { return {}; } },
   write(all) { try { localStorage.setItem(this.key, JSON.stringify(all)); } catch { /* private mode: this visit only */ } },
-  get(name) { return docEl.dataset[name] || PREF_DEFAULT[name]; },
+  get(name) { return docEl().dataset[name] || PREF_DEFAULT[name]; },
   set(name, value, { remember = true } = {}) {
     if (!(name in PREF_DEFAULT)) throw new Error(`unknown pref ${name}`);
     const commit = () => {
-      if (!value || value === PREF_DEFAULT[name]) delete docEl.dataset[name]; else docEl.dataset[name] = value;
+      if (!value || value === PREF_DEFAULT[name]) delete docEl().dataset[name]; else docEl().dataset[name] = value;
       if (remember) { const all = this.read(); all[name] = this.get(name); this.write(all); }
       document.dispatchEvent(new CustomEvent('rk:prefs', { detail: { name, value: this.get(name) } }));
     };
     // A theme chosen by the user cross-fades (view transitions); a restored one applies before the first paint.
-    if (name === 'theme' && remember && this.get('theme') !== (value || PREF_DEFAULT.theme) && typeof document.startViewTransition === 'function' && ms('--rk-duration-short')) document.startViewTransition(commit);
+    if (name === 'theme' && remember && this.get('theme') !== (value || PREF_DEFAULT.theme)) crossfade(commit);
     else commit();
   },
   restore() { const all = this.read(); for (const name of Object.keys(PREF_DEFAULT)) if (all[name]) this.set(name, all[name], { remember: false }); },
@@ -349,7 +416,7 @@ export const turn = {
   leave(place, { pressed = null, back = false } = {}) {
     turn.finish();
     // A place still building in leaves from its end state: the turn wins over the arrival.
-    for (const el of [place, docEl]) { clearTimeout(el._rkArrive); el.removeAttribute('data-rk-arriving'); }
+    for (const el of [place, docEl()]) { clearTimeout(el._rkArrive); el.removeAttribute('data-rk-arriving'); }
     return new Promise((resolve) => {
       const timers = [];
       // The pressed tile keeps its press until it leaves; one activated without a press sinks now, in its centre.
@@ -486,7 +553,12 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
   let current = home, item = null, params = '', index = 0, below = null, pushedItem = false, busy = Promise.resolve();
   const watchers = new Map();
   const backButtons = () => document.querySelectorAll('.rk-ab-back[data-rk-back], .rk-titlebar [data-rk-back]');
-  const showBack = () => backButtons().forEach((b) => { b.hidden = current === home && index === 0; });
+  // Places in the app bar (.rk-ab-places): the one you are in is marked; on a place below it, the one you came from.
+  const showBack = () => {
+    backButtons().forEach((b) => { b.hidden = current === home && index === 0; });
+    const bar = [...document.querySelectorAll('.rk-ab-places a[href]')], here = bar.find((a) => nameOf(a.href) === current);
+    if (here) bar.forEach((a) => { if (a === here) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  };
   const rk = () => (history.state && history.state.rk) || {};
   function snapshot(opener) {
     const el = byName(current), prev = rk();
@@ -818,8 +890,8 @@ export function panorama(el, { pivot = null } = {}) {
   function stickyStrip() {
     if (!pivot) return;
     const sticky = pivot.getClientRects().length && pivot.parentElement.classList.contains('rk-place') && getComputedStyle(pivot).position === 'sticky';
-    if (sticky) { docEl.style.setProperty('--rk-pivot-h', `${pivot.offsetHeight}px`); wrote = true; }
-    else if (wrote) { docEl.style.removeProperty('--rk-pivot-h'); wrote = false; }
+    if (sticky) { docEl().style.setProperty('--rk-pivot-h', `${pivot.offsetHeight}px`); wrote = true; }
+    else if (wrote) { docEl().style.removeProperty('--rk-pivot-h'); wrote = false; }
   }
   const ro = new ResizeObserver(fit);
   ro.observe(el);
@@ -834,6 +906,9 @@ export function panorama(el, { pivot = null } = {}) {
   if (pivot) { pivot.addEventListener('click', pivotClick); pivot.addEventListener('wheel', stripWheel, { passive: false }); pivotScale(pivot); }
   if (document.fonts) document.fonts.ready.then(fit);
   if (el.tabIndex < 0 && !el.hasAttribute('tabindex')) el.tabIndex = 0;
+  // Focusable, it is a landmark the keys act on: a region, and a region needs a name to be announced as one.
+  if (!el.hasAttribute('role')) el.setAttribute('role', 'region');
+  if (!el.hasAttribute('aria-label') && !el.hasAttribute('aria-labelledby')) console.warn('Rekta.panorama(): give the panorama an aria-label or aria-labelledby; it takes focus, and a region without a name is announced as nothing', el);
   requestAnimationFrame(() => { fit(); mark(current); });
   return {
     goTo,
@@ -862,6 +937,11 @@ function stripWheel(e) {
 // the page so fluid sizes and window-size classes stay right.
 function pivotScale(strip) {
   if (!strip.getClientRects().length) return;
+  // Measuring is not a change to show: from the stylesheet's measure-free sizes (font-size) to the scale the first time,
+  // and a new width after a resize or a font load, apply at once.
+  const titles = [...strip.querySelectorAll(':scope > a, :scope > button')];
+  for (const el of titles) el.style.transition = 'none';
+  strip.setAttribute('data-rk-measured', '');
   const probe = document.createElement('span');
   probe.style.cssText = 'position:absolute;visibility:hidden;font-size:var(--_rk-inactive)';
   strip.appendChild(probe);
@@ -869,7 +949,9 @@ function pivotScale(strip) {
   const inactive = parseFloat(getComputedStyle(probe).fontSize), active = item ? parseFloat(getComputedStyle(item).fontSize) : inactive;
   probe.remove();
   if (inactive && active) strip.style.setProperty('--rk-pivot-scale', (inactive / active).toFixed(3));
-  for (const el of strip.querySelectorAll(':scope > a, :scope > button')) if (el.offsetWidth) el.style.setProperty('--_rk-w', `${el.offsetWidth}px`);
+  for (const el of titles) if (el.offsetWidth) el.style.setProperty('--_rk-w', `${el.offsetWidth}px`);
+  void strip.offsetWidth;
+  for (const el of titles) el.style.transition = '';
 }
 function pivotFit(strip) {
   const items = [...strip.querySelectorAll(':scope > a, :scope > button')];
@@ -906,11 +988,52 @@ function pivotGlide(strip, item) {
 export function pivot(el, { onSelect } = {}) {
   const tabs = () => [...el.querySelectorAll('[role=tab]')];
   const panel = (t) => document.getElementById(t.getAttribute('aria-controls'));
-  let gen = 0;
+  const nav = el.classList.contains('rk-pivot--nav');
+  let gen = 0, wide = false, host = null, following = 0;
+  const chosen = () => tabs().findIndex((t) => t.getAttribute('aria-selected') === 'true');
+  // Wide: from size.pivot-wide up (the width of the panels' common parent), every facet shows, side by side as
+  // panorama sections; the strip is a jump list that follows the scroll. A pivot that picks the place never goes wide.
+  const panels = () => tabs().map(panel);
+  const startOf = (p) => Math.min(host.scrollLeft + p.getBoundingClientRect().left - host.getBoundingClientRect().left - (parseFloat(getComputedStyle(host).paddingLeft) || 0), host.scrollWidth - host.clientWidth);
+  function mark(i) {
+    const list = tabs();
+    list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; });
+    pivotGlide(el, list[i]);
+  }
+  function layout() {
+    const ps = panels(), parent = ps.length && ps.every((p) => p && p.parentElement === ps[0].parentElement) ? ps[0].parentElement : null;
+    const min = px('--rk-pivot-wide', el), now = !nav && !!parent && min > 0 && parent.clientWidth >= min;
+    if (now === wide) return;
+    wide = now; host = now ? parent : null;
+    el.toggleAttribute('data-rk-wide', now);
+    if (parent) parent.toggleAttribute('data-rk-wide', now);
+    const i = Math.max(0, chosen());
+    ps.forEach((p, k) => { if (p) p.hidden = !now && k !== i; });
+    if (now && ps[i]) host.scrollLeft = startOf(ps[i]);
+  }
+  function follow() {                                    /* wide: the facet at the leading edge is the one chosen */
+    if (!wide || Date.now() < following) return;
+    const box = host.getBoundingClientRect(), edge = box.left + (parseFloat(getComputedStyle(host).paddingLeft) || 0) + 1;
+    const ps = panels(), mine = ps[chosen()];
+    if (mine) { const r = mine.getBoundingClientRect(); if (r.left >= box.left - 1 && r.right <= box.right + 1) return; }   /* still whole in sight: it stays */
+    let i = ps.findIndex((p) => p && p.getBoundingClientRect().right > edge + p.getBoundingClientRect().width / 2);
+    if (host.scrollLeft + host.clientWidth >= host.scrollWidth - 1) i = ps.length - 1;   /* at the end: the last */
+    if (i >= 0 && i !== chosen()) { mark(i); if (onSelect) onSelect(i, tabs()[i]); }
+  }
   function select(i, { focus = false } = {}) {
-    const list = tabs(), prev = list.findIndex((t) => t.getAttribute('aria-selected') === 'true');
-    if (i === prev || !list[i]) return;
-    if (el.classList.contains('rk-pivot--nav')) {
+    const list = tabs(), prev = chosen();
+    if (!list[i]) return;
+    if (wide) {
+      const p = panel(list[i]), d = ms('--rk-duration-pivot-glide');
+      following = Date.now() + d + 50;                  /* the glide is not a scroll to follow */
+      mark(i);
+      if (p) animateScroll(host, startOf(p), d, bezier('--rk-ease-pivot-glide'));
+      if (focus) list[i].focus();
+      if (i !== prev && onSelect) onSelect(i, list[i]);
+      return;
+    }
+    if (i === prev) return;
+    if (nav) {
       turn.finish();
       const from = list.map(panel).find((p) => p && !p.hidden), to = panel(list[i]), back = i < prev, mine = ++gen;
       list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; const p = panel(t); if (p && p !== from) p.hidden = true; });
@@ -931,19 +1054,39 @@ export function pivot(el, { onSelect } = {}) {
   const key = (e) => {
     const list = tabs(), i = list.indexOf(e.target);
     if (i < 0) return;
+    if (wide && e.key === 'Tab' && !e.shiftKey) {        /* wide: from the strip into the facet chosen, not the first */
+      const p = panel(list[i]);
+      if (p) { e.preventDefault(); if (!p.hasAttribute('tabindex')) { p.tabIndex = -1; p._rkTab = true; } p.focus({ preventScroll: true }); }
+      return;
+    }
     const down = getComputedStyle(el).flexDirection === 'column';
     const to = { [down ? 'ArrowDown' : 'ArrowRight']: i + 1, [down ? 'ArrowUp' : 'ArrowLeft']: i - 1, Home: 0, End: list.length - 1 }[e.key];
     if (to === undefined) return;
     e.preventDefault();
     select((to + list.length) % list.length, { focus: true });
   };
-  const resize = () => { pivotScale(el); pivotFit(el); };
+  let watched = null;
+  const scrolled = () => follow();
+  const resize = () => {
+    layout();
+    if (watched !== host) { if (watched) watched.removeEventListener('scroll', scrolled); watched = host; if (host) host.addEventListener('scroll', scrolled, { passive: true }); }
+    pivotScale(el); pivotFit(el);
+  };
   const ro = new ResizeObserver(resize);
   el.addEventListener('click', click); el.addEventListener('keydown', key); el.addEventListener('wheel', stripWheel, { passive: false });
   ro.observe(el);
+  const first = tabs().map(panel).find(Boolean);
+  if (first && first.parentElement) ro.observe(first.parentElement);
   resize();
   if (document.fonts) document.fonts.ready.then(resize);
-  return { select, destroy() { el.removeEventListener('click', click); el.removeEventListener('keydown', key); el.removeEventListener('wheel', stripWheel); ro.disconnect(); } };
+  return {
+    select,
+    get wide() { return wide; },
+    destroy() {
+      el.removeEventListener('click', click); el.removeEventListener('keydown', key); el.removeEventListener('wheel', stripWheel); ro.disconnect();
+      if (watched) watched.removeEventListener('scroll', scrolled);
+    },
+  };
 }
 
 // Toaster ------------------------------------------------------------------------------------------------------------
@@ -959,7 +1102,7 @@ export function toaster(region) {
     if (!undoable) return;
     const sr = document.createElement('span');
     sr.className = 'rk-toast-sr';
-    sr.textContent = `, ${windowSec()} seconds to${again ? ' undo' : ''}`;
+    sr.textContent = tx('undoWindow', windowSec(), again);
     msg.appendChild(sr);
   }
   function show(text, { key = text, undo = null, from = null, action = 'undo', act = null } = {}) {
@@ -976,7 +1119,7 @@ export function toaster(region) {
     if (undo) {
       const btn = el.appendChild(document.createElement('button'));
       btn.type = 'button'; btn.className = 'rk-toast-act'; btn.setAttribute('aria-keyshortcuts', 'Control+Z Meta+Z');
-      btn.append(`${action} `);
+      btn.append(`${action === 'undo' || action === 'redo' ? tx(action) : action} `);
       count = btn.appendChild(document.createElement('span'));
       count.className = 'rk-toast-count'; count.setAttribute('aria-hidden', 'true');
       const line = el.appendChild(document.createElement('span'));
@@ -989,12 +1132,12 @@ export function toaster(region) {
       btn.addEventListener('click', () => { leave(false); act.run(); });
     }
     say(msg, text, !!undo);
-    const paint = () => { if (count) { count.textContent = left; el.style.setProperty('--_rk-left', left / WIN); } };
+    const paint = () => { if (count) { count.textContent = left; el.style.setProperty('--rk-toast-left', left / WIN); } };
     const tick = () => {
       timer = 0;
       if (!undo) { leave(false); return; }
       left -= 1;
-      if (left <= 0) { el.style.setProperty('--_rk-left', 0); leave(false); return; }
+      if (left <= 0) { el.style.setProperty('--rk-toast-left', 0); leave(false); return; }
       paint(); hold();
     };
     function hold() {
@@ -1064,7 +1207,7 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
   let settle = 0;
   const ro = new ResizeObserver(() => {
     clearTimeout(settle);
-    settle = setTimeout(() => docEl.style.setProperty('--rk-banner-h', `${Math.ceil(el.getBoundingClientRect().height)}px`), 60);
+    settle = setTimeout(() => docEl().style.setProperty('--rk-banner-h', `${Math.ceil(el.getBoundingClientRect().height)}px`), 60);
   });
   ro.observe(el, { box: 'border-box' });
   const now = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -1072,7 +1215,7 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
     const s = states[name], t = s.until || now();
     const head = document.createElement('span'); head.className = 'rk-banner-head';
     const word = head.appendChild(document.createElement('span')); word.className = 'rk-banner-word'; word.textContent = s.word || name;
-    const time = head.appendChild(document.createElement('time')); time.className = 'rk-banner-time'; time.dateTime = t; time.textContent = `${s.since || 'since'} ${t}`;
+    const time = head.appendChild(document.createElement('time')); time.className = 'rk-banner-time'; time.dateTime = t; time.textContent = `${s.since || strings.since} ${t}`;
     const msg = document.createElement('span'); msg.className = 'rk-banner-msg'; msg.textContent = s.text;
     alertRegion.replaceChildren(); statusRegion.replaceChildren();
     (s.alert ? alertRegion : statusRegion).replaceChildren(head, msg);
@@ -1111,9 +1254,9 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
       else if (top === 'warning') appbar.setAttribute('data-rk-state', 'paused');
       else appbar.removeAttribute('data-rk-state');
     }
-    if (liveWord) liveWord.textContent = name ? (states[name].word || name) : 'live';
+    if (liveWord) liveWord.textContent = name ? (states[name].word || name) : tx('live');
     if (name === shown) {
-      if (changed && toasts) toasts.show(`${on[changed] ? states[changed].on : states[changed].off.split('.')[0]}. The banner keeps showing “${states[name].word || name}” until that ends.`, { key: 'state' });
+      if (changed && toasts) toasts.show(tx('bannerStill', on[changed] ? states[changed].on : states[changed].off.split('.')[0], states[name].word || name), { key: 'state' });
       return;
     }
     const before = shown;
@@ -1214,12 +1357,13 @@ export async function pending(button, work, { label } = {}) {
 // there is no room below; it never leaves the viewport. data-rk-side says which side it took.
 export function place(el, anchor) {
   const a = anchor.getBoundingClientRect(), gap = 4, edge = num('--rk-space-s') || 8;
-  el.style.left = '0px'; el.style.top = '0px';
+  el.style.left = '0px'; el.style.top = '0px'; el.style.right = 'auto'; el.style.bottom = 'auto';   /* over a stylesheet's own placement */
   const w = el.offsetWidth, h = el.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
   const below = vh - a.bottom - gap - edge, above = a.top - gap - edge;
   const side = h <= below || below >= above ? 'below' : 'above';
   const top = side === 'below' ? a.bottom + gap : Math.max(edge, a.top - gap - h);
-  const left = Math.min(Math.max(edge, a.left), Math.max(edge, vw - w - edge));
+  // From the control's leading edge; one too near the trailing edge for that opens from its trailing edge instead.
+  const left = a.left + w <= vw - edge ? Math.max(edge, a.left) : Math.max(edge, Math.min(a.right, vw - edge) - w);
   el.style.left = `${Math.round(left)}px`; el.style.top = `${Math.round(top)}px`;
   el.dataset.rkSide = side;
 }
@@ -1247,7 +1391,7 @@ export function menu(trigger, el, { onSelect, summary = null } = {}) {
   function summarize() {
     if (!summary) return;
     const on = [...el.querySelectorAll('[aria-checked="true"]')].map((i) => i.textContent.trim());
-    trigger.textContent = `${summary}: ${on.length ? on.join(', ') : 'any'}`;
+    trigger.textContent = tx('chosen', summary, on.length ? on.join(', ') : tx('any'));
   }
   summarize();
   // With popovers the trigger is the menu's invoker: the browser toggles it on click and a click on the trigger
@@ -1338,7 +1482,7 @@ function selectionMode(appbar, owner, mode, n) {
   appbar.toggleAttribute('data-rk-selecting', modes.size > 0);
   if (was && !modes.size) { appbar.setAttribute('data-rk-unselecting', ''); setTimeout(() => appbar.removeAttribute('data-rk-unselecting'), ms('--rk-duration-short') + 20); }
   const c = appbar.querySelector('.rk-ab-count');
-  if (c && (mode || !modes.size)) c.textContent = `${n} selected`;
+  if (c && (mode || !modes.size)) c.textContent = tx('selected', n);
   return modes.size > 0;
 }
 export function select(el, { items = ':scope > li, :scope > tr', onShow = null, onChange = null, appbar = null } = {}) {
@@ -1554,7 +1698,7 @@ export function table(el, { onSort, select: selectable = null, onShow = null, on
       const h = document.createElement('span');
       h.className = 'rk-col-handle'; h.tabIndex = 0;
       h.setAttribute('role', 'separator'); h.setAttribute('aria-orientation', 'vertical');
-      h.setAttribute('aria-label', `width of ${th.textContent.trim()}`);
+      h.setAttribute('aria-label', tx('columnWidth', th.textContent.trim()));
       th.appendChild(h);
     });
     const was = store.get();
@@ -1605,7 +1749,7 @@ export function table(el, { onSort, select: selectable = null, onShow = null, on
       td.removeAttribute('aria-busy'); input.readOnly = false;
       td.dataset.status = 'error'; input.setAttribute('aria-invalid', 'true');
       const msg = document.createElement('span');
-      msg.className = 'rk-cell-error'; msg.id = uid('rk-cell-error'); msg.textContent = (err && err.message) || 'That value was not taken.';
+      msg.className = 'rk-cell-error'; msg.id = uid('rk-cell-error'); msg.textContent = (err && err.message) || tx('cellRefused');
       td.appendChild(msg); input.setAttribute('aria-describedby', msg.id);
       input.focus();
       return false;
@@ -1773,7 +1917,7 @@ export function palette(el, { items = () => [], trigger = null, router = null, s
     });
     if (!shown.length) {
       const li = document.createElement('li'); li.className = 'rk-empty rk-palette-empty'; li.setAttribute('role', 'presentation');
-      li.textContent = `Nothing to go to or run matches “${q}”.`; list.appendChild(li);
+      li.textContent = tx('paletteEmpty', q); list.appendChild(li);
     }
     mark(0);
   }
@@ -1866,11 +2010,15 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
     }));
   }
   const fits = () => el.scrollWidth <= el.clientWidth + 1;
+  const placesShown = () => { const p = el.querySelector(':scope > .rk-ab-places'); return !!p && getComputedStyle(p).display !== 'none'; };
   function layout() {
     if (el.hasAttribute('data-rk-selecting')) return;
     el.querySelectorAll(':scope > [data-rk-overflow]').forEach((c) => c.removeAttribute('data-rk-overflow'));
     more.hidden = true;
-    if (!fits()) {
+    if (placesShown()) {                                 /* the places hold the bar: every command is in "more" */
+      const all = candidates();
+      if (all.length) { more.hidden = false; all.forEach((c) => c.setAttribute('data-rk-overflow', '')); }
+    } else if (!fits()) {
       more.hidden = false;
       for (const c of candidates()) { if (fits()) break; c.setAttribute('data-rk-overflow', ''); }
     }
@@ -1888,7 +2036,7 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
 // Forms ------------------------------------------------------------------------------------------------------------
 const uid = (p) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 const controlsOf = (form) => [...form.querySelectorAll('input, select, textarea')].filter((c) => !/^(button|submit|reset|image|hidden)$/.test(c.type));
-const labelOf = (c) => { const l = c.id && document.querySelector(`label[for="${CSS.escape(c.id)}"]`); return ((l && l.textContent) || c.getAttribute('aria-label') || c.name || 'field').replace(/\s+/g, ' ').trim(); };
+const labelOf = (c) => { const l = c.id && document.querySelector(`label[for="${CSS.escape(c.id)}"]`); return ((l && l.textContent) || c.getAttribute('aria-label') || c.name || tx('field')).replace(/\s+/g, ' ').trim(); };
 
 // disable(control, reason): a control that cannot act now, and says why next to it (a .rk-hint linked by
 // aria-describedby). It stays focusable (aria-disabled), so the reason is read with it; clicks do nothing.
@@ -1917,7 +2065,7 @@ export function disable(control, reason) {
 // confirm({ title, text, kicker, ok, cancel, safe }): a short question in a sheet; resolves true when ok is chosen.
 // The safe answer is the primary button and takes focus: for an action that cannot be undone, safe: 'cancel'.
 // Escape and a tap on the shading answer cancel.
-export function confirm({ title, text = '', kicker = '', ok = 'ok', cancel = 'cancel', safe = 'ok', root = document.querySelector('.rk') || document.body } = {}) {
+export function confirm({ title, text = '', kicker = '', ok = tx('ok'), cancel = tx('cancel'), safe = 'ok', root = document.querySelector('.rk') || document.body } = {}) {
   const d = document.createElement('dialog');
   d.className = 'rk-sheet';
   const tid = uid('rk-confirm');
@@ -1982,7 +2130,7 @@ export function form(el, { validators = {}, onSubmit = null, submit = el.querySe
     const hid = uid('rk-errors');
     box.setAttribute('aria-labelledby', hid);
     const head = document.createElement('p'); head.id = hid;
-    head.textContent = message || (list.length === 1 ? '1 field needs attention' : `${list.length} fields need attention`);
+    head.textContent = message || tx('needAttention', list.length);
     const ul = document.createElement('ul');
     for (const { c, m } of list) {
       const a = document.createElement('a'); a.href = `#${c.id}`; a.textContent = `${labelOf(c)}: ${m}`;
@@ -2008,7 +2156,7 @@ export function form(el, { validators = {}, onSubmit = null, submit = el.querySe
     summarize([]);
     if (!onSubmit) return;
     try { await (submit ? pending(submit, () => onSubmit(values())) : onSubmit(values())); }
-    catch (err) { if (err && err.fields) setErrors(err.fields, err.message); else summarize([], (err && err.message) || 'Could not save. Try again.'); }
+    catch (err) { if (err && err.fields) setErrors(err.fields, err.message); else summarize([], (err && err.message) || tx('saveFailed')); }
   };
   el.addEventListener('input', input);
   el.addEventListener('focusout', blur);
@@ -2024,7 +2172,7 @@ export function form(el, { validators = {}, onSubmit = null, submit = el.querySe
 // guard(el, { router, what }): unsaved input is not lost by accident. While the form differs from how it was
 // loaded (or last saved: clean()), leaving its place asks "Leave without saving?" (keep editing is the safe answer)
 // and closing the window asks the browser's question. Discarding puts the form back as it was.
-export function guard(el, { router = null, what = 'This form' } = {}) {
+export function guard(el, { router = null, what = tx('guardWhat') } = {}) {
   const state = (c) => (c.type === 'checkbox' || c.type === 'radio' ? c.checked : c.value);
   let saved = new Map();
   const clean = () => { saved = new Map(controlsOf(el).map((c) => [c, state(c)])); };
@@ -2037,7 +2185,7 @@ export function guard(el, { router = null, what = 'This form' } = {}) {
   const off = router ? router.guard(() => {
     const n = changed().length;
     if (!n || (place && place.dataset.rkPlace !== router.current)) return true;
-    return confirm({ kicker: 'unsaved', title: 'Leave without saving?', text: `${what} has ${n === 1 ? '1 unsaved change' : `${n} unsaved changes`}.`, ok: 'discard changes', cancel: 'keep editing', safe: 'cancel' })
+    return confirm({ kicker: tx('guardKicker'), title: tx('guardTitle'), text: tx('guardText', what, n), ok: tx('guardDiscard'), cancel: tx('guardKeep'), safe: 'cancel' })
       .then((leave) => { if (leave) restore(); return leave; });
   }) : () => {};
   return { get dirty() { return changed().length > 0; }, changed, clean, restore, destroy() { removeEventListener('beforeunload', unload); off(); } };
@@ -2403,26 +2551,26 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
     if (!cancel && to !== from) { const rest = els.filter((x) => x !== item); if (to >= rest.length) rest[rest.length - 1].after(item); else rest[to].before(item); }
     const d = ms('--rk-duration-moderate');
     if (d) for (const x of els) { const dy = before.get(x) - x.getBoundingClientRect().top; if (dy) x.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') }); }
-    if (!cancel && to !== from) { if (onMove) onMove(from, to, item); say(`${name(item)}: position ${to + 1} of ${els.length}.`); }
+    if (!cancel && to !== from) { if (onMove) onMove(from, to, item); say(tx('position', name(item), to + 1, els.length)); }
   };
   const key = (e) => {
     const grip = e.target.closest(handle), item = grip && itemOf(grip);
     if (!item) return;
     const els = all(), i = els.indexOf(item);
     if (grabbed === item) {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(`position ${all().indexOf(item) + 1} of ${els.length}`); }
-      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); grabbed.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(`${name(item)} put down at position ${i + 1} of ${els.length}.`); }
-      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); moveTo(item, +item.dataset.rkFrom); item.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(`${name(item)} put back.`); }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(tx('position', '', all().indexOf(item) + 1, els.length)); }
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); grabbed.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(tx('putDown', name(item), i + 1, els.length)); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); moveTo(item, +item.dataset.rkFrom); item.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(tx('putBack', name(item))); }
       return;
     }
-    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(`${name(item)}: position ${all().indexOf(item) + 1} of ${els.length}.`); return; }
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(tx('position', name(item), all().indexOf(item) + 1, els.length)); return; }
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault(); grabbed = item; item.dataset.rkFrom = String(i); item.setAttribute('data-rk-grabbed', ''); grip.setAttribute('aria-pressed', 'true');
-      say(`${name(item)} picked up, position ${i + 1} of ${els.length}. ↑ ↓ to move, Space to put down, Escape to put back.`);
+      say(tx('pickedUp', name(item), i + 1, els.length));
     }
   };
   const blur = (e) => { if (grabbed && !moving && !grabbed.contains(e.relatedTarget)) { grabbed.removeAttribute('data-rk-grabbed'); const g = grabbed.querySelector(handle); if (g) g.setAttribute('aria-pressed', 'false'); grabbed = null; } };
-  function prepare() { for (const it of all()) { const g = it.querySelector(handle); if (g) { g.setAttribute('aria-pressed', 'false'); if (!g.getAttribute('aria-label')) g.setAttribute('aria-label', `move ${name(it)}`); } } }
+  function prepare() { for (const it of all()) { const g = it.querySelector(handle); if (g) { g.setAttribute('aria-pressed', 'false'); if (!g.getAttribute('aria-label')) g.setAttribute('aria-label', tx('move', name(it))); } } }
   prepare();
   list.addEventListener('pointerdown', down); list.addEventListener('pointermove', move);
   list.addEventListener('pointerup', end); list.addEventListener('pointercancel', end);
@@ -2567,10 +2715,10 @@ export function undoStack({ toaster: toasts = null, limit = 50 } = {}) {
   }
   async function undoIt() {
     const e = done.pop();
-    if (!e) { if (toasts) toasts.show('Nothing to undo.', { key: 'rk-history-none' }); return false; }
+    if (!e) { if (toasts) toasts.show(tx('nothingToUndo'), { key: 'rk-history-none' }); return false; }
     await e.undo();
     undone.push(e);
-    if (toasts) toasts.show(`Undone: ${lower(e.label)}`, { key: `rk-history-undone-${e.label}`, undo: () => redoIt(), action: 'redo' });
+    if (toasts) toasts.show(tx('undone', lower(e.label)), { key: `rk-history-undone-${e.label}`, undo: () => redoIt(), action: 'redo' });
     fire();
     return true;
   }
@@ -2613,14 +2761,15 @@ export function live(region, { stale = 0, age = region.querySelector('.rk-age'),
   const more = document.createElement('button');
   more.type = 'button'; more.className = 'rk-btn rk-btn--quiet rk-live-more'; more.hidden = true;
   (age || region).after(more);
-  const ago = (t) => { const s = Math.round(t / 1000); return s < 5 ? 'just now' : s < 60 ? `${s} s ago` : s < 3600 ? `${Math.floor(s / 60)} min ago` : `at ${new Date(Date.now() - t).toTimeString().slice(0, 5)}`; };
+  const ago = (d) => { const s = Math.round(d / 1000); return s < 5 ? tx('justNow') : s < 60 ? tx('secondsAgo', s) : s < 3600 ? tx('minutesAgo', Math.floor(s / 60)) : tx('at', clock(new Date(Date.now() - d))); };
+  const staleFor = (d) => { const s = Math.round(d / 1000); return tx('staleFor', s, Math.floor(s / 60), clock(new Date(Date.now() - d))); };
   const state = () => (offline ? 'offline' : Date.now() - last > limit() ? 'stale' : 'fresh');
   function paint() {
-    const s = state(), t = Date.now() - last;
+    const s = state(), since = Date.now() - last;
     if (region.dataset.rkLive !== s) region.dataset.rkLive = s;
-    if (age) age.textContent = s === 'offline' ? `offline · last update ${ago(t)}` : s === 'stale' ? `stale · no update for ${ago(t).replace(' ago', '')}` : held ? `held while you look · updated ${ago(t)}` : `updated ${ago(t)}`;
+    if (age) age.textContent = s === 'offline' ? tx('offlineSince', ago(since)) : s === 'stale' ? staleFor(since) : held ? tx('heldUpdated', ago(since)) : tx('updated', ago(since));
     more.hidden = !waiting.length;
-    more.textContent = waiting.length === 1 ? '1 update waiting · show' : `${waiting.length} updates waiting · show`;
+    more.textContent = tx('updatesWaiting', waiting.length);
   }
   function flush() { const list = waiting; waiting = []; list.forEach((w) => w.apply()); paint(); }
   function update(apply, key = null) {
@@ -2661,6 +2810,8 @@ export function live(region, { stale = 0, age = region.querySelector('.rk-age'),
 // value at that point in a tooltip (and to screen readers); a table of the same numbers follows it. Lines draw in and
 // bars grow from the baseline once, when first drawn.
 const SVGNS = 'http://www.w3.org/2000/svg';
+// A series in a product's domain colour code (series.code: 1 to 8, --rk-series-N; docs/data.md).
+const code = (s) => (s.code ? { 'data-rk-code': String(Math.max(1, Math.min(8, Math.round(+s.code) || 1))) } : {});
 const svgEl = (tag, attrs = {}, parent = null) => { const e = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
 function niceTicks(lo, hi, count = 4) {
   if (hi === lo) hi = lo + 1;
@@ -2669,7 +2820,7 @@ function niceTicks(lo, hi, count = 4) {
   for (let v = a; v <= b + step / 2; v += step) out.push(+v.toFixed(10));
   return out;
 }
-const compact = (v) => (Math.abs(v) >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : Math.abs(v) >= 1e3 ? `${+(v / 1e3).toFixed(1)}K` : `${+v.toFixed(2)}`);
+const compact = (v) => number(v);
 export function chart(el, opts = {}) {
   let o = { type: 'line', labels: [], series: [], unit: '', min: undefined, max: undefined, height: 220, summary: '', table: true, ...opts };
   el.classList.add('rk-chart');
@@ -2694,7 +2845,7 @@ export function chart(el, opts = {}) {
     const band = pw / Math.max(1, n), x = (i) => (bars ? left + band * (i + 0.5) : left + (n > 1 ? (pw * i) / (n - 1) : pw / 2));
     svg.replaceChildren();
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
-    svg.setAttribute('aria-label', o.summary || `${o.type === 'bars' ? 'Bar' : 'Line'} chart of ${o.series.map((s) => s.label).join(' and ')}, ${o.labels[0]} to ${o.labels[n - 1]}. Use the arrow keys to read each value; a table follows.`);
+    svg.setAttribute('aria-label', o.summary || tx('chartName', o.type, o.series.map((s) => s.label), o.labels[0], o.labels[n - 1]));
     const grid = svgEl('g', { class: 'rk-chart-grid' }, svg);
     for (const t of ticks) {
       svgEl('line', { x1: left, x2: W - right, y1: y(t), y2: y(t) }, grid);
@@ -2712,7 +2863,7 @@ export function chart(el, opts = {}) {
       o.series.forEach((s, si) => s.values.forEach((v, i) => {
         if (!Number.isFinite(v)) return;
         const bx = x(i) - (k * w + (k - 1) * 2) / 2 + si * (w + 2), by = Math.min(y(v), y0), bh = Math.max(1, Math.abs(y0 - y(v)));
-        const r = svgEl('rect', { x: bx, y: by, width: w, height: bh, class: `rk-bar rk-s${si}`, 'data-i': i }, marks);
+        const r = svgEl('rect', { x: bx, y: by, width: w, height: bh, class: `rk-bar rk-s${si}`, 'data-i': i, ...code(s) }, marks);
         if (motion) { r.setAttribute('data-rk-grow', ''); r.style.cssText = `animation-delay:${Math.min(i, 10) * ms('--rk-duration-stagger')}ms`; }
         if (si === 0 && v > peak.v) peak = { v, x: bx + w / 2, y: by, i };
       }));
@@ -2722,7 +2873,7 @@ export function chart(el, opts = {}) {
       o.series.forEach((s, si) => {
         const pts = s.values.map((v, i) => (Number.isFinite(v) ? [x(i), y(v)] : null));
         const d = pts.reduce((acc, p, i) => (p ? `${acc}${acc && pts[i - 1] ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}` : acc), '');
-        svgEl('path', { d, class: `rk-line rk-s${si}`, pathLength: '1', ...(motion ? { 'data-rk-draw': '' } : {}) }, marks);
+        svgEl('path', { d, class: `rk-line rk-s${si}`, pathLength: '1', ...code(s), ...(motion ? { 'data-rk-draw': '' } : {}) }, marks);
         const lastI = s.values.length - 1;
         if (Number.isFinite(s.values[lastI])) endYs.push({ si, y: y(s.values[lastI]), label: s.label });
       });
@@ -2733,10 +2884,11 @@ export function chart(el, opts = {}) {
     geo = { x, y, n, band, left, right, W, top, ph, bars, hot };
     svgEl('rect', { x: left, y: top, width: pw, height: ph, class: 'rk-chart-hit' }, svg);
     legend.hidden = o.series.length < 2;
-    legend.replaceChildren(...o.series.map((s, si) => { const li = document.createElement('li'); li.innerHTML = `<i class="rk-key-${bars ? 'box' : 'line'} rk-s${si}"></i>`; li.append(s.label); return li; }));
+    legend.replaceChildren(...o.series.map((s, si) => { const li = document.createElement('li'); li.innerHTML = `<i class="rk-key-${bars ? 'box' : 'line'} rk-s${si}"${s.code ? ` data-rk-code="${+s.code}"` : ''}></i>`; li.append(s.label); return li; }));
     if (o.table) {
       details.hidden = false;
-      details.innerHTML = '<summary>show the numbers</summary><table class="rk-table"><thead><tr><th scope="col"></th></tr></thead><tbody></tbody></table>';
+      details.innerHTML = '<summary></summary><table class="rk-table"><thead><tr><th scope="col"></th></tr></thead><tbody></tbody></table>';
+      details.querySelector('summary').textContent = tx('chartNumbers');
       const hr = details.querySelector('thead tr'), body = details.querySelector('tbody');
       o.series.forEach((s) => { const th = document.createElement('th'); th.scope = 'col'; th.className = 'rk-num'; th.textContent = s.label; hr.appendChild(th); });
       o.labels.forEach((l, i) => { const tr = document.createElement('tr'); const th = document.createElement('th'); th.scope = 'row'; th.textContent = l; tr.appendChild(th); o.series.forEach((s) => { const td = document.createElement('td'); td.className = 'rk-num'; td.textContent = Number.isFinite(s.values[i]) ? fmt(s.values[i]) : '–'; tr.appendChild(td); }); body.appendChild(tr); });
@@ -2756,9 +2908,9 @@ export function chart(el, opts = {}) {
     if (bars) { svg.querySelectorAll(`.rk-bar[data-i="${i}"]`).forEach((b) => b.setAttribute('data-rk-hot', '')); anchor = svg.querySelector(`.rk-bar[data-i="${i}"]`); }
     else {
       anchor = svgEl('line', { x1: x(i), x2: x(i), y1: top, y2: top + ph, class: 'rk-chart-cross' }, hot);
-      o.series.forEach((s, si) => { if (Number.isFinite(s.values[i])) svgEl('circle', { cx: x(i), cy: y(s.values[i]), r: 4, class: `rk-chart-dot rk-s${si}` }, hot); });
+      o.series.forEach((s, si) => { if (Number.isFinite(s.values[i])) svgEl('circle', { cx: x(i), cy: y(s.values[i]), r: 4, class: `rk-chart-dot rk-s${si}`, ...code(s) }, hot); });
     }
-    const text = `${o.labels[i]} · ${o.series.map((s) => `${o.series.length > 1 ? `${s.label} ` : ''}${Number.isFinite(s.values[i]) ? fmt(s.values[i]) : 'no value'}`).join(' · ')}`;
+    const text = `${o.labels[i]} · ${o.series.map((s) => `${o.series.length > 1 ? `${s.label} ` : ''}${Number.isFinite(s.values[i]) ? fmt(s.values[i]) : tx('noValue')}`).join(' · ')}`;
     if (anchor) showTip(anchor, text);
     if (speak) say.textContent = text;
   }
@@ -2833,7 +2985,7 @@ export function titlebar(el, { router = null } = {}) {
     const p = document.querySelector(`[data-rk-place="${CSS.escape(router.current || '')}"]`), h = p && p.querySelector('.rk-title');
     place.textContent = p && p.dataset.rkParent && h ? h.textContent.trim() : '';
   };
-  const geometry = () => docEl.toggleAttribute('data-rk-wco', !!(wco && wco.visible));
+  const geometry = () => docEl().toggleAttribute('data-rk-wco', !!(wco && wco.visible));
   document.addEventListener('rk:placechange', paint);
   if (wco) wco.addEventListener('geometrychange', geometry);
   paint(); geometry();
@@ -2850,10 +3002,10 @@ export function pwa({ sw = 'sw.js', toaster: toasts = null, onChange = null } = 
   let prompt = null, waiting = null, reg = null, reloading = false;
   const fire = () => { const s = { ...state }; if (onChange) onChange(s); document.dispatchEvent(new CustomEvent('rk:pwa', { detail: s })); };
   const before = (e) => { e.preventDefault(); prompt = e; state.canInstall = true; fire(); };
-  const installed = () => { prompt = null; state.canInstall = false; state.installed = true; fire(); if (toasts) toasts.show('Installed. It opens in a window of its own.', { key: 'rk-pwa' }); };
+  const installed = () => { prompt = null; state.canInstall = false; state.installed = true; fire(); if (toasts) toasts.show(tx('installed'), { key: 'rk-pwa' }); };
   function wait(w) {
     waiting = w; state.updateReady = true; fire();
-    if (toasts) toasts.show('A new version is ready.', { key: 'rk-pwa-update', act: { label: 'reload', run: () => update() } });
+    if (toasts) toasts.show(tx('newVersion'), { key: 'rk-pwa-update', act: { label: tx('reload'), run: () => update() } });
   }
   async function register() {
     if (!state.supported || !sw || !document.querySelector('link[rel="manifest"]')) return;
@@ -3004,10 +3156,12 @@ export function sparkTo(line, points) {
   sparkRuns.set(line, requestAnimationFrame(step));
 }
 // crossfade(change): a change of the whole look (theme, accent) fades over duration-short instead of flipping, where
-// the browser has view transitions.
+// the browser has view transitions. Rekta's timing applies to its own transitions only (data-rk-crossfade on the
+// root while one runs): an app's own root view transitions keep theirs.
 export function crossfade(change) {
   if (!ms('--rk-duration-short') || !document.startViewTransition) { change(); return Promise.resolve(); }
-  return document.startViewTransition(change).finished.catch(() => {});
+  docEl().setAttribute('data-rk-crossfade', '');
+  return document.startViewTransition(change).finished.catch(() => {}).finally(() => docEl().removeAttribute('data-rk-crossfade'));
 }
 
 // Inputs -----------------------------------------------------------------------------------------------------------
@@ -3062,7 +3216,7 @@ export function combobox(input, { options = [], source = null, onSelect = null, 
     });
     if (!shown.length) {
       const li = document.createElement('li'); li.className = 'rk-empty rk-palette-empty'; li.setAttribute('role', 'presentation');
-      li.textContent = opts ? (q ? `Nothing matches “${q}”.` : 'Nothing to choose yet.') : 'Could not load the choices. Type to try again.';
+      li.textContent = opts ? (q ? tx('noMatch', q) : tx('nothingYet')) : tx('loadFailed');
       list.appendChild(li);
     }
     const at = chosen ? shown.findIndex(({ o }) => o.value === chosen.value) : -1;
@@ -3235,7 +3389,9 @@ export function drop(el, { onFiles = null, accept = null } = {}) {
 // Start --------------------------------------------------------------------------------------------------------------
 // The defaults for a page: restore the user's prefs, press on tiles, sheets, steppers, sliders, switches, and the
 // first paint's build-in. An embedded page whose host owns theme, density and motion passes restore: false.
-export function start({ root = document, restore = true } = {}) {
+export function start({ root = document, restore = true, locale: tag = '', strings: words = null } = {}) {
+  if (tag) setLocale(tag);
+  if (words) setStrings(words);
   if (restore) prefs.restore();
   const parts = [press(root)];
   root.querySelectorAll('dialog.rk-sheet').forEach((d) => parts.push(sheet(d)));
@@ -3247,6 +3403,6 @@ export function start({ root = document, restore = true } = {}) {
   document.addEventListener('input', onRange);
   document.addEventListener('change', onSegment);
   parts.push({ destroy() { document.removeEventListener('input', onRange); document.removeEventListener('change', onSegment); } });
-  arrive(docEl);
+  arrive(docEl());
   return { destroy() { parts.forEach((p) => p.destroy()); } };
 }

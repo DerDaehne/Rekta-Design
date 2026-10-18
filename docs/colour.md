@@ -53,16 +53,23 @@ soft-tint pair, and fails the build if a future token edit breaks one.
 
 Secondary text (`color.*.text.contrast-high`) is used on neutral
 surfaces, never on a status tile — its contrast was only checked against
-`bg`/`surface`, not against the dampened status hues.
+`bg`/`surface`, not against the dampened status hues (on the light error
+tile it falls to 1.9:1). `rekta.css` enforces this: inside a status tile
+or banner, `--rk-text-contrast-high` takes the primary text colour, so a
+meta, a facts line, an age or a stale value placed there the documented
+way stays at AA. A product that draws its own secondary text on a fill
+has to do the same: `--check` measures token pairs, not the selectors
+that combine them.
 
 ## Dark theme is not an inverted light theme
 
 `color.dark.*` is an independently chosen token set, not a formula
-applied to `color.light.*`. Notably, warning's dampened mix is lighter
-relative to its surroundings in the dark theme than in the light theme —
-dark-theme warning is the one status whose AA margin is tighter (5.3:1
-vs. 14.8:1 in light), which is why the self-check measures every pair
-rather than assuming symmetry.
+applied to `color.light.*`, and the margins are not symmetric. Primary
+text on the tile fills measures, at the time of writing: dark success
+4.99:1, the tightest pair; light error 5.25:1, the next; dark warning
+6.62:1 against light warning 14.83:1. That is why the self-check measures
+every pair rather than assuming symmetry, and why the numbers here are an
+illustration: `node scripts/build.mjs --check` is the authority.
 
 ## Focus, hover, disabled
 
@@ -93,6 +100,20 @@ A product may add words for its own states (offline, halted, read-only
 in a banner) but maps each onto one of these colours and never reuses a
 word for two states. A status is never decoration: no status colour for
 emphasis, selection, branding or a chart series.
+
+## Product slots
+
+A product has two colour slots of its own, both set per theme:
+
+- **The accent** (`--rk-accent`, `--rk-on-accent`): its one hue, for the
+  primary button, checked controls and a selected item.
+- **A domain colour code** (`--rk-series-1` to `-8`): colours its users
+  already read as information, such as heart-rate zones, for small data
+  marks only ([data.md](data.md#a-domains-colour-code)). Never text,
+  never a tile; 3:1 on the ground; apart under colour blindness.
+  `build.mjs --check-product` checks a product's values.
+
+Everything else is the design's ([platforms.md](platforms.md#product-overrides)).
 
 ## Selection and floating surfaces
 

@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="site.css">
 <!-- Prefs go on the root before first paint, so a remembered theme never flashes. -->
 <script src="rekta.global.js"></script>
+<script src="rekta.strings.de.global.js"></script>
 <script src="site-head.js"></script>
 </head>
 <body>
@@ -45,7 +46,7 @@
     <div class="rk-panorama" id="pan" tabindex="0" role="region" aria-label="Rekta Design, sections side by side">
 
       <section class="rk-sec sec-wide" id="overview" aria-labelledby="overview-title">
-        <p class="rk-kicker">Rekta Design · a design language · 0.2 · desktop and web</p>
+        <p class="rk-kicker">Rekta Design · a design language · 0.3 · desktop and web</p>
         <h1 class="rk-title" id="overview-title">Straight lines, live tiles, sideways motion.</h1>
         <p class="rk-facts">no cards · two independent themes · four status fills · every value a token · no framework</p>
         <p>Rekta Design is a platform-neutral design language; the name comes from Latin <i>recta</i>, the straight line. This site is built in it, and every part of it is a live example: you are inside a <b>panorama</b>, the <b>pivot</b> above names its sections in a fixed order, and the <b>app bar</b> below holds the global controls.</p>
@@ -130,6 +131,9 @@
           <p class="rk-facts">3 of 5 steps · failed at the schema check · 4 comments</p>
         </div>
         <p>Level 1, a quiet kicker. Level 2, the one semibold title per screen. Level 3, a fact line. Navigation titles, like the pivot above, are large and <span class="light">light</span>: they name a place, not a thing. UI words are lowercase; content keeps its own case. Sizes are in rem, so they follow your text size; large ones grow with the place, not the screen.</p>
+        <p class="rk-kicker group-label">statements on the ground</p>
+        <div class="rk-statement"><p class="rk-kicker">nightly import</p><p>It has run every night this month without a retry.</p><p class="rk-facts">30 of 30 runs · median 4 min 12 s</p></div>
+        <div class="rk-statement"><p class="rk-kicker">review</p><p>Two changes wait for a second reader; the oldest since Tuesday.</p><p class="rk-facts">2 open · oldest 3 days</p></div>
         <p class="rk-kicker group-label">scale</p>
         <!--@typescale-->
         <p class="note">Body text is Barlow at {{font-size-s|px}}, self-hosted under the SIL Open Font License; numbers that read as data use weight 500 and tabular figures.</p>
@@ -398,6 +402,16 @@
           <li><b>a full app bar</b><span>Make the window narrow: what does not fit moves into “more”.</span></li>
         </ul>
         <p class="rk-actions"><button class="rk-btn" type="button" id="n-goto">go to</button><button class="rk-btn" type="button" id="n-keys">keyboard shortcuts</button><button class="rk-btn" type="button" id="n-sort">sort tokens by</button></p>
+        <p class="rk-kicker group-label">a phone app: its places in the bar</p>
+        <figure class="phone" inert aria-label="Example: on a phone, an app's four places sit in the app bar, in the thumb's reach">
+          <div class="phone-screen"><p class="rk-kicker">this week</p><p class="rk-title">3 rides, 4 h 12 min</p><p class="rk-facts">212 km · 2 940 m up · zone 2 most of it</p></div>
+          <div class="rk-appbar phone-bar">
+            <span class="rk-ab-status"><i class="rk-pulse" aria-hidden="true"></i><span class="rk-ab-k">live</span></span>
+            <nav class="rk-ab-places" aria-label="places"><a class="rk-ab" href="#" aria-current="page"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-home"/></svg><span>today</span></a><a class="rk-ab" href="#"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-clock"/></svg><span>history</span></a><a class="rk-ab" href="#"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-calendar"/></svg><span>plan</span></a><a class="rk-ab" href="#"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-user"/></svg><span>profile</span></a></nav>
+            <button class="rk-ab rk-ab-more" type="button"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-more"/></svg><span>more</span></button>
+          </div>
+        </figure>
+        <p class="note">In the compact window class an app with up to five places may put them in the app bar, in the thumb's reach (<code>.rk-ab-places</code>); its commands move into “more”, back stays first, and a selection takes the bar over. Sideways the pivot holds them, as on this page.</p>
         <div id="n-sort-menu">
           <p class="rk-menu-label">sort tokens by</p>
           <button class="rk-menu-item" role="menuitemradio" aria-checked="true" type="button" data-sort="1">name</button>
@@ -500,6 +514,12 @@
           </div>
         </div>
         <div class="chart" id="chart-bars"></div>
+        <p class="rk-kicker group-label">a domain's own colours: heart-rate zones</p>
+        <div class="zones" role="img" aria-label="Time in heart-rate zones, a 75 minute ride: zone 1 12 min, zone 2 31 min, zone 3 18 min, zone 4 10 min, zone 5 4 min">
+          <span style="flex-grow:12;background:var(--rk-series-1)"></span><span style="flex-grow:31;background:var(--rk-series-2)"></span><span style="flex-grow:18;background:var(--rk-series-3)"></span><span style="flex-grow:10;background:var(--rk-series-4)"></span><span style="flex-grow:4;background:var(--rk-series-5)"></span>
+        </div>
+        <p class="rk-actions tag-row" aria-hidden="true"><span class="rk-tag" data-rk-code="1">z1 · 12 min</span><span class="rk-tag" data-rk-code="2">z2 · 31 min</span><span class="rk-tag" data-rk-code="3">z3 · 18 min</span><span class="rk-tag" data-rk-code="4">z4 · 10 min</span><span class="rk-tag" data-rk-code="5">z5 · 4 min</span></p>
+        <p class="note">Data is ink and grey. The one exception is a colour code the users already know, here five heart-rate zones from cool to warm: a product sets <code>--rk-series-1</code> to <code>-5</code> per theme, for small marks only, never text or a tile, and <code>build.mjs --check-product</code> holds the values to 3:1 and to colour-blind separation, as this page's are.</p>
         <p class="rk-kicker group-label">meters</p>
         <div class="meters">
           <div><div class="rk-meter-head"><span>processor</span><b id="m-cpu-v">42%</b></div><div class="rk-meter" id="m-cpu" role="meter" aria-label="processor" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" style="--rk-v:.42"></div></div>

@@ -432,7 +432,7 @@
           },
           "viewport": 0.042
         },
-        "$description": "Level 1: the place you are at, in the top-level nav."
+        "$description": "Navigation title: the place you are at, in the top-level nav. Large and light (typography.md)."
       },
       "nav-inactive": {
         "$type": "fluidDimension",
@@ -462,7 +462,7 @@
           },
           "viewport": 0.026
         },
-        "$description": "Level 2: the active facet within a place."
+        "$description": "Navigation title: the active facet within a place. Large and light (typography.md)."
       },
       "pivot-inactive": {
         "$type": "fluidDimension",
@@ -507,7 +507,7 @@
           },
           "viewport": 0.028
         },
-        "$description": "Level 3: a record's own bold title (e.g. a ticket)."
+        "$description": "The one bold main title of a screen, such as a record's own (level 2 of the title hierarchy in typography.md)."
       }
     },
     "line-height": {
@@ -654,6 +654,14 @@
         "unit": "px"
       },
       "$description": "The narrowest a pane of a split view may be dragged; below twice this plus the handle the split shows one pane at a time."
+    },
+    "pivot-wide": {
+      "$type": "dimension",
+      "$value": {
+        "value": 1300,
+        "unit": "px"
+      },
+      "$description": "From this width of the facets' container up, a pivot shows its facets side by side as panorama sections, its strip a jump list. A product decision, not a structural breakpoint: override it; 0 never."
     }
   },
   "density": {
@@ -712,7 +720,7 @@
     }
   },
   "motion": {
-    "$description": "Every transition has one meaning (see the motion table in README.md). Under reduced motion every motion.duration becomes 0: transitions go instant, never skipped. timing.* is wall time and stays.",
+    "$description": "Every transition has one meaning (see the motion table in docs/motion.md). Under reduced motion every motion.duration becomes 0: transitions go instant, never skipped. timing.* is wall time and stays.",
     "duration": {
       "press": {
         "$type": "duration",

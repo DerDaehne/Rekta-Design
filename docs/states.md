@@ -63,7 +63,8 @@ From bottom to top:
 | `layer.appbar` | The app bar |
 | `layer.banner` | The status banner |
 | `layer.toast` | The toast region |
-| Top layer | Sheets (modal dialogs), floating surfaces (popovers), in the order they opened |
+| `layer.float` | Floating surfaces (menus, lists) where the browser has no popover top layer |
+| Top layer | Sheets (modal dialogs), floating surfaces (popovers, where the browser has them), in the order they opened |
 
 - One modal at a time. A floating surface may open from inside a sheet;
   it sits above it.
@@ -71,3 +72,11 @@ From bottom to top:
   [navigation.md](navigation.md#who-gets-a-key)).
 - A sheet holds focus. Report the result of an action taken in a sheet
   after the sheet has closed, not as a toast beneath its shading.
+- **Toasts stay below sheets**, always: the toast region is never made a
+  popover to reach the top layer. A sheet, or the palette, that has to
+  say something while it is open says it inside itself, where the user
+  is looking: a message in place under the field or list it is about
+  (`.rk-hint`, or `.rk-empty` for a list with nothing to show; motion.md,
+  "A message in place"). A toast is for what happened, once nothing
+  covers the page; a hint inside the sheet is for what is happening in
+  it.
