@@ -53,10 +53,15 @@ holds less of a small screen. The sections below it start with their
 own heading; a kicker repeating the strip's title would say it twice. Above a width threshold
 (`size.pivot-wide`, 1300px — a product picks its own, it is not one of
 the four structural breakpoints), a pivot renders all its facets side by
-side as panorama sections instead of one at a time; its strip stays
-above them as a jump list that follows the scroll. `pivot()` does this on
-the web (see [behaviour.md](behaviour.md)); a pivot that picks the place
-never does.
+side as panorama sections instead of one at a time. Its strip stays
+visible above them, always: it is the jump list and the marker of where
+you are, and it follows the scroll. Keys: on the strip, ← → Home End pick
+a title and glide its facet to the leading edge, focus staying on the
+title; Tab goes into the facet chosen (not the first one in the page),
+and Tab on from there moves through that facet and then the next. A
+facet scrolled into view by wheel or touch becomes the chosen title.
+`pivot()` does this on the web (see [behaviour.md](behaviour.md)); a
+pivot that picks the place never does.
 
 ### Along the top or down the side
 

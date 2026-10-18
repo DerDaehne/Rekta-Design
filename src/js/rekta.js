@@ -982,6 +982,11 @@ export function pivot(el, { onSelect } = {}) {
   const key = (e) => {
     const list = tabs(), i = list.indexOf(e.target);
     if (i < 0) return;
+    if (wide && e.key === 'Tab' && !e.shiftKey) {        /* wide: from the strip into the facet chosen, not the first */
+      const p = panel(list[i]);
+      if (p) { e.preventDefault(); if (!p.hasAttribute('tabindex')) { p.tabIndex = -1; p._rkTab = true; } p.focus({ preventScroll: true }); }
+      return;
+    }
     const down = getComputedStyle(el).flexDirection === 'column';
     const to = { [down ? 'ArrowDown' : 'ArrowRight']: i + 1, [down ? 'ArrowUp' : 'ArrowLeft']: i - 1, Home: 0, End: list.length - 1 }[e.key];
     if (to === undefined) return;

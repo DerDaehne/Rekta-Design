@@ -32,6 +32,27 @@ word may be semibold while the rest of the title stays light (e.g. one
 bold word, one light word) — the one deliberate exception to "navigation
 titles are light."
 
+## Statement block
+
+Explanatory text in a section, without a tile, is a statement block on
+the ground (`.rk-statement`): a kicker naming it, one or two plain
+sentences in body size, and a fact line with the small technical value,
+above a hairline. Several statements stack, each with its own hairline,
+like rows. It is the same three levels as a screen's title, one size
+down: the sentence takes the title's place and is never bold.
+
+```html
+<div class="rk-statement">
+  <p class="rk-kicker">nightly import</p>
+  <p>It has run every night this month without a retry.</p>
+  <p class="rk-facts">30 of 30 runs · median 4 min 12 s</p>
+</div>
+```
+
+Choose a tile when the statement is one of several things side by side
+on a grid, or when it opens something; choose a statement block when it
+is read in sequence, or runs longer than a tile holds.
+
 ## Scale
 
 All sizes are tokens (`typography.size.*`); do not hand-roll pixel

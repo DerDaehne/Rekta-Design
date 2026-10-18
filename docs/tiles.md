@@ -54,6 +54,18 @@ rather than ad-hoc layout per tile type:
 - **Status word** — the status is also spelled out as a small word
   (not just implied by colour), typically top-right, so the tile's
   meaning does not depend on colour perception alone.
+- **Message** — one plain sentence (`.rk-tile-msg`, size `s`) for a tile
+  whose content is a statement rather than a number: "The import has run
+  every night this month." A kicker (`.rk-kicker`) may name it above,
+  and a fact line (`.rk-facts`) may carry one small technical value
+  below ("30 of 30 runs"). About 60 characters fit a 1 × 1 tile and 140
+  a 2 × 1; past four lines (six on a wide tile) the sentence ends in an
+  ellipsis, and the whole of it is still read by screen readers. A
+  longer text is not a tile: open a place where it can be read whole, or
+  put it on the ground as a statement block
+  ([typography.md](typography.md#statement-block)). A message tile is
+  neutral (`surface`) unless what it says is a status, then it takes that
+  fill and status word like any other tile.
 
 A tile combines at most two or three of these — a tile that tries to
 show a stat pair, a sparkline, a progress meter and a long status

@@ -75,7 +75,7 @@ them:
 |---|---|---|
 | `data-rk-pressed` | a tile, a `[data-rk-press]` item | Being pressed, or held for the rest of `duration-press` after a quick tap. |
 | `data-rk-turn` | units of a place, or the place | `out`, `back-out`, `pressed` while leaving; `in`, `back-in` while arriving. |
-| `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it. Removed once the build-in is over, so a re-render never replays it. |
+| `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it; `turned` after a place turn, where only sparklines draw. Removed once the build-in is over (`duration-moderate` + 10 × `duration-stagger` + `duration-long` + 50ms), so a re-render never replays it. A page without the script may set and remove it itself, with the same value and window. |
 | `data-rk-phase` | a toast, the banner | `leaving` while it goes; `clear` on the banner when no state stands. |
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
 | `data-rk-measured` | a pivot | `rekta.js` has measured its titles: inactive ones shrink by a scale that animates, instead of the stylesheet's measure-free font-size. |
@@ -292,9 +292,11 @@ add nothing to history.
 Wide: when the panels share a parent at least `--rk-pivot-wide` wide
 (`size.pivot-wide`, 1300px; 0 never), every facet shows, side by side as
 panorama sections sized in tile units, and both the pivot and that parent
-get `data-rk-wide`. The strip stays as a jump list: a title glides its
-facet to the leading edge over `duration-pivot-glide`, and the title
-follows the facet at the leading edge as the user scrolls. Narrower, it
+get `data-rk-wide`. The strip stays visible as a jump list: a title (a
+click, or ← → Home End with focus staying on the strip) glides its facet
+to the leading edge over `duration-pivot-glide`, Tab moves focus into the
+facet chosen, and the title follows the facet at the leading edge as the
+user scrolls. Narrower, it
 is one facet at a time again, the one last chosen. A pivot that picks the
 place (`.rk-pivot--nav`) never goes wide. The threshold is the product's
 to pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.

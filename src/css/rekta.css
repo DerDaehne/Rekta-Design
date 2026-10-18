@@ -93,7 +93,11 @@ a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit
 .rk-tile:focus-visible { outline: 2px solid currentColor; outline-offset: -5px; }
 .rk-tile-word { position: absolute; top: 10px; right: 12px; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); }
 .rk-stat b { display: block; font-size: var(--rk-font-size-xxl); font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; line-height: 1; }
-.rk-tile-msg { font-size: var(--rk-font-size-s); line-height: var(--rk-line-height-compact); }
+.rk-tile-msg {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden;
+  font-size: var(--rk-font-size-s); line-height: var(--rk-line-height-compact);
+}
+.rk-w2 > .rk-tile-msg { -webkit-line-clamp: 6; line-clamp: 6; }   /* past it, an ellipsis; the whole sentence is still read */
 .rk-w2 { grid-column: span 2; }
 .rk-h2 { grid-row: span 2; }
 @keyframes rk-build-in { from { opacity: 0; transform: translateY(6px); } }
@@ -129,6 +133,8 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-spark polyline { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-dasharray: 1; }
 [data-rk-arriving] .rk-spark:not(.rk-spark--static) polyline { animation: rk-draw var(--rk-duration-long) var(--rk-ease-in) both; }
 .rk-tile[data-status='success'] .rk-spark { display: none; }
+/* In a row: the row's secondary colour (its status mark, when it has one), a tile unit wide (a 200 × 28 box: about the text's height). */
+.rk-rows > li > .rk-spark { flex: none; width: var(--rk-tile-unit); align-self: center; color: var(--_rk-mark, var(--rk-text-contrast-high)); }
 @keyframes rk-draw { from { stroke-dashoffset: 1; } }
 
 /* Pivot ---------------------------------------------------------------------------------------------------------- */
@@ -789,6 +795,11 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-sec + .rk-sec { border-top: 1px solid var(--rk-text-contrast-low); }
 .rk-sec > * + * { margin-top: var(--rk-space-m); }
 .rk-sec > .rk-kicker + * { margin-top: var(--rk-space-xs); }
+/* A statement on the ground: kicker, a plain sentence, a fact line, over a hairline (typography.md). */
+.rk-statement { padding-block: var(--rk-space-m); border-bottom: 1px solid var(--rk-text-contrast-low); }
+.rk-statement > * { margin: 0; }
+.rk-statement > .rk-kicker + * { margin-top: var(--rk-space-xs); }
+.rk-statement > .rk-facts { margin-top: var(--rk-space-xs); }
 /* Compact: a section strip that is a direct child of the place sticks under the banner. It never shrinks. A top-level
    strip (rk-pivot--nav) takes the facet level here: sticking, it holds less of a small screen. */
 .rk-place > .rk-pivot {

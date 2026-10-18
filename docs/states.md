@@ -72,3 +72,11 @@ From bottom to top:
   [navigation.md](navigation.md#who-gets-a-key)).
 - A sheet holds focus. Report the result of an action taken in a sheet
   after the sheet has closed, not as a toast beneath its shading.
+- **Toasts stay below sheets**, always: the toast region is never made a
+  popover to reach the top layer. A sheet, or the palette, that has to
+  say something while it is open says it inside itself, where the user
+  is looking: a message in place under the field or list it is about
+  (`.rk-hint`, or `.rk-empty` for a list with nothing to show; motion.md,
+  "A message in place"). A toast is for what happened, once nothing
+  covers the page; a hint inside the sheet is for what is happening in
+  it.

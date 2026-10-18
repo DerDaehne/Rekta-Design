@@ -168,6 +168,8 @@ const wide = await p.evaluate(async () => {
   const out = { wide: pv.wide, shown: shown(), flex: getComputedStyle(wfs).display };
   box.querySelector('#wt2').click(); await wait(700);
   out.jumped = wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true';
+  box.querySelector('#wt2').focus(); box.querySelector('#wt2').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+  out.tabbed = document.activeElement && document.activeElement.id === 'wf2';
   wfs.scrollTo({ left: 0, behavior: 'instant' }); await wait(200);
   out.followed = box.querySelector('#wt0').getAttribute('aria-selected') === 'true';
   box.style.width = '700px'; await wait(200);
@@ -177,6 +179,7 @@ const wide = await p.evaluate(async () => {
 });
 ok(wide.wide && wide.shown === 4 && wide.flex === 'flex', 'a pivot above size.pivot-wide shows every facet side by side', JSON.stringify(wide));
 ok(wide.jumped && wide.followed, 'its strip jumps to a facet and follows the scroll', JSON.stringify(wide));
+ok(wide.tabbed, 'Tab from the strip goes into the facet chosen', JSON.stringify(wide));
 ok(wide.narrow, 'below it, one facet at a time again', JSON.stringify(wide));
 
 // Motion: reorder, toast, reduce motion.
