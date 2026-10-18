@@ -33,6 +33,88 @@ it at the top of a module. Call its functions only in the browser, in a
 mount hook or an effect. `node scripts/build.mjs --check` imports it in
 plain Node, so this cannot break unnoticed.
 
+## Words and numbers
+
+Every word `rekta.js` shows or says (a toast's undo, a chart's name, a
+live region's age, a sortable item's announcements) comes from one
+catalogue, `Rekta.strings`, English by default. Numbers in charts and
+times in live regions follow a locale.
+
+```js
+import * as Rekta from './rekta.js';
+import { de } from './rekta.strings.de.js';      // or rekta.strings.de.global.js: window.RektaStrings.de
+Rekta.start({ locale: 'de', strings: de });
+Rekta.setStrings({ selected: (n) => `${n} markiert` });   // any word on its own, later too
+```
+
+- `start({ locale, strings })`, `setLocale(tag)`, `setStrings(partial)`
+  (`setStrings(null)` gives back the English words). A value is a string
+  or a function of the arguments below; a word changed later is used the
+  next time it is shown.
+- `locale()` is the locale in use: the one set, else the document's
+  `lang`, else the browser's. `number(v)` formats a figure the way charts
+  do: compact from a thousand up (1.2K in English, 1234,5 and 2,5 Mio. in
+  German), the locale's separators below.
+- A German catalogue ships as `dist/rekta.strings.de.js` (and the classic
+  `rekta.strings.de.global.js`); the showcase uses it at `?lang=de`.
+- `--check` fails when a phrase in `rekta.js` is written outside the
+  catalogue, and when a shipped catalogue lacks a word or has one the
+  script does not use.
+
+Words a caller passes in (a confirm's `ok`, a guard's `what`, a banner
+state's `word`) are the caller's, in its own language.
+
+| Key | Used by | English |
+|---|---|---|
+| `undo` | `toaster()` | “undo” |
+| `redo` | `undoStack()` | “redo” |
+| `ok` | `confirm()` | “ok” |
+| `cancel` | `confirm()` | “cancel” |
+| `live` | `banner()` | “live” |
+| `since` | `banner()` | “since” |
+| `any` | `menu() summary` | “any” |
+| `field` | `form()` | “field” |
+| `noValue` | `chart()` | “no value” |
+| `reload` | `pwa()` | “reload” |
+| `undoWindow` | `toaster()` | (5, true) → “, 5 seconds to undo” |
+| `bannerStill` | `banner()` | ("Paused", "halted") → “Paused. The banner keeps showing “halted” until that ends.” |
+| `chosen` | `menu() summary` | ("status", "failed") → “status: failed” |
+| `selected` | `select()` | (3) → “3 selected” |
+| `columnWidth` | `table()` | ("status") → “width of status” |
+| `cellRefused` | `table() edit` | “That value was not taken.” |
+| `paletteEmpty` | `palette()` | ("xyz") → “Nothing to go to or run matches “xyz”.” |
+| `saveFailed` | `form()` | “Could not save. Try again.” |
+| `guardWhat` | `guard()` | “This form” |
+| `guardKicker` | `guard()` | “unsaved” |
+| `guardTitle` | `guard()` | “Leave without saving?” |
+| `guardText` | `guard()` | ("This form", 2) → “This form has 2 unsaved changes.” |
+| `guardDiscard` | `guard()` | “discard changes” |
+| `guardKeep` | `guard()` | “keep editing” |
+| `move` | `sortable()` | ("Build") → “move Build” |
+| `nothingToUndo` | `undoStack()` | “Nothing to undo.” |
+| `undone` | `undoStack()` | ("archive 3 jobs") → “Undone: archive 3 jobs” |
+| `justNow` | `live()` | “just now” |
+| `secondsAgo` | `live()` | (12) → “12 s ago” |
+| `minutesAgo` | `live()` | (4) → “4 min ago” |
+| `at` | `live()` | ("14:02") → “at 14:02” |
+| `updated` | `live()` | ("just now") → “updated just now” |
+| `heldUpdated` | `live()` | ("just now") → “held while you look · updated just now” |
+| `staleFor` | `live()` | (40, 0, "14:02") → “stale · no update for 40 s” |
+| `offlineSince` | `live()` | ("4 min ago") → “offline · last update 4 min ago” |
+| `updatesWaiting` | `live()` | (2) → “2 updates waiting · show” |
+| `chartName` | `chart()` | ("line", ["requests"], "Mon", "Sun") → “Line chart of requests, Mon to Sun. Use the arrow keys to read each value; a table follows.” |
+| `chartNumbers` | `chart()` | “show the numbers” |
+| `installed` | `pwa()` | “Installed. It opens in a window of its own.” |
+| `newVersion` | `pwa()` | “A new version is ready.” |
+| `noMatch` | `combobox()` | ("xyz") → “Nothing matches “xyz”.” |
+| `nothingYet` | `combobox()` | “Nothing to choose yet.” |
+| `needAttention` | `form()` | (2) → “2 fields need attention” |
+| `pickedUp` | `sortable()` | ("Build", 2, 4) → “Build picked up, position 2 of 4. ↑ ↓ to move, Space to put down, Escape to put back.” |
+| `putDown` | `sortable()` | ("Build", 3, 4) → “Build put down at position 3 of 4.” |
+| `putBack` | `sortable()` | ("Build") → “Build put back.” |
+| `position` | `sortable()` | ("Build", 3, 4) → “Build: position 3 of 4.” |
+| `loadFailed` | `combobox()` | “Could not load the choices. Type to try again.” |
+
 ## The contract
 
 - **Classes are yours.** Rekta defines only `.rk-*` classes and never

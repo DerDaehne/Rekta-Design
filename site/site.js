@@ -15,7 +15,9 @@
   const TOKENS = JSON.parse($('#tokens-data').textContent);
   const WORD = { info: 'active', warning: 'waiting', error: 'failed', success: 'done' };
 
-  const app = Rekta.start();
+  // ?lang=de: every word rekta.js shows or says, and its numbers, in German (the page's own text stays English).
+  const lang = new URLSearchParams(location.search).get('lang');
+  const app = lang === 'de' && window.RektaStrings ? Rekta.start({ locale: 'de', strings: RektaStrings.de }) : Rekta.start();
   const router = Rekta.places({ home: 'home', title: 'Rekta Design' });
   const home = Rekta.panorama($('#pan'), { pivot: $('#nav') });
   const facets = Rekta.pivot($('#facet-strip'));

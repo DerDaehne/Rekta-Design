@@ -46,7 +46,8 @@
      combobox   a field with a list of choices that filters as you type
      stepper    a number field between − and +, repeating while held
      drop       a zone that takes dropped or chosen files
-     start      the defaults for a page: prefs, press, sheets, steppers, sliders, switches, arrival build-in
+     strings    every word the script shows or says, English unless a product sets its own; locale() and number()
+     start      the defaults for a page: prefs, press, sheets, steppers, sliders, switches, arrival build-in, words
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
 export const version = '0.3.0';
@@ -59,6 +60,71 @@ function ms(name, el) { const v = css(name, el); return (parseFloat(v) || 0) * (
 function num(name, el) { return parseFloat(css(name, el)) || 0; }
 // A length token in px, whatever unit it is written in (rem follows the root's font size).
 function px(name, el) { const v = css(name, el), n = parseFloat(v) || 0; return /rem$/.test(v) ? n * (parseFloat(getComputedStyle(docEl()).fontSize) || 16) : n; }
+
+// Words and numbers -------------------------------------------------------------------------------------------------
+// Every word rekta.js shows or says comes from strings, English by default. start({ locale, strings }) or
+// setStrings({ ... }) replaces any of them: a value is a string, or a function of the same arguments returning one.
+// Numbers and times follow the locale (start's, else the document's lang, else the browser's).
+// rk-strings-begin
+export const strings = {
+  undo: 'undo', redo: 'redo', ok: 'ok', cancel: 'cancel', live: 'live', since: 'since', any: 'any', field: 'field',
+  noValue: 'no value', reload: 'reload',
+  undoWindow: (seconds, again) => `, ${seconds} seconds to${again ? ' undo' : ''}`,
+  bannerStill: (event, word) => `${event}. The banner keeps showing “${word}” until that ends.`,
+  chosen: (summary, chosen) => `${summary}: ${chosen}`,
+  selected: (n) => `${n} selected`,
+  columnWidth: (column) => `width of ${column}`,
+  cellRefused: 'That value was not taken.',
+  paletteEmpty: (query) => `Nothing to go to or run matches “${query}”.`,
+  saveFailed: 'Could not save. Try again.',
+  guardWhat: 'This form',
+  guardKicker: 'unsaved',
+  guardTitle: 'Leave without saving?',
+  guardText: (what, n) => `${what} has ${n === 1 ? '1 unsaved change' : `${n} unsaved changes`}.`,
+  guardDiscard: 'discard changes',
+  guardKeep: 'keep editing',
+  move: (item) => `move ${item}`,
+  nothingToUndo: 'Nothing to undo.',
+  undone: (what) => `Undone: ${what}`,
+  justNow: 'just now',
+  secondsAgo: (s) => `${s} s ago`,
+  minutesAgo: (m) => `${m} min ago`,
+  at: (time) => `at ${time}`,
+  updated: (ago) => `updated ${ago}`,
+  heldUpdated: (ago) => `held while you look · updated ${ago}`,
+  staleFor: (s, m, time) => `stale · no update for ${s < 60 ? `${s} s` : m < 60 ? `${m} min` : `since ${time}`}`,
+  offlineSince: (ago) => `offline · last update ${ago}`,
+  updatesWaiting: (n) => (n === 1 ? '1 update waiting · show' : `${n} updates waiting · show`),
+  chartName: (type, series, from, to) => `${type === 'bars' ? 'Bar' : 'Line'} chart of ${series.join(' and ')}, ${from} to ${to}. Use the arrow keys to read each value; a table follows.`,
+  chartNumbers: 'show the numbers',
+  installed: 'Installed. It opens in a window of its own.',
+  newVersion: 'A new version is ready.',
+  noMatch: (query) => `Nothing matches “${query}”.`,
+  nothingYet: 'Nothing to choose yet.',
+  needAttention: (n) => (n === 1 ? '1 field needs attention' : `${n} fields need attention`),
+  pickedUp: (item, at, of) => `${item} picked up, position ${at} of ${of}. ↑ ↓ to move, Space to put down, Escape to put back.`,
+  putDown: (item, at, of) => `${item} put down at position ${at} of ${of}.`,
+  putBack: (item) => `${item} put back.`,
+  position: (item, at, of) => (item ? `${item}: position ${at} of ${of}.` : `position ${at} of ${of}`),
+  loadFailed: 'Could not load the choices. Type to try again.',
+};
+// rk-strings-end
+const DEFAULT_STRINGS = { ...strings };
+let localeSet = '';
+// setStrings(partial): replaces those words; setStrings(null) gives back the English ones.
+export function setStrings(partial) { if (partial === null) Object.assign(strings, DEFAULT_STRINGS); else Object.assign(strings, partial); }
+export function setLocale(tag) { localeSet = tag || ''; }
+export function locale() { return localeSet || (typeof document !== 'undefined' && document.documentElement.lang) || (typeof navigator !== 'undefined' && navigator.language) || 'en'; }
+function tx(key, ...args) { const v = strings[key]; return typeof v === 'function' ? v(...args) : v === undefined ? key : String(v); }
+// number(v): a figure for a chart, a tooltip or a table: compact from a thousand up (1.2K, 1200 in German), in the
+// locale's digits and separators.
+export function number(v, { compact = true } = {}) {
+  if (!Number.isFinite(v)) return String(v);
+  const big = compact && Math.abs(v) >= 1e3;
+  try { return new Intl.NumberFormat(locale(), big ? { notation: 'compact', maximumFractionDigits: 1 } : { maximumFractionDigits: 2 }).format(v); }
+  catch { return String(+v.toFixed(2)); }
+}
+function clock(date) { try { return new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' }).format(date); } catch { return date.toTimeString().slice(0, 5); } }
 function bezier(name) {
   const m = /cubic-bezier\(([^)]+)\)/.exec(css(name));
   const [x1, y1, x2, y2] = m ? m[1].split(',').map(Number) : [0.25, 0.1, 0.25, 1];
@@ -1031,7 +1097,7 @@ export function toaster(region) {
     if (!undoable) return;
     const sr = document.createElement('span');
     sr.className = 'rk-toast-sr';
-    sr.textContent = `, ${windowSec()} seconds to${again ? ' undo' : ''}`;
+    sr.textContent = tx('undoWindow', windowSec(), again);
     msg.appendChild(sr);
   }
   function show(text, { key = text, undo = null, from = null, action = 'undo', act = null } = {}) {
@@ -1048,7 +1114,7 @@ export function toaster(region) {
     if (undo) {
       const btn = el.appendChild(document.createElement('button'));
       btn.type = 'button'; btn.className = 'rk-toast-act'; btn.setAttribute('aria-keyshortcuts', 'Control+Z Meta+Z');
-      btn.append(`${action} `);
+      btn.append(`${action === 'undo' || action === 'redo' ? tx(action) : action} `);
       count = btn.appendChild(document.createElement('span'));
       count.className = 'rk-toast-count'; count.setAttribute('aria-hidden', 'true');
       const line = el.appendChild(document.createElement('span'));
@@ -1144,7 +1210,7 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
     const s = states[name], t = s.until || now();
     const head = document.createElement('span'); head.className = 'rk-banner-head';
     const word = head.appendChild(document.createElement('span')); word.className = 'rk-banner-word'; word.textContent = s.word || name;
-    const time = head.appendChild(document.createElement('time')); time.className = 'rk-banner-time'; time.dateTime = t; time.textContent = `${s.since || 'since'} ${t}`;
+    const time = head.appendChild(document.createElement('time')); time.className = 'rk-banner-time'; time.dateTime = t; time.textContent = `${s.since || strings.since} ${t}`;
     const msg = document.createElement('span'); msg.className = 'rk-banner-msg'; msg.textContent = s.text;
     alertRegion.replaceChildren(); statusRegion.replaceChildren();
     (s.alert ? alertRegion : statusRegion).replaceChildren(head, msg);
@@ -1183,9 +1249,9 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
       else if (top === 'warning') appbar.setAttribute('data-rk-state', 'paused');
       else appbar.removeAttribute('data-rk-state');
     }
-    if (liveWord) liveWord.textContent = name ? (states[name].word || name) : 'live';
+    if (liveWord) liveWord.textContent = name ? (states[name].word || name) : tx('live');
     if (name === shown) {
-      if (changed && toasts) toasts.show(`${on[changed] ? states[changed].on : states[changed].off.split('.')[0]}. The banner keeps showing “${states[name].word || name}” until that ends.`, { key: 'state' });
+      if (changed && toasts) toasts.show(tx('bannerStill', on[changed] ? states[changed].on : states[changed].off.split('.')[0], states[name].word || name), { key: 'state' });
       return;
     }
     const before = shown;
@@ -1320,7 +1386,7 @@ export function menu(trigger, el, { onSelect, summary = null } = {}) {
   function summarize() {
     if (!summary) return;
     const on = [...el.querySelectorAll('[aria-checked="true"]')].map((i) => i.textContent.trim());
-    trigger.textContent = `${summary}: ${on.length ? on.join(', ') : 'any'}`;
+    trigger.textContent = tx('chosen', summary, on.length ? on.join(', ') : tx('any'));
   }
   summarize();
   // With popovers the trigger is the menu's invoker: the browser toggles it on click and a click on the trigger
@@ -1411,7 +1477,7 @@ function selectionMode(appbar, owner, mode, n) {
   appbar.toggleAttribute('data-rk-selecting', modes.size > 0);
   if (was && !modes.size) { appbar.setAttribute('data-rk-unselecting', ''); setTimeout(() => appbar.removeAttribute('data-rk-unselecting'), ms('--rk-duration-short') + 20); }
   const c = appbar.querySelector('.rk-ab-count');
-  if (c && (mode || !modes.size)) c.textContent = `${n} selected`;
+  if (c && (mode || !modes.size)) c.textContent = tx('selected', n);
   return modes.size > 0;
 }
 export function select(el, { items = ':scope > li, :scope > tr', onShow = null, onChange = null, appbar = null } = {}) {
@@ -1627,7 +1693,7 @@ export function table(el, { onSort, select: selectable = null, onShow = null, on
       const h = document.createElement('span');
       h.className = 'rk-col-handle'; h.tabIndex = 0;
       h.setAttribute('role', 'separator'); h.setAttribute('aria-orientation', 'vertical');
-      h.setAttribute('aria-label', `width of ${th.textContent.trim()}`);
+      h.setAttribute('aria-label', tx('columnWidth', th.textContent.trim()));
       th.appendChild(h);
     });
     const was = store.get();
@@ -1678,7 +1744,7 @@ export function table(el, { onSort, select: selectable = null, onShow = null, on
       td.removeAttribute('aria-busy'); input.readOnly = false;
       td.dataset.status = 'error'; input.setAttribute('aria-invalid', 'true');
       const msg = document.createElement('span');
-      msg.className = 'rk-cell-error'; msg.id = uid('rk-cell-error'); msg.textContent = (err && err.message) || 'That value was not taken.';
+      msg.className = 'rk-cell-error'; msg.id = uid('rk-cell-error'); msg.textContent = (err && err.message) || tx('cellRefused');
       td.appendChild(msg); input.setAttribute('aria-describedby', msg.id);
       input.focus();
       return false;
@@ -1846,7 +1912,7 @@ export function palette(el, { items = () => [], trigger = null, router = null, s
     });
     if (!shown.length) {
       const li = document.createElement('li'); li.className = 'rk-empty rk-palette-empty'; li.setAttribute('role', 'presentation');
-      li.textContent = `Nothing to go to or run matches “${q}”.`; list.appendChild(li);
+      li.textContent = tx('paletteEmpty', q); list.appendChild(li);
     }
     mark(0);
   }
@@ -1961,7 +2027,7 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
 // Forms ------------------------------------------------------------------------------------------------------------
 const uid = (p) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 const controlsOf = (form) => [...form.querySelectorAll('input, select, textarea')].filter((c) => !/^(button|submit|reset|image|hidden)$/.test(c.type));
-const labelOf = (c) => { const l = c.id && document.querySelector(`label[for="${CSS.escape(c.id)}"]`); return ((l && l.textContent) || c.getAttribute('aria-label') || c.name || 'field').replace(/\s+/g, ' ').trim(); };
+const labelOf = (c) => { const l = c.id && document.querySelector(`label[for="${CSS.escape(c.id)}"]`); return ((l && l.textContent) || c.getAttribute('aria-label') || c.name || tx('field')).replace(/\s+/g, ' ').trim(); };
 
 // disable(control, reason): a control that cannot act now, and says why next to it (a .rk-hint linked by
 // aria-describedby). It stays focusable (aria-disabled), so the reason is read with it; clicks do nothing.
@@ -1990,7 +2056,7 @@ export function disable(control, reason) {
 // confirm({ title, text, kicker, ok, cancel, safe }): a short question in a sheet; resolves true when ok is chosen.
 // The safe answer is the primary button and takes focus: for an action that cannot be undone, safe: 'cancel'.
 // Escape and a tap on the shading answer cancel.
-export function confirm({ title, text = '', kicker = '', ok = 'ok', cancel = 'cancel', safe = 'ok', root = document.querySelector('.rk') || document.body } = {}) {
+export function confirm({ title, text = '', kicker = '', ok = tx('ok'), cancel = tx('cancel'), safe = 'ok', root = document.querySelector('.rk') || document.body } = {}) {
   const d = document.createElement('dialog');
   d.className = 'rk-sheet';
   const tid = uid('rk-confirm');
@@ -2055,7 +2121,7 @@ export function form(el, { validators = {}, onSubmit = null, submit = el.querySe
     const hid = uid('rk-errors');
     box.setAttribute('aria-labelledby', hid);
     const head = document.createElement('p'); head.id = hid;
-    head.textContent = message || (list.length === 1 ? '1 field needs attention' : `${list.length} fields need attention`);
+    head.textContent = message || tx('needAttention', list.length);
     const ul = document.createElement('ul');
     for (const { c, m } of list) {
       const a = document.createElement('a'); a.href = `#${c.id}`; a.textContent = `${labelOf(c)}: ${m}`;
@@ -2081,7 +2147,7 @@ export function form(el, { validators = {}, onSubmit = null, submit = el.querySe
     summarize([]);
     if (!onSubmit) return;
     try { await (submit ? pending(submit, () => onSubmit(values())) : onSubmit(values())); }
-    catch (err) { if (err && err.fields) setErrors(err.fields, err.message); else summarize([], (err && err.message) || 'Could not save. Try again.'); }
+    catch (err) { if (err && err.fields) setErrors(err.fields, err.message); else summarize([], (err && err.message) || tx('saveFailed')); }
   };
   el.addEventListener('input', input);
   el.addEventListener('focusout', blur);
@@ -2097,7 +2163,7 @@ export function form(el, { validators = {}, onSubmit = null, submit = el.querySe
 // guard(el, { router, what }): unsaved input is not lost by accident. While the form differs from how it was
 // loaded (or last saved: clean()), leaving its place asks "Leave without saving?" (keep editing is the safe answer)
 // and closing the window asks the browser's question. Discarding puts the form back as it was.
-export function guard(el, { router = null, what = 'This form' } = {}) {
+export function guard(el, { router = null, what = tx('guardWhat') } = {}) {
   const state = (c) => (c.type === 'checkbox' || c.type === 'radio' ? c.checked : c.value);
   let saved = new Map();
   const clean = () => { saved = new Map(controlsOf(el).map((c) => [c, state(c)])); };
@@ -2110,7 +2176,7 @@ export function guard(el, { router = null, what = 'This form' } = {}) {
   const off = router ? router.guard(() => {
     const n = changed().length;
     if (!n || (place && place.dataset.rkPlace !== router.current)) return true;
-    return confirm({ kicker: 'unsaved', title: 'Leave without saving?', text: `${what} has ${n === 1 ? '1 unsaved change' : `${n} unsaved changes`}.`, ok: 'discard changes', cancel: 'keep editing', safe: 'cancel' })
+    return confirm({ kicker: tx('guardKicker'), title: tx('guardTitle'), text: tx('guardText', what, n), ok: tx('guardDiscard'), cancel: tx('guardKeep'), safe: 'cancel' })
       .then((leave) => { if (leave) restore(); return leave; });
   }) : () => {};
   return { get dirty() { return changed().length > 0; }, changed, clean, restore, destroy() { removeEventListener('beforeunload', unload); off(); } };
@@ -2476,26 +2542,26 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
     if (!cancel && to !== from) { const rest = els.filter((x) => x !== item); if (to >= rest.length) rest[rest.length - 1].after(item); else rest[to].before(item); }
     const d = ms('--rk-duration-moderate');
     if (d) for (const x of els) { const dy = before.get(x) - x.getBoundingClientRect().top; if (dy) x.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') }); }
-    if (!cancel && to !== from) { if (onMove) onMove(from, to, item); say(`${name(item)}: position ${to + 1} of ${els.length}.`); }
+    if (!cancel && to !== from) { if (onMove) onMove(from, to, item); say(tx('position', name(item), to + 1, els.length)); }
   };
   const key = (e) => {
     const grip = e.target.closest(handle), item = grip && itemOf(grip);
     if (!item) return;
     const els = all(), i = els.indexOf(item);
     if (grabbed === item) {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(`position ${all().indexOf(item) + 1} of ${els.length}`); }
-      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); grabbed.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(`${name(item)} put down at position ${i + 1} of ${els.length}.`); }
-      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); moveTo(item, +item.dataset.rkFrom); item.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(`${name(item)} put back.`); }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(tx('position', '', all().indexOf(item) + 1, els.length)); }
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); grabbed.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(tx('putDown', name(item), i + 1, els.length)); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); moveTo(item, +item.dataset.rkFrom); item.removeAttribute('data-rk-grabbed'); grip.setAttribute('aria-pressed', 'false'); grabbed = null; say(tx('putBack', name(item))); }
       return;
     }
-    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(`${name(item)}: position ${all().indexOf(item) + 1} of ${els.length}.`); return; }
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); if (moveTo(item, i + (e.key === 'ArrowUp' ? -1 : 1))) say(tx('position', name(item), all().indexOf(item) + 1, els.length)); return; }
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault(); grabbed = item; item.dataset.rkFrom = String(i); item.setAttribute('data-rk-grabbed', ''); grip.setAttribute('aria-pressed', 'true');
-      say(`${name(item)} picked up, position ${i + 1} of ${els.length}. ↑ ↓ to move, Space to put down, Escape to put back.`);
+      say(tx('pickedUp', name(item), i + 1, els.length));
     }
   };
   const blur = (e) => { if (grabbed && !moving && !grabbed.contains(e.relatedTarget)) { grabbed.removeAttribute('data-rk-grabbed'); const g = grabbed.querySelector(handle); if (g) g.setAttribute('aria-pressed', 'false'); grabbed = null; } };
-  function prepare() { for (const it of all()) { const g = it.querySelector(handle); if (g) { g.setAttribute('aria-pressed', 'false'); if (!g.getAttribute('aria-label')) g.setAttribute('aria-label', `move ${name(it)}`); } } }
+  function prepare() { for (const it of all()) { const g = it.querySelector(handle); if (g) { g.setAttribute('aria-pressed', 'false'); if (!g.getAttribute('aria-label')) g.setAttribute('aria-label', tx('move', name(it))); } } }
   prepare();
   list.addEventListener('pointerdown', down); list.addEventListener('pointermove', move);
   list.addEventListener('pointerup', end); list.addEventListener('pointercancel', end);
@@ -2640,10 +2706,10 @@ export function undoStack({ toaster: toasts = null, limit = 50 } = {}) {
   }
   async function undoIt() {
     const e = done.pop();
-    if (!e) { if (toasts) toasts.show('Nothing to undo.', { key: 'rk-history-none' }); return false; }
+    if (!e) { if (toasts) toasts.show(tx('nothingToUndo'), { key: 'rk-history-none' }); return false; }
     await e.undo();
     undone.push(e);
-    if (toasts) toasts.show(`Undone: ${lower(e.label)}`, { key: `rk-history-undone-${e.label}`, undo: () => redoIt(), action: 'redo' });
+    if (toasts) toasts.show(tx('undone', lower(e.label)), { key: `rk-history-undone-${e.label}`, undo: () => redoIt(), action: 'redo' });
     fire();
     return true;
   }
@@ -2686,14 +2752,15 @@ export function live(region, { stale = 0, age = region.querySelector('.rk-age'),
   const more = document.createElement('button');
   more.type = 'button'; more.className = 'rk-btn rk-btn--quiet rk-live-more'; more.hidden = true;
   (age || region).after(more);
-  const ago = (t) => { const s = Math.round(t / 1000); return s < 5 ? 'just now' : s < 60 ? `${s} s ago` : s < 3600 ? `${Math.floor(s / 60)} min ago` : `at ${new Date(Date.now() - t).toTimeString().slice(0, 5)}`; };
+  const ago = (d) => { const s = Math.round(d / 1000); return s < 5 ? tx('justNow') : s < 60 ? tx('secondsAgo', s) : s < 3600 ? tx('minutesAgo', Math.floor(s / 60)) : tx('at', clock(new Date(Date.now() - d))); };
+  const staleFor = (d) => { const s = Math.round(d / 1000); return tx('staleFor', s, Math.floor(s / 60), clock(new Date(Date.now() - d))); };
   const state = () => (offline ? 'offline' : Date.now() - last > limit() ? 'stale' : 'fresh');
   function paint() {
-    const s = state(), t = Date.now() - last;
+    const s = state(), since = Date.now() - last;
     if (region.dataset.rkLive !== s) region.dataset.rkLive = s;
-    if (age) age.textContent = s === 'offline' ? `offline · last update ${ago(t)}` : s === 'stale' ? `stale · no update for ${ago(t).replace(' ago', '')}` : held ? `held while you look · updated ${ago(t)}` : `updated ${ago(t)}`;
+    if (age) age.textContent = s === 'offline' ? tx('offlineSince', ago(since)) : s === 'stale' ? staleFor(since) : held ? tx('heldUpdated', ago(since)) : tx('updated', ago(since));
     more.hidden = !waiting.length;
-    more.textContent = waiting.length === 1 ? '1 update waiting · show' : `${waiting.length} updates waiting · show`;
+    more.textContent = tx('updatesWaiting', waiting.length);
   }
   function flush() { const list = waiting; waiting = []; list.forEach((w) => w.apply()); paint(); }
   function update(apply, key = null) {
@@ -2742,7 +2809,7 @@ function niceTicks(lo, hi, count = 4) {
   for (let v = a; v <= b + step / 2; v += step) out.push(+v.toFixed(10));
   return out;
 }
-const compact = (v) => (Math.abs(v) >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : Math.abs(v) >= 1e3 ? `${+(v / 1e3).toFixed(1)}K` : `${+v.toFixed(2)}`);
+const compact = (v) => number(v);
 export function chart(el, opts = {}) {
   let o = { type: 'line', labels: [], series: [], unit: '', min: undefined, max: undefined, height: 220, summary: '', table: true, ...opts };
   el.classList.add('rk-chart');
@@ -2767,7 +2834,7 @@ export function chart(el, opts = {}) {
     const band = pw / Math.max(1, n), x = (i) => (bars ? left + band * (i + 0.5) : left + (n > 1 ? (pw * i) / (n - 1) : pw / 2));
     svg.replaceChildren();
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
-    svg.setAttribute('aria-label', o.summary || `${o.type === 'bars' ? 'Bar' : 'Line'} chart of ${o.series.map((s) => s.label).join(' and ')}, ${o.labels[0]} to ${o.labels[n - 1]}. Use the arrow keys to read each value; a table follows.`);
+    svg.setAttribute('aria-label', o.summary || tx('chartName', o.type, o.series.map((s) => s.label), o.labels[0], o.labels[n - 1]));
     const grid = svgEl('g', { class: 'rk-chart-grid' }, svg);
     for (const t of ticks) {
       svgEl('line', { x1: left, x2: W - right, y1: y(t), y2: y(t) }, grid);
@@ -2809,7 +2876,8 @@ export function chart(el, opts = {}) {
     legend.replaceChildren(...o.series.map((s, si) => { const li = document.createElement('li'); li.innerHTML = `<i class="rk-key-${bars ? 'box' : 'line'} rk-s${si}"></i>`; li.append(s.label); return li; }));
     if (o.table) {
       details.hidden = false;
-      details.innerHTML = '<summary>show the numbers</summary><table class="rk-table"><thead><tr><th scope="col"></th></tr></thead><tbody></tbody></table>';
+      details.innerHTML = '<summary></summary><table class="rk-table"><thead><tr><th scope="col"></th></tr></thead><tbody></tbody></table>';
+      details.querySelector('summary').textContent = tx('chartNumbers');
       const hr = details.querySelector('thead tr'), body = details.querySelector('tbody');
       o.series.forEach((s) => { const th = document.createElement('th'); th.scope = 'col'; th.className = 'rk-num'; th.textContent = s.label; hr.appendChild(th); });
       o.labels.forEach((l, i) => { const tr = document.createElement('tr'); const th = document.createElement('th'); th.scope = 'row'; th.textContent = l; tr.appendChild(th); o.series.forEach((s) => { const td = document.createElement('td'); td.className = 'rk-num'; td.textContent = Number.isFinite(s.values[i]) ? fmt(s.values[i]) : '–'; tr.appendChild(td); }); body.appendChild(tr); });
@@ -2831,7 +2899,7 @@ export function chart(el, opts = {}) {
       anchor = svgEl('line', { x1: x(i), x2: x(i), y1: top, y2: top + ph, class: 'rk-chart-cross' }, hot);
       o.series.forEach((s, si) => { if (Number.isFinite(s.values[i])) svgEl('circle', { cx: x(i), cy: y(s.values[i]), r: 4, class: `rk-chart-dot rk-s${si}` }, hot); });
     }
-    const text = `${o.labels[i]} · ${o.series.map((s) => `${o.series.length > 1 ? `${s.label} ` : ''}${Number.isFinite(s.values[i]) ? fmt(s.values[i]) : 'no value'}`).join(' · ')}`;
+    const text = `${o.labels[i]} · ${o.series.map((s) => `${o.series.length > 1 ? `${s.label} ` : ''}${Number.isFinite(s.values[i]) ? fmt(s.values[i]) : tx('noValue')}`).join(' · ')}`;
     if (anchor) showTip(anchor, text);
     if (speak) say.textContent = text;
   }
@@ -2923,10 +2991,10 @@ export function pwa({ sw = 'sw.js', toaster: toasts = null, onChange = null } = 
   let prompt = null, waiting = null, reg = null, reloading = false;
   const fire = () => { const s = { ...state }; if (onChange) onChange(s); document.dispatchEvent(new CustomEvent('rk:pwa', { detail: s })); };
   const before = (e) => { e.preventDefault(); prompt = e; state.canInstall = true; fire(); };
-  const installed = () => { prompt = null; state.canInstall = false; state.installed = true; fire(); if (toasts) toasts.show('Installed. It opens in a window of its own.', { key: 'rk-pwa' }); };
+  const installed = () => { prompt = null; state.canInstall = false; state.installed = true; fire(); if (toasts) toasts.show(tx('installed'), { key: 'rk-pwa' }); };
   function wait(w) {
     waiting = w; state.updateReady = true; fire();
-    if (toasts) toasts.show('A new version is ready.', { key: 'rk-pwa-update', act: { label: 'reload', run: () => update() } });
+    if (toasts) toasts.show(tx('newVersion'), { key: 'rk-pwa-update', act: { label: tx('reload'), run: () => update() } });
   }
   async function register() {
     if (!state.supported || !sw || !document.querySelector('link[rel="manifest"]')) return;
@@ -3137,7 +3205,7 @@ export function combobox(input, { options = [], source = null, onSelect = null, 
     });
     if (!shown.length) {
       const li = document.createElement('li'); li.className = 'rk-empty rk-palette-empty'; li.setAttribute('role', 'presentation');
-      li.textContent = opts ? (q ? `Nothing matches “${q}”.` : 'Nothing to choose yet.') : 'Could not load the choices. Type to try again.';
+      li.textContent = opts ? (q ? tx('noMatch', q) : tx('nothingYet')) : tx('loadFailed');
       list.appendChild(li);
     }
     const at = chosen ? shown.findIndex(({ o }) => o.value === chosen.value) : -1;
@@ -3310,7 +3378,9 @@ export function drop(el, { onFiles = null, accept = null } = {}) {
 // Start --------------------------------------------------------------------------------------------------------------
 // The defaults for a page: restore the user's prefs, press on tiles, sheets, steppers, sliders, switches, and the
 // first paint's build-in. An embedded page whose host owns theme, density and motion passes restore: false.
-export function start({ root = document, restore = true } = {}) {
+export function start({ root = document, restore = true, locale: tag = '', strings: words = null } = {}) {
+  if (tag) setLocale(tag);
+  if (words) setStrings(words);
   if (restore) prefs.restore();
   const parts = [press(root)];
   root.querySelectorAll('dialog.rk-sheet').forEach((d) => parts.push(sheet(d)));

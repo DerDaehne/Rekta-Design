@@ -182,6 +182,23 @@ ok(wide.jumped && wide.followed, 'its strip jumps to a facet and follows the scr
 ok(wide.tabbed, 'Tab from the strip goes into the facet chosen', JSON.stringify(wide));
 ok(wide.narrow, 'below it, one facet at a time again', JSON.stringify(wide));
 
+// rekta.js in German (?lang=de): its words from the catalogue, its numbers in the locale; none of its English shows.
+{
+  const de = await open({}, '?lang=de');
+  await de.waitForTimeout(800);
+  const seen = await de.evaluate(() => {
+    // What rekta.js itself writes: live ages, a table's column handles, a chart's table of numbers, sortable grips.
+    const own = [...document.querySelectorAll('.rk-age, .rk-chart-table > summary, .rk-live-more')].map((e) => e.textContent)
+      .concat([...document.querySelectorAll('th > [role=separator][aria-label], [data-rk-grip][aria-label], .rk-grip[aria-label]')].map((e) => e.getAttribute('aria-label')))
+      .filter(Boolean);
+    const english = own.filter((x) => /\b(updated|ago|just now|show the numbers|width of|move|position|waiting)\b/.test(x));
+    return { english, count: own.length, sample: own.slice(0, 4), number: Rekta.number(1234.5), locale: Rekta.locale() };
+  });
+  ok(seen.count > 2 && seen.english.length === 0, 'in German, what rekta.js writes is German', JSON.stringify(seen));
+  ok(seen.locale === 'de' && seen.number === '1234,5', 'and its numbers follow the locale', JSON.stringify(seen));
+  await de.close();
+}
+
 // Motion: reorder, toast, reduce motion.
 await go(p, 'motion');
 await p.click('#flip li:first-child input'); await p.waitForTimeout(500);

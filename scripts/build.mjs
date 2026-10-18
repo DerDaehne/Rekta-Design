@@ -279,6 +279,31 @@ function check(tokens) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.js reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }
   for (const n of ['pivot-inactive', 'nav-inactive']) if (!defined.has(`font-size-${n}`)) problems.push(`rekta.js needs --rk-font-size-${n}`);
+  // Every word the script shows or says comes from its strings catalogue (rk-strings-begin … end), so a product can
+  // translate it: an English phrase in a literal anywhere else fails. A heuristic: two words in a row, outside errors
+  // thrown, console output and selectors.
+  {
+    const a = js.indexOf('// rk-strings-begin'), b = js.indexOf('// rk-strings-end');
+    if (a < 0 || b < a) problems.push('rekta.js has no strings catalogue (rk-strings-begin … rk-strings-end)');
+    const lines = js.split('\n'), first = js.slice(0, a).split('\n').length, last = js.slice(0, b).split('\n').length;
+    const TECH = /throw new Error|console\.|querySelector|\.matches\(|closest\(|cssText|insertAdjacentHTML|new RegExp/;
+    lines.forEach((line, i) => {
+      if (i + 1 >= first && i + 1 <= last) return;
+      const l = line.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '');
+      if (TECH.test(l)) return;
+      for (const m of l.matchAll(/'([^'\n]*)'|`([^`\n]*)`|"([^"\n]*)"/g)) {
+        const text = (m[1] ?? m[2] ?? m[3]).replace(/\$\{[^}]*\}/g, ' ').replace(/\s+/g, ' ');
+        if (/[A-Za-z]{2,} [a-z]{2,}/.test(text) && !/[[\]#>:]|^\s*\.|--|rk-|\(/.test(text)) problems.push(`rekta.js:${i + 1} shows words outside its strings catalogue: "${text.trim().slice(0, 60)}"`);
+      }
+    });
+  }
+  // Each catalogue shipped in another language has exactly the English keys.
+  for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
+    const keys = (all) => { const text = all.replace(/^\s*\/\/.*$/gm, ''); return new Set([...text.matchAll(/^\s+(\w+): /gm), ...text.matchAll(/[{,] (\w+): '/g)].map((m) => m[1])); };
+    const en = keys(js.slice(js.indexOf('// rk-strings-begin'), js.indexOf('// rk-strings-end'))), other = keys(readFileSync(join(root, 'src', 'js', f), 'utf8'));
+    for (const k of en) if (!other.has(k)) problems.push(`src/js/${f} lacks ${k}`);
+    for (const k of other) if (!en.has(k)) problems.push(`src/js/${f} has ${k}, which rekta.js does not use`);
+  }
   // Importing the module touches no DOM, so a page that renders on the server can import it (call it in the browser).
   try { execFileSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(pathToFileURL(join(root, 'src', 'js', 'rekta.js')).href)})`], { stdio: 'pipe' }); }
   catch (e) { problems.push(`rekta.js cannot be imported without a DOM (server rendering): ${String(e.stderr || e.message).split('\n').find((l) => /Error/.test(l)) || e.message}`); }
@@ -315,6 +340,12 @@ export function buildDist() {
   const esm = readFileSync(join(root, 'src', 'js', 'rekta.js'), 'utf8').replace(/^export const version = '[^']*';/m, `export const version = '${pkg.version}';`);
   writeFileSync(join(dist, 'rekta.js'), esm);
   writeFileSync(join(dist, 'rekta.global.js'), toGlobal(esm));
+  // Catalogues in other languages: as a module (export const de), and as a classic script (window.RektaStrings.de).
+  for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
+    const text = readFileSync(join(root, 'src', 'js', f), 'utf8'), lang = f.split('.')[1];
+    writeFileSync(join(dist, `rekta.${f}`), text);
+    writeFileSync(join(dist, `rekta.strings.${lang}.global.js`), text.replace(new RegExp(`^export const ${lang.replace('-', '_')} = `, 'm'), `(window.RektaStrings = window.RektaStrings || {}).${lang.replace('-', '_')} = `));
+  }
   const icons = loadIcons();
   writeFileSync(join(dist, 'rekta.icons.svg'), iconsSprite(icons));
   writeFileSync(join(dist, 'rekta.icons.json'), JSON.stringify({ name: 'Rekta Design icons', version: pkg.version, grid: 20, strokeWidth: 1.6, lineCap: 'butt', lineJoin: 'miter', color: 'text colour (currentColor); a filled shape says fill', icons: Object.fromEntries(Object.entries(icons).map(([n, i]) => [n, i.shapes])) }, null, 1) + '\n');
