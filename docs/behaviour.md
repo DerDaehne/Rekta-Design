@@ -42,6 +42,20 @@ paint: load `rekta.global.js` in `<head>` and call
   carries it; a tag, tile or banner without its own `data-status` stays
   neutral inside a status row.
 
+### Rules on the root
+
+`rekta.css` styles `.rk-*` classes. A few rules reach further, on
+purpose, and a page that composes Rekta with its own CSS should know
+them:
+
+| Rule | Why |
+|---|---|
+| `:root { scroll-padding-block: … }` | Anchors and focus scroll clear of the banner and section strip above (`--rk-banner-h`, `--rk-pivot-h`) and the app bar below. |
+| `:root:has(dialog.rk-sheet[open])` | The page under an open sheet stops scrolling, and keeps its scrollbar's room so nothing shifts. |
+| `[data-status='…']` | Sets only the internal `--_rk-fill`, `--_rk-mark` and `--_rk-soft`, which nothing outside Rekta's components reads. |
+| `:root[data-theme]`, `[data-density]`, `[data-motion]`, `[data-rk-titlebar]` | The switches `prefs` and the installed app's title bar write on the root. |
+| `:root[data-rk-crossfade]::view-transition-old(root)` and `-new(root)` | Rekta's cross-fade timing, only while `crossfade()` (or a theme change through `prefs`) runs its own view transition: an app's own root view transitions keep their timing. |
+
 ### State the script writes
 
 | Attribute | On | Meaning |

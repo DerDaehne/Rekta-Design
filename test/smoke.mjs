@@ -520,6 +520,12 @@ const btnH = () => p.evaluate(() => Math.round(document.querySelector('#reset').
 ok((await btnH()) === 32, 'fine pointer: compact controls', await btnH());
 await p.check('input[name=density][value=comfortable]'); await p.waitForTimeout(200);
 ok((await btnH()) === 44, 'comfortable: 44px controls', await btnH());
+const fade = await p.evaluate(async () => {           /* Rekta's view-transition timing only while its own runs */
+  const root = document.documentElement, done = Rekta.crossfade(() => {}), during = root.hasAttribute('data-rk-crossfade');
+  await done;
+  return { during, after: root.hasAttribute('data-rk-crossfade'), vt: typeof document.startViewTransition === 'function' };
+});
+ok(!fade.vt || (fade.during && !fade.after), 'the root carries data-rk-crossfade only while Rekta cross-fades', JSON.stringify(fade));
 await p.check('input[name=density][value=auto]'); await p.check('input[name=theme][value=system]'); await p.check('input[name=accent][value=ink]');
 ok((await p.evaluate(() => JSON.parse(localStorage.getItem('rekta-prefs')).theme)) === 'system', 'prefs remembered');
 

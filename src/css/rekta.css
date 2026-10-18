@@ -1,10 +1,17 @@
 /* Rekta Design components.
 
-   Load order: rekta.tokens.css, rekta.fonts.css, rekta.css. Every value comes from a --rk- token.
+   Load order: rekta.tokens.css, rekta.fonts.css, rekta.css. Every colour, space, type size, radius, duration and
+   shared easing comes from a --rk- token. Literal values are fixed geometry, the same in every theme and density
+   (hairlines of 1-2px, icon boxes, marks, the toggle's track, the tile's inner padding), and the place change's own
+   angles and curves (--_rk-turn-*, described in docs/motion.md).
 
    Contract
    - Rekta defines only .rk-* classes and --rk-* properties. data-status, data-theme, data-density and data-motion
      apply on .rk and inside it; the theme, density and motion switches go on the root element.
+   - Rules outside .rk-*, on purpose (docs/behaviour.md lists them): :root's scroll-padding below the banner and above
+     the app bar; :root stops scrolling while a .rk-sheet is open; [data-status] sets only internal --_rk-* properties,
+     inert outside Rekta's components; the root's data-theme, data-density, data-motion and data-rk-titlebar
+     switches; the view-transition timing, only while rekta.js marks the root data-rk-crossfade.
    - Hide with the hidden attribute: Rekta's display rules never override it.
    - Public hooks a page may set: --rk-i (build-in index of a tile, 0-10), --rk-sec-w (width of a panorama section),
      --rk-split-w (width of a split's list pane; rekta.js writes it while the handle is dragged).
@@ -1055,8 +1062,9 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk { --rk-tile-unit: var(--rk-tile-unit-ultrawide); }
 }
 
-/* A change of the whole look (theme) cross-fades over duration-short (rekta.js starts a view transition). */
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--rk-duration-short); animation-timing-function: var(--rk-ease-base); }
+/* A change of the whole look (theme) cross-fades over duration-short. Only Rekta's own view transitions: rekta.js marks
+   the root data-rk-crossfade while one runs, so an app's own root view transitions keep their timing. */
+:root[data-rk-crossfade]::view-transition-old(root), :root[data-rk-crossfade]::view-transition-new(root) { animation-duration: var(--rk-duration-short); animation-timing-function: var(--rk-ease-base); }
 
 /* Reduced motion: the tokens zero every duration; these are the parts that are not durations. */
 @media (prefers-reduced-motion: reduce) {

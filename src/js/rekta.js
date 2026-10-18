@@ -110,7 +110,7 @@ export const prefs = {
       document.dispatchEvent(new CustomEvent('rk:prefs', { detail: { name, value: this.get(name) } }));
     };
     // A theme chosen by the user cross-fades (view transitions); a restored one applies before the first paint.
-    if (name === 'theme' && remember && this.get('theme') !== (value || PREF_DEFAULT.theme) && typeof document.startViewTransition === 'function' && ms('--rk-duration-short')) document.startViewTransition(commit);
+    if (name === 'theme' && remember && this.get('theme') !== (value || PREF_DEFAULT.theme)) crossfade(commit);
     else commit();
   },
   restore() { const all = this.read(); for (const name of Object.keys(PREF_DEFAULT)) if (all[name]) this.set(name, all[name], { remember: false }); },
@@ -3062,10 +3062,12 @@ export function sparkTo(line, points) {
   sparkRuns.set(line, requestAnimationFrame(step));
 }
 // crossfade(change): a change of the whole look (theme, accent) fades over duration-short instead of flipping, where
-// the browser has view transitions.
+// the browser has view transitions. Rekta's timing applies to its own transitions only (data-rk-crossfade on the
+// root while one runs): an app's own root view transitions keep theirs.
 export function crossfade(change) {
   if (!ms('--rk-duration-short') || !document.startViewTransition) { change(); return Promise.resolve(); }
-  return document.startViewTransition(change).finished.catch(() => {});
+  docEl.setAttribute('data-rk-crossfade', '');
+  return document.startViewTransition(change).finished.catch(() => {}).finally(() => docEl.removeAttribute('data-rk-crossfade'));
 }
 
 // Inputs -----------------------------------------------------------------------------------------------------------
