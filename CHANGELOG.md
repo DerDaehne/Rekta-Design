@@ -5,7 +5,7 @@ tokens, public hooks, `data-rk-*` attributes, events and the `rekta.js`
 API are the public surface. Before 1.0, a minor version may still break
 it; each entry says how.
 
-## Unreleased
+## 0.3.0 — 2026-10-18
 
 ### Breaking (rekta-core: declared first)
 
@@ -56,6 +56,18 @@ apps change as follows (`man rekta` has the whole API):
 
 ### Added
 
+- **Facets side by side.** From `size.pivot-wide` (a new token, 1300px,
+  a product decision) a pivot's facets show side by side as panorama
+  sections; the strip is a jump list that glides to a facet and follows the
+  scroll (`pivot()`, `data-rk-wide`). Narrower, one facet at a time again.
+- **Product overrides** are documented as the way to make Rekta Design a
+  product's own (`docs/platforms.md`): the accent per theme, the toast and
+  stale timings, the tile unit, `size.pivot-wide`, density as a user
+  setting, and what must not be overridden.
+- `build.mjs --check` reports the statuses' separation under tritanopia
+  (not a failure; `docs/accessibility.md` says why), and fails when the
+  version in `package.json`, `rekta.js`, rekta-core, the flake and the
+  newest changelog heading disagree.
 - **rekta-core: declared UI.** A window given `rk_window_desc.build` (with
   `.user`, and `.on_key` for keys nothing focused takes) calls it to know what
   to show: macros for every view, collection, menu and controller (`RK_TILE`,
@@ -465,6 +477,13 @@ apps change as follows (`man rekta` has the whole API):
 
 ### Changed
 
+- **Rekta's view-transition timing applies to its own cross-fades only.**
+  `crossfade()` and a theme change through `prefs` mark the root
+  `data-rk-crossfade` while they run; an app's own root view transitions
+  keep their timing whatever the stylesheet order. The rules that reach
+  beyond `.rk-*` are listed in `docs/behaviour.md`.
+- `panorama()` gives the panorama `role="region"` when it has no role, and
+  warns in the console when it has no accessible name.
 - **Checkboxes and radios on the web are Rekta's own** (`.rk-switch`), no
   longer the browser's with `accent-color`: a 20 px square with a 2 px frame,
   checked the accent with an on-accent mark; a radio a ring, checked an accent
@@ -538,6 +557,12 @@ apps change as follows (`man rekta` has the whole API):
 
 ### Fixed
 
+- Secondary text inside a status tile or banner (a meta, a facts line, an
+  age, a stale value) fell below AA, to 1.9:1 on the light error tile; it
+  now takes the primary text colour there.
+- The docs agree with the tokens and the code again: the app bar's height,
+  the tightest AA pairs, the navigation title levels, the pivot's motion
+  tokens, `layer.float`.
 - rekta-core, found while building the declared UI: a menu open when its
   window closed kept the window alive (they now close with it); a sheet
   destroyed while it had focus kept the view focused before it; a controller

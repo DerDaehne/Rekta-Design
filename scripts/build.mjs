@@ -331,6 +331,19 @@ export function checkAll() {
     if (i.viewBox !== '0 0 20 20') problems.push(`icon ${n} is not on the 20px grid (viewBox ${i.viewBox})`);
     if (!i.shapes.length) problems.push(`icon ${n} has no shapes`);
   }
+  // One version everywhere: package.json, rekta.js, rekta-core, the flake and the newest released changelog heading.
+  try {
+    const want = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+    const read = (file) => readFileSync(join(root, file), 'utf8');
+    const h = read('core/include/rekta.h'), part = (n) => (new RegExp(`#define RK_VERSION_${n} (\\d+)`).exec(h) || [])[1];
+    const found = {
+      'src/js/rekta.js': (/^export const version = '([^']+)';/m.exec(read('src/js/rekta.js')) || [])[1],
+      'core/include/rekta.h': `${part('MAJOR')}.${part('MINOR')}.${part('PATCH')}`,
+      'flake.nix': (/version = "([^"]+)";/.exec(read('flake.nix')) || [])[1],
+      'CHANGELOG.md': (/^## (\d+\.\d+\.\d+)/m.exec(read('CHANGELOG.md')) || [])[1],
+    };
+    for (const [file, v] of Object.entries(found)) if (v !== want) problems.push(`${file} says version ${v}, package.json ${want}`);
+  } catch (e) { problems.push(`the version check: ${e.message}`); }
   try {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
     for (const [file, text] of Object.entries(coreFiles(tokens, pkg.version, icons))) {
@@ -346,7 +359,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (process.argv.includes('--check')) {
     const problems = checkAll();
     if (problems.length) { console.error(problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
-    console.log('✓ tokens and stylesheet pass: contrast, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid');
+    console.log('✓ tokens and stylesheet pass: contrast, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
     for (const n of notes) console.log(`  i ${n}`);
   } else {
     console.log(`✓ dist/ written (Rekta Design ${buildDist()})`);

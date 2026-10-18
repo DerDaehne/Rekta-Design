@@ -49,7 +49,7 @@
      start      the defaults for a page: prefs, press, sheets, steppers, sliders, switches, arrival build-in
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
-export const version = '0.2.0';
+export const version = '0.3.0';
 
 // Tokens -------------------------------------------------------------------------------------------------------------
 const docEl = document.documentElement;
