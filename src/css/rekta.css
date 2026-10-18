@@ -93,6 +93,13 @@ a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit
 .rk-tile:focus-visible { outline: 2px solid currentColor; outline-offset: -5px; }
 .rk-tile-word { position: absolute; top: 10px; right: 12px; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); }
 .rk-stat b { display: block; font-size: var(--rk-font-size-xxl); font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; line-height: 1; }
+/* Figures outside a tile (a status region, docs/tiles.md): side by side, each its number over its words. */
+.rk-figures { display: flex; flex-wrap: wrap; gap: var(--rk-space-m) var(--rk-space-xl); margin: 0; }
+.rk-figures > .rk-stat > span { display: block; margin-top: var(--rk-space-xs); font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
+/* A title from user data (docs/typography.md): long words break, and past three lines an ellipsis; the whole title is
+   still read, and data-rk-tip="overflow" shows it to the mouse. */
+.rk-title { overflow-wrap: anywhere; }
+.rk-clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 .rk-tile-msg {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden;
   font-size: var(--rk-font-size-s); line-height: var(--rk-line-height-compact);
@@ -204,7 +211,16 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-btn:active, .rk-btn[aria-expanded='true'] { background-color: var(--rk-hover); }
 .rk-btn--primary, .rk-btn--primary:active { background-color: var(--rk-accent); border-color: var(--rk-accent); color: var(--rk-on-accent); }
 .rk-btn--primary:active { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+/* An action that cannot be undone (docs/forms.md): frame and words in the error colour, never filled, never primary. */
+.rk-btn[data-status='error'] { border-color: var(--rk-status-error-full); background-color: transparent; color: var(--rk-status-error-full); }
+.rk-btn[data-status='error']:active { background-color: var(--rk-hover); }
 .rk-btn:disabled, .rk-btn[aria-disabled='true'] { border-color: var(--rk-disabled); background: none; color: var(--rk-disabled); cursor: not-allowed; }
+/* An icon-only button: square at the control's height (the row's, in a row), 44px under a coarse pointer whatever the
+   density; it needs an aria-label. Quiet (.rk-btn--quiet) for row actions and a sheet's close. */
+.rk-btn--icon { width: var(--rk-control-height); min-width: var(--rk-control-height); padding: 0; }
+.rk-btn--icon > svg { width: 20px; height: 20px; flex: none; }
+.rk-rows .rk-btn--icon, .rk-table .rk-btn--icon { width: var(--rk-row-height); min-width: var(--rk-row-height); min-height: var(--rk-row-height); }
+@media (pointer: coarse) { .rk-btn--icon, .rk-rows .rk-btn--icon, .rk-table .rk-btn--icon { min-width: var(--rk-touch-target); min-height: var(--rk-touch-target); } }
 .rk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rk-space-s); }
 /* A checkbox or radio with its label; a group of them goes in .rk-choices. */
 .rk-switch { display: inline-flex; align-items: center; gap: var(--rk-space-s); min-height: var(--rk-control-height); font-weight: var(--rk-font-weight-semibold); cursor: pointer; }
@@ -648,6 +664,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-empty[data-status='error'] > :first-child::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--_rk-mark); }
 /* Pending: the button keeps its width and says what it is doing ("saving…"); the line runs under it. */
 .rk-btn[data-rk-pending] { cursor: progress; }
+/* A running action refuses clicks (aria-disabled) but is not disabled: it keeps its colours and says what it does. */
+.rk-btn[data-rk-pending][aria-disabled='true'] { border-color: currentColor; color: inherit; cursor: progress; }
+.rk-btn--primary[data-rk-pending][aria-disabled='true'] { background-color: var(--rk-accent); border-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk-btn[data-status='error'][data-rk-pending][aria-disabled='true'] { border-color: var(--rk-status-error-full); color: var(--rk-status-error-full); }
 .rk-btn[data-rk-pending]::after { inset: auto 0 -6px; }
 
 /* Table ---------------------------------------------------------------------------------------------------------- */
@@ -791,9 +811,11 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 
 /* Sheet ---------------------------------------------------------------------------------------------------------- */
 /* A short question from the top edge; everything behind it stays where it was and does not scroll. A tap on the
-   shading cancels (closedby="any", with a script fallback); with unsaved input, use closedby="closerequest". */
+   shading cancels (closedby="any", with a script fallback); with unsaved input, use closedby="closerequest".
+   Sized and centred against the viewport (100vw), not the box the root's reserved scrollbar gutter leaves: with
+   classic scrollbars that box is 15px narrower, and a phone-wide sheet stood short of the right edge. */
 .rk-sheet {
-  margin: 0 auto auto; width: min(32rem, 100%); max-width: 100%; max-height: calc(100dvh - var(--rk-space-xl)); overflow-y: auto; overscroll-behavior: contain;
+  margin: 0 auto auto calc((100vw - min(32rem, 100vw)) / 2); width: min(32rem, 100vw); max-width: none; max-height: calc(100dvh - var(--rk-space-xl)); overflow-y: auto; overscroll-behavior: contain;
   padding: var(--rk-space-l) var(--rk-space-m);
   border: 0; border-bottom: 1px solid var(--rk-text-contrast-low); border-radius: 0 0 var(--rk-radius-m) var(--rk-radius-m);
   background: var(--rk-bg); color: var(--rk-text-primary);
@@ -803,6 +825,12 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-sheet > * + *, .rk-sheet form > * + * { margin-top: var(--rk-space-m); }
 .rk-sheet .rk-kicker + * { margin-top: var(--rk-space-xs); }
 :root:has(dialog.rk-sheet[open]) { overflow: hidden; scrollbar-gutter: stable; }
+/* Every sheet has a visible way out (docs/states.md): its safe answer, or this close button at the top corner,
+   <button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close"> in its form. */
+.rk-sheet-close { position: absolute; top: var(--rk-space-xs); right: var(--rk-space-xs); margin: 0 !important; }
+.rk-sheet:has(> form > .rk-sheet-close) > form > .rk-kicker:first-child, .rk-sheet:has(> .rk-sheet-close) > .rk-kicker:first-child { padding-right: var(--rk-touch-target); }
+/* Asking before unsaved input goes (sheet(dialog, { dirty })): the question takes the sheet's place, in it. */
+.rk-sheet[data-rk-asking] > :not(.rk-sheet-ask) { display: none !important; }
 .rk-scrim { position: fixed; inset: 0; background: var(--rk-shading); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 @keyframes rk-from-top { from { opacity: 0; transform: translateY(-16px); } }
 /* Something that appears in place to say a thing (an error summary, a refusal, waiting updates): a fade and 8px. */

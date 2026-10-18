@@ -458,6 +458,13 @@
     customAccent = null; window.siteAccent(null); store.set('rekta-site-accent-def', null); store.set('rekta-site-accent', null); paintAccent();
     toasts.show('Accent removed.', { key: 'accent' });
   });
+  // A form in a sheet: a close request asks while the name has been typed in.
+  const viewSheet = $('#view-sheet');
+  Rekta.sheet(viewSheet, { dirty: () => $('#view-name').value.trim() !== '' });
+  $('#view-open').addEventListener('click', () => { $('#view-name').value = ''; viewSheet.showModal(); });
+  viewSheet.addEventListener('close', () => {
+    if (viewSheet.returnValue === 'save' && $('#view-name').value.trim()) toasts.show(`View “${$('#view-name').value.trim()}” saved.`, { key: 'view', from: $('#view-open') });
+  });
   if (customAccent) { $('#a-name').value = customAccent.name; $('#a-light').value = customAccent.light; $('#a-dark').value = customAccent.dark || ''; accentGuard.clean(); }
 
   /* ---------- desktop: a tree, tooltips, context menus, a sortable list, ten thousand lines ---------- */

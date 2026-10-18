@@ -99,6 +99,7 @@ export const strings = {
   guardText: { one: (what) => `${what} has 1 unsaved change.`, other: (what, n) => `${what} has ${n} unsaved changes.` },
   guardDiscard: 'discard changes',
   guardKeep: 'keep editing',
+  discardTitle: 'Discard what you entered?',
   move: (item) => `move ${item}`,
   nothingToUndo: 'Nothing to undo.',
   undone: (what) => `Undone: ${what}`,
@@ -1405,12 +1406,20 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
 // Sheet --------------------------------------------------------------------------------------------------------------
 // <dialog class="rk-sheet"> opened with showModal(). A tap on the shading cancels where closedby is not supported.
 // It leaves the way it came, back up to the top edge, over duration-short: its answer counts once it has gone.
-export function sheet(dialog) {
+// sheet(dialog, { dirty }): while dirty() is true, a close request (Escape, the shading, a cancel button) asks first,
+// in the sheet itself (one modal at a time): "keep editing" is the answer that is chosen and focused. Calling it again
+// for a dialog start() already attached updates its options.
+const sheets = new WeakMap();
+export function sheet(dialog, opts = {}) {
+  const had = sheets.get(dialog);
+  if (had) { Object.assign(had.opts, opts); return had.api; }
+  const o = { dirty: null, ...opts };
   const close = HTMLDialogElement.prototype.close;
-  let leaving = false;
+  let leaving = false, ask = null, before = null;
   function leaveThen(value) {
     const d = ms('--rk-duration-short') * 0.8;
     if (!dialog.open) return;
+    if (ask) unask(false);
     if (!d || leaving) { leaving = false; close.call(dialog, value); return; }
     leaving = true;
     dialog.setAttribute('data-rk-phase', 'leaving');
@@ -1418,19 +1427,63 @@ export function sheet(dialog) {
     try { anims.push(dialog.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, easing: 'linear', fill: 'forwards', pseudoElement: '::backdrop' })); } catch { /* no pseudo-element animation */ }
     finished(anims).then(() => { leaving = false; dialog.removeAttribute('data-rk-phase'); close.call(dialog, value); anims.forEach((a) => a.cancel()); });
   }
+  const isDirty = () => { try { return !!(o.dirty && o.dirty()); } catch { return false; } };
+  function askFirst(value) {
+    if (ask) return;
+    before = document.activeElement;
+    const id = uid('rk-ask');
+    ask = document.createElement('div');
+    ask.className = 'rk-sheet-ask'; ask.setAttribute('role', 'group'); ask.setAttribute('aria-labelledby', id);
+    const kicker = ask.appendChild(document.createElement('p')); kicker.className = 'rk-kicker'; kicker.textContent = tx('guardKicker');
+    const title = ask.appendChild(document.createElement('h2')); title.className = 'rk-group'; title.id = id; title.textContent = tx('discardTitle');
+    const row = ask.appendChild(document.createElement('p')); row.className = 'rk-actions';
+    const keep = row.appendChild(document.createElement('button')); keep.type = 'button'; keep.className = 'rk-btn rk-btn--primary'; keep.textContent = tx('guardKeep');
+    const drop = row.appendChild(document.createElement('button')); drop.type = 'button'; drop.className = 'rk-btn'; drop.textContent = tx('guardDiscard');
+    keep.addEventListener('click', () => unask(true));
+    drop.addEventListener('click', () => leaveThen(value));
+    dialog.setAttribute('data-rk-asking', '');
+    dialog.appendChild(ask);
+    keep.focus();
+  }
+  function unask(refocus) {
+    if (!ask) return;
+    ask.remove(); ask = null; dialog.removeAttribute('data-rk-asking');
+    if (refocus && before && before.isConnected) before.focus();
+  }
+  // A close request: ask when there is something to lose; while asking, it means "keep editing".
+  function request(value) {
+    if (ask) { unask(true); return; }
+    if (isDirty()) askFirst(value); else leaveThen(value);
+  }
   const click = (e) => {
     if ('closedBy' in HTMLDialogElement.prototype || e.target !== dialog || dialog.getAttribute('closedby') === 'closerequest') return;
     const r = dialog.getBoundingClientRect();
-    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialog.close('cancel');
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) request('cancel');
   };
-  const submit = (e) => { if (e.target.getAttribute('method') !== 'dialog' || e.defaultPrevented) return; e.preventDefault(); leaveThen(e.submitter ? e.submitter.value : ''); };
-  const cancel = (e) => { if (!e.cancelable) return; e.preventDefault(); leaveThen('cancel'); };
+  const submit = (e) => {
+    if (e.target.getAttribute('method') !== 'dialog' || e.defaultPrevented) return;
+    e.preventDefault();
+    const value = e.submitter ? e.submitter.value : '';
+    if (value === 'cancel') request(value); else leaveThen(value);
+  };
+  const cancel = (e) => { if (!e.cancelable) { unask(false); return; } e.preventDefault(); request('cancel'); };
+  const closed = () => unask(false);
   if (!dialog.hasAttribute('closedby')) dialog.setAttribute('closedby', 'any');
   dialog.close = (value) => leaveThen(value);
   dialog.addEventListener('click', click);
   dialog.addEventListener('submit', submit);
   dialog.addEventListener('cancel', cancel);
-  return { destroy() { dialog.removeEventListener('click', click); dialog.removeEventListener('submit', submit); dialog.removeEventListener('cancel', cancel); delete dialog.close; } };
+  dialog.addEventListener('close', closed);
+  const api = {
+    get asking() { return !!ask; },
+    destroy() {
+      unask(false); sheets.delete(dialog);
+      dialog.removeEventListener('click', click); dialog.removeEventListener('submit', submit); dialog.removeEventListener('cancel', cancel); dialog.removeEventListener('close', closed);
+      delete dialog.close;
+    },
+  };
+  sheets.set(dialog, { opts: o, api });
+  return api;
 }
 
 // Data states ------------------------------------------------------------------------------------------------------

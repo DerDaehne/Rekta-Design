@@ -27,6 +27,43 @@ what looks current is current, and what is not says so.
 - **Pausing is the user's.** A paused, halted or offline banner state
   stops live drawing everywhere; the regions turn stale on their own.
 
+## A growing list: a trace, a log
+
+A list that grows by appending (a build's log, a request's trace, a
+chat-like timeline) reads in time order and keeps the live contract.
+
+- **New rows at the end**, oldest first: it reads down like a transcript.
+  (A list of current things with the newest on top, such as
+  notifications, is not a log: there new items enter at the top and
+  push nothing the user is reading, because they come above it only
+  while the list is scrolled to its top.)
+- **Following the newest.** While the list is scrolled to its end (within
+  one row), it follows: new rows come in and the list keeps its end in
+  view. Scrolling away (up), the pointer resting on it or focus in it
+  stops following; the list then holds still, rows append below out of
+  sight, and a quiet button at its end says how many ("12 new · show",
+  the same `.rk-live-more` look as "updates waiting"). The button, or
+  scrolling back to the end, shows them and follows again. Nothing ever
+  scrolls the list while the user reads it.
+- **Arrival.** A row that comes in view while following enters like any
+  new row in a list (`enter(el)`: it slides in over `duration-moderate`).
+  More than a few rows a second arrive at once, without motion; under
+  reduced motion they simply appear. A row that arrives out of sight has
+  no motion.
+- **Step rows.** A row that marks something other than an entry (a
+  manual intervention, a phase starting, a resume after a pause) is a
+  full-width row whose words are in the kicker style (lowercase,
+  `text-contrast-high`, the time and who: "paused by ana · 14:02"), with
+  a hairline above it; a status square (`.rk-tag[data-status]`) only
+  where it is a status. It never takes a fill and never moves the rows
+  around it.
+- **Assistive technology:** the list is `role="log"` (polite, additions
+  only), so new rows are read as they come; with many per second, say
+  the count instead ("12 new lines") through the region's status.
+- **Age and staleness** as for every live region: the age line counts
+  from the last row or heartbeat; a stopped trace says it has stopped
+  ("finished at 14:20") rather than turning stale.
+
 ## Undo
 
 Anything a person does to data can be taken back: archive, edit, move,

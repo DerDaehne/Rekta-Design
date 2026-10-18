@@ -5,6 +5,71 @@ tokens, public hooks, `data-rk-*` attributes, events and the `rekta.js`
 API are the public surface. Before 1.0, a minor version may still break
 it; each entry says how.
 
+## Unreleased
+
+Reports #36–#65, from products built on 0.3.0: Rekta Design in apps with a
+framework router and a server.
+
+### Changed (may need a change in an app)
+
+- **A nav pivot turns only with `places()` or `pivot(el, { turn })`** (#40).
+  A facet pivot no longer refers to the turn, so a bundle that only uses
+  `pivot` drops it (6.0 → 4.0 KB gzip). A nav pivot without either now
+  slides like a facet pivot.
+- **`pivot()` owns `hidden` on its panels one facet at a time, from the
+  start**; wide, it shows every panel with `data-rk-reveal` and leaves
+  `hidden` alone (#36).
+- **Counting strings are plural forms** (#54): `undoWindow`, `selected`,
+  `guardText`, `updatesWaiting` and `needAttention` are
+  `{ one, other, … }`, picked with `Intl.PluralRules`. A function given to
+  `setStrings()` still works.
+- **The banner's time line is the state's real start** (#47): kept per
+  state from `set(name, true)`, or the `since` given; `since: false` shows
+  none.
+- **Places in the app bar hide the places' top strip** (#50) through
+  `:root[data-rk-places]`, which `appbar()` writes; pinned controls move
+  into "more" while the places show.
+- **A sheet is sized against the viewport** (#61), so it spans a phone
+  whatever the scrollbar gutter.
+- **The showcase's light zones 1 and 3** moved to `#5489b6` and `#7d8d5e`
+  (#52), 0.09 apart under tritanopia too.
+
+### Added
+
+- `strip(el)` for a router's strip of links, `arrive(el)` exported,
+  `pivot()`'s `select(i, { silent })`, `layout()` and `turn` option; lengths
+  in any form (`calc()`) (#37–#42).
+- Toasts: `windowMs`, `onEnd(reason)`, `status`, and the toast's
+  `setRemaining(ms)`, `remaining`, `held`, with `rk:toasthold` (#45, #46).
+- Focus fallback: `start({ focusFallback })`, `[data-rk-focus-fallback]`,
+  then `h1`, `main` (#43).
+- Banner remedy as a link: `action: { label, href }` (#47).
+- App bar: `data-rk-priority="pinned"`, key hints apart in "more",
+  `data-rk-places`, `.rk-place-name` (#48–#50).
+- `sheet(dialog, { dirty })`: unsaved input asks in the sheet before it
+  goes; `.rk-sheet-close` (#59, #60).
+- Buttons: `.rk-btn[data-status="error"]` for destructive actions,
+  `.rk-btn--icon`, and a pending button keeps its colours (#63–#65).
+- Data: `.rk-meter[data-rk-code]`, the share bar `.rk-shares` (#51);
+  `.rk-figures` for a status region (#57); `.rk-clamp` for a long title
+  (#58).
+- TypeScript declarations: `dist/rekta.d.ts`, `dist/rekta.strings.de.d.ts`,
+  `types` in `exports`, and `./strings.de.js` exported (#53).
+- `--check`: declarations match the exports, counting strings have `one`
+  and `other`, a destructive button's words hold 4.5:1.
+
+### Documented
+
+The keys Rekta takes, per layer and component, and that app handlers skip
+`defaultPrevented` (#44); a facet in the address (#55); a growing live list
+(#56); the status region (#57); a long main title (#58); a form in a sheet
+and a visible way out (#59, #60); the error summary's markup (#62).
+
+### Fixed
+
+- The showcase's reminder said "in 2 days" for a date three days ahead
+  after 21:00: it counts calendar days now.
+
 ## 0.3.0 — 2026-10-18
 
 ### Breaking (rekta-core: declared first)

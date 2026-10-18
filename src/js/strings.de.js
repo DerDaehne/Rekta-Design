@@ -17,6 +17,7 @@ export const de = {
   guardText: { one: (what) => `${what} hat eine ungespeicherte Änderung.`, other: (what, n) => `${what} hat ${n} ungespeicherte Änderungen.` },
   guardDiscard: 'Änderungen verwerfen',
   guardKeep: 'weiter bearbeiten',
+  discardTitle: 'Eingaben verwerfen?',
   move: (item) => `${item} verschieben`,
   nothingToUndo: 'Nichts rückgängig zu machen.',
   undone: (what) => `Rückgängig: ${what}`,

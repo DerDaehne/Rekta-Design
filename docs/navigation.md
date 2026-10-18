@@ -108,6 +108,34 @@ places its tiles and links open, each with one parent.
   item replaces the address while the list stays in view, and is a step
   of its own where the item replaces the list (compact); see
   [collections.md](collections.md#split-view).
+- **A facet is part of the address, as a query**, like filters:
+  `#runs?facet=history` (`/runs?facet=history` in path mode). Choosing a
+  facet replaces the address and never adds a history entry; a reload or
+  a shared link opens that facet. The first facet is the default and
+  leaves the parameter out. A pivot that is the place's whole content
+  uses `facet`; a place with two pivots names each (`?view=…`). A path
+  segment would make each facet a place of its own (and back would step
+  through them); a hash is the place's already.
+
+  ```js
+  const tabs = Rekta.pivot(strip, {
+    onSelect(i, tab) {
+      const p = router.params;                                 // a copy
+      if (i) p.set('facet', tab.dataset.facet); else p.delete('facet');
+      router.setParams(p);
+    },
+  });
+  router.onItem('runs', (item, { params }) => {             // arrival and back
+    const at = [...strip.children].findIndex((t) => t.dataset.facet === params.get('facet'));
+    tabs.select(Math.max(0, at), { silent: true });
+  });
+  ```
+
+  **The first paint** renders the addressed facet: the
+  server (or the framework's render) marks its tab `aria-selected="true"`
+  and leaves the other panels `hidden`; `pivot()` starts on the tab
+  marked selected and keeps it, so nothing jumps when the script arrives.
+  An unknown facet falls back to the first, without an error.
 
 ### Crumb
 

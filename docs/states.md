@@ -81,6 +81,12 @@ From bottom to top:
   [navigation.md](navigation.md#who-gets-a-key)).
 - A sheet holds focus. Report the result of an action taken in a sheet
   after the sheet has closed, not as a toast beneath its shading.
+- **Every sheet has a visible way out**: its safe answer, or a close
+  button (`.rk-btn--icon.rk-btn--quiet.rk-sheet-close`, `value="cancel"`,
+  `aria-label="close"`) at its top corner. Escape and the shading are not
+  enough: a touch screen may have neither key nor gesture, and with
+  `closedby="closerequest"` the shading does nothing. The markup is in
+  [forms.md](forms.md#a-form-in-a-sheet).
 - **Toasts stay below sheets**, always: the toast region is never made a
   popover to reach the top layer. A sheet, or the palette, that has to
   say something while it is open says it inside itself, where the user

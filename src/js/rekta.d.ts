@@ -174,7 +174,9 @@ export declare function banner(el: HTMLElement, options: {
   readonly shown: string | null;
 };
 
-export declare function sheet(dialog: HTMLDialogElement): Destroyable;
+/** With `dirty`, a close request asks in the sheet before unsaved input goes. Called again for an attached sheet, it
+ * updates the options and returns the same handle. */
+export declare function sheet(dialog: HTMLDialogElement, options?: { dirty?: (() => boolean) | null }): Destroyable & { readonly asking: boolean };
 export declare function busy<T>(region: HTMLElement, work: Promise<T> | (() => Promise<T>)): Promise<T>;
 export declare function pending<T>(button: HTMLElement, work: Promise<T> | (() => Promise<T>), options?: { label?: string }): Promise<T | undefined>;
 

@@ -108,11 +108,12 @@ state's `word`) are the caller's, in its own language.
 | `paletteEmpty` | `palette()` | ("xyz") → “Nothing to go to or run matches “xyz”.” |
 | `saveFailed` | `form()` | “Could not save. Try again.” |
 | `guardWhat` | `guard()` | “This form” |
-| `guardKicker` | `guard()` | “unsaved” |
+| `guardKicker` | `guard()`, `sheet()` | “unsaved” |
 | `guardTitle` | `guard()` | “Leave without saving?” |
 | `guardText` | `guard()` | forms of ("This form", 2), counting the second → “This form has 2 unsaved changes.” |
-| `guardDiscard` | `guard()` | “discard changes” |
-| `guardKeep` | `guard()` | “keep editing” |
+| `guardDiscard` | `guard()`, `sheet()` | “discard changes” |
+| `guardKeep` | `guard()`, `sheet()` | “keep editing” |
+| `discardTitle` | `sheet()` | “Discard what you entered?” |
 | `move` | `sortable()` | ("Build") → “move Build” |
 | `nothingToUndo` | `undoStack()` | “Nothing to undo.” |
 | `undone` | `undoStack()` | ("archive 3 jobs") → “Undone: archive 3 jobs” |
@@ -199,6 +200,7 @@ them:
 | `data-rk-live` | a live region | `fresh`, `stale` or `offline`. |
 | `data-rk-held` | a live region | Held still while the pointer rests on it or focus is in it. |
 | `data-rk-phase="leaving"` | a sheet | Leaving, before it closes. |
+| `data-rk-asking` | a sheet | It asks before unsaved input goes (`sheet(dialog, { dirty })`). |
 | `data-rk-unselecting` | the app bar | Its own commands coming back after the selection mode. |
 | `data-rk-sliding` | segments, the chosen label | The accent block is sliding to the new choice. |
 | `data-rk-grow` | a chart's bars | Growing in on the first draw. |
@@ -588,14 +590,24 @@ sentence share a line and the action goes under them, about 105px on a
 
 Returns `{ set(name, on, { from, since }), toggle(name), is(name), shown, destroy }`.
 
-### `sheet(dialog)`
+### `sheet(dialog, { dirty })`
 
 For `<dialog class="rk-sheet">` opened with `showModal()`. A tap on the
 shading cancels where `closedby` is not supported. Use
 `closedby="closerequest"` on a sheet with unsaved input. The sheet leaves
 the way it came before it closes (`data-rk-phase="leaving"`): `close()`,
 Escape and a `method=dialog` form all wait for it, and `close` fires
-after. Returns `{ destroy }`.
+after.
+
+With `dirty` (a function), a close request while it returns true
+(Escape, the shading, a `method=dialog` submit with `value="cancel"`)
+asks first, inside the sheet (`.rk-sheet-ask`; the sheet gets
+`data-rk-asking` and shows only the question): `discardTitle` with
+"keep editing" (primary, focused) and "discard changes". Another close
+request while it asks keeps editing. `start()` attaches every sheet, so
+call `sheet(dialog, { dirty })` afterwards: it updates the options of the
+sheet already attached and returns the same handle. Returns
+`{ asking, destroy }`.
 
 ### `busy(region, work)`
 

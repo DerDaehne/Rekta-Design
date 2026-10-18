@@ -242,6 +242,7 @@ function check(tokens) {
       need('focus', bg, 3, 'focus ring');
       need('accent', bg, 3, 'accent');
       for (const s of STATUS) need(`status-${s}-full`, bg, 3, 'status mark');
+      need('status-error-full', bg, 4.5, 'a destructive button\'s words (.rk-btn[data-status=error])');
     }
     need('on-accent', 'accent', 4.5, 'text');
     for (const s of STATUS) {

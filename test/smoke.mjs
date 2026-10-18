@@ -558,6 +558,8 @@ await go(p, 'forms');
 ok((await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'remove says why it cannot act yet');
 await p.click('#a-save'); await p.waitForTimeout(300);
 ok((await text(p, '.rk-errors > p')) === '2 fields need attention' && await p.evaluate(() => document.activeElement.classList.contains('rk-errors')), 'sending empty: a summary takes focus', await text(p, '.rk-errors > p'));
+ok(await p.evaluate(() => { const b = document.querySelector('.rk-errors'), h = b && document.getElementById(b.getAttribute('aria-labelledby'));
+  return b === b.parentElement.firstElementChild && b.getAttribute('role') === 'group' && b.getAttribute('tabindex') === '-1' && h && h.tagName === 'P' && [...b.querySelectorAll('ul > li > a')].every((a) => /^#a-/.test(a.getAttribute('href'))); }), 'the summary has the markup forms.md gives');
 await p.click('.rk-errors a[href="#a-light"]');
 ok((await focused(p)) === 'a-light', 'a summary link focuses its field');
 await p.fill('#a-light', '#f7cb47'); await p.waitForTimeout(100);
@@ -573,8 +575,42 @@ ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(
 ok(!(await p.getAttribute('#a-remove', 'aria-disabled')), 'remove can act now');
 await p.click('#a-remove'); await p.waitForTimeout(400);
 ok((await sheetTitle(p)) === 'Remove “sea”?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep it', 'confirm: the safe answer first');
-await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(400);
-ok((await p.evaluate(() => document.documentElement.dataset.accent)) === undefined && (await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'removed, ink again');
+await p.click('dialog[open] button[value=ok]');
+await until(p, () => p.evaluate(() => !document.querySelector('dialog[open]')), 3000);   /* the sheet leaves first; its answer counts once it has gone */
+ok((await p.evaluate(() => document.documentElement.dataset.accent)) === undefined && (await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'removed, ink again', await p.evaluate(() => `accent ${document.documentElement.dataset.accent} remove ${document.querySelector('#a-remove').getAttribute('aria-disabled')} open ${!!document.querySelector('dialog[open]')} phase ${document.querySelector('dialog[open]')?.getAttribute('data-rk-phase')}`));
+
+// Buttons: a running one keeps its colours, a destructive one is framed in the error colour, an icon button is square.
+const btns = await p.evaluate(async () => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const row = document.createElement('p'); row.className = 'rk-actions';
+  row.innerHTML = '<button class="rk-btn rk-btn--primary" type="button">save</button><button class="rk-btn" type="button" data-status="error">delete</button>';
+  document.querySelector('#forms').append(row);
+  const [save, del] = row.children, before = getComputedStyle(save).backgroundColor;
+  let release; const run = Rekta.pending(save, new Promise((r) => { release = r; }));
+  await new Promise((r) => setTimeout(r, 50));
+  const out = { before, during: getComputedStyle(save).backgroundColor, disabled: rgb('var(--rk-disabled)'), ad: save.getAttribute('aria-disabled'),
+    pendingKeeps: save.getAttribute('aria-disabled') === 'true' && getComputedStyle(save).backgroundColor === before && getComputedStyle(save).color !== rgb('var(--rk-disabled)'),
+    danger: getComputedStyle(del).color === rgb('var(--rk-status-error-full)') && getComputedStyle(del).borderTopColor === rgb('var(--rk-status-error-full)') && getComputedStyle(del).backgroundColor === 'rgba(0, 0, 0, 0)' };
+  release(); await run; row.remove();
+  return out;
+});
+ok(btns.pendingKeeps, 'a running button keeps its colours (it is not disabled)', JSON.stringify(btns));
+ok(btns.danger, 'a destructive button: frame and words in the error colour, not filled', JSON.stringify(btns));
+// A form in a sheet: a close request asks while there is input; Escape while asking keeps editing; an untouched one closes.
+await p.click('#view-open'); await p.waitForTimeout(400);
+const closeBtn = await p.evaluate(() => { const r = document.querySelector('#view-sheet .rk-sheet-close').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), label: document.querySelector('#view-sheet .rk-sheet-close').getAttribute('aria-label') }; });
+ok(closeBtn.w === closeBtn.h && closeBtn.w >= 32 && closeBtn.label === 'close', 'the sheet has a visible way out: a square icon button with a name', JSON.stringify(closeBtn));
+await p.keyboard.press('Escape');
+ok(await until(p, () => p.evaluate(() => !document.querySelector('#view-sheet').open), 3000), 'an untouched form in a sheet just closes');
+await p.click('#view-open'); await p.waitForTimeout(400);
+await p.fill('#view-name', 'release review'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+const asked = await p.evaluate(() => { const d = document.querySelector('#view-sheet'), f = document.activeElement; return { open: d.open, asking: d.hasAttribute('data-rk-asking'), focus: f.textContent, field: document.querySelector('#view-name').getClientRects().length }; });
+ok(asked.open && asked.asking && asked.focus === 'keep editing' && asked.field === 0, 'with input, Escape asks in the sheet, "keep editing" first', JSON.stringify(asked));
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+ok(await p.evaluate(() => { const d = document.querySelector('#view-sheet'); return d.open && !d.hasAttribute('data-rk-asking') && document.activeElement.id === 'view-name' && document.activeElement.value === 'release review'; }), 'Escape while it asks keeps editing, focus back in the field');
+await p.click('#view-sheet .rk-sheet-close'); await p.waitForTimeout(200);
+await p.click('#view-sheet .rk-sheet-ask .rk-btn:not(.rk-btn--primary)');
+ok(await until(p, () => p.evaluate(() => !document.querySelector('#view-sheet').open), 3000), 'the close button asks too, and discarding closes');
 await p.fill('#a-name', 'sea-2');
 await go(p, 'overview');
 await p.click('#tile-notes'); await p.waitForTimeout(400);
@@ -671,8 +707,8 @@ ok((await p.evaluate(() => JSON.parse(localStorage.getItem('rekta-prefs')).theme
 // Sheet: the shading cancels; reset.
 await p.click('#reset'); await p.waitForTimeout(300);
 ok((await p.evaluate(() => getComputedStyle(document.documentElement).overflow)) === 'hidden', 'the page behind a sheet does not scroll');
-await p.mouse.click(700, 850); await p.waitForTimeout(400);
-ok(!(await p.evaluate(() => document.querySelector('#sheet').open)), 'a tap on the shading cancels');
+await p.mouse.click(700, 850);
+ok(await until(p, () => p.evaluate(() => !document.querySelector('#sheet').open), 3000), 'a tap on the shading cancels');
 await p.click('#reset'); await p.waitForTimeout(300); await p.click('#sheet button[value=reset]'); await p.waitForTimeout(600);
 ok((await toast(p)).startsWith('Demo reset') && (await text(p, '#presses')) === '0', 'reset restores the demo');
 
@@ -806,6 +842,15 @@ await m.screenshot({ path: join(shots, 'phone-token.png') });
 await m.goBack(); await m.waitForTimeout(TURN);
 ok(await m.evaluate(() => !document.querySelector('#tokens-list').hidden), 'phone: back returns to the list', await focused(m));
 await m.close();
+
+// A sheet at 375px with classic scrollbars: the whole width, not short by the reserved gutter.
+{
+  const n = await open({ viewport: { width: 375, height: 800 } });
+  await n.evaluate(() => document.querySelector('#sheet').showModal()); await n.waitForTimeout(500);
+  const r = await n.evaluate(() => { const b = document.querySelector('#sheet').getBoundingClientRect(); return { x: Math.round(b.x), w: Math.round(b.width), vw: innerWidth }; });
+  ok(r.x === 0 && r.w === r.vw, 'a phone-wide sheet spans the viewport, scrollbar gutter or not', JSON.stringify(r));
+  await n.close();
+}
 
 // Motion that follows a change of content: tiles re-flow, flip and peek; rows come and go; a sheet leaves.
 const q = await open();
