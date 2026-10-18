@@ -515,11 +515,12 @@
         </div>
         <div class="chart" id="chart-bars"></div>
         <p class="rk-kicker group-label">a domain's own colours: heart-rate zones</p>
-        <div class="zones" role="img" aria-label="Time in heart-rate zones, a 75 minute ride: zone 1 12 min, zone 2 31 min, zone 3 18 min, zone 4 10 min, zone 5 4 min">
-          <span style="flex-grow:12;background:var(--rk-series-1)"></span><span style="flex-grow:31;background:var(--rk-series-2)"></span><span style="flex-grow:18;background:var(--rk-series-3)"></span><span style="flex-grow:10;background:var(--rk-series-4)"></span><span style="flex-grow:4;background:var(--rk-series-5)"></span>
+        <div class="rk-shares" id="zones" role="img" aria-label="Time in heart-rate zones, a 75 minute ride: zone 1 12 min, zone 2 31 min, zone 3 18 min, zone 4 10 min, zone 5 4 min">
+          <span data-rk-code="1" style="--rk-v:12"></span><span data-rk-code="2" style="--rk-v:31"></span><span data-rk-code="3" style="--rk-v:18"></span><span data-rk-code="4" style="--rk-v:10"></span><span data-rk-code="5" style="--rk-v:4"></span>
         </div>
         <p class="rk-actions tag-row" aria-hidden="true"><span class="rk-tag" data-rk-code="1">z1 · 12 min</span><span class="rk-tag" data-rk-code="2">z2 · 31 min</span><span class="rk-tag" data-rk-code="3">z3 · 18 min</span><span class="rk-tag" data-rk-code="4">z4 · 10 min</span><span class="rk-tag" data-rk-code="5">z5 · 4 min</span></p>
-        <p class="note">Data is ink and grey. The one exception is a colour code the users already know, here five heart-rate zones from cool to warm: a product sets <code>--rk-series-1</code> to <code>-5</code> per theme, for small marks only, never text or a tile, and <code>build.mjs --check-product</code> holds the values to 3:1 and to colour-blind separation, as this page's are.</p>
+        <div class="zone-meter"><div class="rk-meter-head"><span>zone 2, endurance</span><b>31 min</b></div><div class="rk-meter" id="zone-meter" role="meter" aria-label="time in zone 2" aria-valuemin="0" aria-valuemax="75" aria-valuenow="31" aria-valuetext="31 of 75 minutes" data-rk-code="2" style="--rk-v:.41"></div></div>
+        <p class="note">Data is ink and grey. The one exception is a colour code the users already know, here five heart-rate zones from cool to warm, as one share bar (<code>.rk-shares</code>) and as a meter (<code>.rk-meter[data-rk-code]</code>): a product sets <code>--rk-series-1</code> to <code>-5</code> per theme, for small marks only, never text or a tile, and <code>build.mjs --check-product</code> holds the values to 3:1 and to colour-blind separation, as this page's are.</p>
         <p class="rk-kicker group-label">meters</p>
         <div class="meters">
           <div><div class="rk-meter-head"><span>processor</span><b id="m-cpu-v">42%</b></div><div class="rk-meter" id="m-cpu" role="meter" aria-label="processor" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" style="--rk-v:.42"></div></div>

@@ -231,6 +231,19 @@ const codes = await p.evaluate(() => {
   return out;
 });
 ok(codes.tag === codes.want && codes.line === codes.want && codes.tagText === codes.ink, 'a domain colour code marks the tag and the chart line, never the text', JSON.stringify(codes));
+const shares = await p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const parts = [...document.querySelectorAll('#zones > span')], w = parts.map((x) => x.getBoundingClientRect().width);
+  const meter = document.querySelector('#zone-meter');
+  meter.setAttribute('data-status', 'warning'); const withStatus = getComputedStyle(meter, '::before').backgroundColor; meter.removeAttribute('data-status');
+  return {
+    colours: parts.every((x, i) => getComputedStyle(x).backgroundColor === rgb(`var(--rk-series-${i + 1})`)),
+    ratio: Math.abs(w[1] / w[0] - 31 / 12) < 0.15, gap: Math.round(parts[1].getBoundingClientRect().left - parts[0].getBoundingClientRect().right),
+    meter: getComputedStyle(meter, '::before').backgroundColor === rgb('var(--rk-series-2)'), status: withStatus === rgb('var(--rk-status-warning-full)'),
+  };
+});
+ok(shares.colours && shares.ratio && shares.gap === 2, 'a share bar: each share in its code, as wide as its share, 2px apart', JSON.stringify(shares));
+ok(shares.meter && shares.status, 'a meter fills in its code; a status wins', JSON.stringify(shares));
 
 // rekta.js in German (?lang=de): its words from the catalogue, its numbers in the locale; none of its English shows.
 {
@@ -484,7 +497,7 @@ const tst = await p.evaluate(async () => {
   const fb = document.createElement('p'); fb.textContent = 'fallback'; fb.setAttribute('data-rk-focus-fallback', '');
   document.querySelector('#feedback').append(fb);
   const gone = document.createElement('button');
-  const t3 = t.show('Sent.', { undo: () => {}, from: gone }); await wait(50);
+  const t3 = t.show('Sent.', { undo: () => {}, from: gone }); await wait(500);   /* in once the one before has gone */
   t3.el.querySelector('button').focus(); t.dismiss(); await wait(50);
   const fellBack = document.activeElement === fb;
   fb.remove(); t.destroy(); await wait(300); region.remove();
@@ -677,6 +690,14 @@ ok((await p.title()).startsWith('--rk-focus · '), 'the title names the token', 
 await p.screenshot({ path: join(shots, 'token.png') });
 await p.click('#tok-body tr[data-name="bg"]', { modifiers: ['Control'] }); await p.waitForTimeout(200);
 ok((await text(p, '.rk-ab-count')) === '2 selected', 'Ctrl+click in the tokens');
+// Plural forms follow the locale's rules (Intl.PluralRules): Polish says 3 and 5 differently.
+await p.evaluate(() => { Rekta.setLocale('pl'); Rekta.setStrings({ selected: { one: '1 zaznaczony', few: (n) => `${n} zaznaczone`, many: (n) => `${n} zaznaczonych`, other: (n) => `${n} zaznaczonego` } }); });
+await p.click('#tok-body tr[data-name="surface"]', { modifiers: ['Control'] }); await p.waitForTimeout(100);
+const pl3 = await text(p, '.rk-ab-count');
+await p.click('#tok-body tr[data-name="accent"]', { modifiers: ['Control'] }); await p.click('#tok-body tr[data-name="text-primary"]', { modifiers: ['Control'] }); await p.waitForTimeout(100);
+const pl5 = await text(p, '.rk-ab-count');
+await p.evaluate(() => { Rekta.setStrings(null); Rekta.setLocale(''); });
+ok(pl3 === '3 zaznaczone' && pl5 === '5 zaznaczonych', 'a count picks its plural form by the locale', `${pl3} / ${pl5}`);
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 ok(await visible(p, 'tokens'), 'Escape ends the selection before it goes back');
 await p.click('#tok-group'); await p.waitForTimeout(200); await p.click('#tok-group-menu [data-v=motion]'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);

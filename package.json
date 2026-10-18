@@ -10,8 +10,10 @@
     "./tokens.css": "./dist/rekta.tokens.css",
     "./rekta.css": "./dist/rekta.css",
     "./fonts.css": "./dist/rekta.fonts.css",
-    ".": "./dist/rekta.js"
+    "./strings.de.js": { "types": "./dist/rekta.strings.de.d.ts", "default": "./dist/rekta.strings.de.js" },
+    ".": { "types": "./dist/rekta.d.ts", "default": "./dist/rekta.js" }
   },
+  "types": "./dist/rekta.d.ts",
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "node scripts/build.mjs --check",

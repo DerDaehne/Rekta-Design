@@ -78,15 +78,17 @@ function px(name, el) {
 // Words and numbers -------------------------------------------------------------------------------------------------
 // Every word rekta.js shows or says comes from strings, English by default. start({ locale, strings }) or
 // setStrings({ ... }) replaces any of them: a value is a string, or a function of the same arguments returning one.
+// An entry that counts (COUNT_ARG names the argument) is a set of plural forms, { one, few, many, other, ... }, picked
+// with Intl.PluralRules for the locale; each form is a string or a function of the same arguments.
 // Numbers and times follow the locale (start's, else the document's lang, else the browser's).
 // rk-strings-begin
 export const strings = {
   undo: 'undo', redo: 'redo', ok: 'ok', cancel: 'cancel', live: 'live', since: 'since', any: 'any', field: 'field',
   noValue: 'no value', reload: 'reload',
-  undoWindow: (seconds, again) => `, ${seconds} seconds to${again ? ' undo' : ''}`,
+  undoWindow: { one: (seconds, again) => `, 1 second to${again ? ' undo' : ''}`, other: (seconds, again) => `, ${seconds} seconds to${again ? ' undo' : ''}` },
   bannerStill: (event, word) => `${event}. The banner keeps showing “${word}” until that ends.`,
   chosen: (summary, chosen) => `${summary}: ${chosen}`,
-  selected: (n) => `${n} selected`,
+  selected: { one: (n) => `${n} selected`, other: (n) => `${n} selected` },
   columnWidth: (column) => `width of ${column}`,
   cellRefused: 'That value was not taken.',
   paletteEmpty: (query) => `Nothing to go to or run matches “${query}”.`,
@@ -94,7 +96,7 @@ export const strings = {
   guardWhat: 'This form',
   guardKicker: 'unsaved',
   guardTitle: 'Leave without saving?',
-  guardText: (what, n) => `${what} has ${n === 1 ? '1 unsaved change' : `${n} unsaved changes`}.`,
+  guardText: { one: (what) => `${what} has 1 unsaved change.`, other: (what, n) => `${what} has ${n} unsaved changes.` },
   guardDiscard: 'discard changes',
   guardKeep: 'keep editing',
   move: (item) => `move ${item}`,
@@ -108,14 +110,14 @@ export const strings = {
   heldUpdated: (ago) => `held while you look · updated ${ago}`,
   staleFor: (s, m, time) => `stale · no update for ${s < 60 ? `${s} s` : m < 60 ? `${m} min` : `since ${time}`}`,
   offlineSince: (ago) => `offline · last update ${ago}`,
-  updatesWaiting: (n) => (n === 1 ? '1 update waiting · show' : `${n} updates waiting · show`),
+  updatesWaiting: { one: '1 update waiting · show', other: (n) => `${n} updates waiting · show` },
   chartName: (type, series, from, to) => `${type === 'bars' ? 'Bar' : 'Line'} chart of ${series.join(' and ')}, ${from} to ${to}. Use the arrow keys to read each value; a table follows.`,
   chartNumbers: 'show the numbers',
   installed: 'Installed. It opens in a window of its own.',
   newVersion: 'A new version is ready.',
   noMatch: (query) => `Nothing matches “${query}”.`,
   nothingYet: 'Nothing to choose yet.',
-  needAttention: (n) => (n === 1 ? '1 field needs attention' : `${n} fields need attention`),
+  needAttention: { one: '1 field needs attention', other: (n) => `${n} fields need attention` },
   pickedUp: (item, at, of) => `${item} picked up, position ${at} of ${of}. ↑ ↓ to move, Space to put down, Escape to put back.`,
   putDown: (item, at, of) => `${item} put down at position ${at} of ${of}.`,
   putBack: (item) => `${item} put back.`,
@@ -123,13 +125,19 @@ export const strings = {
   loadFailed: 'Could not load the choices. Type to try again.',
 };
 // rk-strings-end
+const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
 const DEFAULT_STRINGS = { ...strings };
 let localeSet = '';
 // setStrings(partial): replaces those words; setStrings(null) gives back the English ones.
 export function setStrings(partial) { if (partial === null) Object.assign(strings, DEFAULT_STRINGS); else Object.assign(strings, partial); }
 export function setLocale(tag) { localeSet = tag || ''; }
 export function locale() { return localeSet || (typeof document !== 'undefined' && document.documentElement.lang) || (typeof navigator !== 'undefined' && navigator.language) || 'en'; }
-function tx(key, ...args) { const v = strings[key]; return typeof v === 'function' ? v(...args) : v === undefined ? key : String(v); }
+function plural(n) { try { return new Intl.PluralRules(locale()).select(n); } catch { return n === 1 ? 'one' : 'other'; } }
+function tx(key, ...args) {
+  let v = strings[key];
+  if (v && typeof v === 'object') { const n = Number(args[COUNT_ARG[key] || 0]); v = v[plural(n)] ?? v.other; }
+  return typeof v === 'function' ? v(...args) : v === undefined ? key : String(v);
+}
 // number(v): a figure for a chart, a tooltip or a table: compact from a thousand up (1.2K, 1200 in German), in the
 // locale's digits and separators.
 export function number(v, { compact = true } = {}) {

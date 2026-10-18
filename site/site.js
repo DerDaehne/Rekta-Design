@@ -680,12 +680,14 @@
     },
   });
   $('#text-size').addEventListener('input', (e) => { root.style.fontSize = +e.target.value === 100 ? '' : `${e.target.value}%`; env(); });
-  const today = new Date(); today.setDate(today.getDate() + 3);
-  $('#when-d').value = today.toISOString().slice(0, 10);
+  const later = new Date(); later.setDate(later.getDate() + 3);
+  $('#when-d').value = `${later.getFullYear()}-${String(later.getMonth() + 1).padStart(2, '0')}-${String(later.getDate()).padStart(2, '0')}`;
+  // Days are calendar days in the user's time zone, whatever the hour now.
+  const midnight = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
   function when() {
     const d = $('#when-d').value, t = $('#when-t').value || '09:00';
     if (!d) { $('#when-hint').textContent = 'No date: nothing to remind you of.'; return; }
-    const at = new Date(`${d}T${t}`), days = Math.round((at - Date.now()) / 864e5);
+    const at = new Date(`${d}T${t}`), days = Math.round((midnight(at) - midnight(new Date())) / 864e5);
     $('#when-hint').textContent = at < Date.now() ? 'That has passed: choose a later time.' : `${days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`}, at ${t}.`;
   }
   $('#when-d').addEventListener('input', when); $('#when-t').addEventListener('input', when); when();

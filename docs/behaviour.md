@@ -33,6 +33,14 @@ it at the top of a module. Call its functions only in the browser, in a
 mount hook or an effect. `node scripts/build.mjs --check` imports it in
 plain Node, so this cannot break unnoticed.
 
+**TypeScript.** `dist/rekta.d.ts` declares the whole API (and
+`dist/rekta.strings.de.d.ts` the German catalogue); the package's
+`exports` point `types` at them, so `import * as Rekta from
+'rekta-design'` and `import { de } from 'rekta-design/strings.de.js'`
+are typed with no declarations of your own. The declarations live next
+to the script (`src/js/rekta.d.ts`), and `--check` fails when an export
+has none or a declaration names something the script does not export.
+
 ## Words and numbers
 
 Every word `rekta.js` shows or says (a toast's undo, a chart's name, a
@@ -44,13 +52,27 @@ times in live regions follow a locale.
 import * as Rekta from './rekta.js';
 import { de } from './rekta.strings.de.js';      // or rekta.strings.de.global.js: window.RektaStrings.de
 Rekta.start({ locale: 'de', strings: de });
-Rekta.setStrings({ selected: (n) => `${n} markiert` });   // any word on its own, later too
+Rekta.setStrings({ guardWhat: 'Dieser Entwurf' });        // any word on its own, later too
 ```
 
 - `start({ locale, strings })`, `setLocale(tag)`, `setStrings(partial)`
   (`setStrings(null)` gives back the English words). A value is a string
   or a function of the arguments below; a word changed later is used the
   next time it is shown.
+- **Counts.** An entry that says a count (`undoWindow`, `selected`,
+  `guardText`, `updatesWaiting`, `needAttention`) is a set of plural
+  forms, one per category of `Intl.PluralRules` for the locale (`zero`,
+  `one`, `two`, `few`, `many`, `other`), each a string or a function of
+  the entry's arguments. A missing category falls back to `other`.
+
+  ```js
+  Rekta.setLocale('pl');
+  Rekta.setStrings({ selected: { one: '1 zaznaczony', few: (n) => `${n} zaznaczone`,
+    many: (n) => `${n} zaznaczonych`, other: (n) => `${n} zaznaczonego` } });
+  ```
+
+  A plain function still works for a product's own replacement; the
+  catalogues that ship use forms.
 - `locale()` is the locale in use: the one set, else the document's
   `lang`, else the browser's. `number(v)` formats a figure the way charts
   do: compact from a thousand up (1.2K in English, 1234,5 and 2,5 Mio. in
@@ -58,8 +80,9 @@ Rekta.setStrings({ selected: (n) => `${n} markiert` });   // any word on its own
 - A German catalogue ships as `dist/rekta.strings.de.js` (and the classic
   `rekta.strings.de.global.js`); the showcase uses it at `?lang=de`.
 - `--check` fails when a phrase in `rekta.js` is written outside the
-  catalogue, and when a shipped catalogue lacks a word or has one the
-  script does not use.
+  catalogue, when a shipped catalogue lacks a word or has one the script
+  does not use, and when a counting entry lacks its `one` or `other`
+  form (or names something that is not a plural category).
 
 Words a caller passes in (a confirm's `ok`, a guard's `what`, a banner
 state's `word`) are the caller's, in its own language.
@@ -76,10 +99,10 @@ state's `word`) are the caller's, in its own language.
 | `field` | `form()` | “field” |
 | `noValue` | `chart()` | “no value” |
 | `reload` | `pwa()` | “reload” |
-| `undoWindow` | `toaster()` | (5, true) → “, 5 seconds to undo” |
+| `undoWindow` | `toaster()` | forms of (5, true) → “, 5 seconds to undo” |
 | `bannerStill` | `banner()` | ("Paused", "halted") → “Paused. The banner keeps showing “halted” until that ends.” |
 | `chosen` | `menu() summary` | ("status", "failed") → “status: failed” |
-| `selected` | `select()` | (3) → “3 selected” |
+| `selected` | `select()` | forms of (3) → “3 selected” |
 | `columnWidth` | `table()` | ("status") → “width of status” |
 | `cellRefused` | `table() edit` | “That value was not taken.” |
 | `paletteEmpty` | `palette()` | ("xyz") → “Nothing to go to or run matches “xyz”.” |
@@ -87,7 +110,7 @@ state's `word`) are the caller's, in its own language.
 | `guardWhat` | `guard()` | “This form” |
 | `guardKicker` | `guard()` | “unsaved” |
 | `guardTitle` | `guard()` | “Leave without saving?” |
-| `guardText` | `guard()` | ("This form", 2) → “This form has 2 unsaved changes.” |
+| `guardText` | `guard()` | forms of ("This form", 2), counting the second → “This form has 2 unsaved changes.” |
 | `guardDiscard` | `guard()` | “discard changes” |
 | `guardKeep` | `guard()` | “keep editing” |
 | `move` | `sortable()` | ("Build") → “move Build” |
@@ -101,14 +124,14 @@ state's `word`) are the caller's, in its own language.
 | `heldUpdated` | `live()` | ("just now") → “held while you look · updated just now” |
 | `staleFor` | `live()` | (40, 0, "14:02") → “stale · no update for 40 s” |
 | `offlineSince` | `live()` | ("4 min ago") → “offline · last update 4 min ago” |
-| `updatesWaiting` | `live()` | (2) → “2 updates waiting · show” |
+| `updatesWaiting` | `live()` | forms of (2) → “2 updates waiting · show” |
 | `chartName` | `chart()` | ("line", ["requests"], "Mon", "Sun") → “Line chart of requests, Mon to Sun. Use the arrow keys to read each value; a table follows.” |
 | `chartNumbers` | `chart()` | “show the numbers” |
 | `installed` | `pwa()` | “Installed. It opens in a window of its own.” |
 | `newVersion` | `pwa()` | “A new version is ready.” |
 | `noMatch` | `combobox()` | ("xyz") → “Nothing matches “xyz”.” |
 | `nothingYet` | `combobox()` | “Nothing to choose yet.” |
-| `needAttention` | `form()` | (2) → “2 fields need attention” |
+| `needAttention` | `form()` | forms of (2) → “2 fields need attention” |
 | `pickedUp` | `sortable()` | ("Build", 2, 4) → “Build picked up, position 2 of 4. ↑ ↓ to move, Space to put down, Escape to put back.” |
 | `putDown` | `sortable()` | ("Build", 3, 4) → “Build put down at position 3 of 4.” |
 | `putBack` | `sortable()` | ("Build") → “Build put back.” |
@@ -197,7 +220,7 @@ them:
 | Property | Written by | Read by |
 |---|---|---|
 | `--rk-i` | the page | A tile's build-in order (0–10). |
-| `--rk-v` | the page | A meter's value, 0 to 1. |
+| `--rk-v` | the page | A meter's value, 0 to 1; a share of a `.rk-shares` bar, in any unit. |
 | `--rk-titlebar-controls` | a native shell | Room kept at the title bar's end for the window's own buttons (140px by default) when `data-rk-titlebar` shows it. |
 | `--rk-sec-w` | the page | A panorama section's width when sideways. |
 | `--rk-split-w` | the page, `split()` | The width of a split's list pane; the handle writes it while dragged. |

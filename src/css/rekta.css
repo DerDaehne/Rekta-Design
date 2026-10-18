@@ -508,14 +508,14 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-legend i { flex: none; background: var(--_rk-series); }
 /* A product's domain colour code (docs/data.md): series.code N draws in --rk-series-N, ink until the product sets it.
    Small marks only: a line, a bar, a legend key, a tag's square, a zone. Never text, never a tile fill. */
-.rk-chart [data-rk-code='1'], .rk-tag[data-rk-code='1'] { --_rk-series: var(--rk-series-1, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='2'], .rk-tag[data-rk-code='2'] { --_rk-series: var(--rk-series-2, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='3'], .rk-tag[data-rk-code='3'] { --_rk-series: var(--rk-series-3, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='4'], .rk-tag[data-rk-code='4'] { --_rk-series: var(--rk-series-4, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='5'], .rk-tag[data-rk-code='5'] { --_rk-series: var(--rk-series-5, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='6'], .rk-tag[data-rk-code='6'] { --_rk-series: var(--rk-series-6, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='7'], .rk-tag[data-rk-code='7'] { --_rk-series: var(--rk-series-7, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='8'], .rk-tag[data-rk-code='8'] { --_rk-series: var(--rk-series-8, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='1'], .rk-tag[data-rk-code='1'], .rk-meter[data-rk-code='1'], .rk-shares > [data-rk-code='1'] { --_rk-series: var(--rk-series-1, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='2'], .rk-tag[data-rk-code='2'], .rk-meter[data-rk-code='2'], .rk-shares > [data-rk-code='2'] { --_rk-series: var(--rk-series-2, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='3'], .rk-tag[data-rk-code='3'], .rk-meter[data-rk-code='3'], .rk-shares > [data-rk-code='3'] { --_rk-series: var(--rk-series-3, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='4'], .rk-tag[data-rk-code='4'], .rk-meter[data-rk-code='4'], .rk-shares > [data-rk-code='4'] { --_rk-series: var(--rk-series-4, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='5'], .rk-tag[data-rk-code='5'], .rk-meter[data-rk-code='5'], .rk-shares > [data-rk-code='5'] { --_rk-series: var(--rk-series-5, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='6'], .rk-tag[data-rk-code='6'], .rk-meter[data-rk-code='6'], .rk-shares > [data-rk-code='6'] { --_rk-series: var(--rk-series-6, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='7'], .rk-tag[data-rk-code='7'], .rk-meter[data-rk-code='7'], .rk-shares > [data-rk-code='7'] { --_rk-series: var(--rk-series-7, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='8'], .rk-tag[data-rk-code='8'], .rk-meter[data-rk-code='8'], .rk-shares > [data-rk-code='8'] { --_rk-series: var(--rk-series-8, var(--rk-text-primary)); }
 .rk-tag[data-rk-code]::before { background: var(--_rk-series); }
 .rk-chart-dot[data-rk-code], .rk-bar[data-rk-code][data-rk-hot] { fill: var(--_rk-series); }
 .rk-key-line { width: 14px; height: 2px; }
@@ -527,6 +527,14 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
    when the value means that status (a disk nearly full). The label and the value sit above it. */
 .rk-meter { position: relative; height: 6px; overflow: hidden; background: var(--rk-text-contrast-low); }
 .rk-meter::before { content: ''; position: absolute; inset: 0 auto 0 0; width: calc(var(--rk-v, 0) * 100%); background: var(--_rk-mark, var(--rk-text-primary)); transition: width var(--rk-duration-moderate) var(--rk-ease-base); }
+/* A meter whose bar is a domain mark (time in a heart-rate zone) fills in its code; a status still wins. */
+.rk-meter[data-rk-code]:not([data-status])::before { background: var(--_rk-series); }
+/* Shares of one whole as one bar (time per zone): each child's --rk-v is its share (any unit: minutes, a count),
+   2px apart like a category's bars, at least 2px so a small share still shows. A child takes its code's colour, ink
+   without one. The bar is an image (role="img") whose name says every share; the words go beside it, never in a
+   code colour (docs/data.md). */
+.rk-shares { display: flex; gap: 2px; height: var(--rk-space-s); max-width: calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s)); }
+.rk-shares > * { flex: var(--rk-v, 1) 1 0; min-width: 2px; background: var(--_rk-series, var(--rk-text-primary)); }
 .rk-meter-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rk-space-s); margin-bottom: var(--rk-space-xs); font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
 .rk-meter-head > b { font-size: var(--rk-font-size-s); font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; color: var(--rk-text-primary); }
 
@@ -1013,7 +1021,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-range::-webkit-slider-thumb { background: CanvasText; }
   .rk-tip, .rk-cell-error { border: 1px solid CanvasText; }
   .rk-meter { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; }
-  .rk-meter::before, .rk-dots > i { forced-color-adjust: none; background: CanvasText; }
+  .rk-meter::before, .rk-meter[data-rk-code]:not([data-status])::before, .rk-dots > i, .rk-shares > * { forced-color-adjust: none; background: CanvasText; }
   .rk-chart .rk-s0, .rk-chart .rk-s1 { forced-color-adjust: none; --_rk-series: CanvasText; }
   .rk-chart .rk-s1 { stroke-dasharray: 4 3; }
   .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row { forced-color-adjust: none; background-color: Highlight; color: HighlightText; }

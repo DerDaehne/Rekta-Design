@@ -15,13 +15,19 @@ these, and only these, a product sets a code of up to eight colours,
 the accent, [platforms.md](platforms.md#product-overrides)).
 
 - **Small marks only:** a line, a bar, a zone, a legend key, a tag's
-  square (`.rk-tag[data-rk-code="N"]`). Never a tile fill, never a large
-  area, and **text is never drawn in a code colour**: the label beside
-  the mark says what it is.
+  square (`.rk-tag[data-rk-code="N"]`), a meter's fill
+  (`.rk-meter[data-rk-code="N"]`; a `data-status` on it still wins), a
+  share of a share bar (`.rk-shares`, below). Never a tile fill, never a
+  large area, and **text is never drawn in a code colour**: the label
+  beside the mark says what it is.
 - **3:1 against the ground and the surface**, in each theme.
 - **Apart under colour blindness:** every pair at least 0.09 (OKLab)
   under protanopia and deuteranopia, as the status tiles are; tritanopia
-  is reported.
+  is reported. Aim for 0.07 there too, as the status colours have
+  (0.067–0.069): blue and green codes are the pair tritanopia merges. The
+  showcase's light zones were 0.038 apart (zone 1 blue, zone 3 green);
+  zone 3 now leans yellow (`#7d8d5e`) and zone 1 a touch greener
+  (`#5489b6`), which keeps every pair at 0.09 under all three.
 - **Both themes**, the same codes.
 - `chart()` draws a series in its code with `{ label, values, code: N }`;
   without a value set, a code falls back to ink.
@@ -32,6 +38,28 @@ the accent, [platforms.md](platforms.md#product-overrides)).
 A code is not a way round "three series become small multiples": it is
 for colours with a meaning the users bring with them, not for telling
 arbitrary series apart.
+
+### Shares of a whole
+
+Time per zone, a budget by category: one bar split into its shares
+(`.rk-shares`), each child's `--rk-v` its share in any unit (minutes, a
+count) and its `data-rk-code` its colour (ink without one). The shares
+stand 2px apart like a category's bars, at least 2px wide so a small one
+still shows, `space-s` high, at most three tile units wide.
+
+```html
+<div class="rk-shares" role="img" aria-label="Time in zones: zone 1 12 min, zone 2 31 min, zone 3 18 min">
+  <span data-rk-code="1" style="--rk-v:12"></span><span data-rk-code="2" style="--rk-v:31"></span><span data-rk-code="3" style="--rk-v:18"></span>
+</div>
+<p class="rk-actions" aria-hidden="true"><span class="rk-tag" data-rk-code="1">z1 · 12 min</span> …</p>
+```
+
+- **Words:** the bar is an image whose name says every share; the words
+  go beside or under it as tags (`.rk-tag[data-rk-code]`, the square in
+  the code, the words in ink), in the bar's order, `aria-hidden` when
+  they repeat the name. Never a number inside a share.
+- **One bar per whole.** Two wholes to compare are two bars, one under
+  the other, at the same width.
 
 ## Charts
 
@@ -92,7 +120,8 @@ A sparkline is a trend at a glance: one series, no axis, no labels.
 ## Meters
 
 A quantity against its whole (`rk-meter`, `role="meter"`): a 6px
-hairline-grey track, the fill in ink. When the value means a status
+hairline-grey track, the fill in ink, or in a domain's code
+(`data-rk-code="N"`) when the quantity belongs to one (time in zone 2). When the value means a status
 (a disk nearly full, storage full), the fill takes that status's
 `full` colour, the label carries the status tag, and the accessible
 value says it in words ("81%, nearly full"). The label and the value
