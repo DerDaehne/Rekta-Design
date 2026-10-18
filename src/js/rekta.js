@@ -909,11 +909,51 @@ function pivotGlide(strip, item) {
 export function pivot(el, { onSelect } = {}) {
   const tabs = () => [...el.querySelectorAll('[role=tab]')];
   const panel = (t) => document.getElementById(t.getAttribute('aria-controls'));
-  let gen = 0;
+  const nav = el.classList.contains('rk-pivot--nav');
+  let gen = 0, wide = false, host = null, following = 0;
+  const chosen = () => tabs().findIndex((t) => t.getAttribute('aria-selected') === 'true');
+  // Wide: from size.pivot-wide up (the width of the panels' common parent), every facet shows, side by side as
+  // panorama sections; the strip is a jump list that follows the scroll. A pivot that picks the place never goes wide.
+  const panels = () => tabs().map(panel);
+  const startOf = (p) => Math.min(host.scrollLeft + p.getBoundingClientRect().left - host.getBoundingClientRect().left - (parseFloat(getComputedStyle(host).paddingLeft) || 0), host.scrollWidth - host.clientWidth);
+  function mark(i) {
+    const list = tabs();
+    list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; });
+    pivotGlide(el, list[i]);
+  }
+  function layout() {
+    const ps = panels(), parent = ps.length && ps.every((p) => p && p.parentElement === ps[0].parentElement) ? ps[0].parentElement : null;
+    const min = px('--rk-pivot-wide', el), now = !nav && !!parent && min > 0 && parent.clientWidth >= min;
+    if (now === wide) return;
+    wide = now; host = now ? parent : null;
+    el.toggleAttribute('data-rk-wide', now);
+    if (parent) parent.toggleAttribute('data-rk-wide', now);
+    const i = Math.max(0, chosen());
+    ps.forEach((p, k) => { if (p) p.hidden = !now && k !== i; });
+    if (now && ps[i]) host.scrollLeft = startOf(ps[i]);
+  }
+  function follow() {                                    /* wide: the facet at the leading edge is the one chosen */
+    if (!wide || Date.now() < following) return;
+    const edge = host.getBoundingClientRect().left + (parseFloat(getComputedStyle(host).paddingLeft) || 0) + 1;
+    const ps = panels();
+    let i = ps.findIndex((p) => p && p.getBoundingClientRect().right > edge + p.getBoundingClientRect().width / 2);
+    if (host.scrollLeft + host.clientWidth >= host.scrollWidth - 1) i = ps.length - 1;   /* at the end: the last */
+    if (i >= 0 && i !== chosen()) { mark(i); if (onSelect) onSelect(i, tabs()[i]); }
+  }
   function select(i, { focus = false } = {}) {
-    const list = tabs(), prev = list.findIndex((t) => t.getAttribute('aria-selected') === 'true');
-    if (i === prev || !list[i]) return;
-    if (el.classList.contains('rk-pivot--nav')) {
+    const list = tabs(), prev = chosen();
+    if (!list[i]) return;
+    if (wide) {
+      const p = panel(list[i]), d = ms('--rk-duration-pivot-glide');
+      following = Date.now() + d + 50;                  /* the glide is not a scroll to follow */
+      mark(i);
+      if (p) animateScroll(host, startOf(p), d, bezier('--rk-ease-pivot-glide'));
+      if (focus) list[i].focus();
+      if (i !== prev && onSelect) onSelect(i, list[i]);
+      return;
+    }
+    if (i === prev) return;
+    if (nav) {
       turn.finish();
       const from = list.map(panel).find((p) => p && !p.hidden), to = panel(list[i]), back = i < prev, mine = ++gen;
       list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; const p = panel(t); if (p && p !== from) p.hidden = true; });
@@ -940,13 +980,28 @@ export function pivot(el, { onSelect } = {}) {
     e.preventDefault();
     select((to + list.length) % list.length, { focus: true });
   };
-  const resize = () => { pivotScale(el); pivotFit(el); };
+  let watched = null;
+  const scrolled = () => follow();
+  const resize = () => {
+    layout();
+    if (watched !== host) { if (watched) watched.removeEventListener('scroll', scrolled); watched = host; if (host) host.addEventListener('scroll', scrolled, { passive: true }); }
+    pivotScale(el); pivotFit(el);
+  };
   const ro = new ResizeObserver(resize);
   el.addEventListener('click', click); el.addEventListener('keydown', key); el.addEventListener('wheel', stripWheel, { passive: false });
   ro.observe(el);
+  const first = tabs().map(panel).find(Boolean);
+  if (first && first.parentElement) ro.observe(first.parentElement);
   resize();
   if (document.fonts) document.fonts.ready.then(resize);
-  return { select, destroy() { el.removeEventListener('click', click); el.removeEventListener('keydown', key); el.removeEventListener('wheel', stripWheel); ro.disconnect(); } };
+  return {
+    select,
+    get wide() { return wide; },
+    destroy() {
+      el.removeEventListener('click', click); el.removeEventListener('keydown', key); el.removeEventListener('wheel', stripWheel); ro.disconnect();
+      if (watched) watched.removeEventListener('scroll', scrolled);
+    },
+  };
 }
 
 // Toaster ------------------------------------------------------------------------------------------------------------

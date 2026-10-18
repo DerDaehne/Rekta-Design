@@ -160,6 +160,16 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-pivot--side > :is([aria-current], [aria-selected='true']) { --_rk-step: var(--rk-space-m); }
 .rk-pivot--side > :is([aria-current], [aria-selected='true']):dir(rtl) { --_rk-step: calc(-1 * var(--rk-space-m)); }
 
+/* Facets side by side: from size.pivot-wide up, pivot() marks the facets' common parent data-rk-wide and shows
+   every facet as a panorama section, sized in tile units; the strip stays, as a jump list that follows the scroll. */
+[data-rk-wide]:not(.rk-pivot) {
+  display: flex; gap: var(--rk-space-xl); overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+  scrollbar-width: thin; scrollbar-color: var(--rk-text-contrast-low) transparent;
+}
+[data-rk-wide]:not(.rk-pivot) > [role='tabpanel'] {
+  flex: 0 0 var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))); min-width: 0;
+}
+
 /* Buttons and switches ------------------------------------------------------------------------------------------- */
 /* Primary takes the accent slot (ink by default). Height follows the density: 44px for touch, 32px for a fine pointer. */
 .rk-btn {

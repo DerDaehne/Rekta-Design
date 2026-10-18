@@ -654,6 +654,14 @@
         "unit": "px"
       },
       "$description": "The narrowest a pane of a split view may be dragged; below twice this plus the handle the split shows one pane at a time."
+    },
+    "pivot-wide": {
+      "$type": "dimension",
+      "$value": {
+        "value": 1300,
+        "unit": "px"
+      },
+      "$description": "From this width of the facets' container up, a pivot shows its facets side by side as panorama sections, its strip a jump list. A product decision, not a structural breakpoint: override it; 0 never."
     }
   },
   "density": {

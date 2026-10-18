@@ -155,6 +155,29 @@ await go(p, 'panorama');
 await p.click('#tab-2'); await p.waitForTimeout(500);
 ok(await p.evaluate(() => !document.querySelector('#facet-2').hidden && document.querySelector('#facet-0').hidden), 'a facet shows its panel');
 ok(/sideways · 1440/.test(await text(p, '#env-class')), 'the environment reads out', await text(p, '#env-class'));
+// A pivot whose facets' container is wider than size.pivot-wide shows them side by side, its strip a jump list.
+const wide = await p.evaluate(async () => {
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:0;top:0;width:1300px;z-index:-1';
+  box.innerHTML = '<div class="rk-pivot" role="tablist" aria-label="w" style="--rk-pivot-wide: 900px">'
+    + [0, 1, 2, 3].map((i) => `<button role="tab" id="wt${i}" aria-controls="wf${i}" aria-selected="${i === 0}">facet ${i}</button>`).join('') + '</div>'
+    + '<div id="wfs">' + [0, 1, 2, 3].map((i) => `<div role="tabpanel" id="wf${i}" ${i ? 'hidden' : ''}><p>${'text '.repeat(40)}</p></div>`).join('') + '</div>';
+  document.body.append(box);
+  const pv = Rekta.pivot(box.firstChild), wfs = box.querySelector('#wfs'), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const shown = () => [...wfs.children].filter((x) => !x.hidden).length;
+  const out = { wide: pv.wide, shown: shown(), flex: getComputedStyle(wfs).display };
+  box.querySelector('#wt2').click(); await wait(700);
+  out.jumped = wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true';
+  wfs.scrollTo({ left: 0, behavior: 'instant' }); await wait(200);
+  out.followed = box.querySelector('#wt0').getAttribute('aria-selected') === 'true';
+  box.style.width = '700px'; await wait(200);
+  out.narrow = !pv.wide && shown() === 1;
+  pv.destroy(); box.remove();
+  return out;
+});
+ok(wide.wide && wide.shown === 4 && wide.flex === 'flex', 'a pivot above size.pivot-wide shows every facet side by side', JSON.stringify(wide));
+ok(wide.jumped && wide.followed, 'its strip jumps to a facet and follows the scroll', JSON.stringify(wide));
+ok(wide.narrow, 'below it, one facet at a time again', JSON.stringify(wide));
 
 // Motion: reorder, toast, reduce motion.
 await go(p, 'motion');

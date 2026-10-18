@@ -51,6 +51,7 @@ paint: load `rekta.global.js` in `<head>` and call
 | `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it. Removed once the build-in is over, so a re-render never replays it. |
 | `data-rk-phase` | a toast, the banner | `leaving` while it goes; `clear` on the banner when no state stands. |
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
+| `data-rk-wide` | a pivot and its facets' parent | The facets show side by side (`pivot()`, from `size.pivot-wide` up). |
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
@@ -257,7 +258,19 @@ Returns `{ goTo(sectionOrId, { focus, instant }), current, destroy }`.
 `el` is a `.rk-pivot[role=tablist]` of `[role=tab]` buttons with
 `aria-controls`. A click or ← → Home End selects a facet; the strip
 glides by the facet's place in the order (the ones before it stay in reach) and the panel slides in from its side. Facets
-add nothing to history. Returns `{ select(index, { focus }), destroy }`.
+add nothing to history.
+
+Wide: when the panels share a parent at least `--rk-pivot-wide` wide
+(`size.pivot-wide`, 1300px; 0 never), every facet shows, side by side as
+panorama sections sized in tile units, and both the pivot and that parent
+get `data-rk-wide`. The strip stays as a jump list: a title glides its
+facet to the leading edge over `duration-pivot-glide`, and the title
+follows the facet at the leading edge as the user scrolls. Narrower, it
+is one facet at a time again, the one last chosen. A pivot that picks the
+place (`.rk-pivot--nav`) never goes wide. The threshold is the product's
+to pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.
+
+Returns `{ select(index, { focus }), wide, destroy }`.
 
 ### `toaster(region)`
 

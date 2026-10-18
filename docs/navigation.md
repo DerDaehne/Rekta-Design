@@ -51,11 +51,12 @@ level (`nav-active`, `nav-inactive`); compact, where it sticks to the
 top, it takes the facet level (`pivot-active`, `pivot-inactive`), so it
 holds less of a small screen. The sections below it start with their
 own heading; a kicker repeating the strip's title would say it twice. Above a width threshold
-(1300px in the source prototype — a project adopting Rekta Design can pick
-its own, it is not one of the four structural breakpoints), a pivot may
-render all its facets side by side as a panorama instead of one at a
-time, with the pivot strip still present below them for narrower
-viewports or as a jump list.
+(`size.pivot-wide`, 1300px — a product picks its own, it is not one of
+the four structural breakpoints), a pivot renders all its facets side by
+side as panorama sections instead of one at a time; its strip stays
+above them as a jump list that follows the scroll. `pivot()` does this on
+the web (see [behaviour.md](behaviour.md)); a pivot that picks the place
+never does.
 
 ### Along the top or down the side
 
