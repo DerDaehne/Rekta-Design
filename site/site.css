@@ -30,7 +30,6 @@ kbd.rk-key { font-family: inherit; }
 .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--rk-space-s) var(--rk-space-m); margin: 0; padding: 0; list-style: none; }
 .swatches li { display: grid; grid-template-columns: 28px 1fr; grid-template-rows: auto auto; column-gap: var(--rk-space-s); align-items: center; }
 .swatch { grid-row: 1 / span 2; width: 28px; height: 28px; border-radius: var(--rk-radius-tile); box-shadow: inset 0 0 0 1px var(--rk-text-contrast-low); }
-.tile-hex { color: inherit; }
 .pairs b { font-weight: var(--rk-font-weight-medium); }
 
 /* Typography. */

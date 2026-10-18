@@ -62,6 +62,28 @@ const TURN = 1300;
 for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 844, 'light'], [390, 844, 'dark'], [844, 390, 'light']]) {
   const p = await open({ viewport: { width: w, height: h }, colorScheme: scheme, hasTouch: w < 760 || h < 481 });
   ok(!(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `${w}x${h} ${scheme}: no horizontal overflow`);
+  if (w === 1440) {
+    // Secondary text composed into a status fill (a meta, facts, an age, a stale value) keeps AA: --check sees token
+    // pairs only, so the selectors that combine them are measured here.
+    const worst = await p.evaluate(() => {
+      const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+      let low = { r: 99, what: '' };
+      for (const st of ['info', 'success', 'warning', 'error']) {
+        const host = document.createElement('div');
+        host.innerHTML = `<div class="rk-tile" data-status="${st}"><span class="rk-meta">m</span><span class="rk-facts">f</span><span class="rk-age">a</span><span data-rk-live="stale"><b data-rk-value>v</b></span></div>`
+          + `<div class="rk-banner" data-status="${st}"><span class="rk-meta">m</span><span class="rk-facts">f</span></div>`;
+        document.body.append(host);
+        for (const fill of host.children) for (const el of fill.querySelectorAll('*')) {
+          const r = ratio(getComputedStyle(el).color, getComputedStyle(fill).backgroundColor);
+          if (r < low.r) low = { r, what: `${el.className || el.tagName} on ${fill.className} ${st}` };
+        }
+        host.remove();
+      }
+      return low;
+    });
+    ok(worst.r >= 4.5, `${scheme}: secondary text on every status fill clears AA`, `${worst.what} ${worst.r.toFixed(2)}:1`);
+  }
   await p.screenshot({ path: join(shots, `rest-${w}x${h}-${scheme}.png`) });
   await p.close();
 }

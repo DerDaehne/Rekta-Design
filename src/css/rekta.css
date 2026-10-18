@@ -50,6 +50,9 @@
 [data-status='warning'] { --_rk-fill: var(--rk-status-warning-tile); --_rk-mark: var(--rk-status-warning-full); --_rk-soft: var(--rk-status-warning-soft); }
 [data-status='error'] { --_rk-fill: var(--rk-status-error-tile); --_rk-mark: var(--rk-status-error-full); --_rk-soft: var(--rk-status-error-soft); }
 :is(.rk-tag, .rk-tile, .rk-banner):not([data-status]) { --_rk-fill: initial; --_rk-mark: initial; --_rk-soft: initial; }
+/* On a status fill only the primary text colour clears AA (docs/colour.md): secondary text inside a status tile or
+   banner (a meta, a facts line, an age, a stale value) takes it, and size and weight carry the hierarchy. */
+:is(.rk-tile, .rk-banner)[data-status] { --rk-text-contrast-high: var(--rk-text-primary); }
 
 /* Hairline rows: content over chrome. */
 .rk-rows { list-style: none; padding: 0; }

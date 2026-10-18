@@ -50,7 +50,7 @@ const WORD = { info: 'active', success: 'done', warning: 'waiting', error: 'fail
 const blocks = {
   status: () => ['info', 'success', 'warning', 'error'].map((st, i) => `<div class="rk-tile" data-status="${st}" style="--rk-i:${i}"><span class="rk-tile-word">${WORD[st]}</span>`
     + `<span class="rk-stat"><b data-contrast="text-primary status-${st}-tile">–</b><span>primary text on ${st}</span></span>`
-    + `<span class="rk-meta tile-hex">${byName.get(`status-${st}-tile`).value} · ${byName.get(`status-${st}-tile`).alt}</span></div>`).join('\n'),
+    + `<span class="rk-meta">${byName.get(`status-${st}-tile`).value} · ${byName.get(`status-${st}-tile`).alt}</span></div>`).join('\n'),
   swatches: () => `<ul class="swatches">${['bg', 'surface', 'surface-2', 'text-primary', 'text-contrast-high', 'text-contrast-medium', 'text-contrast-low', 'accent', 'focus', 'disabled'].map((n) => {
     const t = byName.get(n), v = t.value.startsWith('var(') ? 'text-primary' : t.value, a = t.alt.startsWith('var(') ? 'text-primary' : t.alt;
     return `<li><span class="swatch" style="background:var(--rk-${n})"></span><code>${n}</code><span class="rk-meta">${esc(v)} · ${esc(a)}</span></li>`;
