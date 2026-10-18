@@ -224,6 +224,9 @@ export function toGlobal(esm) {
   return `/* Rekta Design behaviour, classic script. Generated from src/js/rekta.js by scripts/build.mjs; do not edit. */\n(function () {\n${body}\nwindow.Rekta = { ${names.join(', ')} };\n})();\n`;
 }
 
+// Said by --check without failing it: trade-offs the docs name (accessibility.md), measured on every build.
+const notes = [];
+
 function check(tokens) {
   const problems = [];
   const t = buildTokensJson(tokens, 'check');
@@ -251,6 +254,12 @@ function check(tokens) {
         const d = distance(c[`status-${STATUS[i]}-${form}`], c[`status-${STATUS[j]}-${form}`], kind);
         if (d < 0.09) problems.push(`${theme}: ${STATUS[i]} and ${STATUS[j]} ${form} are ${d.toFixed(3)} apart under ${kind}, need 0.09`);
       }
+    }
+    // Under blue-yellow colour blindness (tritan) the separation is reported, not required: the word on every status
+    // tile carries the meaning there (docs/accessibility.md).
+    for (const form of ['full', 'tile']) for (let i = 0; i < STATUS.length; i += 1) for (let j = i + 1; j < STATUS.length; j += 1) {
+      const d = distance(c[`status-${STATUS[i]}-${form}`], c[`status-${STATUS[j]}-${form}`], 'tritan');
+      if (d < 0.09) notes.push(`${theme}: ${STATUS[i]} and ${STATUS[j]} ${form} are ${d.toFixed(3)} apart under tritan (0.09 is required under protan and deutan)`);
     }
   }
   // Every --rk- property the stylesheet reads is a token or a documented hook.
@@ -338,6 +347,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const problems = checkAll();
     if (problems.length) { console.error(problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
     console.log('✓ tokens and stylesheet pass: contrast, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid');
+    for (const n of notes) console.log(`  i ${n}`);
   } else {
     console.log(`✓ dist/ written (Rekta Design ${buildDist()})`);
   }
