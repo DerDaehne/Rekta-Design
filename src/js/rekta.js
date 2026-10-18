@@ -59,7 +59,21 @@ function css(name, el = docEl()) { return getComputedStyle(el).getPropertyValue(
 function ms(name, el) { const v = css(name, el); return (parseFloat(v) || 0) * (/ms$/.test(v) ? 1 : 1000); }
 function num(name, el) { return parseFloat(css(name, el)) || 0; }
 // A length token in px, whatever unit it is written in (rem follows the root's font size).
-function px(name, el) { const v = css(name, el), n = parseFloat(v) || 0; return /rem$/.test(v) ? n * (parseFloat(getComputedStyle(docEl()).fontSize) || 16) : n; }
+// A length token in px, whatever it is written as: px and rem directly, anything else (calc(), a var() of a calc(), em)
+// through an element sized by it, so a product's override in any length form reads right.
+function px(name, el) {
+  const v = css(name, el);
+  if (/^-?[\d.]+(px)?$/.test(v)) return parseFloat(v);
+  if (/^-?[\d.]+rem$/.test(v)) return parseFloat(v) * (parseFloat(getComputedStyle(docEl()).fontSize) || 16);
+  if (!v) return 0;
+  const host = el && el.isConnected ? el : document.body, probe = document.createElement('span');
+  probe.dataset.rkProbe = '';
+  probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;width:var(${name});height:0;padding:0;border:0`;
+  host.appendChild(probe);
+  const w = probe.getBoundingClientRect().width;
+  probe.remove();
+  return w || 0;
+}
 
 // Words and numbers -------------------------------------------------------------------------------------------------
 // Every word rekta.js shows or says comes from strings, English by default. start({ locale, strings }) or
@@ -404,7 +418,9 @@ function turnRows(u, place, held) {
   return { slots };
 }
 function perspective(far) { return Math.round((num('--rk-turnstile-perspective') || 800) + 1.2 * Math.max(0, far)) + 'px'; }
-function arrive(el) {
+// arrive(el): a place (or the root) builds in: tiles rise and sparklines draw while data-rk-arriving is on, for the arrival
+// window. A framework router calls it for a place it opened by client navigation.
+export function arrive(el) {
   el.setAttribute('data-rk-arriving', '');
   const wait = ms('--rk-duration-moderate') + 10 * ms('--rk-duration-stagger') + ms('--rk-duration-long') + 50;
   clearTimeout(el._rkArrive);
@@ -553,12 +569,18 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
   let current = home, item = null, params = '', index = 0, below = null, pushedItem = false, busy = Promise.resolve();
   const watchers = new Map();
   const backButtons = () => document.querySelectorAll('.rk-ab-back[data-rk-back], .rk-titlebar [data-rk-back]');
-  // Places in the app bar (.rk-ab-places): the one you are in is marked; on a place below it, the one you came from.
+  // Links to places, in the app bar (.rk-ab-places) or a place strip of links (.rk-pivot--nav): the one you are in is
+  // marked; on a place below it, the one you came from stays marked.
+  const placeLinks = (box) => [...box.querySelectorAll(':scope > a[href]')].filter((a) => nameOf(a.href));
   const showBack = () => {
     backButtons().forEach((b) => { b.hidden = current === home && index === 0; });
-    const bar = [...document.querySelectorAll('.rk-ab-places a[href]')], here = bar.find((a) => nameOf(a.href) === current);
-    if (here) bar.forEach((a) => { if (a === here) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    for (const box of document.querySelectorAll('.rk-ab-places, .rk-pivot--nav')) {
+      const links = placeLinks(box), here = links.find((a) => nameOf(a.href) === current);
+      if (here) links.forEach((a) => { if (a === here) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    }
   };
+  navTurn = turn;                                         /* a pivot that picks the place turns it */
+  const strips = [...document.querySelectorAll('.rk-pivot--nav:not([role=tablist])')].filter((n) => placeLinks(n).length).map((n) => strip(n));
   const rk = () => (history.state && history.state.rk) || {};
   function snapshot(opener) {
     const el = byName(current), prev = rk();
@@ -767,7 +789,7 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
       if (place === current) setItem(item, { initial: true });
       return () => watchers.delete(place);
     },
-    destroy() { removeEventListener('popstate', pop); document.removeEventListener('click', click); offKeys(); },
+    destroy() { removeEventListener('popstate', pop); document.removeEventListener('click', click); offKeys(); strips.forEach((x) => x.destroy()); },
   };
 }
 
@@ -943,6 +965,7 @@ function pivotScale(strip) {
   for (const el of titles) el.style.transition = 'none';
   strip.setAttribute('data-rk-measured', '');
   const probe = document.createElement('span');
+  probe.dataset.rkProbe = '';
   probe.style.cssText = 'position:absolute;visibility:hidden;font-size:var(--_rk-inactive)';
   strip.appendChild(probe);
   const item = strip.querySelector('a, button');
@@ -985,7 +1008,10 @@ function pivotGlide(strip, item) {
 // A pivot that picks the place (rk-pivot--nav) turns it: the panel in sight turns away, then the next turns in, the
 // way back when its title is earlier in the order. Any other pivot picks a facet: the panel slides in from its side.
 // Down the side (rk-pivot--side) Up and Down pick a title; along the top Left and Right.
-export function pivot(el, { onSelect } = {}) {
+// The place turn a pivot that picks the place (rk-pivot--nav) uses: places() registers it, or pivot(el, { turn }) takes
+// it. A facet pivot never references the turn, so a bundle that only uses facets leaves it out.
+let navTurn = null;
+export function pivot(el, { onSelect, turn: placeTurn = null } = {}) {
   const tabs = () => [...el.querySelectorAll('[role=tab]')];
   const panel = (t) => document.getElementById(t.getAttribute('aria-controls'));
   const nav = el.classList.contains('rk-pivot--nav');
@@ -1000,6 +1026,9 @@ export function pivot(el, { onSelect } = {}) {
     list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; });
     pivotGlide(el, list[i]);
   }
+  // Who owns hidden on the panels: pivot() sets it one facet at a time (from the start, too); wide, it leaves hidden as
+  // it is and shows every panel with data-rk-reveal, so a framework that binds hidden to the chosen facet stays right.
+  function narrow() { const i = Math.max(0, chosen()); panels().forEach((p, k) => { if (p) { p.removeAttribute('data-rk-reveal'); p.hidden = k !== i; } }); }
   function layout() {
     const ps = panels(), parent = ps.length && ps.every((p) => p && p.parentElement === ps[0].parentElement) ? ps[0].parentElement : null;
     const min = px('--rk-pivot-wide', el), now = !nav && !!parent && min > 0 && parent.clientWidth >= min;
@@ -1008,7 +1037,7 @@ export function pivot(el, { onSelect } = {}) {
     el.toggleAttribute('data-rk-wide', now);
     if (parent) parent.toggleAttribute('data-rk-wide', now);
     const i = Math.max(0, chosen());
-    ps.forEach((p, k) => { if (p) p.hidden = !now && k !== i; });
+    if (now) ps.forEach((p) => { if (p) p.setAttribute('data-rk-reveal', ''); }); else narrow();
     if (now && ps[i]) host.scrollLeft = startOf(ps[i]);
   }
   function follow() {                                    /* wide: the facet at the leading edge is the one chosen */
@@ -1020,8 +1049,9 @@ export function pivot(el, { onSelect } = {}) {
     if (host.scrollLeft + host.clientWidth >= host.scrollWidth - 1) i = ps.length - 1;   /* at the end: the last */
     if (i >= 0 && i !== chosen()) { mark(i); if (onSelect) onSelect(i, tabs()[i]); }
   }
-  function select(i, { focus = false } = {}) {
-    const list = tabs(), prev = chosen();
+  // select(i, { focus, silent }): silent, as when the app sets the facet from its own state, calls no onSelect.
+  function select(i, { focus = false, silent = false } = {}) {
+    const list = tabs(), prev = chosen(), told = (k) => { if (!silent && onSelect) onSelect(k, list[k]); };
     if (!list[i]) return;
     if (wide) {
       const p = panel(list[i]), d = ms('--rk-duration-pivot-glide');
@@ -1029,18 +1059,19 @@ export function pivot(el, { onSelect } = {}) {
       mark(i);
       if (p) animateScroll(host, startOf(p), d, bezier('--rk-ease-pivot-glide'));
       if (focus) list[i].focus();
-      if (i !== prev && onSelect) onSelect(i, list[i]);
+      if (i !== prev) told(i);
       return;
     }
     if (i === prev) return;
-    if (nav) {
+    const turn = placeTurn || navTurn;
+    if (nav && turn) {
       turn.finish();
       const from = list.map(panel).find((p) => p && !p.hidden), to = panel(list[i]), back = i < prev, mine = ++gen;
       list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; const p = panel(t); if (p && p !== from) p.hidden = true; });
       pivotGlide(el, list[i]);
       if (focus) list[i].focus();
       (from ? turn.leave(from, { back }) : Promise.resolve()).then(() => { if (mine === gen && to) turn.enter(to, { back }); });
-      if (onSelect) onSelect(i, list[i]);
+      told(i);
       return;
     }
     list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; const p = panel(t); if (p) p.hidden = k !== i; });
@@ -1048,7 +1079,7 @@ export function pivot(el, { onSelect } = {}) {
     const d = ms('--rk-duration-moderate') * 0.75, p = panel(list[i]);
     if (d && p) p.animate([{ transform: `translateX(${(i > prev ? 1 : -1) * num('--rk-slide-distance')}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: d, easing: css('--rk-ease-out') });
     if (focus) list[i].focus();
-    if (onSelect) onSelect(i, list[i]);
+    told(i);
   }
   const click = (e) => { const t = e.target.closest('[role=tab]'); if (t) select(tabs().indexOf(t)); };
   const key = (e) => {
@@ -1073,20 +1104,52 @@ export function pivot(el, { onSelect } = {}) {
     pivotScale(el); pivotFit(el);
   };
   const ro = new ResizeObserver(resize);
+  // A title's words change (a count: "questions 2" → "questions 12"): measure again, once per frame.
+  let frame = 0;
+  const mo = new MutationObserver((records) => { if (realChange(records)) { cancelAnimationFrame(frame); frame = requestAnimationFrame(resize); } });
   el.addEventListener('click', click); el.addEventListener('keydown', key); el.addEventListener('wheel', stripWheel, { passive: false });
   ro.observe(el);
+  mo.observe(el, { childList: true, characterData: true, subtree: true });
   const first = tabs().map(panel).find(Boolean);
   if (first && first.parentElement) ro.observe(first.parentElement);
+  narrow();
   resize();
   if (document.fonts) document.fonts.ready.then(resize);
   return {
     select,
     get wide() { return wide; },
+    layout: resize,
     destroy() {
-      el.removeEventListener('click', click); el.removeEventListener('keydown', key); el.removeEventListener('wheel', stripWheel); ro.disconnect();
+      el.removeEventListener('click', click); el.removeEventListener('keydown', key); el.removeEventListener('wheel', stripWheel); ro.disconnect(); mo.disconnect();
+      cancelAnimationFrame(frame);
       if (watched) watched.removeEventListener('scroll', scrolled);
     },
   };
+}
+
+// A change in the page, not one of rekta.js's own measuring probes coming and going.
+const realChange = (records) => records.some((r) => r.type === 'characterData'
+  || (r.type === 'childList' && [...r.addedNodes, ...r.removedNodes].some((n) => !(n.dataset && 'rkProbe' in n.dataset))));
+
+// strip(el): a strip of links whose current one a router marks (aria-current), as a framework router's place strip:
+// measured as a pivot is (the inactive titles' scale, even gaps), the size change played when the mark moves, and the
+// glide when the strip does not fit. It routes nothing. Returns { layout, destroy }.
+export function strip(el) {
+  let frame = 0, last = el.querySelector(':scope > [aria-current]');
+  const layout = () => { pivotScale(el); pivotFit(el); };
+  const later = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(layout); };
+  const mo = new MutationObserver((records) => {
+    if (realChange(records)) later();
+    const now = el.querySelector(':scope > [aria-current]');
+    if (now && now !== last) { last = now; pivotGlide(el, now); }
+  });
+  const ro = new ResizeObserver(layout);
+  mo.observe(el, { attributes: true, attributeFilter: ['aria-current'], childList: true, characterData: true, subtree: true });
+  ro.observe(el);
+  el.addEventListener('wheel', stripWheel, { passive: false });
+  layout();
+  if (document.fonts) document.fonts.ready.then(layout);
+  return { layout, destroy() { mo.disconnect(); ro.disconnect(); cancelAnimationFrame(frame); el.removeEventListener('wheel', stripWheel); } };
 }
 
 // Toaster ------------------------------------------------------------------------------------------------------------

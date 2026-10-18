@@ -191,6 +191,7 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 [data-rk-wide]:not(.rk-pivot) > [role='tabpanel'] {
   flex: 0 0 var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))); min-width: 0;
 }
+[data-rk-wide]:not(.rk-pivot) > [role='tabpanel'][data-rk-reveal] { display: block; }   /* shown whatever hidden says */
 
 /* Buttons and switches ------------------------------------------------------------------------------------------- */
 /* Primary takes the accent slot (ink by default). Height follows the density: 44px for touch, 32px for a fine pointer. */

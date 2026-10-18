@@ -163,8 +163,11 @@ const wide = await p.evaluate(async () => {
     + [0, 1, 2, 3].map((i) => `<button role="tab" id="wt${i}" aria-controls="wf${i}" aria-selected="${i === 0}">facet ${i}</button>`).join('') + '</div>'
     + '<div id="wfs">' + [0, 1, 2, 3].map((i) => `<div role="tabpanel" id="wf${i}" ${i ? 'hidden' : ''}><p>${'text '.repeat(40)}</p></div>`).join('') + '</div>';
   document.body.append(box);
-  const pv = Rekta.pivot(box.firstChild), wfs = box.querySelector('#wfs'), wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const shown = () => [...wfs.children].filter((x) => !x.hidden).length;
+  // As a framework would: it binds hidden to the facet it holds, set from onSelect (#36).
+  let held = 0;
+  const pv = Rekta.pivot(box.firstChild, { onSelect: (i) => { held = i; [...box.querySelectorAll('[role=tabpanel]')].forEach((x, k) => { x.hidden = k !== held; }); } });
+  const wfs = box.querySelector('#wfs'), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const shown = () => [...wfs.children].filter((x) => getComputedStyle(x).display !== 'none').length;
   const out = { wide: pv.wide, shown: shown(), flex: getComputedStyle(wfs).display };
   box.querySelector('#wt2').click(); await wait(700);
   out.jumped = wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true';
@@ -172,8 +175,20 @@ const wide = await p.evaluate(async () => {
   out.tabbed = document.activeElement && document.activeElement.id === 'wf2';
   wfs.scrollTo({ left: 0, behavior: 'instant' }); await wait(200);
   out.followed = box.querySelector('#wt0').getAttribute('aria-selected') === 'true';
+  out.bound = shown() === 4;                            /* the framework hid the others; wide still shows them all */
+  const before = held;
+  pv.select(3, { silent: true }); await wait(50);
+  out.silent = held === before && box.querySelector('#wt3').getAttribute('aria-selected') === 'true';   /* #37 */
   box.style.width = '700px'; await wait(200);
   out.narrow = !pv.wide && shown() === 1;
+  // #38: an override in calc() reads as the length it is.
+  box.firstChild.style.setProperty('--rk-pivot-wide', 'calc(var(--rk-tile-unit) * 4)'); box.style.width = '650px'; pv.layout(); await wait(100);
+  out.calc = pv.wide;
+  box.style.width = '500px'; await wait(150);
+  // #39: a title's count changes: measured again, so the gap stays even.
+  const t1 = box.querySelector('#wt1'); t1.textContent = 'facet 1 · 128 new things'; await wait(150);
+  const r = [...box.querySelectorAll('[role=tab]')].map((e) => e.getBoundingClientRect());
+  out.gaps = r.slice(1).map((x, i) => Math.round(x.left - r[i].right)).join(',');
   pv.destroy(); box.remove();
   return out;
 });
@@ -181,6 +196,28 @@ ok(wide.wide && wide.shown === 4 && wide.flex === 'flex', 'a pivot above size.pi
 ok(wide.jumped && wide.followed, 'its strip jumps to a facet and follows the scroll', JSON.stringify(wide));
 ok(wide.tabbed, 'Tab from the strip goes into the facet chosen', JSON.stringify(wide));
 ok(wide.narrow, 'below it, one facet at a time again', JSON.stringify(wide));
+ok(wide.bound, 'wide, panels show even with hidden bound by a framework (data-rk-reveal)', JSON.stringify(wide));
+ok(wide.silent, 'select(i, { silent }) calls no onSelect', JSON.stringify(wide));
+ok(wide.calc, 'a --rk-pivot-wide written in calc() is read as its length', JSON.stringify(wide));
+ok(new Set(wide.gaps.split(',')).size === 1, 'a title whose words change is measured again: even gaps', wide.gaps);
+// strip(): a strip of links a router marks (#41); arrive() is exported (#42).
+const stripped = await p.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const n = document.createElement('nav'); n.className = 'rk-pivot rk-pivot--nav'; n.style.cssText = 'position:fixed;left:0;top:0;width:900px;z-index:-1';
+  n.innerHTML = '<a href="#x1" aria-current="page">home</a><a href="#x2">history and more</a><a href="#x3">files</a>';
+  document.body.append(n);
+  const s = Rekta.strip(n); await wait(100);
+  const gaps = () => { const r = [...n.children].map((e) => e.getBoundingClientRect()); return r.slice(1).map((x, i) => Math.round(x.left - r[i].right)).join(','); };
+  const out = { measured: n.hasAttribute('data-rk-measured'), before: gaps() };
+  n.children[0].removeAttribute('aria-current'); n.children[1].setAttribute('aria-current', 'page'); await wait(400);
+  out.after = gaps(); out.scaled = getComputedStyle(n.children[0]).transform !== 'none';
+  s.destroy(); n.remove();
+  const place = document.createElement('div'); document.body.append(place); Rekta.arrive(place);
+  out.arrive = place.hasAttribute('data-rk-arriving'); place.remove();
+  return out;
+});
+ok(stripped.measured && new Set(stripped.before.split(',')).size === 1 && new Set(stripped.after.split(',')).size === 1 && stripped.scaled, 'strip() measures a link strip and follows the mark', JSON.stringify(stripped));
+ok(stripped.arrive, 'arrive() is exported for framework routers', JSON.stringify(stripped));
 
 // A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.
 const codes = await p.evaluate(() => {

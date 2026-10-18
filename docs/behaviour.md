@@ -364,26 +364,65 @@ place sticks under the banner and publishes `--rk-pivot-h`.
 
 Returns `{ goTo(sectionOrId, { focus, instant }), current, destroy }`.
 
-### `pivot(el, { onSelect })`
+### `pivot(el, { onSelect, turn })`
 
 `el` is a `.rk-pivot[role=tablist]` of `[role=tab]` buttons with
 `aria-controls`. A click or ← → Home End selects a facet; the strip
-glides by the facet's place in the order (the ones before it stay in reach) and the panel slides in from its side. Facets
-add nothing to history.
+glides by the facet's place in the order (the ones before it stay in
+reach) and the panel slides in from its side. Facets add nothing to
+history.
+
+- **`hidden` on the panels** is `pivot()`'s: it sets it from the start
+  (every panel but the chosen one) and on every change. A framework may
+  bind `hidden` to the facet it holds, as long as that follows
+  `onSelect`; wide (below), `pivot()` leaves `hidden` as it is and shows
+  every panel with `data-rk-reveal`, so such a binding stays right in
+  both modes.
+- **`onSelect(index, tab)`** is called for the user's choice (a click,
+  the keys, a scroll in wide mode) and for `select(index)`;
+  `select(index, { silent: true })` changes the facet without it, for an
+  app that sets the facet from its own state.
+- **Measuring.** The titles are measured when the strip resizes, when
+  fonts load and when a title's words change (a count going from 2 to
+  12); `layout()` measures again by hand.
+- **A pivot that picks the place** (`.rk-pivot--nav`) turns the place
+  with the turn `places()` registers, or the one passed as `turn`
+  (`pivot(el, { turn: Rekta.turn })`); without either it slides like a
+  facet pivot. A facet pivot never refers to the turn, so a bundle that
+  only uses facets leaves it out (about 2 KB gzip).
 
 Wide: when the panels share a parent at least `--rk-pivot-wide` wide
-(`size.pivot-wide`, 1300px; 0 never), every facet shows, side by side as
-panorama sections sized in tile units, and both the pivot and that parent
-get `data-rk-wide`. The strip stays visible as a jump list: a title (a
-click, or ← → Home End with focus staying on the strip) glides its facet
-to the leading edge over `duration-pivot-glide`, Tab moves focus into the
-facet chosen, and the title follows the facet at the leading edge as the
-user scrolls. Narrower, it
-is one facet at a time again, the one last chosen. A pivot that picks the
-place (`.rk-pivot--nav`) never goes wide. The threshold is the product's
-to pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.
+(`size.pivot-wide`, 1300px; 0 never; any length, `calc()` included),
+every facet shows, side by side as panorama sections sized in tile
+units, and both the pivot and that parent get `data-rk-wide`. The strip
+stays visible as a jump list: a title (a click, or ← → Home End with
+focus staying on the strip) glides its facet to the leading edge over
+`duration-pivot-glide`, Tab moves focus into the facet chosen, and the
+title follows the facet at the leading edge as the user scrolls.
+Narrower, it is one facet at a time again, the one last chosen. A pivot
+that picks the place never goes wide. The threshold is the product's to
+pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.
 
-Returns `{ select(index, { focus }), wide, destroy }`.
+Returns `{ select(index, { focus, silent }), wide, layout, destroy }`.
+
+### `strip(el)`
+
+A strip of links whose current one a router marks with `aria-current`,
+such as a framework router's place strip (`nav.rk-pivot.rk-pivot--nav`
+of `<a>`): it measures the titles as `pivot()` does (even gaps, the
+inactive titles' scale), plays the size change when the mark moves and
+glides the strip when it does not fit. It routes nothing and switches no
+panels. `places()` calls it for its own place strips of links. Use it as
+a framework action: `strip(node)` on mount, `.destroy()` on unmount.
+Returns `{ layout, destroy }`.
+
+### `arrive(el)`
+
+Builds a place in: `el` (a place, or the root) carries `data-rk-arriving`
+for the arrival window, so its tiles rise and its sparklines draw
+([motion.md](motion.md)). `places()` and `start()` call it; a framework
+router calls it for a place it opened by client navigation, after the
+place is in the page.
 
 ### `toaster(region)`
 
