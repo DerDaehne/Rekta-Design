@@ -942,8 +942,9 @@ export function pivot(el, { onSelect } = {}) {
   }
   function follow() {                                    /* wide: the facet at the leading edge is the one chosen */
     if (!wide || Date.now() < following) return;
-    const edge = host.getBoundingClientRect().left + (parseFloat(getComputedStyle(host).paddingLeft) || 0) + 1;
-    const ps = panels();
+    const box = host.getBoundingClientRect(), edge = box.left + (parseFloat(getComputedStyle(host).paddingLeft) || 0) + 1;
+    const ps = panels(), mine = ps[chosen()];
+    if (mine) { const r = mine.getBoundingClientRect(); if (r.left >= box.left - 1 && r.right <= box.right + 1) return; }   /* still whole in sight: it stays */
     let i = ps.findIndex((p) => p && p.getBoundingClientRect().right > edge + p.getBoundingClientRect().width / 2);
     if (host.scrollLeft + host.clientWidth >= host.scrollWidth - 1) i = ps.length - 1;   /* at the end: the last */
     if (i >= 0 && i !== chosen()) { mark(i); if (onSelect) onSelect(i, tabs()[i]); }
