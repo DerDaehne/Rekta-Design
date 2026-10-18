@@ -31,6 +31,15 @@ schedule…". It refuses more clicks (`aria-disabled`), and after
 it. When the action ends, the label comes back and a toast reports the
 result; a failure is said at the control that caused it.
 
+A failure whose control has gone (a background save, an action from a
+sheet that has closed, a place the user has left) has nowhere else to
+be said: it goes in a toast with `status: 'error'` (`toaster.show(text,
+{ status })`). The toast takes the error fill and is announced at once
+(`role="alert"`); it names what failed and, where there is one, the way
+to try again (`act`). A failure that lasts, such as the server being
+unreachable, is a banner state, not a toast. Toasts that report a
+success carry no status: the plain toast is the success.
+
 ## Floating surfaces
 
 Menus, the command palette, the places list and a combobox's list float

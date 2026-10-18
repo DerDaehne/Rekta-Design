@@ -166,6 +166,20 @@ function animateScroll(el, to, duration, ease) {
   };
   el._rkRaf = requestAnimationFrame(step);
 }
+// Where focus goes when the element it should return to is gone: start({ focusFallback }), then a shown
+// [data-rk-focus-fallback], the shown place's title, the page's h1, main.
+let fallbackFocus = null;
+function fallbackTarget() {
+  const shownFirst = (sel) => [...document.querySelectorAll(sel)].find((e) => e.getClientRects().length && !e.closest('[hidden], [inert]')) || null;
+  return (fallbackFocus && fallbackFocus()) || shownFirst('[data-rk-focus-fallback]') || shownFirst('.rk-place:not([hidden]) .rk-title')
+    || shownFirst('main h1') || shownFirst('h1') || document.querySelector('main');
+}
+function returnFocus(from) {
+  const t = from && from.isConnected && !from.closest('[hidden]') ? from : fallbackTarget();
+  if (!t) return;
+  if (!t.hasAttribute('tabindex') && !t.matches('a[href], button, input, select, textarea, summary')) t.setAttribute('tabindex', '-1');
+  t.focus();
+}
 function focusHeading(scope) {
   const h = scope && scope.querySelector('.rk-title, .rk-group, h1, h2, h3');
   if (!h) return null;
@@ -1159,23 +1173,24 @@ export function strip(el) {
 // Ctrl/Cmd+Z undoes while the window is open, except in a text field. Undo is a shortcut, never the only way back.
 export function toaster(region) {
   let open = null;
-  const windowSec = () => Math.round(ms('--rk-duration-toast') / 1000) || 5;
-  function say(msg, text, undoable, again) {
+  const tokenWindow = () => (Math.round(ms('--rk-duration-toast') / 1000) || 5) * 1000;
+  function say(msg, text, undoable, again, secs) {
     msg.textContent = text;
     if (!undoable) return;
     const sr = document.createElement('span');
     sr.className = 'rk-toast-sr';
-    sr.textContent = tx('undoWindow', windowSec(), again);
+    sr.textContent = tx('undoWindow', secs, again);
     msg.appendChild(sr);
   }
-  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null } = {}) {
-    if (open && open.key === key && open.undo && undo) { open.update(text, undo); return open; }
-    if (open) open.leave(false);
-    const WIN = windowSec();
-    let left = WIN, timer = 0, hover = false, focus = false, done = false, waiting = 0;
-    let plainLeft = ms('--rk-duration-toast'), since = 0;
+  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null, status = '', windowMs = 0, onEnd = null } = {}) {
+    if (open && open.key === key && open.undo && undo) { open.update(text, undo, { windowMs, onEnd }); return open; }
+    if (open) open.leave(false, 'replaced');
+    // remaining counts down in ms; an undo toast steps its figure on whole seconds, a plain one goes when it runs out.
+    let total = undo ? windowMs || tokenWindow() : ms('--rk-duration-toast'), remaining = total;
+    let timer = 0, step = 0, since = 0, hover = false, focus = false, held = false, done = false, waiting = 0;
     const el = document.createElement('div');
     el.className = 'rk-toast';
+    if (status) { el.dataset.status = status; if (status === 'error') el.setAttribute('role', 'alert'); }
     const msg = el.appendChild(document.createElement('p'));
     msg.className = 'rk-toast-msg';
     let count = null;
@@ -1192,41 +1207,59 @@ export function toaster(region) {
       // A plain action ("reload"): no countdown; the toast stays its usual time and holds like any other.
       const btn = el.appendChild(document.createElement('button'));
       btn.type = 'button'; btn.className = 'rk-toast-act'; btn.textContent = act.label;
-      btn.addEventListener('click', () => { leave(false); act.run(); });
+      btn.addEventListener('click', () => { leave(false, 'acted'); act.run(); });
     }
-    say(msg, text, !!undo);
-    const paint = () => { if (count) { count.textContent = left; el.style.setProperty('--rk-toast-left', left / WIN); } };
+    const secs = () => Math.max(0, Math.ceil(remaining / 1000));
+    say(msg, text, !!undo, false, secs());
+    const paint = () => { if (count) { count.textContent = secs(); el.style.setProperty('--rk-toast-left', total ? Math.max(0, remaining) / total : 0); } };
     const tick = () => {
-      timer = 0;
-      if (!undo) { leave(false); return; }
-      left -= 1;
-      if (left <= 0) { el.style.setProperty('--rk-toast-left', 0); leave(false); return; }
+      timer = 0; remaining -= step;
+      if (remaining <= 0) { remaining = 0; paint(); leave(false, 'expired'); return; }
       paint(); hold();
     };
     function hold() {
       if (done || waiting) return;
-      if (hover || focus) { if (timer) { clearTimeout(timer); timer = 0; if (!undo) plainLeft -= Date.now() - since; } }
-      else if (!timer) { since = Date.now(); timer = setTimeout(tick, undo ? 1000 : Math.max(0, plainLeft)); }
+      const was = held;
+      held = hover || focus;
+      if (held) { if (timer) { clearTimeout(timer); timer = 0; remaining -= Date.now() - since; } }
+      else if (!timer) { since = Date.now(); step = undo ? remaining % 1000 || 1000 : remaining; timer = setTimeout(tick, Math.max(0, step)); }
+      if (held !== was) {
+        el.toggleAttribute('data-rk-held', held);
+        el.dispatchEvent(new CustomEvent('rk:toasthold', { bubbles: true, detail: { held, remaining } }));
+      }
     }
-    function leave(doUndo) {
+    function leave(doUndo, reason = doUndo ? 'undone' : 'dismissed') {
       if (done) return;
       done = true; clearTimeout(timer);
-      if (waiting) { clearTimeout(waiting); waiting = 0; if (open === api) open = null; if (doUndo && undo) undo(); return; }
+      const end = () => { if (doUndo && undo) undo(); if (onEnd) onEnd(doUndo && undo ? 'undone' : reason); };
+      if (waiting) { clearTimeout(waiting); waiting = 0; if (open === api) open = null; end(); return; }
       const hadFocus = el.contains(document.activeElement);
       el.setAttribute('data-rk-phase', 'leaving');
       setTimeout(() => el.remove(), ms('--rk-duration-short'));
       if (open === api) open = null;
-      if (doUndo && undo) undo();
-      if (hadFocus) {
-        const target = from && from.isConnected && !from.closest('[hidden]') ? from : document.querySelector('.rk-place:not([hidden]) .rk-title');
-        if (target) { if (!target.hasAttribute('tabindex') && target.matches('.rk-title')) target.setAttribute('tabindex', '-1'); target.focus(); }
-      }
+      end();
+      if (hadFocus) returnFocus(from);
+    }
+    // A time the server reports: the window shows what is left of it, and 0 ends it, held or not.
+    function setRemaining(t) {
+      if (done) return;
+      clearTimeout(timer); timer = 0;
+      remaining = Math.max(0, t); total = Math.max(total, remaining);
+      if (!remaining) { paint(); leave(false, 'expired'); return; }
+      paint(); hold();
     }
     const api = {
       key, el, action,
       leave,
+      setRemaining,
+      get remaining() { return held || !timer ? remaining : Math.max(0, remaining - (Date.now() - since)); },
+      get held() { return held; },
       undo: undo ? () => leave(true) : null,
-      update(t, u) { undo = u; say(msg, t, !!u, true); left = WIN; paint(); clearTimeout(timer); timer = 0; hold(); },
+      update(t, u, { windowMs: w = 0, onEnd: e = null } = {}) {
+        undo = u; if (e) onEnd = e;
+        total = remaining = w || (undo ? windowMs || tokenWindow() : total);
+        say(msg, t, !!u, true, secs()); paint(); clearTimeout(timer); timer = 0; hold();
+      },
     };
     el.addEventListener('pointerenter', () => { hover = true; hold(); });
     el.addEventListener('pointerleave', () => { hover = false; hold(); });
@@ -1256,13 +1289,15 @@ export function toaster(region) {
 
 // Banner -------------------------------------------------------------------------------------------------------------
 // One lasting system state at a time, the most severe first (order). states: { name: { word, status, alert, text,
-// action, since: 'since' | 'until', until, on, off } }. A new state fades in once and holds still; a change of kind
+// action: label | { label, href }, since: the word before the time, until, on, off } }. set(name, true, { since })
+// gives the real start (a Date, or false when it is unknown: no time line); without it the start is now. A new state fades in once and holds still; a change of kind
 // glides to its new height; an ending state is an event, so the toaster says so once the banner has gone. Both live
 // regions stay mounted. The app bar follows with data-rk-state (halted for error, paused for warning).
 export function banner(el, { states, order = Object.keys(states), appbar = null, liveWord = null, toaster: toasts = null, onAction = null } = {}) {
   const alertRegion = el.querySelector('[role=alert]'), statusRegion = el.querySelector('[role=status]');
   const remedy = el.querySelector('.rk-actions .rk-btn');
-  const on = Object.fromEntries(order.map((n) => [n, false]));
+  let remedyLink = null;                                                // the remedy of a state whose action navigates
+  const on = Object.fromEntries(order.map((n) => [n, false])), started = {};
   let shown = null, clearing = 0, setBy = null;
   if (!el.hasAttribute('data-rk-phase') && !el.querySelector('.rk-banner-word')) el.setAttribute('data-rk-phase', 'clear');
   // The banner's height on the root, written once the banner has settled: scroll-padding keeps focus clear of it,
@@ -1273,12 +1308,20 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
     settle = setTimeout(() => docEl().style.setProperty('--rk-banner-h', `${Math.ceil(el.getBoundingClientRect().height)}px`), 60);
   });
   ro.observe(el, { box: 'border-box' });
-  const now = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  // A start on another day names the day too.
+  const when = (d) => {
+    if (new Date().toDateString() === d.toDateString()) return clock(d);
+    try { return new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(d); } catch { return d.toLocaleString(); }
+  };
   function write(name) {
-    const s = states[name], t = s.until || now();
+    const s = states[name], start = started[name];
     const head = document.createElement('span'); head.className = 'rk-banner-head';
     const word = head.appendChild(document.createElement('span')); word.className = 'rk-banner-word'; word.textContent = s.word || name;
-    const time = head.appendChild(document.createElement('time')); time.className = 'rk-banner-time'; time.dateTime = t; time.textContent = `${s.since || strings.since} ${t}`;
+    if (s.until || start) {
+      const time = head.appendChild(document.createElement('time')); time.className = 'rk-banner-time';
+      if (s.until) { time.dateTime = s.until; time.textContent = `${s.since || strings.since} ${s.until}`; }
+      else { time.dateTime = start.toISOString(); time.textContent = `${s.since || strings.since} ${when(start)}`; }
+    }
     const msg = document.createElement('span'); msg.className = 'rk-banner-msg'; msg.textContent = s.text;
     alertRegion.replaceChildren(); statusRegion.replaceChildren();
     (s.alert ? alertRegion : statusRegion).replaceChildren(head, msg);
@@ -1291,16 +1334,19 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
     if (s.status) el.dataset.status = s.status; else delete el.dataset.status;
     el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
     write(name);
-    if (remedy) { remedy.textContent = s.action || ''; remedy.parentElement.hidden = !s.action; remedy.removeAttribute('aria-disabled'); }
+    if (remedy) {
+      const label = s.action && typeof s.action === 'object' ? s.action.label : s.action, href = s.action && s.action.href;
+      if (href && !remedyLink) { remedyLink = document.createElement('a'); remedyLink.className = remedy.className; remedy.after(remedyLink); }
+      if (remedyLink) { remedyLink.hidden = !href; if (href) { remedyLink.href = href; remedyLink.textContent = label; } }
+      remedy.hidden = !!href; remedy.textContent = href ? '' : label || '';
+      remedy.parentElement.hidden = !label; remedy.removeAttribute('aria-disabled');
+    }
     // A change of kind, or a state that returns while the banner leaves, glides to its new height.
     const h1 = el.getBoundingClientRect().height, d = ms('--rk-duration-short');
     if (standing && d && Math.abs(h1 - h0) >= 1) el.animate([{ height: `${h0}px` }, { height: `${h1}px` }], { duration: d, easing: css('--rk-ease-in') });
   }
   function clear(then) {
-    if (el.contains(document.activeElement)) {
-      const target = setBy && setBy.isConnected && !setBy.closest('[hidden]') ? setBy : document.querySelector('.rk-place:not([hidden]) .rk-title');
-      if (target) { if (target.matches('.rk-title') && !target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1'); target.focus(); }
-    }
+    if (el.contains(document.activeElement)) returnFocus(setBy);
     el.setAttribute('data-rk-phase', 'leaving');
     clearing = setTimeout(() => {
       el.setAttribute('data-rk-phase', 'clear');
@@ -1331,10 +1377,11 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
   }
   const act = () => { if (shown && remedy.getAttribute('aria-disabled') !== 'true') (onAction ? onAction(shown) : set(shown, false)); };
   if (remedy) remedy.addEventListener('click', act);
-  function set(name, value, { from = null } = {}) {
+  function set(name, value, { from = null, since } = {}) {
     if (!(name in on)) throw new Error(`unknown banner state ${name}`);
     if (on[name] === !!value) return;
     on[name] = !!value;
+    if (value) { const d = since === false || since === null ? null : since === undefined ? new Date() : new Date(since); started[name] = d && !isNaN(d) ? d : null; }
     sync(name, from);
   }
   sync(null, null);
@@ -1343,7 +1390,7 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
     toggle(name, opts) { set(name, !on[name], opts); },
     is(name) { return on[name]; },
     get shown() { return shown; },
-    destroy() { ro.disconnect(); if (remedy) remedy.removeEventListener('click', act); },
+    destroy() { ro.disconnect(); if (remedy) remedy.removeEventListener('click', act); if (remedyLink) remedyLink.remove(); },
   };
 }
 
@@ -2052,22 +2099,36 @@ export function palette(el, { items = () => [], trigger = null, router = null, s
 
 // App bar ----------------------------------------------------------------------------------------------------------
 // appbar(el, { more }): controls that do not fit move into a "more" menu, the least important first (data-rk-priority,
-// higher stays longer; then from the end). more is a .rk-ab button shown only while something has moved; its menu
-// repeats each moved control's words, and choosing one clicks the control. Back, the live state and a selection's
-// controls never move.
+// higher stays longer, none is 0; then from the end). more is a .rk-ab button shown only while something has moved;
+// its menu repeats each moved control's words (its key hint apart, as the palette shows it), and choosing one clicks
+// the control. Back, the live state, a selection's controls and data-rk-priority="pinned" never move (pinned ones do
+// while the bar holds the places, which come first). While the bar holds the places, data-rk-places is on the bar and the root, and rekta.css leaves the places' top strip out.
+const placesBars = new Set();                                         // bars holding the places: the root says so while any does
+const markPlaces = (bar, on) => { if (on) placesBars.add(bar); else placesBars.delete(bar); bar.toggleAttribute('data-rk-places', on); docEl().toggleAttribute('data-rk-places', placesBars.size > 0); };
 export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
   if (!more) return { layout() {}, destroy() {} };
   const pop = document.createElement('div');
   pop.className = 'rk-float rk-ab-menu';
   el.appendChild(pop);
-  const words = (c) => (c.getAttribute('aria-label') || c.textContent).replace(/\s+/g, ' ').trim();
-  const candidates = () => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back'))
+  const words = (c) => {
+    if (c.hasAttribute('aria-label')) return c.getAttribute('aria-label').trim();
+    const copy = c.cloneNode(true);
+    copy.querySelectorAll('[aria-hidden="true"], .rk-key').forEach((x) => x.remove());
+    return copy.textContent.replace(/\s+/g, ' ').trim();
+  };
+  const keyHint = (c) => shortcutText(c) || ((c.querySelector('.rk-key') || {}).textContent || '').trim();
+  const candidates = (pinned = false) => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back') && (pinned || c.dataset.rkPriority !== 'pinned'))
     .map((c, i) => ({ c, i, p: Number(c.dataset.rkPriority || 0) }))
     .sort((a, b) => a.p - b.p || b.i - a.i).map((x) => x.c);
   function build() {
     pop.replaceChildren(...[...el.querySelectorAll(':scope > .rk-ab[data-rk-overflow]')].map((c) => {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'rk-menu-item'; b.setAttribute('role', 'menuitem'); b.textContent = words(c);
+      const k = keyHint(c);
+      if (k) {
+        const kk = b.appendChild(document.createElement('span')); kk.className = 'rk-menu-key'; kk.setAttribute('aria-hidden', 'true'); kk.textContent = k;
+        if (c.hasAttribute('aria-keyshortcuts')) b.setAttribute('aria-keyshortcuts', c.getAttribute('aria-keyshortcuts'));
+      }
       b._rkFor = c;
       return b;
     }));
@@ -2078,8 +2139,10 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
     if (el.hasAttribute('data-rk-selecting')) return;
     el.querySelectorAll(':scope > [data-rk-overflow]').forEach((c) => c.removeAttribute('data-rk-overflow'));
     more.hidden = true;
-    if (placesShown()) {                                 /* the places hold the bar: every command is in "more" */
-      const all = candidates();
+    const withPlaces = placesShown();
+    markPlaces(el, withPlaces);
+    if (withPlaces) {                                 /* the places hold the bar: every command is in "more", pinned too */
+      const all = candidates(true);
       if (all.length) { more.hidden = false; all.forEach((c) => c.setAttribute('data-rk-overflow', '')); }
     } else if (!fits()) {
       more.hidden = false;
@@ -2092,8 +2155,16 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
   more.addEventListener('pointerdown', rebuild); more.addEventListener('keydown', rebuild);
   const ro = new ResizeObserver(layout);
   ro.observe(el);
+  const mo = new MutationObserver(layout);                // places or commands a framework renders later
+  mo.observe(el, { childList: true });
   layout();
-  return { layout, destroy() { ro.disconnect(); m.destroy(); more.removeEventListener('pointerdown', rebuild); more.removeEventListener('keydown', rebuild); pop.remove(); } };
+  return {
+    layout,
+    destroy() {
+      ro.disconnect(); mo.disconnect(); m.destroy(); more.removeEventListener('pointerdown', rebuild); more.removeEventListener('keydown', rebuild); pop.remove();
+      markPlaces(el, false);
+    },
+  };
 }
 
 // Forms ------------------------------------------------------------------------------------------------------------
@@ -3452,8 +3523,9 @@ export function drop(el, { onFiles = null, accept = null } = {}) {
 // Start --------------------------------------------------------------------------------------------------------------
 // The defaults for a page: restore the user's prefs, press on tiles, sheets, steppers, sliders, switches, and the
 // first paint's build-in. An embedded page whose host owns theme, density and motion passes restore: false.
-export function start({ root = document, restore = true, locale: tag = '', strings: words = null } = {}) {
+export function start({ root = document, restore = true, locale: tag = '', strings: words = null, focusFallback = null } = {}) {
   if (tag) setLocale(tag);
+  if (focusFallback) fallbackFocus = focusFallback;
   if (words) setStrings(words);
   if (restore) prefs.restore();
   const parts = [press(root)];
@@ -3467,5 +3539,5 @@ export function start({ root = document, restore = true, locale: tag = '', strin
   document.addEventListener('change', onSegment);
   parts.push({ destroy() { document.removeEventListener('input', onRange); document.removeEventListener('change', onSegment); } });
   arrive(docEl());
-  return { destroy() { parts.forEach((p) => p.destroy()); } };
+  return { destroy() { parts.forEach((p) => p.destroy()); if (focusFallback && fallbackFocus === focusFallback) fallbackFocus = null; } };
 }

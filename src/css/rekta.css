@@ -852,6 +852,8 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 }
 .rk-toasts > .rk-toast { grid-area: 1 / 1; }
 .rk-toast[data-rk-phase='leaving'] { pointer-events: none; animation: rk-toast-out var(--rk-duration-short) var(--rk-ease-in) reverse both; }
+/* A toast with a status takes its fill, as a banner does: a failure whose control has gone (docs/states.md). */
+.rk-toast[data-status] { background-color: var(--_rk-fill); color: var(--rk-text-primary); }
 .rk-toast-msg { flex: 1 1 auto; align-self: center; min-width: 0; padding: calc(var(--rk-space-s) + var(--rk-space-xs)) var(--rk-space-m); text-wrap: pretty; }
 .rk-toast-act {
   position: relative; flex: none; display: inline-flex; align-items: center; gap: var(--rk-space-s);
@@ -1077,6 +1079,16 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-appbar:has(> .rk-ab-places) > .rk-ab-status { flex-direction: column; justify-content: center; gap: 4px; min-width: 48px; margin-inline-end: 0; font-size: var(--rk-font-size-xxs); }
   .rk-appbar:has(> .rk-ab-places) > .rk-ab-more { flex-direction: column; justify-content: center; gap: 2px; font-size: var(--rk-font-size-xxs); }
   .rk-appbar[data-rk-selecting] > .rk-ab-places { display: none; }
+}
+/* While the bar holds the places, appbar() writes data-rk-places on it and on the root: the places' top strip would
+   say the same twice, so it steps aside (without the script it stays). The place is then named by the marked place
+   in the bar and by its .rk-place-name, screen-reader only while the strip shows, the strip's active title here. */
+:root[data-rk-places] .rk-place > .rk-pivot--nav { display: none; }
+.rk-place-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+:root[data-rk-places] .rk-place-name {
+  position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: normal;
+  margin: 0; padding: var(--rk-space-s) var(--rk-space-m) 0;
+  font-size: var(--rk-font-size-pivot-active); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-nav);
 }
 /* Narrow place: table rows stack. Check (if any), main cell and status on the first line, the other cells as
    "label value" below, labelled from data-label (rekta.js fills it from the head). The head becomes a row of sort

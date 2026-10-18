@@ -149,6 +149,7 @@ them:
 | `:root:has(dialog.rk-sheet[open])` | The page under an open sheet stops scrolling, and keeps its scrollbar's room so nothing shifts. |
 | `[data-status='…']` | Sets only the internal `--_rk-fill`, `--_rk-mark` and `--_rk-soft`, which nothing outside Rekta's components reads. |
 | `:root[data-theme]`, `[data-density]`, `[data-motion]`, `[data-rk-titlebar]` | The switches `prefs` and the installed app's title bar write on the root. |
+| `:root[data-rk-places]` | `appbar()` writes it while the bar holds the places: the places' top strip (`.rk-place > .rk-pivot--nav`) steps aside and `.rk-place-name` shows (`docs/navigation.md`). |
 | `:root[data-rk-crossfade]::view-transition-old(root)` and `-new(root)` | Rekta's cross-fade timing, only while `crossfade()` (or a theme change through `prefs`) runs its own view transition: an app's own root view transitions keep their timing. |
 
 ### State the script writes
@@ -187,6 +188,8 @@ them:
 | `data-value` | a combobox's input | The chosen option's value. |
 | `--_rk-v` | a slider | How far its value is along the track, for the fill. |
 | `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
+| `data-rk-places` | the app bar, the root | The bar holds the places (`appbar()`, compact). |
+| `data-rk-held` | a toast | Its window holds: the pointer rests on it or focus is in it. |
 | `data-theme`, `data-density`, `data-motion` | the root | Prefs overrides (see `prefs`). |
 
 ### Public hooks
@@ -209,6 +212,7 @@ them:
 |---|---|---|
 | `rk:prefs` | `document` | `{ name, value }` after `prefs.set`. |
 | `rk:bannerchange` | the banner (bubbles) | `{ state }`, the state now shown or `null`. |
+| `rk:toasthold` | a toast (bubbles) | `{ held, remaining }` when its window starts or stops holding; `remaining` in ms. |
 | `rk:selectionchange` | a list, table body or virtual list (bubbles) | `{ count, mode, items }` (`indices` for a virtual list) after the selection changes. |
 | `rk:edit` | a table (bubbles) | `{ row, cell, value }` after an edit is kept. |
 | `rk:historychange` | `document` | `{ undo, redo }`, the labels next in line. |
@@ -217,7 +221,7 @@ them:
 
 ## API
 
-### `start({ root, restore })`
+### `start({ root, restore, locale, strings, focusFallback })`
 
 The defaults for a page: restores prefs (unless `restore: false`, for an
 embedded page whose host owns theme, density and motion), attaches
@@ -225,6 +229,22 @@ embedded page whose host owns theme, density and motion), attaches
 `stepper` to every `.rk-stepper`, keeps every `input.rk-range` filled
 to its value, gives every `.rk-toggle` checkbox `role="switch"`, turns on
 tooltips (`tips()`), and marks the first paint as an arrival. Returns `{ destroy }`.
+
+**Where focus goes back.** A toast or the banner that goes while it has
+focus returns focus to the control that raised it. When that control
+is gone (or hidden), focus goes to the first of these that exists and
+shows:
+
+1. `focusFallback()`, a function given to `start()` that returns an
+   element (or `null` to go on down the list);
+2. an element with `data-rk-focus-fallback`;
+3. the shown place's `.rk-title` (`places()` apps);
+4. the page's `h1` (in `main` first);
+5. `main`.
+
+An app with a framework router renders no `.rk-place`: it marks its
+page heading with `data-rk-focus-fallback`, or relies on its `h1`. An
+element that cannot take focus gets `tabindex="-1"`.
 
 ### `prefs`
 
@@ -247,17 +267,49 @@ One keyboard dispatcher for the whole page. The handler gets the
 then prevented and nothing below sees it. Returns a function that
 removes the handler. Composition (IME) events never reach a handler.
 
-| Priority | Layer |
-|---|---|
-| 40 | Floating surfaces: menu, palette, combobox list |
-| 30 | A toast that has focus (Escape dismisses it) |
-| 25 | The open toast's undo (Ctrl/Cmd+Z, not in a text field) |
-| 20 | A selection (Escape clears it) |
-| 10 | The place (Escape goes back) |
+The layers, highest first. An app's own layer picks its place among
+them; a floating surface of the app's own takes 40. A key nobody wants
+passes through.
+
+| Priority | Who | Keys | When |
+|---|---|---|---|
+| 45 | `tips()` | Escape | A tooltip shows. |
+| 40 | floating surfaces | | Rekta's menu, palette and combobox list take their keys on their own element (below), before the dispatcher. |
+| 30 | `toaster()` | Escape | Focus is in the toast. |
+| 25 | `toaster()` | Ctrl/Cmd+Z | An undo toast is open, focus not in a text field. |
+| 20 | `select()`, `virtual()` | Escape | In the selection mode, focus in the list or the app bar. |
+| 10 | `places()` | Escape | Away from home, and `escapeIsFree`. |
+| 5 | `palette()` | Ctrl/Cmd+K (its `shortcut`) | Always, while it is attached. |
+| 4 | `undoStack()` | Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y | Something to undo or redo, focus not in a text field. |
 
 `keys.escapeIsFree(event)` is false while focus is in a text field, a
 combobox, listbox, menu or expanded control, or while a modal or popover
 is open. Native `<dialog>` and popovers handle their own Escape.
+
+**An app's own key handlers skip what Rekta used.** The dispatcher
+listens on `document` and calls `preventDefault()` for every key a layer
+takes; component handlers (on the pivot, a menu, a table…) run on their
+element, before `document`, and prevent the keys they use too. An app
+that routes keys on `document` or `window` therefore starts with
+`if (e.defaultPrevented) return;`, or adds its handler as a layer with
+`keys.on()`, so one key never acts twice. The reverse holds already:
+Rekta ignores an event the app has prevented.
+
+Keys components take on their own element, while focus is in it:
+
+| Component | Keys |
+|---|---|
+| `menu()`, `contextMenu()` | ↑ ↓ Home End, Escape, Tab (closes); ↑ ↓ on the trigger open it; Shift+F10 and ContextMenu open a context menu |
+| `palette()` | ↑ ↓, Enter, Escape (clears, then closes), Tab (stays) |
+| `combobox()` | ↑ ↓, Enter, Escape, Tab (closes) |
+| `pivot()`, `strip()` | ← → (↑ ↓ on a side pivot), Home End; Tab into the chosen facet when wide |
+| `panorama()` | ← → PageUp PageDown, Home End |
+| `select()`, `table()` | ↑ ↓ (and ← → in a grid of tiles), Home End, Space/Enter (with Ctrl/Cmd or Shift), Ctrl/Cmd+A; F2 on a row edits its cell; ← → Home on a column's resize handle |
+| `virtual()` | ↑ ↓ PageUp PageDown, Home End, Space/Enter, Ctrl/Cmd+A |
+| `tree()` | ↑ ↓ ← →, Home End, Enter/Space, `*`, a letter (to the next item it starts) |
+| `split()` handle | ← → (Shift: four steps), Home End |
+| `sortable()` | Space/Enter picks up and puts down, ↑ ↓ move, Escape puts back; Alt+↑ ↓ moves at once |
+| `chart()` | ← → Home End |
 
 ### `press(scope)`
 
@@ -430,15 +482,52 @@ place is in the page.
 `aria-atomic="false"`, placed after the content whose actions raise
 toasts.
 
-`toaster.show(text, { key, undo, from, action, act })` shows one toast,
-replacing the one open. With `undo`, the toast has an undo button and a
-`duration-toast` window that counts down once a second and holds while
-it is hovered or has focus. The same `key` with `undo` updates the open
-toast and restarts its window. Ctrl/Cmd+Z undoes while the window is
-open, except in a text field; Escape inside a toast dismisses it. When
-the toast had focus as it goes, focus returns to `from`, or to the
-place's title. Undo is a shortcut, never the only way back. `act:
-{ label, run }` adds a plain action without a countdown ("reload").
+`toaster.show(text, { key, undo, from, action, act, status, windowMs, onEnd })`
+shows one toast, replacing the one open. With `undo`, the toast has an
+undo button and a window (`windowMs`, or `duration-toast`) that counts
+down once a second and holds while it is hovered or has focus. The same
+`key` with `undo` updates the open toast and restarts its window; its
+`undo`, `onEnd` and `windowMs` are then the new ones. Ctrl/Cmd+Z undoes
+while the window is open, except in a text field; Escape inside a toast
+dismisses it. When the toast had focus as it goes, focus returns to
+`from`, or to the fallback (see `start()`). Undo is a shortcut, never
+the only way back. `act: { label, run }` adds a plain action without a
+countdown ("reload").
+
+- `status`: `info`, `success`, `warning` or `error` sets `data-status`
+  and the toast takes that fill. An `error` toast is `role="alert"`,
+  announced at once. Use it for a failure whose control has gone (a
+  background save); a failure at a control that is still there is said
+  at the control (`docs/states.md`).
+- `onEnd(reason)` is called once when the toast goes: `expired` (its
+  window ran out), `undone`, `replaced` (another toast took its place),
+  `acted` (its `act` ran) or `dismissed` (Escape, `dismiss()`).
+
+`show()` returns the toast: `{ key, el, undo(), leave(), setRemaining(ms),
+remaining, held }`.
+
+- `remaining` is what is left of its window, in ms; `held` is true
+  while hover or focus holds it. `rk:toasthold` (`{ held, remaining }`)
+  bubbles from the toast each time that changes, and `data-rk-held`
+  is on it meanwhile.
+- `setRemaining(ms)` sets what is left, e.g. the time the server
+  reports for its own undo window. `setRemaining(0)` ends the toast
+  as `expired`, held or not.
+
+**An undo window that protects a server effect.** The toast's window
+holds while the user rests on it; the server's does not. Give the
+toast the server's window (`windowMs`), complete the action in `onEnd`
+for every reason but `undone`, and when the server's window ends first,
+call `setRemaining(0)`, so a held toast never offers an undo that no
+longer works:
+
+```js
+const t = toasts.show('3 messages deleted', {
+  undo: () => api.restore(ids), windowMs: res.undoMs,
+  onEnd: (why) => { if (why !== 'undone') api.purge(ids); },
+});
+setTimeout(() => t.setRemaining(0), res.undoMs);   // the server's deadline does not hold
+```
 
 Returns `{ show, open, dismiss(), destroy }`.
 
@@ -455,6 +544,18 @@ sentence share a line and the action goes under them, about 105px on a
   `status` is the fill; `alert: true` only for a halt; `on` and `off`
   are the toast texts for a state that starts or ends while another
   holds the banner.
+- The time line says when the state started: "since 14:05" (the day
+  too, when it started on another day). The start is when `set(name,
+  true)` turned it on, or the one given: `set(name, true, { since })`
+  with a `Date` (or anything `new Date()` reads). A state the client
+  did not see start (it comes from the server after a reload) passes
+  the server's time, or `since: false` when nobody knows: then there is
+  no time line, rather than a wrong one. `until` (a text, "until 18:00")
+  replaces the line for a state with a known end; the state's own
+  `since` is only the word before the time.
+- `action` is the remedy's label. `action: { label, href }` makes it a
+  link (`a.rk-btn`, with the same classes as the markup's button) that
+  navigates (sign in → `/login`) instead of calling `onAction`.
 - `order`: most severe first. One banner at a time; the most severe
   state that is on holds it.
 - `appbar` gets `data-rk-state`; `liveWord` gets the state's word.
@@ -462,7 +563,7 @@ sentence share a line and the action goes under them, about 105px on a
   has gone.
 - The remedy button calls `onAction(name)`, or turns the state off.
 
-Returns `{ set(name, on, { from }), toggle(name), is(name), shown, destroy }`.
+Returns `{ set(name, on, { from, since }), toggle(name), is(name), shown, destroy }`.
 
 ### `sheet(dialog)`
 
@@ -569,10 +670,28 @@ anywhere; `trigger` (the app bar's "go to") toggles it too. Returns
 ### `appbar(el, { more })`
 
 Moves the app bar's controls that do not fit into the menu of `more` (a
-`.rk-ab.rk-ab-more` button, shown only while needed), the lowest
-`data-rk-priority` first, then from the end; writes `data-rk-overflow`
-on each moved control. Back, the live state and a selection's controls
-never move. Returns `{ layout(), destroy }`.
+`.rk-ab.rk-ab-more` button, shown only while needed); writes
+`data-rk-overflow` on each moved control. Returns `{ layout(), destroy }`.
+
+- **Order.** The lowest `data-rk-priority` moves first; a control
+  without one has 0, so it goes before any with a positive number.
+  Among equals, the last in the bar goes first.
+- **Never moves:** back, the live state, a selection's controls, and a
+  control with `data-rk-priority="pinned"` (a primary command such as
+  search or "go to"). Pinned controls take the bar's room for good.
+  Measured at 320px with words of about six letters: beside back, the
+  live state and "more", one pinned control fits; two fit only where
+  back is hidden (a top-level place). While the places hold the bar
+  they come first, and pinned controls move into "more" with the rest.
+- **The menu** repeats each moved control's words: its `aria-label`, or
+  its text without `aria-hidden` parts and `.rk-key` hints. A key hint
+  shows apart, at the item's end, as in the palette (`.rk-menu-key`,
+  from the control's `aria-keyshortcuts` or its `.rk-key`), and the item
+  carries the same `aria-keyshortcuts`.
+- **Places.** While `.rk-ab-places` shows (compact), every command is
+  in "more", and `data-rk-places` is on the bar and the
+  root (`docs/navigation.md`). The bar re-lays itself out when its
+  children change, so places a framework renders later count.
 
 ### `form(el, { validators, onSubmit, submit })`
 
