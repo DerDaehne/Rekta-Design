@@ -20,7 +20,8 @@
 
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { contrast, distance, parse, toHex8 } from './lib/color.mjs';
 import { coreFonts, coreIcons, coreTokens } from './lib/core.mjs';
 
@@ -278,6 +279,9 @@ function check(tokens) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.js reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }
   for (const n of ['pivot-inactive', 'nav-inactive']) if (!defined.has(`font-size-${n}`)) problems.push(`rekta.js needs --rk-font-size-${n}`);
+  // Importing the module touches no DOM, so a page that renders on the server can import it (call it in the browser).
+  try { execFileSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(pathToFileURL(join(root, 'src', 'js', 'rekta.js')).href)})`], { stdio: 'pipe' }); }
+  catch (e) { problems.push(`rekta.js cannot be imported without a DOM (server rendering): ${String(e.stderr || e.message).split('\n').find((l) => /Error/.test(l)) || e.message}`); }
   // The classic script must parse as one, with every export on window.Rekta.
   try { new Function(toGlobal(js)); } catch (e) { problems.push(`rekta.global.js does not parse: ${e.message}`); }
   return problems;

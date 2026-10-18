@@ -52,12 +52,13 @@
 export const version = '0.3.0';
 
 // Tokens -------------------------------------------------------------------------------------------------------------
-const docEl = document.documentElement;
-function css(name, el = docEl) { return getComputedStyle(el).getPropertyValue(name).trim(); }
+// The document's root, looked up when used: importing the module touches no DOM, so it loads during server rendering.
+const docEl = () => document.documentElement;
+function css(name, el = docEl()) { return getComputedStyle(el).getPropertyValue(name).trim(); }
 function ms(name, el) { const v = css(name, el); return (parseFloat(v) || 0) * (/ms$/.test(v) ? 1 : 1000); }
 function num(name, el) { return parseFloat(css(name, el)) || 0; }
 // A length token in px, whatever unit it is written in (rem follows the root's font size).
-function px(name, el) { const v = css(name, el), n = parseFloat(v) || 0; return /rem$/.test(v) ? n * (parseFloat(getComputedStyle(docEl).fontSize) || 16) : n; }
+function px(name, el) { const v = css(name, el), n = parseFloat(v) || 0; return /rem$/.test(v) ? n * (parseFloat(getComputedStyle(docEl()).fontSize) || 16) : n; }
 function bezier(name) {
   const m = /cubic-bezier\(([^)]+)\)/.exec(css(name));
   const [x1, y1, x2, y2] = m ? m[1].split(',').map(Number) : [0.25, 0.1, 0.25, 1];
@@ -101,11 +102,11 @@ export const prefs = {
   key: 'rekta-prefs',
   read() { try { return JSON.parse(localStorage.getItem(this.key) || '{}'); } catch { return {}; } },
   write(all) { try { localStorage.setItem(this.key, JSON.stringify(all)); } catch { /* private mode: this visit only */ } },
-  get(name) { return docEl.dataset[name] || PREF_DEFAULT[name]; },
+  get(name) { return docEl().dataset[name] || PREF_DEFAULT[name]; },
   set(name, value, { remember = true } = {}) {
     if (!(name in PREF_DEFAULT)) throw new Error(`unknown pref ${name}`);
     const commit = () => {
-      if (!value || value === PREF_DEFAULT[name]) delete docEl.dataset[name]; else docEl.dataset[name] = value;
+      if (!value || value === PREF_DEFAULT[name]) delete docEl().dataset[name]; else docEl().dataset[name] = value;
       if (remember) { const all = this.read(); all[name] = this.get(name); this.write(all); }
       document.dispatchEvent(new CustomEvent('rk:prefs', { detail: { name, value: this.get(name) } }));
     };
@@ -349,7 +350,7 @@ export const turn = {
   leave(place, { pressed = null, back = false } = {}) {
     turn.finish();
     // A place still building in leaves from its end state: the turn wins over the arrival.
-    for (const el of [place, docEl]) { clearTimeout(el._rkArrive); el.removeAttribute('data-rk-arriving'); }
+    for (const el of [place, docEl()]) { clearTimeout(el._rkArrive); el.removeAttribute('data-rk-arriving'); }
     return new Promise((resolve) => {
       const timers = [];
       // The pressed tile keeps its press until it leaves; one activated without a press sinks now, in its centre.
@@ -818,8 +819,8 @@ export function panorama(el, { pivot = null } = {}) {
   function stickyStrip() {
     if (!pivot) return;
     const sticky = pivot.getClientRects().length && pivot.parentElement.classList.contains('rk-place') && getComputedStyle(pivot).position === 'sticky';
-    if (sticky) { docEl.style.setProperty('--rk-pivot-h', `${pivot.offsetHeight}px`); wrote = true; }
-    else if (wrote) { docEl.style.removeProperty('--rk-pivot-h'); wrote = false; }
+    if (sticky) { docEl().style.setProperty('--rk-pivot-h', `${pivot.offsetHeight}px`); wrote = true; }
+    else if (wrote) { docEl().style.removeProperty('--rk-pivot-h'); wrote = false; }
   }
   const ro = new ResizeObserver(fit);
   ro.observe(el);
@@ -1122,7 +1123,7 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
   let settle = 0;
   const ro = new ResizeObserver(() => {
     clearTimeout(settle);
-    settle = setTimeout(() => docEl.style.setProperty('--rk-banner-h', `${Math.ceil(el.getBoundingClientRect().height)}px`), 60);
+    settle = setTimeout(() => docEl().style.setProperty('--rk-banner-h', `${Math.ceil(el.getBoundingClientRect().height)}px`), 60);
   });
   ro.observe(el, { box: 'border-box' });
   const now = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -2891,7 +2892,7 @@ export function titlebar(el, { router = null } = {}) {
     const p = document.querySelector(`[data-rk-place="${CSS.escape(router.current || '')}"]`), h = p && p.querySelector('.rk-title');
     place.textContent = p && p.dataset.rkParent && h ? h.textContent.trim() : '';
   };
-  const geometry = () => docEl.toggleAttribute('data-rk-wco', !!(wco && wco.visible));
+  const geometry = () => docEl().toggleAttribute('data-rk-wco', !!(wco && wco.visible));
   document.addEventListener('rk:placechange', paint);
   if (wco) wco.addEventListener('geometrychange', geometry);
   paint(); geometry();
@@ -3066,8 +3067,8 @@ export function sparkTo(line, points) {
 // root while one runs): an app's own root view transitions keep theirs.
 export function crossfade(change) {
   if (!ms('--rk-duration-short') || !document.startViewTransition) { change(); return Promise.resolve(); }
-  docEl.setAttribute('data-rk-crossfade', '');
-  return document.startViewTransition(change).finished.catch(() => {}).finally(() => docEl.removeAttribute('data-rk-crossfade'));
+  docEl().setAttribute('data-rk-crossfade', '');
+  return document.startViewTransition(change).finished.catch(() => {}).finally(() => docEl().removeAttribute('data-rk-crossfade'));
 }
 
 // Inputs -----------------------------------------------------------------------------------------------------------
@@ -3307,6 +3308,6 @@ export function start({ root = document, restore = true } = {}) {
   document.addEventListener('input', onRange);
   document.addEventListener('change', onSegment);
   parts.push({ destroy() { document.removeEventListener('input', onRange); document.removeEventListener('change', onSegment); } });
-  arrive(docEl);
+  arrive(docEl());
   return { destroy() { parts.forEach((p) => p.destroy()); } };
 }

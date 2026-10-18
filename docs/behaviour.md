@@ -27,6 +27,12 @@ For a remembered theme with no flash, restore the prefs before first
 paint: load `rekta.global.js` in `<head>` and call
 `Rekta.prefs.restore()` there.
 
+**Server rendering.** Importing `rekta.js` touches no DOM, so a page
+that renders on the server (SvelteKit, Next.js, Astro, Nuxt) can import
+it at the top of a module. Call its functions only in the browser, in a
+mount hook or an effect. `node scripts/build.mjs --check` imports it in
+plain Node, so this cannot break unnoticed.
+
 ## The contract
 
 - **Classes are yours.** Rekta defines only `.rk-*` classes and never
