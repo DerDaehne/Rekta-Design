@@ -834,6 +834,9 @@ export function panorama(el, { pivot = null } = {}) {
   if (pivot) { pivot.addEventListener('click', pivotClick); pivot.addEventListener('wheel', stripWheel, { passive: false }); pivotScale(pivot); }
   if (document.fonts) document.fonts.ready.then(fit);
   if (el.tabIndex < 0 && !el.hasAttribute('tabindex')) el.tabIndex = 0;
+  // Focusable, it is a landmark the keys act on: a region, and a region needs a name to be announced as one.
+  if (!el.hasAttribute('role')) el.setAttribute('role', 'region');
+  if (!el.hasAttribute('aria-label') && !el.hasAttribute('aria-labelledby')) console.warn('Rekta.panorama(): give the panorama an aria-label or aria-labelledby; it takes focus, and a region without a name is announced as nothing', el);
   requestAnimationFrame(() => { fit(); mark(current); });
   return {
     goTo,

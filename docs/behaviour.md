@@ -219,7 +219,18 @@ Returns `{ current, item, params, below, navigate(name, { replace, pressed }), o
 ### `panorama(el, { pivot })`
 
 `el` is a `.rk-panorama` of `.rk-sec` sections; `pivot` is an optional
-`.rk-pivot` of `#section` links. Sideways:
+`.rk-pivot` of `#section` links. The panorama takes focus (`tabindex="0"`)
+so the keys can scroll it, which makes it a landmark: `panorama()` gives
+it `role="region"` when it has no role, and the page must give it a name,
+`aria-label` or `aria-labelledby` (the place's title). Without one a
+screen reader announces a nameless group, and `panorama()` warns in the
+console.
+
+```html
+<div class="rk-panorama" aria-labelledby="home-title"> … </div>
+```
+
+Sideways:
 
 - One wheel gesture (events less than `duration-wheel-latch` apart)
   latches to one scroller: to the section under the pointer if it can
