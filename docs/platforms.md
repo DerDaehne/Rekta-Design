@@ -72,6 +72,54 @@ override; the override wins.
 Every transition must still reach its end state with zero duration:
 instant, never skipped.
 
+## Product overrides
+
+Some values are a product's decision, not the design's. They are the
+official way to make Rekta Design a product's own without forking it: on
+the web, override the `--rk-*` property after the Rekta stylesheets; in
+rekta-core, call the setter.
+
+| Token | Property | What a product decides | rekta-core |
+|---|---|---|---|
+| `color.*.accent`, `on-accent` | `--rk-accent`, `--rk-on-accent` | Its one hue: primary button, checked controls, a selected item. Per theme. | `rk_app_set_accent(light, dark)` |
+| `timing.toast` | `--rk-duration-toast` | How long a toast stays, and so the undo window (say 10s instead of 5s). Read when a toast opens. | the token, fixed |
+| `timing.stale` | `--rk-duration-stale` | When live data without an update counts as stale. A live region's own `stale` option wins. | the token, fixed |
+| `size.tile-unit`, `size.tile-unit-ultrawide` | `--rk-tile-unit`, `--rk-tile-unit-ultrawide` | The tile grid's cell, below and from 2560px. Set both: from 2560px the stylesheet sets the first from the second. | the token, fixed |
+| `size.pivot-wide` | `--rk-pivot-wide` | From what width a pivot shows its facets side by side; 0 never. May differ per pivot. | not yet |
+| density | `data-density` on the root | Not a token to override but a setting for the user: `Rekta.prefs` writes it (`auto`, `comfortable`, `compact`). | `rk_app_set_density` |
+
+The accent is set per theme, with the selectors `rekta.tokens.css`
+uses, so the dark value also wins over the system's dark mode and the
+in-app theme:
+
+```css
+/* after rekta.tokens.css and rekta.css */
+:root { --rk-accent: #7a2a8c; --rk-on-accent: #ffffff; --rk-duration-toast: 10000ms; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --rk-accent: #d39be0; --rk-on-accent: #2a0f31; }
+}
+:root[data-theme="dark"] { --rk-accent: #d39be0; --rk-on-accent: #2a0f31; }
+```
+
+An accent must hold 3:1 against `bg` in its theme, `on-accent` 4.5:1 on
+it, and stay clearly apart from every status hue ([colour.md](colour.md));
+the showcase measures a candidate live.
+
+Everything else is the design, not a setting. In particular, do not
+override:
+
+- **The status colours, text, `bg`, `surface` and `focus`.** Their AA
+  contrast and their separation under colour blindness are measured
+  together by `--check`; one changed value can break a pair it cannot see.
+- **`motion.duration.*` and the easings.** Each motion has one meaning
+  ([motion.md](motion.md)), and under reduced motion `rekta.tokens.css`
+  sets every duration to 0 on `:root`: an override on `:root` after it
+  wins over that too and brings motion back to people who asked for none.
+  (The `timing.*` values above are wall time and stay under reduced
+  motion; that is why they may change.)
+- **Spacing, radius and the type scale.** The tile grid, the hairlines and
+  the title hierarchy are built from them.
+
 ## Window-size classes
 
 Two classes, decided by the **place** (the pane that hosts the content),
