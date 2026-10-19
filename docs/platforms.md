@@ -77,16 +77,18 @@ instant, never skipped.
 Some values are a product's decision, not the design's. They are the
 official way to make Rekta Design a product's own without forking it: on
 the web, override the `--rk-*` property after the Rekta stylesheets; in
-rekta-core, call the setter.
+rekta-core, call the setter. A value rekta-core keeps the design's
+(motion, colours, the type scale) is refused there with a log line,
+not set.
 
 | Token | Property | What a product decides | rekta-core |
 |---|---|---|---|
 | `color.*.accent`, `on-accent` | `--rk-accent`, `--rk-on-accent` | Its one hue: primary button, checked controls, a selected item. Per theme. | `rk_app_set_accent(light, dark)` |
-| `timing.toast` | `--rk-duration-toast` | How long a toast stays, and so the undo window (say 10s instead of 5s). Read when a toast opens. | the token, fixed |
-| `timing.stale` | `--rk-duration-stale` | When live data without an update counts as stale. A live region's own `stale` option wins. | the token, fixed |
-| `size.tile-unit`, `size.tile-unit-ultrawide` | `--rk-tile-unit`, `--rk-tile-unit-ultrawide` | The tile grid's cell, below and from 2560px. Set both: from 2560px the stylesheet sets the first from the second. | the token, fixed |
-| `size.pivot-wide` | `--rk-pivot-wide` | From what width a pivot shows its facets side by side; 0 never. May differ per pivot. | not yet |
-| a domain colour code (no token: a product slot) | `--rk-series-1` to `-8` | Colours its users already read, such as heart-rate zones, for small data marks; per theme, as the accent. Checked with `build.mjs --check-product`. | not yet |
+| `timing.toast` | `--rk-duration-toast` | How long a toast stays, and so the undo window (say 10s instead of 5s). Read when a toast opens. | `rk_app_set_timing(RK_TIMING_TOAST, ms)` |
+| `timing.stale` | `--rk-duration-stale` | When live data without an update counts as stale. A live region's own `stale` option wins. | `rk_app_set_timing(RK_TIMING_STALE, ms)`; `rk_duration_of` reads it |
+| `size.tile-unit`, `size.tile-unit-ultrawide` | `--rk-tile-unit`, `--rk-tile-unit-ultrawide` | The tile grid's cell, below and from 2560px. Set both: from 2560px the stylesheet sets the first from the second. | `rk_app_set_metric(RK_TILE_UNIT, px)` (the ultrawide cell stays the token's) |
+| `size.pivot-wide` | `--rk-pivot-wide` | From what width a pivot shows its facets side by side; 0 never. May differ per pivot. | `rk_app_set_metric(RK_PIVOT_WIDE, px)`; per pivot `rk_pivot_set_wide` |
+| a domain colour code (no token: a product slot) | `--rk-series-1` to `-8` | Colours its users already read, such as heart-rate zones, for small data marks; per theme, as the accent. Checked with `build.mjs --check-product`. | `rk_app_set_series(code, light, dark)`, held to the same rules (said through the log); `rk_tile_set_code`, `rk_row_set_code` |
 | density | `data-density` on the root | Not a token to override but a setting for the user: `Rekta.prefs` writes it (`auto`, `comfortable`, `compact`). | `rk_app_set_density` |
 
 A length may be written in any form, `px`, `rem` or a `calc()` of

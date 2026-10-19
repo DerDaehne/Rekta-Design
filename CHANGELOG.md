@@ -44,6 +44,26 @@ Reports #67–#83 on 0.4.0.
 - `tokens/rekta.hooks.json`, shipped as `hooks` in `rekta.tokens.json`;
   `--check` holds the docs' table to it (#77).
 
+### rekta-core (#35: one design with the web)
+
+- **Its words are the app's** (web #16): `rk_strings` and
+  `rk_app_set_strings()`, English by default with the web catalogue's
+  keys (undo, redo, undone, ok, cancel, choose, back, move, on, off);
+  `make test` fails when such a word is written anywhere else.
+- **Domain colour codes** (web #33): `rk_app_set_series()`, held to the
+  web's product rules (3:1, 0.09 apart under protan and deutan, ported
+  to C); `rk_tile_set_code()`, `rk_row_set_code()`; declared `.code`.
+- **Product overrides** (web #11): `rk_app_set_metric()` for
+  `RK_TILE_UNIT` and the new `RK_PIVOT_WIDE`, `rk_app_set_timing()` for
+  `RK_TIMING_TOAST` and the new `RK_TIMING_STALE`; `size.pivot-wide` and
+  `timing.stale` are in `rk_tokens.h`.
+- **Facets side by side** (web #12, #24): `rk_pivot_set_wide()`,
+  `rk_pivot_is_wide()`; declared `.wide`.
+- 285 exported functions (9 new); `rk_ui` and the enums grew at their
+  end only. Still English: the date picker's month and day names, the
+  status words, item counts, a drop's default words; locale-aware
+  numbers are not there yet.
+
 ### Documented
 
 The five recipe and comment fixes of #76; one rule for on/off controls,
