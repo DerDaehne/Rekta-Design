@@ -137,6 +137,14 @@ a pivot's
 .Fa .wide
 is the width from which its pages stand side by side
 .Pq see Fn rk_pivot_set_wide .
+.It A split's next item
+A new
+.Fa .pulse
+on a split is its detail's next item: it slides in from
+.Fa .reveal Ns 's
+side, the trailing one (0 or 1) or the leading one (\-1)
+.Pq see Fn rk_split_reveal ;
+the same pulse is a replace, still.
 .It Mistakes
 A field the kind does not read, a key twice among siblings, a node the user
 closed that the build declares open again: each is said once through the log.
@@ -317,10 +325,58 @@ a grip's
 and a toggle's
 .Fa on
 and
-.Fa off .
+.Fa off ;
+the date picker's
+.Fa months
+and
+.Fa weekdays
+.Pq Monday first ,
+the
+.Fa status
+words by
+.Vt rk_status
+.Pq idle, active, done, waiting, failed ,
+a list's count read aloud
+.Fa items ,
+the window's buttons
+.Fa minimize ,
+.Fa maximize
+and
+.Fa close ,
+and a drop without a title,
+.Fa files .
+A counting word has a form for each
+.Vt rk_plural
+.Pq Dv RK_PLURAL_ZERO , ONE , TWO , FEW , MANY , OTHER ,
+as CLDR's plural categories:
+.Fa plural
+picks one for a number
+.Pq Dv NULL : English, 1 one and the rest other ,
+a form left
+.Dv NULL
+takes other, and a counting word given in any form is the app's in all of
+them.
+Figures follow
+.Fa decimal
+and
+.Fa group
+.Pq a point and a comma; an empty group for none ,
+grouped from
+.Fa group_min
+digits before the first group
+.Pq CLDR's minimum grouping digits: 1 in English, 2 in German ,
+and the compact forms
+.Fa thousand ,
+.Fa million ,
+.Fa billion
+and
+.Fa trillion
+.Pq Li %sK , %sM , %sB , %sT ; an empty one is not shortened at that size .
 Copied; a field left
 .Dv NULL
-keeps the English word, a format needs exactly one
+keeps the English word, a format
+.Pq undone, move, a counting word's form, a compact figure
+needs exactly one
 .Li %s ,
 and
 .Dv NULL
@@ -329,6 +385,20 @@ Set
 .Fa strings->size
 to
 .Li sizeof(rk_strings) .
+.It Fn rk_format_number "char *out" "size_t size" "double v" "bool compact"
+A figure in the app's words, as the web's
+.Fn number :
+up to two decimals with the decimal sign and digit groups of
+.Vt rk_strings
+.Pq 1,234.5; German 1234,5 and 12.345 ;
+.Fa compact ,
+from a thousand up, shortened with one decimal at most
+.Pq 1.2K, 2.5M; German 1234,5 and 2,5 Mio.\& .
+Returns the figure's length; as
+.Xr snprintf 3 ,
+.Fa out
+holds what fits.
+Sliders, steppers and a list's count use it.
 .It Fn rk_app_set_log "void (*fn)(rk_log_level level, const char *message, void *user)" "void *user"
 Where misuse is said
 .Pq see Sx ERRORS ;
@@ -743,7 +813,17 @@ turns to the detail, whose crumb
 .Pq Fa title
 and Escape turn back, which
 .Fn rk_split_on_back
-hears; sideways it slides a new item's detail in.
+hears; sideways an item where there was none slides in from the trailing
+side, and the same item shown again stays still.
+.Fn rk_split_reveal
+is a real advance, as the web's
+.Li split().reveal :
+sideways the detail's next item slides in from the side of travel over 0.75 \(mu
+duration-moderate, slide-distance with a fade
+.Pf ( Fa dir
+1 the trailing side, \-1 the leading side, 0 a replace that does not slide);
+compact the detail turns in where the list showed.
+The first display never slides.
 .Fn rk_split_is_sideways ,
 .Fn rk_split_is_detail_shown
 and

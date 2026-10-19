@@ -161,8 +161,13 @@ RK_API rk_color rk_series_of(int code);            /* in the current theme; ink 
    toast stays, and so the undo window), RK_TIMING_STALE. Below 0: the token's again. Any other is said, not set. */
 RK_API void rk_app_set_metric(rk_metric metric, float px);
 RK_API void rk_app_set_timing(rk_duration timing, double ms);
+/* A counting word's forms, as CLDR's plural categories (the web's Intl.PluralRules): English says one and other,
+   Polish one, few, many and other. */
+typedef enum rk_plural { RK_PLURAL_ZERO, RK_PLURAL_ONE, RK_PLURAL_TWO, RK_PLURAL_FEW, RK_PLURAL_MANY, RK_PLURAL_OTHER, RK_PLURAL_FORCE32 = 0x7fffffff } rk_plural;
 /* The words the library says itself, as the web's Rekta.strings: English until an app sets its own (copied). A
-   field NULL keeps the English word; undone and move are formats with one %s. NULL: the English words again. */
+   field NULL keeps the English word; undone, move, a counting word's forms and the compact figures are formats with
+   one %s. A counting word given in any form is the app's in all of them: a form it leaves NULL takes its other.
+   NULL: the English words again. */
 typedef struct rk_strings {
   uint32_t size;                                   /* sizeof(rk_strings) */
   const char *undo, *redo;                         /* a toast's action after rk_window_do, after an undo */
@@ -172,8 +177,30 @@ typedef struct rk_strings {
   const char *back;                                /* a split's crumb without a title: "back" */
   const char *move;                                /* a grip, read aloud: "move %s", its row's title */
   const char *on, *off;                            /* beside a toggle */
+  /* added later, as rk_strings grows: at its end */
+  const char *months[12];                          /* the date picker's month: "January" to "December" */
+  const char *weekdays[7];                         /* its columns, Monday first: "Mo" to "Su" */
+  const char *status[5];                           /* a status's word, by rk_status: "idle" (none), "active", "done",
+                                                      "waiting", "failed" */
+  const char *items[RK_PLURAL_OTHER + 1];          /* a list's count, read aloud, by rk_plural: "%s item" (one), "%s items"
+                                                      (other); %s is the figure */
+  const char *minimize, *maximize, *close;         /* the window's buttons, read aloud */
+  const char *files;                               /* a drop without a title, read aloud */
+  const char *decimal, *group;                     /* a figure's decimal sign and digit group: ".", "," ("": none) */
+  const char *thousand, *million, *billion, *trillion;   /* compact figures, %s the number shortened: "%sK", "%sM",
+                                                      "%sB", "%sT"; "": not shortened at that size (German: "", then
+                                                      "%s Mio.", "%s Mrd.", "%s Bio.") */
+  int group_min;                                   /* the digits before the first group a figure needs to be grouped, as
+                                                      CLDR's minimum grouping digits: 0 or 1 English (1,234), 2 German
+                                                      (1234, but 12.345) */
+  int (*plural)(long n);                           /* n's rk_plural, for the counting words; NULL: English (1 one, the
+                                                      rest other); one outside rk_plural is other */
 } rk_strings;
 RK_API void rk_app_set_strings(const rk_strings *strings);
+/* A figure in the app's words, as the web's number(): up to two decimals, the decimal sign and digit groups of
+   rk_strings (1,234.5; German 1234,5 and 12.345); compact, from a thousand up, shortened with one decimal at most (1.2K,
+   2.5M; German 1234,5 and 2,5 Mio.). Returns the figure's length; out holds what fits, NUL-terminated, as snprintf. */
+RK_API size_t rk_format_number(char *out, size_t size, double v, bool compact);
 /* A font file (TrueType or OpenType, or a collection's first face) for the characters Barlow lacks, tried before the
    system's: an app that writes Japanese may bring its own. False when it cannot be read or drawn with. */
 RK_API bool rk_app_add_font(const char *path);
@@ -565,7 +592,13 @@ RK_API void rk_tree_on_toggle(rk_view *tree, void (*fn)(rk_view *tree, int item,
    wide at first, a double click gives that back. Compact one pane shows at a time: rk_split_set_detail_shown turns
    to the detail, whose crumb (the title) and Escape turn back. Each pane scrolls itself: give it an rk_scroll where it may be long. */
 RK_API rk_view *rk_split(rk_view *list, rk_view *detail, const char *title);   /* takes both; title: the list's, for the crumb */
-RK_API void rk_split_set_detail_shown(rk_view *split, bool shown);   /* sideways: a new item's detail slides in; compact: turns */
+RK_API void rk_split_set_detail_shown(rk_view *split, bool shown);   /* sideways: an item where there was none slides in
+                                                                        from the trailing side; compact: turns */
+/* The detail's next item, as the web's split().reveal(dir): sideways it slides in from the side of travel - dir 1 the
+   trailing side (next, another item picked), -1 the leading side (previous), 0 not at all (the same item, or only its
+   new data). Compact the detail turns in where the list showed, and stays still where it shows already. Call it after
+   a real advance only: the first display, and the same item shown again, never slide. */
+RK_API void rk_split_reveal(rk_view *split, int dir);
 RK_API bool rk_split_is_detail_shown(rk_view *split);     /* compact: which pane shows */
 RK_API bool rk_split_is_sideways(rk_view *split);
 RK_API void rk_split_on_back(rk_view *split, void (*fn)(rk_view *split, void *user), void *user);   /* compact: the user went back to the list (the crumb, Escape) */
@@ -848,13 +881,16 @@ typedef struct rk_ui {
                                                       again: what it holds keeps its last description, bound pointers
                                                       too; a list's or a table's: its rows are drawn again only when it
                                                       changes (0: at every build) */
-  uint32_t pulse;                                  /* a new one plays its change again */
+  uint32_t pulse;                                  /* a new one plays its change again; a split's: its detail's next item */
   rk_ui_change change;
 
   /* added later, as rk_ui grows: at its end */
   int code;                                        /* a tile's sparkline, a row's tag: a domain colour, 1 to 8 */
   float wide;                                      /* a pivot's: from what width its facets show side by side (0: the
                                                       app's, below 0: never) */
+  int reveal;                                      /* a split's: a new .pulse is its detail's next item (rk_split_reveal),
+                                                      from the trailing side (0 or 1) or the leading side (-1); the same
+                                                      .pulse, the same item: no slide */
 } rk_ui;
 
 /* A window built from a declaration is made by rk_window_create (rk_window_desc.build). Elsewhere, a declared view

@@ -41,7 +41,7 @@ back. `demo --shots DIR` takes the same tour without a screen.
 
 ```sh
 make               # build/librekta.a and build/demo
-make test          # 607 checks and 38 reference images, headless (the comparison needs node), the built-in words
+make test          # 644 checks and 39 reference images, headless (the comparison needs node), the built-in words
 make shots         # the demo's tour as PNGs in build/shots
 make sanitize      # tests and demo under AddressSanitizer and UBSan
 make modules       # each source compiled on its own; the unity build only joins them
@@ -140,13 +140,18 @@ views, controllers (places with the turn, panorama, pivot, sheets), motion, the
 press, focus everywhere and the keyboard, toasts, undo, the title bar, text
 fields and areas with the clipboard and input methods, every script through the
 system's fonts, checkboxes, options, toggles, segments, sliders, steppers, selects, comboboxes and dates, scroll views, pictures, menus, long lists, tables
-that sort, resize and edit, trees, splits, rows the user puts in order, files
+that sort, resize and edit, trees, splits whose next item slides in from the
+side of travel (`rk_split_reveal`), rows the user puts in order, files
 dragged in from the system and a place to drop them, the system's file chooser
 and notifications, pivots along the top or down the side, tooltips, views
 disabled with their reason, confirmations, controllers inside another's views,
 what a product makes its own (a domain's colour code on sparklines and tags,
-the toast and stale timings, the tile unit, the words of toasts, confirmations,
-selects, crumbs, grips and toggles through `rk_app_set_strings`), pivots that show their facets side by side from
+the toast and stale timings, the tile unit, and every word the library says
+through `rk_app_set_strings`: toasts, confirmations, selects, crumbs, grips,
+toggles, the date picker's months and days, the status words, a list's count
+in the plural forms of the app's language, the names read aloud for the
+window's buttons and an untitled drop, and figures with the app's decimal
+sign, digit groups and compact forms, `rk_format_number`), pivots that show their facets side by side from
 `size.pivot-wide` up, and misuse said through a log instead of crashing; headless, Wayland and X11 tested here (Wayland is
 the default where a compositor answers; `RK_PLATFORM=x11` picks X11), Win32 and
 Cocoa built and tested in CI. A reference gallery holds core to the web: the
@@ -155,7 +160,6 @@ core/build/gallery`), compared in size, extent, colour and shape in CI.
 
 Not there yet: screen readers (the accessibility tree is built, the bridges to
 UI Automation, NSAccessibility and AT-SPI are stage 3), several windows' focus
-between them, and the rest of the words in other languages: the date picker's
-month and day names, the status words, a list's item count and the names read
-aloud for the window's buttons and an untitled drop are English, and figures
-follow no locale yet.
+between them, the scripts that join or reorder (Arabic, Hebrew, the Indic
+scripts: set a character at a time, unshaped), and a date box that follows the
+locale: it keeps the ISO order and its empty yyyy, mm and dd.
