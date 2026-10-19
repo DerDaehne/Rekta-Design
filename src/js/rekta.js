@@ -50,7 +50,7 @@
      start      the defaults for a page: prefs, press, sheets, steppers, sliders, switches, arrival build-in, words
      tokens     token values as they apply right now (theme, density, reduced motion) */
 
-export const version = '0.4.0';
+export const version = '0.5.0';
 
 // Tokens -------------------------------------------------------------------------------------------------------------
 // The document's root, looked up when used: importing the module touches no DOM, so it loads during server rendering.

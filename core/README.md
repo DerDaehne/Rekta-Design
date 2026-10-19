@@ -54,7 +54,7 @@ Developer Command Prompt, or use MinGW with `make`.
 `make install` (with `PREFIX`, default `/usr/local`) puts the static and the
 shared library, the header, the man page and `rekta.pc` in place, so an app
 builds with `cc app.c $(pkg-config --cflags --libs rekta)`. The shared library
-(`librekta.so.0.4`, `librekta.0.4.dylib`, `rekta.dll`) exports only the
+(`librekta.so.0.5`, `librekta.0.5.dylib`, `rekta.dll`) exports only the
 header's `RK_API` functions, which `make abi` checks; before 1.0 the soname
 carries the minor version, since a minor version may still break the ABI.
 

@@ -99,7 +99,7 @@ on every push to `main` (and by hand).
 
 ## Status
 
-**0.4: everything data-heavy desktop and web apps need, on the web and
+**0.5: everything data-heavy desktop and web apps need, on the web and
 natively.** 0.2 laid the foundation: one token source for every
 platform, the component stylesheet and a framework-free behaviour
 script, with routes and back, window-size classes, density and a
@@ -114,7 +114,11 @@ icon set, the title bar of an installed app, and installing and offline.
 undo window and a status, a banner that knows when a state began, the
 places in the app bar, forms in sheets that ask before input goes,
 destructive and icon buttons, plural-aware strings and TypeScript
-declarations. Next: date ranges, a notification centre, rich text. See
+declarations. 0.5 makes it hold under real servers and routers (undo
+windows on the clock, sheets that keep asking, facets that come and go,
+scroll offsets for any router) and brings rekta-core level with the web:
+its words, a domain's colour code, the product overrides and facets side
+by side. Next: date ranges, a notification centre, rich text. See
 [CHANGELOG.md](CHANGELOG.md).
 
 ## License
