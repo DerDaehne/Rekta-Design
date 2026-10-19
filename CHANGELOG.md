@@ -5,6 +5,36 @@ tokens, public hooks, `data-rk-*` attributes, events and the `rekta.js`
 API are the public surface. Before 1.0, a minor version may still break
 it; each entry says how.
 
+## Unreleased
+
+rekta-core: what was left after #35 (#84).
+
+### Changed (may need a change in an app)
+
+- **A split's detail slides only after a real advance.**
+  `rk_split_set_detail_shown(true)` slides sideways only when no item
+  showed before; the first display and the same item shown again stay
+  still. A next item slides with `rk_split_reveal(split, dir)` (or a new
+  `.pulse` on a declared `RK_SPLIT`), from the side of travel.
+
+### Added
+
+- `rk_split_reveal(split, dir)`: 1 from the trailing side, -1 from the
+  leading side, 0 a replace; declared `.reveal` with `.pulse`.
+- More of core's words in `rk_strings` (at its end): month and weekday
+  names, the status words, a list's count, the window buttons, a drop's
+  default name. Counts have plural forms (`rk_plural`, a `plural`
+  callback, English by default; a word given in any form is the app's in
+  all of them).
+- `rk_format_number(out, size, v, compact)`, the web's `number()` in C:
+  decimal sign, digit groups (with CLDR's minimum grouping digits) and
+  compact forms from `rk_strings`; sliders, steppers and counts use it.
+- `test/words.sh` also catches counts and figures written with printf;
+  46 words come from the table.
+
+Still English in core: the date box's empty "yyyy-mm-dd" and its field
+order.
+
 ## 0.5.0 — 2026-10-19
 
 Reports #67–#83 on 0.4.0, and rekta-core caught up with the web (#35).
