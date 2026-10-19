@@ -170,7 +170,7 @@ them:
 | Rule | Why |
 |---|---|
 | `:root { scroll-padding-block: … }` | Anchors and focus scroll clear of the banner and section strip above (`--rk-banner-h`, `--rk-pivot-h`) and the app bar below. |
-| `:root:has(dialog.rk-sheet[open])` | The page under an open sheet stops scrolling, and keeps its scrollbar's room so nothing shifts. |
+| `:root:has(dialog.rk-sheet[open])` | The page under an open sheet stops scrolling; the root keeps its scrollbar's room as right padding (`--rk-scrollbar`, measured by `sheet()` as it opens), so nothing shifts and the sheet spans the viewport. |
 | `[data-status='…']` | Sets only the internal `--_rk-fill`, `--_rk-mark` and `--_rk-soft`, which nothing outside Rekta's components reads. |
 | `:root[data-theme]`, `[data-density]`, `[data-motion]`, `[data-rk-titlebar]` | The switches `prefs` and the installed app's title bar write on the root. |
 | `:root[data-rk-places]` | `appbar()` writes it while the bar holds the places: the places' top strip (`.rk-place > .rk-pivot--nav`) steps aside and `.rk-place-name` shows (`docs/navigation.md`). |
@@ -213,6 +213,7 @@ them:
 | `data-value` | a combobox's input | The chosen option's value. |
 | `--_rk-v` | a slider | How far its value is along the track, for the fill. |
 | `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
+| `data-rk-probe` | a `span` inside a measured element (a pivot strip; any element whose length token is a `calc()`) | A measuring probe, in and out within one call: an app's own `MutationObserver` on such an element should ignore it. |
 | `data-rk-places` | the app bar, the root | The bar holds the places (`appbar()`, compact). |
 | `data-rk-held` | a toast | Its window holds: the pointer rests on it or focus is in it. |
 | `data-theme`, `data-density`, `data-motion` | the root | Prefs overrides (see `prefs`). |
@@ -229,7 +230,15 @@ them:
 | `--rk-banner-h` | `banner()` | `scroll-padding`, the sticky strip, toasts without anchor positioning. |
 | `--rk-pivot-h` | `panorama()` | `scroll-padding` under a sticky section strip. |
 | `--rk-pivot-scale` | `pivot()`, `panorama()` | The inactive pivot titles' scale. |
-| `--rk-toast-left` | `toaster()`, or the page | What is left of a toast's undo window, 1 to 0: the countdown line under its action. A page without the script sets it with the figure. |
+| `--rk-toast-left` | `toaster()`, or the page | What is left of a toast's undo window, 1 to 0: the countdown line along the toast's foot. A page without the script sets it with the figure. |
+| `--rk-scrollbar` | `sheet()` | The root's right padding while a sheet is open: the scrollbar's room, so nothing behind shifts. |
+| `--rk-stage-top` | the page | Where a wide facet row starts below the fixed chrome and the place's title block; the row fills the height under it (`docs/layout.md`). |
+| `--rk-series-1` … `--rk-series-8` | the product | A domain colour code per theme (`docs/data.md`). |
+
+The list is machine-readable too: `tokens/rekta.hooks.json`, shipped as
+`hooks` in `rekta.tokens.json` (name, who writes it, who reads it), so a
+product that lints its own `--rk-` use can tell a hook from a typo.
+`--check` holds this table and that list to each other.
 
 ### Events
 
@@ -441,7 +450,7 @@ place sticks under the banner and publishes `--rk-pivot-h`.
 
 Returns `{ goTo(sectionOrId, { focus, instant }), current, destroy }`.
 
-### `pivot(el, { onSelect, turn })`
+### `pivot(el, { onSelect, turn, gone })`
 
 `el` is a `.rk-pivot[role=tablist]` of `[role=tab]` buttons with
 `aria-controls`. A click or ← → Home End selects a facet; the strip
@@ -459,6 +468,17 @@ history.
   the keys, a scroll in wide mode) and for `select(index)`;
   `select(index, { silent: true })` changes the facet without it, for an
   app that sets the facet from its own state.
+- **By name.** `select()` takes an index or a name: the tab's `id`, its
+  `data-facet` or its panel's `id` (`select('questions')`), so an app
+  that holds its facet by name never maps it to an index that shifts.
+  `chosen` reads it back (`data-facet`, else `id`, else the index).
+- **Facets that come and go** (an open question, errors, a draft): add
+  or remove the tab (and its panel) and `pivot()` notices on its own,
+  as `sync()` does by hand. A new tab takes no tab stop of its own and
+  its panel is hidden (or revealed, wide); when the chosen facet goes,
+  its neighbour is chosen (the one now in its place, else the last) and
+  `onSelect` hears it, unless `gone: 'silent'`. The strip always keeps
+  exactly one tab stop and one chosen tab.
 - **Measuring.** The titles are measured when the strip resizes, when
   fonts load and when a title's words change (a count going from 2 to
   12); `layout()` measures again by hand.
@@ -480,7 +500,28 @@ Narrower, it is one facet at a time again, the one last chosen. A pivot
 that picks the place never goes wide. The threshold is the product's to
 pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.
 
-Returns `{ select(index, { focus, silent }), wide, layout, destroy }`.
+Wide below a title block (a record, a profile), the row is a stage: at
+most as tall as the window under the sticky chrome (`--rk-stage-top`,
+the page's sticky header and strip; the banner's height without it) and
+above the app bar, and each facet scrolls within itself. While the row
+is not yet whole in view, a vertical wheel over it scrolls the window
+and stops where the row meets the sticky chrome; from there the facets
+take the wheel (`docs/layout.md`).
+
+Returns `{ select(indexOrName, { focus, silent }), sync(), chosen, wide, layout, destroy }`.
+
+### `scrollState(root)`
+
+Every scrolled box of a place as plain data, for a router that is not
+`places()` (SvelteKit, Next): `root` itself, a panorama and its
+sections, a wide facet row and its facets, a split's panes, anything
+marked `data-rk-scroll`, and the window. Boxes are known by their `id`
+or `data-rk-scroll` value, else by their order. Returns
+`{ capture(), restore(state) }`; `capture()` gives
+`{ y, at: { key: [left, top] } }`, which fits in `history.state` or a
+framework's snapshot. Restore once the place is rendered and laid out.
+`places()` uses it for its own back. A recipe is in
+[navigation.md](navigation.md#back-with-a-router-of-your-own).
 
 ### `strip(el)`
 
@@ -526,33 +567,52 @@ countdown ("reload").
   at the control (`docs/states.md`).
 - `onEnd(reason)` is called once when the toast goes: `expired` (its
   window ran out), `undone`, `replaced` (another toast took its place),
-  `acted` (its `act` ran) or `dismissed` (Escape, `dismiss()`).
+  `acted` (its `act` ran) or `dismissed` (Escape, `dismiss()`); or
+  `merged`, when a `show()` with the same `key` and a new `onEnd` joined
+  a second action to this toast: the first action now rides on the
+  second, whose `onEnd` reports the toast's end. A same-key `show()`
+  without an `onEnd` keeps the previous one, which then stands for both.
+- **The window is wall-clock time.** It runs against a deadline, so a
+  late timer (a busy page) or a throttled one (a tab in the background)
+  never stretches it; back in view, it catches up at once and ends if
+  its time has passed.
 
 `show()` returns the toast: `{ key, el, undo(), leave(), setRemaining(ms),
-remaining, held }`.
+release(), setText(text, { announce }), remaining, held, released }`.
 
 - `remaining` is what is left of its window, in ms; `held` is true
   while hover or focus holds it. `rk:toasthold` (`{ held, remaining }`)
   bubbles from the toast each time that changes, and `data-rk-held`
   is on it meanwhile.
-- `setRemaining(ms)` sets what is left, e.g. the time the server
-  reports for its own undo window. `setRemaining(0)` ends the toast
-  as `expired`, held or not.
+- `setRemaining(ms)` sets what is left from now, e.g. the time the
+  server reports for its own undo window; a held toast shows it and
+  counts once let go. `setRemaining(0)` ends the toast as `expired`,
+  held or not.
+- `release()`: holding extends nothing any more. The window runs out
+  from here although the pointer or focus rests on the toast; `held`
+  turns false (with `rk:toasthold`) and `data-rk-held` goes. A same-key
+  update holds again.
+- `setText(text)` changes the words and leaves the window alone, without
+  an announcement; `{ announce: true }` says the new words once, without
+  the window sentence. (`update()` through a same-key `show()` restarts
+  the window and says it again.)
 
-**An undo window that protects a server effect.** The toast's window
-holds while the user rests on it; the server's does not. Give the
-toast the server's window (`windowMs`), complete the action in `onEnd`
-for every reason but `undone`, and when the server's window ends first,
-call `setRemaining(0)`, so a held toast never offers an undo that no
-longer works:
+**An undo window that protects a server effect.** Give the toast the
+server's window (`windowMs`) and complete the action in `onEnd` for
+every reason but `undone` and `merged`. The toast holds while the user
+rests on it, which the server may allow for a while; when the server
+stops extending, call `release()`, and the toast runs out with the
+server's window, not after it:
 
 ```js
 const t = toasts.show('3 messages deleted', {
   undo: () => api.restore(ids), windowMs: res.undoMs,
-  onEnd: (why) => { if (why !== 'undone') api.purge(ids); },
+  onEnd: (why) => { if (why !== 'undone' && why !== 'merged') api.purge(ids); },
 });
-setTimeout(() => t.setRemaining(0), res.undoMs);   // the server's deadline does not hold
+api.onExtendRefused(ids, (leftMs) => { t.setRemaining(leftMs); t.release(); t.setText('3 messages deleted. Holding no longer extends.'); });
 ```
+
+An app timer of its own is not needed: `windowMs` alone ends on time.
 
 Returns `{ show, open, dismiss(), destroy }`.
 
@@ -588,7 +648,11 @@ sentence share a line and the action goes under them, about 105px on a
   has gone.
 - The remedy button calls `onAction(name)`, or turns the state off.
 
-Returns `{ set(name, on, { from, since }), toggle(name), is(name), shown, destroy }`.
+- A state that is on keeps its start and is not announced again when
+  its sentence changes ("2 runs halted" → "3 runs halted"):
+  `set(name, true, { text })` or `update(name, text)` write it in place.
+
+Returns `{ set(name, on, { from, since, text }), update(name, text), toggle(name), is(name), shown, destroy }`.
 
 ### `sheet(dialog, { dirty })`
 
@@ -606,7 +670,10 @@ asks first, inside the sheet (`.rk-sheet-ask`; the sheet gets
 "keep editing" (primary, focused) and "discard changes". Another close
 request while it asks keeps editing. `start()` attaches every sheet, so
 call `sheet(dialog, { dirty })` afterwards: it updates the options of the
-sheet already attached and returns the same handle. Returns
+sheet already attached and returns the same handle. While there is
+something to lose, Escape is taken on its `keydown`, so repeated presses
+keep asking instead of closing on the third. `showModal()` first
+measures the scrollbar into `--rk-scrollbar` on the root. Returns
 `{ asking, destroy }`.
 
 ### `busy(region, work)`
@@ -725,8 +792,12 @@ Moves the app bar's controls that do not fit into the menu of `more` (a
   carries the same `aria-keyshortcuts`.
 - **Places.** While `.rk-ab-places` shows (compact), every command is
   in "more", and `data-rk-places` is on the bar and the
-  root (`docs/navigation.md`). The bar re-lays itself out when its
-  children change, so places a framework renders later count.
+  root (`docs/navigation.md`).
+- **It lays itself out again** when the bar's width changes, when its
+  children change (places a framework renders later), when a child
+  grows or shrinks on its own (the live word a banner writes, a pinned
+  `.rk-ab-mid`), and once the web fonts have arrived; sizes its own
+  layout causes do not set it off again. `layout()` does it by hand.
 
 ### `form(el, { validators, onSubmit, submit })`
 

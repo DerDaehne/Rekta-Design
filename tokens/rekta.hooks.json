@@ -1,0 +1,24 @@
+{
+  "$description": "Rekta Design's public hooks: --rk- custom properties that are not tokens. A page, a native shell or rekta.js writes them; rekta.css reads them. build.mjs ships them as `hooks` in rekta.tokens.json and --check holds docs/behaviour.md (Public hooks) to this list.",
+  "hooks": {
+    "i": { "writtenBy": "the page", "readBy": "A tile's build-in order (0–10)." },
+    "v": { "writtenBy": "the page", "readBy": "A meter's value, 0 to 1; a share of a .rk-shares bar, in any unit." },
+    "titlebar-controls": { "writtenBy": "a native shell", "readBy": "Room kept at the title bar's end for the window's own buttons (140px by default) when data-rk-titlebar shows it." },
+    "sec-w": { "writtenBy": "the page", "readBy": "A panorama section's width when sideways." },
+    "split-w": { "writtenBy": "the page, split()", "readBy": "The width of a split's list pane; the handle writes it while dragged." },
+    "banner-h": { "writtenBy": "banner()", "readBy": "scroll-padding, the sticky strip, toasts without anchor positioning." },
+    "pivot-h": { "writtenBy": "panorama()", "readBy": "scroll-padding under a sticky section strip." },
+    "pivot-scale": { "writtenBy": "pivot(), panorama()", "readBy": "The inactive pivot titles' scale." },
+    "toast-left": { "writtenBy": "toaster(), or the page", "readBy": "What is left of a toast's undo window, 1 to 0: the countdown line along the toast's foot." },
+    "scrollbar": { "writtenBy": "sheet()", "readBy": "The root's right padding while a sheet is open: the scrollbar's room, so nothing behind shifts." },
+    "stage-top": { "writtenBy": "the page", "readBy": "Where a wide facet row starts below the fixed chrome and the place's title block; the row fills the height under it." },
+    "series-1": { "writtenBy": "the product", "readBy": "A domain colour code, 1 to 8, per theme (docs/data.md)." },
+    "series-2": { "writtenBy": "the product", "readBy": "A domain colour code (docs/data.md)." },
+    "series-3": { "writtenBy": "the product", "readBy": "A domain colour code (docs/data.md)." },
+    "series-4": { "writtenBy": "the product", "readBy": "A domain colour code (docs/data.md)." },
+    "series-5": { "writtenBy": "the product", "readBy": "A domain colour code (docs/data.md)." },
+    "series-6": { "writtenBy": "the product", "readBy": "A domain colour code (docs/data.md)." },
+    "series-7": { "writtenBy": "the product", "readBy": "A domain colour code (docs/data.md)." },
+    "series-8": { "writtenBy": "the product", "readBy": "A domain colour code (docs/data.md)." }
+  }
+}

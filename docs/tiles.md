@@ -93,7 +93,7 @@ Rows follow the same split, one control per meaning:
 | In a row | Is | Does |
 |---|---|---|
 | The title | A link, when the row opens a place | Opens it |
-| A state | A switch or checkbox | Sets the state (done, enabled) |
+| A state | A toggle switch (`rk-toggle`): it acts at once ([forms.md](forms.md#inputs)) | Sets the state (done, enabled) |
 | An action | A button with a verb | Acts on the row (approve, retry) |
 
 A row is never a single button that does one of these by surprise.

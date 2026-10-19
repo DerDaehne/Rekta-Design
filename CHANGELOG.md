@@ -5,6 +5,50 @@ tokens, public hooks, `data-rk-*` attributes, events and the `rekta.js`
 API are the public surface. Before 1.0, a minor version may still break
 it; each entry says how.
 
+## Unreleased
+
+Reports #67–#83 on 0.4.0.
+
+### Changed (may need a change in an app)
+
+- **A toast's window is wall-clock time** (#67): it runs against a
+  deadline, so a busy page or a background tab no longer stretches it.
+- **A same-key toast tells the previous `onEnd` `'merged'`** when it
+  brings its own (#68); add `merged` next to `undone` where an app
+  completes the action in `onEnd`.
+- **A pending button keeps every variant's look** (#73): one exception in
+  the disabled rule instead of repainting primary and error; `--quiet`
+  no longer grows a frame.
+- **An open sheet keeps the scrollbar's room as padding** (#75):
+  `:root` gets `padding-right: var(--rk-scrollbar)`, which `sheet()`
+  measures, instead of `scrollbar-gutter: stable`.
+- **A wide facet row is at most as tall as the window** under
+  `--rk-stage-top` and its facets scroll within themselves (#80).
+- **`places()` keeps scroll offsets by box** (id, `data-rk-scroll`,
+  else order) and includes a wide facet row and its facets (#82).
+
+### Added
+
+- Toasts: `release()`, `setText(text, { announce })`, `remaining` and
+  `held` that follow the clock (#69, #70). Banner: `set(name, true,
+  { text })` and `update(name, text)` for a state that is on (#71).
+- `sheet()` takes Escape on its `keydown` while there is something to
+  lose: Escape, Escape, Escape never closes it without asking (#72).
+- `appbar()` lays out again when a child grows (the live word), on a
+  pinned `.rk-ab-mid`, and once fonts load (#74); `.rk-ab-mid` lays out
+  several parts and can be pinned (#78, #79).
+- `pivot()`: `select('name')`, `sync()`, `chosen`, `gone`; facets that
+  come and go keep one tab stop (#81). The wheel over a wide row below a
+  title block scrolls the window first (#80).
+- `scrollState(root)` for routers of their own (#82).
+- `tokens/rekta.hooks.json`, shipped as `hooks` in `rekta.tokens.json`;
+  `--check` holds the docs' table to it (#77).
+
+### Documented
+
+The five recipe and comment fixes of #76; one rule for on/off controls,
+acts at once or waits for "save" (#83).
+
 ## 0.4.0 — 2026-10-19
 
 Reports #36–#65, from products built on 0.3.0: Rekta Design in apps with a
@@ -33,6 +77,11 @@ linked against 0.3 relink.
   into "more" while the places show.
 - **A sheet is sized against the viewport** (#61), so it spans a phone
   whatever the scrollbar gutter.
+- **`.rk-title` breaks long words** (`overflow-wrap: anywhere`, #58): its
+  narrowest width is now one character, so a title in a flex row breaks
+  inside a word where it used to widen the row. Give such a row's title
+  `min-width: max-content` (or `flex: none`) to keep the old behaviour.
+  (Listed here after the release; #76.)
 - **The showcase's light zones 1 and 3** moved to `#5489b6` and `#7d8d5e`
   (#52), 0.09 apart under tritanopia too.
 

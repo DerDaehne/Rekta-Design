@@ -137,6 +137,29 @@ places its tiles and links open, each with one parent.
   marked selected and keeps it, so nothing jumps when the script arrives.
   An unknown facet falls back to the first, without an error.
 
+### Back with a router of your own
+
+`places()` puts every scroll offset back on back. A framework router
+(SvelteKit, Next) does it with `scrollState(root)`, kept with its
+history entry, so a panorama's sections and a wide facet row come back
+where the user left them:
+
+```js
+// SvelteKit: +page.svelte
+import { scrollState } from 'rekta-design';
+let place;                                    // bind:this on the place's <main>
+export const snapshot = {
+  capture: () => scrollState(place).capture(),
+  restore: (s) => requestAnimationFrame(() => scrollState(place).restore(s)),
+};
+```
+
+With `history.state` (Next, or no framework), store `capture()` in the
+entry before leaving (`history.replaceState({ ...history.state, rk: s }, '')`)
+and call `restore(history.state.rk)` after the place has rendered on
+`popstate`. Give the boxes ids (or `data-rk-scroll`) when their number
+can change between visits.
+
 ### Crumb
 
 Every place below the top starts with a crumb: a small link up to its
@@ -219,12 +242,27 @@ now ("resume intake" while paused).
 ### The middle of the bar
 
 Between the live state and the controls, `.rk-ab-mid` holds a product's
-own short line: a key waiting for its second key ("g, then a place"), a
-mode ("Alt only"), a count. One line, `xs`, secondary colour, no
-controls. It takes the room the controls leave and is the first to give
-it up: it cuts its text with an ellipsis before any control moves into
-"more", and is gone while "more" shows, so it shows nothing a user needs that is not said elsewhere too
-(a key hint is also in the command's tooltip and the palette).
+own short line: a mode ("Alt only"), a count, a key waiting for its
+second key ("g, then a place"). One line, `xs`, secondary colour, no
+controls.
+
+- **It gives way first.** It takes the room the controls leave, cuts its
+  text with an ellipsis before any control moves into "more", and is
+  gone while "more" shows. What it says there must be said elsewhere too
+  (a key hint is also in the command's tooltip and the palette).
+- **Unless it is pinned.** Feedback that is said nowhere else and lasts
+  a moment, such as a key sequence waiting for its second key, gets
+  `data-rk-priority="pinned"` while it runs: the middle keeps its words
+  (up to half the bar) and the controls move into "more" to make room;
+  `appbar()` notices the change on its own. Take the attribute off when
+  the sequence ends, and the controls come back.
+- **Several parts** (a state and its key hint, a count and a word) are
+  elements side by side: the middle lays them out in a row, `space-s`
+  apart on one baseline, and cuts the last one.
+
+```html
+<span class="rk-ab-mid" data-rk-priority="pinned"><span>go to</span><kbd class="rk-key">g</kbd><span>then a place</span></span>
+```
 
 ### When the bar is full
 

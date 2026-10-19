@@ -44,10 +44,11 @@ title) and can be long. It keeps its size: a title never shrinks to fit.
   (`line-clamp: 3`).
 - **The whole title stays reachable.** The clamp is visual only: a
   screen reader reads all of it; `data-rk-tip="overflow"` shows it in a
-  tooltip to the mouse and on keyboard focus while it is cut; the
-  window title ("Title · Place · App") carries it whole. Where the full
-  text matters to the task (a ticket being edited), show it whole in the
-  body below as well.
+  tooltip to the mouse while it is cut (a heading takes no keyboard
+  focus, and is not made to); the window title ("Title · Place · App")
+  carries it whole. Where the full text matters to the task (a ticket
+  being edited), show it whole in the body below as well, so it is in
+  reach of the keyboard too.
 
 ```html
 <h1 class="rk-title rk-clamp" data-rk-tip="overflow">Nightly build of release-2026-10 failed on runner 3 because …</h1>

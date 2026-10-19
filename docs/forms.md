@@ -20,10 +20,20 @@ Rekta's own.
 | two to five options seen at a glance | segments (`rk-segments`) | joined buttons, the chosen one in the accent; radios underneath |
 | on or off, acting at once | toggle switch (`rk-toggle`) | `role="switch"`; outside forms that are sent |
 | on or off, sent with a form | checkbox (`rk-switch`) | waits for "save" |
+| a row's state (a task done, a setting on) | toggle switch (`rk-toggle`) | it acts at once, so it is a switch, never a checkbox |
 | a whole number | stepper (`rk-stepper`) | − field +, repeats while held, says when its limit is reached |
 | a value on a scale | slider (`rk-range`) | the accent fills up to the value; an `<output>` shows it |
 | a date or a time | `input[type=date | time].rk-input` | the browser's own pickers |
 | files | drop zone (`rk-drop`, `Rekta.drop()`) | dashed until files are dragged over it; dropping files elsewhere never opens them |
+
+**Acts at once, or waits for "save".** This is the one rule for on/off
+controls, wherever they stand. A state that takes effect the moment it
+changes (a row's done or enabled state, a setting, a filter that applies
+as it is ticked) is a **toggle switch** (`rk-toggle`, `role="switch"`).
+A choice that is only collected, and takes effect when the form is sent,
+is a **checkbox** (`rk-switch`). The names are close; the behaviour
+decides, not the look wanted. A checkbox in a selection (`.rk-check`) is
+neither: it chooses rows, it sets nothing.
 
 - **Toggle switch, the Metro way:** a square-cornered frame (2px
   `text-primary`), the `accent` fill growing from the leading edge when
@@ -58,7 +68,7 @@ The summary's markup, as `form()` writes it and as a server renders it
 for a form sent without the script:
 
 ```html
-<form class="fields" novalidate>
+<form novalidate>
   <div class="rk-errors" role="group" tabindex="-1" aria-labelledby="f-errors">
     <p id="f-errors">2 fields need attention</p>
     <ul>
@@ -160,9 +170,11 @@ an undoable action (archive) never wears it.
   primary, focused answer and "discard changes" beside it. Escape or the
   shading while it asks keep editing; focus goes back where it was. A
   save closes without asking; so does `dialog.close()`, the app's own
-  decision. An unchanged form never asks. (A browser closes a dialog on
-  a second Escape pressed with no click or key in between, whatever a
-  page does; a question the user is answering has had one.)
+  decision. An unchanged form never asks. Escape, Escape, Escape keeps
+  asking and keeping: `sheet()` takes Escape on its `keydown`, where a
+  page can always stop it. (A system back gesture reaches the page only
+  as the dialog's `cancel` event, which a browser lets a page stop once
+  per click or key; a second gesture in a row closes the sheet.)
 
 ## One size of control
 
