@@ -400,7 +400,7 @@ static int range_digits(const range *r) {
   for (double s = r->step; d < 6 && s > 0 && fabs(s - round(s)) > 1e-9; s *= 10) d++;
   return d;
 }
-static void range_format(const range *r, double v, char *out, size_t size) { snprintf(out, size, "%.*f", range_digits(r), v); }
+static void range_format(const range *r, double v, char *out, size_t size) { rk__figure(out, size, v, range_digits(r)); }   /* the app's decimal sign and groups */
 static double range_page(const range *r) { double p = (r->max - r->min) / 10; return r->step > 0 ? RK_MAX(r->step, round(p / r->step) * r->step) : p; }
 
 /* The keys both know: a step, a page, the ends. True when the key was one of them. */
@@ -896,17 +896,20 @@ static rk_rect day_cell(int cur, int day) {
   return (rk_rect){ sheet_pad() + (at % 7) * CELL, sheet_days_y() + (at / 7) * CELL, CELL, CELL };
 }
 
+/* The month shown, in the app's words, and its year (a year, never grouped as a figure): "October 2026". */
+static void month_title(int cur, char *out, size_t size) { snprintf(out, size, "%s %d", rk__words()->months[cur / 100 % 100 - 1], cur / 10000); }
+static void sheet_name(rk_view *v, int cur) { char title[128]; month_title(cur, title, sizeof title); rk__setstr(&v->access_label, title); }
+
 static void sheet_draw(rk_view *v, rk_canvas *c, void *st) {
   date_sheet *s = st;
-  static const char *const months[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
-  static const char *const days[7] = { "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su" };
+  const char *const *days = rk__words()->weekdays;          /* the app's words, Monday first */
   float W = v->pframe.w, H = v->pframe.h, r = rk_metric_of(RK_RADIUS_S), pad = sheet_pad(), head = sheet_head();
   rk_canvas_fill_round_rect(c, (rk_rect){ 0, 0, W, H }, r, rk_color_of(RK_ROLE_TEXT_MEDIUM));
   rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, H - 2 }, r - 1, rk_color_of(RK_ROLE_BG));
   int y = s->cur / 10000, m = s->cur / 100 % 100;
   rk_color ink = rk_color_of(RK_ROLE_TEXT);
-  char title[32];
-  snprintf(title, sizeof title, "%s %d", months[m - 1], y);
+  char title[128];
+  month_title(s->cur, title, sizeof title);
   rk_textfmt t = strong_fmt();
   rk__text_draw(c, title, -1, (W - rk__text_width(title, -1, &t)) / 2, pad + (head - t.size) / 2, &t, ink);
   for (int k = 0; k < 2; k++) {                            /* the month before and after */
@@ -934,7 +937,7 @@ static void sheet_draw(rk_view *v, rk_canvas *c, void *st) {
   }
 }
 
-static void sheet_set(rk_view *v, date_sheet *s, int value) { s->cur = value; rk__view_dirty(v); }
+static void sheet_set(rk_view *v, date_sheet *s, int value) { s->cur = value; sheet_name(v, value); rk__view_dirty(v); }
 
 static void sheet_take(date_sheet *s, int value) {
   date_box *b = s->box;
@@ -999,7 +1002,7 @@ static void date_open(date_box *b) {
   }
   if (b->sheet->parent) return;
   rk__menus_close(w);
-  ((date_sheet *)b->sheet->state)->cur = b->c.value ? (int)b->c.value : today();
+  sheet_set(b->sheet, b->sheet->state, b->c.value ? (int)b->c.value : today());
   rk_rect at = rk__window_rect(b->view);
   rk_size sz = sheet_size();
   float gap = rk_metric_of(RK_SPACE_XS), edge = rk_metric_of(RK_SPACE_M);

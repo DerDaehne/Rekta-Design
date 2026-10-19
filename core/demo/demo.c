@@ -48,7 +48,7 @@ static struct {
   int picked, order[NBUILDS], sort_column, sort_dir;
   char notes_text[NBUILDS][32];
   /* desk */
-  int file, steps[4];
+  int file, steps[4], shown, dir; uint32_t picks;   /* the file in the detail, the way the last pick went, how many */
   bool detail, open_src, open_ui, open_docs;
   /* settings */
   int theme, density, motion, accent, digest;
@@ -58,7 +58,7 @@ static struct {
   bool perf, screen;
 } D = {
   .queue = 14, .inbox = 12, .bar = 0.25f, .volume = 25, .copies = 2, .size = 1, .day = { 2026, 10, 13 },
-  .file = 4, .steps = { 0, 1, 2, 3 }, .open_src = true, .open_ui = true, .notify = true, .digest = 1,
+  .file = 4, .shown = 4, .steps = { 0, 1, 2, 3 }, .open_src = true, .open_ui = true, .notify = true, .digest = 1,
   .sort_column = -1, .sort_dir = 1, .feed = true,
 };
 
@@ -454,7 +454,12 @@ static void lists_section(void) {
 static const char *const FILES[] = { "src", "ui", "button.c", "field.c", "split.c", "tree.c", "core.c", "docs", "motion.md", "navigation.md", "README.md" };
 static const char *const STEPS[] = { "Check out", "Build", "Test", "Package" };
 
-static void desk_show(rk_view *tree, void *u) { (void)tree; (void)u; D.detail = true; }   /* compact: the detail turns in */
+/* compact: the detail turns in; sideways another file slides in from the side it lies on in the tree */
+static void desk_show(rk_view *tree, void *u) {
+  (void)tree; (void)u;
+  if (D.file != D.shown) { D.dir = D.file < D.shown ? -1 : 1; D.picks++; D.shown = D.file; }
+  D.detail = true;
+}
 static void steps_moved(rk_view *rows, int from, int to, void *u) {
   (void)rows; (void)u;
   int s = D.steps[from];                                       /* the app keeps the new order */
@@ -476,7 +481,7 @@ static void pictures_dropped(rk_view *drop, const char *const *taken, int nt, co
 
 static void desk_section(void) {
   RK_LABEL("A desk: things beside their detail.", .style = RK_TEXT_GROUP);
-  RK_SPLIT("files", .open = &D.detail, .height = 460) {
+  RK_SPLIT("files", .open = &D.detail, .pulse = D.picks, .reveal = D.dir, .height = 460) {
     RK_TREE(.chosen = &D.file, .on_press = desk_show) {
       RK_ITEM(FILE(0), .open = &D.open_src) {
         RK_ITEM(FILE(1), .open = &D.open_ui) { RK_ITEM(FILE(2)); RK_ITEM(FILE(3)); RK_ITEM(FILE(4)); }

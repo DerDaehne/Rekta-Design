@@ -106,6 +106,8 @@ rk_color rk__series(int code);                             /* a code's colour no
 /* The words the library says (app.c): rk_app_set_strings over the English ones. */
 const rk_strings *rk__words(void);
 void rk__say(char *out, size_t size, const char *format, const char *arg);   /* a word's format with its one %s */
+void rk__count(char *out, size_t size, const char *const *forms, long n);   /* a counting word's form for n, its figure in */
+size_t rk__figure(char *out, size_t size, double v, int digits);   /* v with exactly digits decimals, in the app's words */
 
 /* Raster (raster.c): premultiplied 32-bit pixels, 0xAARRGGBB in memory order B, G, R, A ------------------------------ */
 
@@ -427,7 +429,7 @@ bool rk__is_tile(rk_view *v);
 void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r);
 void rk__focus_ring(rk_canvas *c, rk_rect r, float out);  /* 2px in the focus colour, out px outside r */
 bool rk__shows_focus(rk_view *v);                         /* v has focus and the keyboard is in use */
-const char *rk__status_word(rk_status s);                 /* "active", "done", ... as the web says it */
+const char *rk__status_word(rk_status s);                 /* "active", "done", ... in the app's words */
 rk_role rk__status_full(rk_status s);                     /* the status in its full colour */
 
 /* A row of rk_rows (widgets.c); sort.c gives it a grip. */

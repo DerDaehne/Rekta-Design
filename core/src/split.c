@@ -4,7 +4,8 @@
    line and the detail starts space-l after it; compact the pane is inset by space-m each side. The list starts four tiles wide and
    no pane goes narrower than pane-min; a drag changes the width at once, Left and Right by space-m (with Shift, four
    times that), Home and End to the narrowest and widest, a double click gives the list its own width back. The app
-   remembers the width (on_resize). A new item's detail slides in as a facet does.
+   remembers the width (on_resize). The detail's next item slides in from the side of travel as a facet does, only
+   after a real advance (rk_split_reveal).
 
    Compact one pane shows at a time and the change turns as a place does: to the detail, forward; back to the list,
    the other way. The detail starts with a crumb back to the list; Escape goes back too. Included after controller.c,
@@ -231,21 +232,27 @@ rk_view *rk_split(rk_view *list, rk_view *detail, const char *title) {
   return v;
 }
 
-/* Sideways a new item's detail slides in from the trailing side, slide-distance, with a fade, over 0.75 x
-   duration-moderate; compact the panes turn. */
+/* Sideways the detail's next item slides in as a facet does (docs/motion.md, next item): from the side of travel, dir 1
+   the trailing side and -1 the leading one, slide-distance, with a fade, over 0.75 x duration-moderate. */
+static void split_slide(split *s, int dir) {
+  rk_view *d = s->detail;
+  rk_transform t0 = d->transform, t1 = d->transform;
+  t0.translate_x += dir * RK_TOK_SLIDE_DISTANCE;
+  double dur = 0.75 * rk_duration_of(RK_DURATION_MODERATE);
+  float a0 = 0, a1 = d->opacity;
+  rk__animate_transform(d, &t0, &t1, dur, 0, rk__ease_out);
+  rk__animate(d, RK_PROP_OPACITY, &a0, &a1, 1, dur, 0, rk__ease_out);
+}
+
+/* Sideways an item where there was none slides in from the trailing side; the same item shown again stays still, and
+   so does the first display (not laid out yet). Compact the panes turn. */
 void rk_split_set_detail_shown(rk_view *v, bool detail) {
   split *s = RK__EXPECT(split_of, v, "a split");
   if (!s) return;
   if (!s->laid || s->sideways) {
+    bool was = s->detail_shown;
     s->detail_shown = s->going = detail;
-    if (!detail || !s->laid) return;
-    rk_view *d = s->detail;
-    rk_transform t0 = d->transform, t1 = d->transform;
-    t0.translate_x += RK_TOK_SLIDE_DISTANCE;
-    double dur = 0.75 * rk_duration_of(RK_DURATION_MODERATE);
-    float a0 = 0, a1 = d->opacity;
-    rk__animate_transform(d, &t0, &t1, dur, 0, rk__ease_out);
-    rk__animate(d, RK_PROP_OPACITY, &a0, &a1, 1, dur, 0, rk__ease_out);
+    if (detail && !was && s->laid) split_slide(s, 1);
     return;
   }
   if (s->timer) { rk_app_cancel(s->timer); split_arrive(s); }  /* a turn still running finishes at once */
@@ -253,6 +260,16 @@ void rk_split_set_detail_shown(rk_view *v, bool detail) {
   s->going = detail;
   double wait = rk__turn_away(s->turn, v, !detail);
   if (wait > 0) s->timer = rk__after_quiet(wait, false, split_arrive, s); else split_arrive(s);
+}
+
+/* A real advance, as the web's reveal(dir): sideways the next item slides in from its side (0: a replace, still);
+   compact the detail turns in where the list showed, as rk_split_set_detail_shown does. */
+void rk_split_reveal(rk_view *v, int dir) {
+  split *s = RK__EXPECT(split_of, v, "a split");
+  if (!s) return;
+  if (s->laid && !s->sideways) { rk_split_set_detail_shown(v, true); return; }
+  s->detail_shown = s->going = true;
+  if (s->laid && dir) split_slide(s, dir > 0 ? 1 : -1);
 }
 
 bool rk_split_is_sideways(rk_view *v) { split *s = RK__EXPECT(split_of, v, "a split"); return s && s->sideways; }

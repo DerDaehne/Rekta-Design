@@ -1866,6 +1866,53 @@ static void test_split(void) {
   done(w);
 }
 
+/* The detail's next item slides in from the side of travel, only after a real advance (docs/motion.md, next item). */
+static void test_split_reveal(void) {
+  rk_window *w = window(1100, 560);
+  rk_view *detail = rk_label("Run 4182", RK_TEXT_GROUP);
+  rk_view *sp = rk_split(rk_label("runs", RK_TEXT_BODY), detail, "runs");
+  rk_split_reveal(sp, 1);
+  rk_window_show(w, rk_controller_create_with_view(sp, "runs"));
+  rk_app_run_for(30);
+  CHECK(rk_split_is_detail_shown(sp) && detail->ptransform.translate_x == 0 && !detail->anims, "the first display never slides");
+  rk_split_set_detail_shown(sp, false);
+  rk_split_set_detail_shown(sp, true);
+  rk_app_run_for(30);
+  CHECK(detail->ptransform.translate_x > 0 && detail->ptransform.translate_x < RK_TOK_SLIDE_DISTANCE && detail->popacity < 1,
+        "an item where there was none slides in from the trailing side (%g)", detail->ptransform.translate_x);
+  rk_app_run_for(600);
+  rk_split_set_detail_shown(sp, true);
+  rk_app_run_for(30);
+  CHECK(detail->ptransform.translate_x == 0 && !detail->anims, "the same item shown again stays still");
+  rk_split_reveal(sp, -1);
+  rk_app_run_for(30);
+  CHECK(detail->ptransform.translate_x < 0 && detail->ptransform.translate_x > -RK_TOK_SLIDE_DISTANCE, "the previous item comes from the leading side (%g)", detail->ptransform.translate_x);
+  rk_app_run_for(600);
+  CHECK(detail->ptransform.translate_x == 0 && detail->popacity == 1, "and stands where the last one was");
+  rk_split_reveal(sp, 0);
+  rk_app_run_for(30);
+  CHECK(detail->ptransform.translate_x == 0 && !detail->anims, "0: a replace, still");
+  rk_split_reveal(sp, 1);
+  rk_app_run_for(30);
+  CHECK(detail->ptransform.translate_x > 0, "the next item from the trailing side (%g)", detail->ptransform.translate_x);
+  rk_app_run_for(600);
+  /* compact: the panes turn instead, and a detail in sight stays still */
+  rk__window_resized(w, 560, 560, 1);
+  rk_split_set_detail_shown(sp, false);
+  rk_app_run_for(1200);
+  CHECK(!rk_split_is_sideways(sp) && !rk_split_is_detail_shown(sp), "compact, the list");
+  rk_split_reveal(sp, 1);
+  rk_app_run_for(1200);
+  CHECK(rk_split_is_detail_shown(sp) && !rk_view_child(sp, 1)->hidden && rk_view_child(sp, 0)->hidden, "compact: the next item turns the detail in");
+  rk_split_reveal(sp, -1);
+  rk_app_run_for(30);
+  CHECK(rk_split_is_detail_shown(sp) && detail->ptransform.translate_x == 0 && !detail->anims, "compact, the detail in sight: still");
+  int was = logged;
+  rk_split_reveal(detail, 1);
+  CHECK(logged == was + 1, "a label is no split: said");
+  done(w);
+}
+
 /* Sortable rows: the grip drags a row, the others step aside; the keyboard picks it up, moves it, puts it down. */
 static int sort_from = -1, sort_to = -1, sort_moves;
 static void sort_moved(rk_view *rows, int from, int to, void *u) { (void)rows; (void)u; sort_from = from; sort_to = to; sort_moves++; }
@@ -3002,6 +3049,106 @@ static void test_product_words(void) {
   done(w);
 }
 
+/* The rest of the words, the counts and the figures: a German table, then a Polish one with few and many. */
+static const char *figure_of(double v, bool compact) { static char s[64]; rk_format_number(s, sizeof s, v, compact); return s; }
+static int polish(long n) {
+  long t = n % 10, h = n % 100;
+  return n == 1 ? RK_PLURAL_ONE : t >= 2 && t <= 4 && (h < 12 || h > 14) ? RK_PLURAL_FEW : RK_PLURAL_MANY;
+}
+static int always_few(long n) { (void)n; return RK_PLURAL_FEW; }
+static void count_item(int index, rk_list_item *out, void *user) { (void)index; (void)user; out->title = "a"; }
+
+static void test_product_counts(void) {
+  /* English figures, as the web's number() */
+  char s[64];
+  CHECK(!strcmp(figure_of(1234.5, false), "1,234.5") && !strcmp(figure_of(12.3, false), "12.3") && !strcmp(figure_of(0.004, false), "0") && !strcmp(figure_of(-0.001, false), "0"),
+        "English figures: two decimals at most, digit groups, never -0 (%s)", figure_of(1234.5, false));
+  CHECK(!strcmp(figure_of(1234.5, true), "1.2K") && !strcmp(figure_of(2.5e6, true), "2.5M") && !strcmp(figure_of(1e3, true), "1K") && !strcmp(figure_of(-1500, true), "-1.5K") &&
+        !strcmp(figure_of(999950, true), "1M") && !strcmp(figure_of(3e9, true), "3B") && !strcmp(figure_of(999, true), "999"), "compact from a thousand up: 1.2K, 2.5M, 999,950 is 1M (%s)", figure_of(999950, true));
+  CHECK(rk_format_number(s, 4, 1234.5, false) == 7 && !strcmp(s, "1,2") && rk_format_number(NULL, 0, 1234.5, false) == 7, "the length of the whole figure, cut to fit as snprintf");
+  CHECK(!strcmp(figure_of(NAN, false), "NaN") && !strcmp(figure_of(-INFINITY, true), "-Infinity"), "what is no number says so, as the web's");
+  rk_window *w = window(720, 560);
+  rk_view *list = rk_list(1, count_item, NULL);
+  CHECK(list->access_value && !strcmp(list->access_value, "1 item"), "a list of one: \"%s\"", list->access_value ? list->access_value : "");
+  rk_list_set_count(list, 12345);
+  CHECK(!strcmp(list->access_value, "12,345 items"), "and of many, its figure grouped: \"%s\"", list->access_value);
+  /* German */
+  rk_strings de = { .size = sizeof de,
+    .months = { "Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember" },
+    .weekdays = { "Mo", "Di", "Mi", "Do", "Fr", "Sa", "So" },
+    .status = { "ruhig", "aktiv", "erledigt", "wartet", "fehlgeschlagen" },
+    .items = { [RK_PLURAL_ONE] = "%s Eintrag", [RK_PLURAL_OTHER] = "%s Einträge" },
+    .minimize = "minimieren", .maximize = "maximieren", .close = "schließen", .files = "Dateien",
+    .decimal = ",", .group = ".", .thousand = "", .million = "%s Mio.", .billion = "%s Mrd.", .trillion = "%s Bio.", .group_min = 2 };
+  rk_app_set_strings(&de);
+  CHECK(!strcmp(figure_of(1234.5, true), "1234,5") && !strcmp(figure_of(12345.6, true), "12.345,6") && !strcmp(figure_of(2.5e6, true), "2,5 Mio.") &&
+        !strcmp(figure_of(1234567.25, false), "1.234.567,25") && !strcmp(figure_of(999950, true), "999.950"), "German figures: 1234,5, 12.345,6, 2,5 Mio. (%s)", figure_of(2.5e6, true));
+  rk_view *page = rk_hstack(), *left = rk_add(page, col(8, 16)), *right = rk_add(page, col(12, 16));
+  rk_view *date = rk_add(left, rk_date(2024, 2, 14));
+  rk_add(left, list);
+  rk_view_set_size(list, 0, 80);
+  rk_view_set_size(left, 320, 0);
+  rk_view_set_size(right, 380, 0);
+  rk_view *rows = rk_add(right, rk_rows());
+  rk_rows_add(rows, "schema.sql", NULL, RK_STATUS_SUCCESS);
+  rk_rows_add(rows, "import.sql", NULL, RK_STATUS_ERROR);
+  rk_view *tile = rk_add(rk_add(right, rk_tile_grid()), rk_tile("12", "Läufe"));
+  rk_view_set_span(tile, 2, 1);
+  rk_tile_set_status(tile, RK_STATUS_INFO, NULL);
+  rk_add(right, rk_slider(0, 10, 0.5, 2.5));
+  rk_add(right, rk_stepper(0, 20000, 100, 12500));
+  rk_view *drop = rk_add(right, rk_drop(NULL, "hier ablegen", NULL, NULL, NULL));
+  show(w, page, "Wörter");
+  CHECK(!strcmp(rk__status_word(RK_STATUS_SUCCESS), "erledigt") && strstr(tile->access_label, "aktiv"), "a status's word, on a tag and a tile: %s", tile->access_label);
+  CHECK(!strcmp(drop->access_label, "Dateien"), "a drop without a title: the app's files");
+  CHECK(!strcmp(list->access_value, "12.345 Einträge"), "a count made in English, in the app's words once laid out: \"%s\"", list->access_value);
+  rk_list_set_count(list, 1);
+  CHECK(!strcmp(list->access_value, "1 Eintrag"), "and its one: \"%s\"", list->access_value);
+  CHECK(w->titlebar->nkids == 3 && !strcmp(w->titlebar->kids[0]->access_label, "minimieren") && !strcmp(w->titlebar->kids[2]->access_label, "schließen"), "the window's buttons, read aloud in the app's words");
+  rk_window_focus(w, date);
+  key(w, RK_KEY_ENTER, 0);
+  rk_app_run_for(300);
+  rk_view *sheet = w->floats->nkids ? w->floats->kids[0] : NULL;
+  CHECK(sheet && sheet->access_label && !strcmp(sheet->access_label, "Februar 2024"), "the month in the app's words: %s", sheet && sheet->access_label ? sheet->access_label : "(none)");
+  key(w, RK_KEY_PAGE_DOWN, 0);
+  CHECK(sheet && !strcmp(sheet->access_label, "März 2024"), "and the next: %s", sheet ? sheet->access_label : "(none)");
+  key(w, RK_KEY_PAGE_UP, 0);
+  rk_app_run_for(100);
+  shot(w, "words-de");                                         /* Di, Mi; erledigt, fehlgeschlagen, aktiv; 2,5 and 12.500 */
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_app_run_for(300);
+  /* Polish: one, few, many; the form left out takes other */
+  rk_strings pl = { .size = sizeof pl, .items = { [RK_PLURAL_ONE] = "%s plik", [RK_PLURAL_FEW] = "%s pliki", [RK_PLURAL_MANY] = "%s plików", [RK_PLURAL_OTHER] = "%s pliku" },
+                    .decimal = ",", .group = "\xc2\xa0", .group_min = 2, .plural = polish };
+  rk_app_set_strings(&pl);
+  const char *const want[][2] = { { "1", "1 plik" }, { "3", "3 pliki" }, { "5", "5 plików" }, { "22", "22 pliki" }, { "112", "112 plików" }, { "12345", "12\xc2\xa0" "345 plików" } };
+  bool all = true;
+  for (int i = 0; i < RK_COUNT(want); i++) {
+    rk__count(s, sizeof s, rk__words()->items, atol(want[i][0]));
+    if (strcmp(s, want[i][1])) { all = false; printf("  %s: %s\n", want[i][0], s); }
+  }
+  CHECK(all, "Polish counts pick one, few and many with the app's plural");
+  rk_app_set_strings(&(rk_strings){ .size = sizeof(rk_strings), .items = { [RK_PLURAL_OTHER] = "%s Stück" } });
+  rk__count(s, sizeof s, rk__words()->items, 1);
+  CHECK(!strcmp(s, "1 Stück"), "a counting word given only as other is the app's in every form, never half English: %s", s);
+  rk_app_set_strings(&(rk_strings){ .size = sizeof(rk_strings), .items = { [RK_PLURAL_ONE] = "%s plik", [RK_PLURAL_OTHER] = "%s pliku" }, .plural = always_few });
+  rk__count(s, sizeof s, rk__words()->items, 3);
+  CHECK(!strcmp(s, "3 pliku"), "a form missing takes other: %s", s);
+  int was = logged;
+  rk_app_set_strings(&(rk_strings){ .size = sizeof(rk_strings), .items = { [RK_PLURAL_ONE] = "%d plik" }, .million = "Mio.", .thousand = "" });
+  CHECK(logged == was + 2 && !strcmp(figure_of(2.5e6, true), "2.5M") && !strcmp(figure_of(1500, true), "1,500"),
+        "a form or a compact figure without its %%s is said and the English stays; \"\" is not shortened (%s)", figure_of(1500, true));
+  rk_app_set_strings(&(rk_strings){ .size = offsetof(rk_strings, months), .undo = "rückgängig" });
+  CHECK(!strcmp(rk__words()->undo, "rückgängig") && !strcmp(rk__words()->months[0], "January") && !strcmp(figure_of(1234.5, false), "1,234.5"),
+        "a table from before months: the words it knows, English for the rest");
+  rk_app_set_strings(NULL);
+  CHECK(!strcmp(rk__status_word(RK_STATUS_ERROR), "failed") && !strcmp(figure_of(2.5e6, true), "2.5M"), "NULL: English words and figures again");
+  rk_app_run_for(50);
+  CHECK(strstr(tile->access_label, "active") && !strcmp(drop->access_label, "files") && !strcmp(w->titlebar->kids[2]->access_label, "close") && !strcmp(list->access_value, "1 item"),
+        "what is read aloud follows once laid out: %s", tile->access_label);
+  done(w);
+}
+
 static void test_product_overrides(void) {
   CHECK(rk_metric_of(RK_PIVOT_WIDE) == 1300 && rk_duration_of(RK_TIMING_STALE) == 30000, "size.pivot-wide and timing.stale from the tokens");
   int was = logged;
@@ -3243,6 +3390,40 @@ static void test_declared_product(void) {
   rk_app_run_for(50);
 }
 
+/* A declared split: a new .pulse is the detail's next item, from .reveal's side; the same pulse slides nothing. */
+typedef struct dreveal { int item, dir; uint32_t pulse; bool open; } dreveal;
+static void dreveal_build(void *user) {
+  dreveal *r = user;
+  RK_SPLIT("runs", .key = "split", .open = &r->open, .pulse = r->pulse, .reveal = r->dir) {
+    RK_LABEL("runs");
+    RK_LABEL(rk_ui_fmt("Run %d", 4182 - r->item), .key = "detail");
+  }
+}
+static void test_declared_reveal(void) {
+  dreveal r = { .open = true };
+  rk_window_desc d = { .size = sizeof d, .title = "reveal", .width = 1100, .height = 560, .build = dreveal_build, .user = &r };
+  rk_window *w = rk_window_create(&d);
+  rk_app_run_for(400);
+  rk_view *sp = in_window(w, "split"), *pane = sp ? ((split *)sp->state)->detail : NULL;
+  CHECK(pane && rk_split_is_sideways(sp) && rk_split_is_detail_shown(sp) && pane->ptransform.translate_x == 0, "declared open: shown, still at the first display");
+  r.item = 1; r.pulse = 1;
+  rk_ui_update(NULL);
+  rk_app_run_for(30);
+  CHECK(pane && pane->ptransform.translate_x > 0 && rk_view_find(sp, "detail"), "a new .pulse: the next item from the trailing side (%g)", pane ? pane->ptransform.translate_x : 0);
+  rk_app_run_for(600);
+  r.item = 0; r.pulse = 2; r.dir = -1;
+  rk_ui_update(NULL);
+  rk_app_run_for(30);
+  CHECK(pane && pane->ptransform.translate_x < 0, ".reveal -1: the previous one from the leading side (%g)", pane ? pane->ptransform.translate_x : 0);
+  rk_app_run_for(600);
+  r.item = 5;
+  rk_ui_update(NULL);
+  rk_app_run_for(30);
+  CHECK(pane && pane->ptransform.translate_x == 0 && !pane->anims, "the same .pulse: a replace, no slide");
+  done(w);
+  rk_app_run_for(50);
+}
+
 /* Main ------------------------------------------------------------------------------------------------------------ */
 
 static void launch(void *user) {
@@ -3273,6 +3454,7 @@ static void launch(void *user) {
   test_side_pivot();
   test_tree();
   test_split();
+  test_split_reveal();
   test_sort();
   test_drop();
   test_notify();
@@ -3292,10 +3474,12 @@ static void launch(void *user) {
   { int lv = rk__live_views; test_declared_navigation(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_navigation: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_collections(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_collections: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_more(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "more: %d views more\n", rk__live_views - lv); }
+  { int lv = rk__live_views; test_declared_reveal(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_reveal: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_fixes(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "fixes alone: %d\n", rk__live_views - lv); test_declared_warnings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "fixes: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_in_place(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_in_place: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_skip(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_skip: %d views more\n", rk__live_views - lv); }
   test_product_words();
+  test_product_counts();
   test_product_overrides();
   test_product_codes();
   test_wide_pivot();

@@ -211,7 +211,11 @@ static void drop_activate(rk_view *v, void *user) {
 
 static void drop_destroy(void *st) { drop_zone *d = st; free(d->title); free(d->hint); free(d->accept); free(d); }
 
-static const rk_class drop_class = { { sizeof(rk_view_class), "rk_drop", drop_draw, drop_measure, NULL, drop_event, drop_destroy }, NULL, NULL };
+/* read aloud: its title, or the app's word for files as it is now */
+static void drop_name(rk_view *v, drop_zone *d) { rk__setstr(&v->access_label, d->title ? d->title : rk__words()->files); }
+static void drop_layout(rk_view *v, void *st) { drop_name(v, st); }
+
+static const rk_class drop_class = { { sizeof(rk_view_class), "rk_drop", drop_draw, drop_measure, drop_layout, drop_event, drop_destroy }, NULL, NULL };
 
 rk_view *rk_drop(const char *title, const char *hint, const char *accept,
                  void (*files)(rk_view *drop, const char *const *taken, int ntaken, const char *const *refused, int nrefused, void *user), void *user) {
@@ -221,7 +225,7 @@ rk_view *rk_drop(const char *title, const char *hint, const char *accept,
   rk_view *v = rk__view_create(&drop_class, d);
   v->focusable = true;
   v->access = RK_ACCESS_BUTTON;
-  rk__setstr(&v->access_label, title ? title : "files");
+  drop_name(v, d);
   v->own_activate = drop_activate; v->press = RK_PRESS_FLAT;   /* its own: an app's handler may come too */
   return v;
 }

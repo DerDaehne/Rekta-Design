@@ -3,9 +3,7 @@
 #include "rk_internal.h"
 #include "rk_tokens.h"
 
-const char *rk__status_word(rk_status s) {
-  switch (s) { case RK_STATUS_INFO: return "active"; case RK_STATUS_SUCCESS: return "done"; case RK_STATUS_WARNING: return "waiting"; case RK_STATUS_ERROR: return "failed"; default: return "idle"; }
-}
+const char *rk__status_word(rk_status s) { return rk__words()->status[s >= RK_STATUS_NONE && s <= RK_STATUS_ERROR ? s : RK_STATUS_NONE]; }
 static rk_role status_tile(rk_status s) {
   switch (s) { case RK_STATUS_INFO: return RK_ROLE_INFO_TILE; case RK_STATUS_SUCCESS: return RK_ROLE_SUCCESS_TILE; case RK_STATUS_WARNING: return RK_ROLE_WARNING_TILE; case RK_STATUS_ERROR: return RK_ROLE_ERROR_TILE; default: return RK_ROLE_SURFACE; }
 }
@@ -233,16 +231,16 @@ static void tile_destroy(void *st) {
   tile *t = st;
   free(t->word); free(t->value); free(t->label); free(t->message); free(t->old_value); free(t->old_label); free(t->series); free(t);
 }
-static const rk_class tile_class = { { sizeof(rk_view_class), "rk_tile", tile_draw, NULL, NULL, NULL, tile_destroy }, tile_peek, NULL };
-
-bool rk__is_tile(rk_view *v) { return v && v->cls == &tile_class; }
-
 static void tile_access(rk_view *v) {
   tile *t = v->state;
   char buf[512];
   snprintf(buf, sizeof buf, "%s%s%s%s%s", t->value ? t->value : "", t->value && t->label ? " " : "", t->label ? t->label : "", ", ", t->word ? t->word : rk__status_word(t->status));
   rk__setstr(&v->access_label, buf);
 }
+static void tile_layout(rk_view *v, void *st) { (void)st; tile_access(v); }   /* the status word as the app's words are now */
+static const rk_class tile_class = { { sizeof(rk_view_class), "rk_tile", tile_draw, NULL, tile_layout, NULL, tile_destroy }, tile_peek, NULL };
+
+bool rk__is_tile(rk_view *v) { return v && v->cls == &tile_class; }
 
 rk_view *rk_tile(const char *value, const char *label) {
   tile *t = rk__alloc(sizeof *t);
@@ -587,8 +585,16 @@ static bool titlebar_event(rk_view *v, const rk_event *e, void *st) {
   return false;
 }
 
+/* minimize, maximize and close, read aloud in the app's words as they are now */
+static void titlebar_names(rk_view *v) {
+  const rk_strings *wd = rk__words();
+  const char *names[3] = { wd->minimize, wd->maximize, wd->close };
+  for (int i = 0; i < v->nkids && i < 3; i++) rk__setstr(&v->kids[i]->access_label, names[i]);
+}
+
 static void titlebar_layout(rk_view *v, void *st) {
   (void)st;
+  titlebar_names(v);
   float x = v->frame.w;
   for (int i = v->nkids - 1; i >= 0; i--) { x -= 46; rk__set_frame(v->kids[i], (rk_rect){ x, 0, 46, v->frame.h - 1 }); }
 }
@@ -606,16 +612,16 @@ rk_view *rk__titlebar_create(rk_window *w) {
   v->fill_role = RK_ROLE_BG; v->pfill = rk_color_of(RK_ROLE_BG);
   /* macOS keeps its traffic lights on the left; elsewhere Rekta draws minimize, maximize and close on the right */
   if (!strcmp(rk__platform()->name, "cocoa")) { tb->inset = 70; return v; }
-  static const char *icons[3] = { "minus", "window", "close" }, *names[3] = { "minimize", "maximize", "close" };
+  static const char *const icons[3] = { "minus", "window", "close" };
   void (*fns[3])(rk_view *, void *) = { tb_min, tb_zoom, tb_close };
   for (int i = 0; i < 3; i++) {
     rk_view *b = button_make(NULL, icons[i], RK_BUTTON_BAR);
-    rk__setstr(&b->access_label, names[i]);
     b->focusable = false;
     rk_view_on_activate(b, fns[i], w);
     b->focusable = false;
     rk__view_add(v, b); rk_release(b);
   }
+  titlebar_names(v);
   return v;
 }
 
