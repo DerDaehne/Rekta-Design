@@ -128,6 +128,15 @@ A scope whose
 .Fa .version
 is the same as last time is not built again; a list's or a table's rows are
 drawn again only when its version changes.
+.It A product's own
+A tile's and a row's
+.Fa .code
+draws a domain colour
+.Pq see Fn rk_app_set_series ;
+a pivot's
+.Fa .wide
+is the width from which its pages stand side by side
+.Pq see Fn rk_pivot_set_wide .
 .It Mistakes
 A field the kind does not read, a key twice among siblings, a node the user
 closed that the build declares open again: each is said once through the log.
@@ -241,6 +250,85 @@ tells you when any of them changed and returns an id for
 and
 .Fn rk_app_is_reduced_motion
 say how things stand.
+.It Fn rk_app_set_series "int code" "rk_color light" "rk_color dark"
+A domain's colour code, as the web's
+.Li --rk-series-1
+to
+.Li -8 :
+colours the users already read, such as heart-rate zones, for small marks
+only \(em a tile's sparkline
+.Pq Fn rk_tile_set_code ,
+a row's tag square
+.Pq Fn rk_row_set_code ,
+a custom view's marks through
+.Fn rk_series_of
+\(em never text and never a fill.
+.Fa code
+is 1 to 8; per theme, as the accent: a
+.Fa dark
+of 0 takes
+.Fa light ,
+and 0, 0 is ink again, which is also what a code without a value draws.
+Each value should hold 3:1 on bg and surface and stand 0.09 apart in OKLab
+under protanopia and deuteranopia from every other code set, as
+.Li build.mjs --check-product
+holds the web's; one that does not is still set, and said through the log.
+.It Fn rk_app_set_metric "rk_metric metric" "float px" , Fn rk_app_set_timing "rk_duration timing" "double ms"
+What a product may change of the design
+.Pq docs/platforms.md, Product overrides :
+the metrics
+.Dv RK_TILE_UNIT
+and
+.Dv RK_PIVOT_WIDE
+.Pq the width from which a pivot shows its pages side by side, 1300; 0: never ,
+the timings
+.Dv RK_TIMING_TOAST
+.Pq how long a toast stays, and so the undo window
+and
+.Dv RK_TIMING_STALE
+.Pq when live data without an update is stale, for the app to show .
+Below 0 gives back the token's value.
+Motion, colours and the type scale stay the design's: any other metric or
+duration is said through the log and not set.
+.Fn rk_metric_of
+and
+.Fn rk_duration_of
+read what holds now.
+.It Fn rk_app_set_strings "const rk_strings *strings"
+The words the library says itself, as the web's
+.Li Rekta.strings :
+a toast's
+.Fa undo
+and
+.Fa redo ,
+.Fa undone
+.Pq Qq Undone: %s ,
+a confirmation's
+.Fa ok
+and
+.Fa cancel ,
+a select's
+.Fa choose ,
+a split's
+.Fa back ,
+a grip's
+.Fa move
+.Pq Qq move %s
+and a toggle's
+.Fa on
+and
+.Fa off .
+Copied; a field left
+.Dv NULL
+keeps the English word, a format needs exactly one
+.Li %s ,
+and
+.Dv NULL
+gives back the English words.
+Set
+.Fa strings->size
+to
+.Li sizeof(rk_strings) .
 .It Fn rk_app_set_log "void (*fn)(rk_log_level level, const char *message, void *user)" "void *user"
 Where misuse is said
 .Pq see Sx ERRORS ;
@@ -384,13 +472,18 @@ fills it with a status;
 .Fn rk_tile_set_series
 and
 .Fn rk_tile_set_progress
-change what it shows.
+change what it shows;
+.Fn rk_tile_set_code
+draws its sparkline in a domain colour.
 A tile with an activate handler presses and opens something.
 .It Fn rk_rows , Fn rk_rows_add
 Hairline rows: a title on the left, a meta or a status on the right.
 A row is a view:
 .Fn rk_row_set
 changes it,
+.Fn rk_row_set_code
+makes its right side a tag whose square takes a domain colour, the words in
+ink,
 .Fn rk_insert
 moves it,
 .Fn rk_view_remove
@@ -801,6 +894,25 @@ in and dark.
 Up and Down then pick the title.
 A window narrower than 760 or lower than 481 logical pixels keeps them along
 the top.
+.It Fn rk_pivot_set_wide "rk_controller *pivot" "float width" , Fn rk_pivot_is_wide
+From
+.Fa width
+up (0: the app's
+.Dv RK_PIVOT_WIDE ,
+1300 until
+.Fn rk_app_set_metric ;
+below 0: never) every page shows, side by side as panorama sections three
+tiles wide
+.Pq a page with a width of its own keeps it ,
+space-xl apart, and the strip stays as a jump list.
+A title, picked by a click or by Left, Right, Home and End with focus staying
+on the strip, glides its page to the leading edge over pivot-glide; Tab goes
+into the page chosen; the wheel moves the pages sideways, and the page at the
+leading edge becomes the one chosen, unless the chosen one is still whole in
+sight.
+Narrower, one page at a time again, the one last chosen.
+A pivot that picks the place, or with its titles down the side, never goes
+wide.
 .It Fn rk_controller_embed "rk_controller *owner" "rk_controller *child"
 A controller inside another's views, such as a pivot in a page: the owner
 takes
@@ -860,6 +972,7 @@ Undo and redo: a text field's own history inside it, the app's elsewhere.
 On macOS, Cmd for Ctrl.
 .It Left , Right , Home , End
 In a strip of titles, the next, the first or the last.
+In a wide pivot focus stays on the strip, and Tab goes into the page chosen.
 .It Page Up , Page Down , Home , End
 A panorama's sections.
 .It Up , Down
@@ -977,6 +1090,11 @@ a setter for one kind of view called on another, a descriptor whose
 .Fa size
 is 0, a call from a thread other than the main one, an icon that is not
 in the set, a pointer that is no Rekta object or one already released.
+A domain colour that breaks the rules is set, and said as a warning; a
+metric or timing that is the design's, and a word's format without exactly
+one
+.Li %s ,
+are said and not set.
 A view added to itself or inside itself asserts in debug builds.
 .Sh SEE ALSO
 .Pa docs/core.md

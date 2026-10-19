@@ -495,7 +495,7 @@ enum {
   G_TEXT, G_LABEL, G_META, G_MESSAGE, G_HINT, G_PLACEHOLDER, G_ICON, G_SHORTCUT, G_ACCEPT, G_ANSWERS, G_STYLE, G_COLOR,
   G_BUTTON, G_STATUS, G_FIT, G_SIDE, G_PROGRESS, G_SERIES, G_OPTIONS, G_COUNT, G_VALUE, G_RANGE, G_INPUT, G_CHECK,
   G_LINES, G_DATA, G_ON, G_CHOSEN, G_NUMBER, G_DAY, G_BUFFER, G_OPEN, G_GAP, G_FLAGS, G_ON_CHANGE, G_ON_SUBMIT,
-  G_ON_CLOSE, G_ON_SELECT, G_ITEM, G_CELL, G_ON_MOVE, G_ON_FILES, G_HOST, G_VERSION, G_COUNT_OF
+  G_ON_CLOSE, G_ON_SELECT, G_ITEM, G_CELL, G_ON_MOVE, G_ON_FILES, G_HOST, G_VERSION, G_CODE, G_WIDE, G_COUNT_OF
 };
 #define B(g) (1ull << (g))
 static const char *const ui_group_names[G_COUNT_OF] = {
@@ -504,7 +504,7 @@ static const char *const ui_group_names[G_COUNT_OF] = {
   ".series", ".options", ".count", ".value", ".min, .max or .step", ".input", ".check", ".lines or .secret", ".data",
   ".on", ".chosen", ".number", ".day", ".buffer", ".open", ".gap, .padding, .align or .cross", ".flags or .sort",
   ".on_change", ".on_submit", ".on_close", ".on_select", ".item or .item_key", ".cell, .on_sort or .on_edit",
-  ".on_move", ".on_files", ".make or .update", ".version",
+  ".on_move", ".on_files", ".make or .update", ".version", ".code", ".wide",
 };
 static uint64_t ui_present(const rk_ui *d) {
   uint64_t m = 0;
@@ -552,6 +552,8 @@ static uint64_t ui_present(const rk_ui *d) {
   if (d->on_files) m |= B(G_ON_FILES);
   if (d->make || d->update) m |= B(G_HOST);
   if (d->version) m |= B(G_VERSION);
+  if (d->code) m |= B(G_CODE);
+  if (d->wide) m |= B(G_WIDE);
   return m;
 }
 static uint64_t ui_reads(rk_ui_kind k, bool in_menu) {
@@ -562,8 +564,8 @@ static uint64_t ui_reads(rk_ui_kind k, bool in_menu) {
     case RK_UI_SPLIT: return B(G_TEXT) | B(G_OPEN) | B(G_ON_CLOSE) | B(G_VERSION);
     case RK_UI_LABEL: return B(G_TEXT) | B(G_STYLE) | B(G_COLOR);
     case RK_UI_BUTTON: return B(G_TEXT) | B(G_BUTTON) | B(G_ICON);
-    case RK_UI_TILE: return B(G_TEXT) | B(G_LABEL) | B(G_META) | B(G_STATUS) | B(G_MESSAGE) | B(G_PROGRESS) | B(G_SERIES);
-    case RK_UI_ROW: return B(G_TEXT) | B(G_META) | B(G_STATUS);
+    case RK_UI_TILE: return B(G_TEXT) | B(G_LABEL) | B(G_META) | B(G_STATUS) | B(G_MESSAGE) | B(G_PROGRESS) | B(G_SERIES) | B(G_CODE);
+    case RK_UI_ROW: return B(G_TEXT) | B(G_META) | B(G_STATUS) | B(G_CODE);
     case RK_UI_ICON: return B(G_ICON) | B(G_COLOR);
     case RK_UI_PROGRESS: return B(G_PROGRESS);
     case RK_UI_IMAGE: return B(G_TEXT) | B(G_FIT) | B(G_DATA);
@@ -584,7 +586,7 @@ static uint64_t ui_reads(rk_ui_kind k, bool in_menu) {
     case RK_UI_HEADING: return B(G_TEXT);
     case RK_UI_PANORAMA: case RK_UI_PLACES: return B(G_TEXT);
     case RK_UI_SECTION: case RK_UI_PAGE: return B(G_TEXT) | box;
-    case RK_UI_PIVOT: return B(G_TEXT) | B(G_CHOSEN) | B(G_SIDE) | control;
+    case RK_UI_PIVOT: return B(G_TEXT) | B(G_CHOSEN) | B(G_SIDE) | B(G_WIDE) | control;
     case RK_UI_PLACE: case RK_UI_SHEET: return B(G_TEXT) | B(G_OPEN) | B(G_ON_CLOSE) | box;
     case RK_UI_CONFIRM: return B(G_TEXT) | B(G_LABEL) | B(G_MESSAGE) | B(G_ANSWERS) | B(G_OPEN) | B(G_ON_CLOSE);
     case RK_UI_HOST: return B(G_HOST);
@@ -666,6 +668,7 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
       if (fresh ? bar >= 0 : bar != was_bar) rk_tile_set_progress(v, bar);
       if ((fresh && d->series && d->nseries > 0) || (!fresh && !ui_same_series(d->series, d->nseries, o->series, o->nseries)))
         rk_tile_set_series(v, d->series, d->series ? d->nseries : 0);
+      if (CHANGED(code) && (d->code || !fresh)) rk_tile_set_code(v, d->code);
       break;
     }
     case RK_UI_ROW:
@@ -673,6 +676,7 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
         ui_transition(n, d, RK_UI_IN_PLACE, false);
         rk_row_set(v, d->text, d->meta, d->status);
       } else if (pulse) rk_view_transition(outer, RK_TRANSITION_CROSSFADE);
+      if (CHANGED(code) && (d->code || !fresh)) rk_row_set_code(v, d->code);
       break;
     case RK_UI_ICON:
       if (!fresh && (!ui_same(d->icon, o->icon) || d->color != o->color)) rk_icon_set(v, d->icon, d->color);
@@ -730,6 +734,7 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
       break;
     case RK_UI_PIVOT:
       if (CHANGED(side) && (d->side || !fresh)) rk_pivot_set_layout(n->ctl, d->side ? RK_PIVOT_SIDE : RK_PIVOT_TOP);
+      if (CHANGED(wide) && (d->wide || !fresh)) rk_pivot_set_wide(n->ctl, d->wide);
       if (!fresh && !ui_same(d->text, o->text)) rk_controller_set_title(n->ctl, d->text);
       break;
     case RK_UI_PANORAMA: case RK_UI_PLACES:

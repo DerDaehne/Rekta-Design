@@ -14,7 +14,7 @@
 
 typedef struct split {
   rk_view *self, *list, *detail, *handle, *crumb;
-  char *title;
+  char *title;                                             /* the crumb's; NULL: the word for back */
   float set;                                               /* the list's width as asked; 0: its own */
   void (*back)(rk_view *split, void *user); void *back_user;   /* the user went back to the list */
   bool detail_shown, sideways, laid;                        /* compact: which pane; how it was laid out last */
@@ -24,6 +24,7 @@ typedef struct split {
   void (*resize)(rk_view *split, float width, void *user); void *resize_user;
 } split;
 
+static const char *crumb_title(split *s) { return s->title ? s->title : rk__words()->back; }
 static float split_own(void) { return 4 * rk_metric_of(RK_TILE_UNIT) + 3 * rk_metric_of(RK_SPACE_S); }
 static float split_min(void) { return rk_metric_of(RK_PANE_MIN); }
 static float split_max(split *s) { return RK_MAX(split_min(), s->self->frame.w - split_min() - 1); }
@@ -111,14 +112,14 @@ static void crumb_draw(rk_view *v, rk_canvas *c, void *st) {
   float H = v->pframe.h, gap = rk_metric_of(RK_SPACE_XS);
   rk_color ink = rk_color_of(v->pressed ? RK_ROLE_TEXT : RK_ROLE_TEXT_HIGH);
   rk_canvas_icon(c, "back", (rk_rect){ 0, (H - 16) / 2, 16, 16 }, ink);
-  rk__text_draw(c, s->title, -1, 16 + gap, (H - f.size * f.line) / 2, &f, ink);
+  rk__text_draw(c, crumb_title(s), -1, 16 + gap, (H - f.size * f.line) / 2, &f, ink);
 }
 
 static rk_size crumb_measure(rk_view *v, rk_size avail, void *st) {
   (void)v; (void)avail;
   split *s = st;
   rk_textfmt f = rk__textfmt(RK_TEXT_LABEL, 0);
-  return (rk_size){ 16 + rk_metric_of(RK_SPACE_XS) + rk__text_width(s->title, -1, &f), rk_metric_of(RK_CONTROL_HEIGHT) };
+  return (rk_size){ 16 + rk_metric_of(RK_SPACE_XS) + rk__text_width(crumb_title(s), -1, &f), rk_metric_of(RK_CONTROL_HEIGHT) };
 }
 
 static const rk_class crumb_class = { { sizeof(rk_view_class), "rk_split_crumb", crumb_draw, crumb_measure, NULL, NULL, NULL }, NULL, NULL };
@@ -146,6 +147,7 @@ static void split_place(split *s) {
   rk_view_set_hidden(s->list, s->detail_shown);
   rk_view_set_hidden(s->detail, !s->detail_shown);
   rk_view_set_hidden(s->crumb, !s->detail_shown);
+  if (!s->title) rk__setstr(&s->crumb->access_label, crumb_title(s));   /* the word for back, as the app has it now */
   float ch = rk_metric_of(RK_CONTROL_HEIGHT), m = rk_metric_of(RK_SPACE_M), iw = RK_MAX(0.0f, W - 2 * m);   /* space-m each side */
   rk__set_frame(s->list, (rk_rect){ m, 0, iw, H });
   rk__set_frame(s->crumb, (rk_rect){ m, 0, crumb_measure(s->crumb, (rk_size){ iw, H }, s).w, ch });
@@ -208,7 +210,7 @@ void rk_split_on_back(rk_view *v, void (*fn)(rk_view *split, void *user), void *
 
 rk_view *rk_split(rk_view *list, rk_view *detail, const char *title) {
   split *s = rk__alloc(sizeof *s);
-  s->title = rk__strdup(title && *title ? title : "back");
+  s->title = title && *title ? rk__strdup(title) : NULL;
   s->turn = rk__turn_new();
   rk_view *v = rk__view_create(&split_class, s);
   s->self = v;
@@ -217,7 +219,7 @@ rk_view *rk_split(rk_view *list, rk_view *detail, const char *title) {
   s->crumb = rk__view_create(&crumb_class, s);
   s->crumb->focusable = true;
   s->crumb->access = RK_ACCESS_LINK;
-  rk__setstr(&s->crumb->access_label, s->title);
+  rk__setstr(&s->crumb->access_label, crumb_title(s));
   rk_view_on_activate(s->crumb, crumb_back, v);
   s->handle = rk__view_create(&handle_class, s);
   s->handle->focusable = true; s->handle->draws_focus = true;

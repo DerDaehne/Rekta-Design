@@ -161,6 +161,7 @@ void rk_button_set_icon(rk_view *v, const char *icon) {
 typedef struct tile {
   rk_status status; char *word, *value, *label, *message, *old_value, *old_label;
   float *series; int nseries; float progress;
+  int code;                                                /* the sparkline's domain colour; 0: ink */
 } tile;
 
 static float tile_stat_height(rk_view *v, tile *t, rk_textfmt *num, rk_textfmt *lab) {
@@ -199,7 +200,7 @@ static void tile_draw(rk_view *v, rk_canvas *c, void *st) {
     rk_point pts[256];
     int n = RK_MIN(t->nseries, 256);
     for (int i = 0; i < n; i++) pts[i] = (rk_point){ pad + inner * i / (n - 1), y + sh * (26 - (t->series[i] - lo) / span * 24) / 28 };
-    rk_canvas_polyline(c, pts, n, 2, ink);
+    rk_canvas_polyline(c, pts, n, 2, t->code ? rk__series(t->code) : ink);   /* a mark may take a code; the text never */
     y -= gap;
   }
   if (t->message) {
@@ -301,6 +302,13 @@ void rk_tile_set_series(rk_view *v, const float *values, int count) {
   rk__view_dirty(v);
 }
 
+void rk_tile_set_code(rk_view *v, int code) {
+  if (!rk__expect(v && v->cls == &tile_class ? v : NULL, v, __func__, "a tile")) return;
+  if (code < 0 || code > 8) { rk__error("rk_tile_set_code: code %d is outside 1 to 8", code); return; }
+  ((tile *)v->state)->code = code;
+  rk__view_dirty(v);
+}
+
 static void set_value(rk_view *v, float value) {
   v->value = value;
   if (rk__view_visible(v) && !rk__reduced()) {
@@ -349,12 +357,12 @@ static void row_draw(rk_view *v, rk_canvas *c, void *st) {
   float base = top + rk__text_ascent(&f);                  /* the meta and the word stand on the title's baseline */
   rk__text_draw(c, r->title, -1, x, top, &f, rk_color_of(RK_ROLE_TEXT));
   float right = W;
-  if (r->status != RK_STATUS_NONE) {
+  if (r->status != RK_STATUS_NONE || r->code) {             /* a tag: the words in ink, the square in its status or code */
     rk_textfmt tf = rk__textfmt(RK_TEXT_LABEL, 0);
-    const char *w = r->meta ? r->meta : rk__status_word(r->status);
+    const char *w = r->meta ? r->meta : r->status != RK_STATUS_NONE ? rk__status_word(r->status) : "";
     float tw = rk__text_width(w, -1, &tf);
     rk__text_draw(c, w, -1, right - tw, base - rk__text_ascent(&tf), &tf, rk_color_of(RK_ROLE_TEXT));
-    rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, above + inner / 2 - 4, 8, 8 }, rk_color_of(rk__status_full(r->status)));
+    rk_canvas_fill_rect(c, (rk_rect){ right - tw - 14, above + inner / 2 - 4, 8, 8 }, r->code ? rk__series(r->code) : rk_color_of(rk__status_full(r->status)));
   } else if (r->meta) {
     rk_textfmt mf = rk__textfmt(RK_TEXT_META, 0);
     float mw = rk__text_width(r->meta, -1, &mf);
@@ -392,6 +400,13 @@ void rk_row_set(rk_view *v, const char *title, const char *meta, rk_status statu
   rk__setstr(&r->meta, meta);
   r->status = status;
   rk__setstr(&v->access_label, r->title);
+  rk__view_dirty(v);
+}
+
+void rk_row_set_code(rk_view *v, int code) {
+  if (!rk__expect(v && v->cls == &rk__row_class ? v : NULL, v, __func__, "a row of rk_rows")) return;
+  if (code < 0 || code > 8) { rk__error("rk_row_set_code: code %d is outside 1 to 8", code); return; }
+  ((row *)v->state)->code = code;
   rk__view_dirty(v);
 }
 

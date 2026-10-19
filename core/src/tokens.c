@@ -2,7 +2,7 @@
 #include "rk_internal.h"
 #include "rk_tokens.h"
 
-rk_prefs rk__prefs = { RK_THEME_SYSTEM, RK_MOTION_PREF_SYSTEM, RK_DENSITY_SYSTEM, false, false, false, { 0, 0 } };
+rk_prefs rk__prefs = { .theme = RK_THEME_SYSTEM, .motion = RK_MOTION_PREF_SYSTEM, .density = RK_DENSITY_SYSTEM };
 
 const float rk__ease_base[4] = RK_TOK_EASE_BASE;
 const float rk__ease_in[4] = RK_TOK_EASE_IN;
@@ -30,13 +30,70 @@ rk_color rk_color_of(rk_role role) {
 
 float rk_metric_of(rk_metric metric) {
   if (metric < 0 || metric >= RK__METRIC_COUNT) return 0;
+  if (rk__prefs.metric_set[metric]) return rk__prefs.metric[metric];
   return rk_tok_metrics[rk__density_index()][metric];
 }
 
 double rk_duration_of(rk_duration d) {
   if (d < 0 || d >= RK__DURATION_COUNT) return 0;
   if (d < RK_TOK_MOTION_COUNT && rk__reduced()) return 0;
+  if (rk__prefs.timing_set[d]) return rk__prefs.timing[d];
   return rk_tok_durations[d];
+}
+
+rk_color rk__series(int code) {
+  rk_color c = code >= 1 && code <= 8 ? rk__prefs.series[code - 1][rk__dark() ? 1 : 0] : 0;
+  return c ? c : rk_color_of(RK_ROLE_TEXT);
+}
+rk_color rk_series_of(int code) { return rk__series(code); }
+
+/* Colour maths ---------------------------------------------------------------------------------------------------- */
+
+static double lin(double v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
+static double gam(double v) { return v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1 / 2.4) - 0.055; }
+static void channels(rk_color c, double out[3]) { for (int i = 0; i < 3; i++) out[i] = ((c >> (24 - 8 * i)) & 255) / 255.0; }
+
+static double luminance(rk_color c) {
+  double v[3];
+  channels(c, v);
+  return 0.2126 * lin(v[0]) + 0.7152 * lin(v[1]) + 0.0722 * lin(v[2]);
+}
+
+double rk__contrast(rk_color a, rk_color b) {
+  double x = luminance(a), y = luminance(b);
+  return (RK_MAX(x, y) + 0.05) / (RK_MIN(x, y) + 0.05);
+}
+
+static const double cvd[3][3][3] = {
+  { { 0.152286, 1.052583, -0.204868 }, { 0.114503, 0.786281, 0.099216 }, { -0.003882, -0.048116, 1.051998 } },   /* protan */
+  { { 0.367322, 0.860646, -0.227968 }, { 0.280085, 0.672501, 0.047413 }, { -0.01182, 0.04294, 0.968881 } },      /* deutan */
+  { { 1.255528, -0.076749, -0.178779 }, { -0.078411, 0.930809, 0.147602 }, { 0.004733, 0.691367, 0.3039 } },     /* tritan */
+};
+
+static void oklab(rk_color c, int kind, double out[3]) {
+  double v[3], r[3];
+  channels(c, v);
+  for (int i = 0; i < 3; i++) r[i] = lin(v[i]);
+  if (kind >= 1 && kind <= 3) {                            /* as seen with the deficiency, back to sRGB as color.mjs does */
+    double s[3];
+    for (int i = 0; i < 3; i++) {
+      const double *m = cvd[kind - 1][i];
+      s[i] = gam(RK_CLAMP(m[0] * r[0] + m[1] * r[1] + m[2] * r[2], 0.0, 1.0));
+    }
+    for (int i = 0; i < 3; i++) r[i] = lin(s[i]);
+  }
+  double l = cbrt(0.4122214708 * r[0] + 0.5363325363 * r[1] + 0.0514459929 * r[2]);
+  double m = cbrt(0.2119034982 * r[0] + 0.6806995451 * r[1] + 0.1073969566 * r[2]);
+  double s = cbrt(0.0883024619 * r[0] + 0.2817188376 * r[1] + 0.6299787005 * r[2]);
+  out[0] = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+  out[1] = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+  out[2] = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+}
+
+double rk__distance(rk_color a, rk_color b, int kind) {
+  double p[3], q[3];
+  oklab(a, kind, p); oklab(b, kind, q);
+  return sqrt((p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1]) + (p[2] - q[2]) * (p[2] - q[2]));
 }
 
 rk_color rk__mix(rk_color a, rk_color b, float t) {

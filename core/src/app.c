@@ -1,6 +1,7 @@
 /* app.c: the run loop, timers, posting from other threads, and the app's settings (theme, motion, density, accent).
    The loop sleeps until an event, a timer or a frame is due; while something moves it draws at 60 frames a second. */
 #include "rk_internal.h"
+#include "rk_tokens.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -156,6 +157,107 @@ void rk_app_set_accent(rk_color light, rk_color dark) {
   rk__prefs.accent[0] = light; rk__prefs.accent[1] = dark ? dark : light;
   changed(true);
 }
+
+/* A domain's colour code: set as asked, and held to the rules the web's build.mjs --check-product holds a product's
+   CSS to - 3:1 on bg and surface, 0.09 apart under protanopia and deuteranopia from every other code. What breaks
+   one is said, not refused: the product sees it the first time it runs. */
+static void series_check(int code) {
+  static const char *const theme[2] = { "light", "dark" }, *const kind[3] = { "", "protanopia", "deuteranopia" };
+  static const rk_role ground[2] = { RK_ROLE_BG, RK_ROLE_SURFACE };
+  for (int t = 0; t < 2; t++) {
+    rk_color c = rk__prefs.series[code - 1][t];
+    if (!c) continue;
+    for (int g = 0; g < 2; g++) {
+      double r = rk__contrast(c, rk_tok_colors[t][ground[g]]);
+      if (r < 3) rk__warn("rk_app_set_series: code %d (#%06x) on %s is %.2f:1 in the %s theme, needs 3:1", code, (unsigned)(c >> 8), g ? "surface" : "bg", r, theme[t]);
+    }
+    for (int o = 1; o <= 8; o++) {
+      rk_color d = rk__prefs.series[o - 1][t];
+      if (o == code || !d) continue;
+      for (int k = 1; k <= 2; k++) {
+        double apart = rk__distance(c, d, k);
+        if (apart < 0.09) rk__warn("rk_app_set_series: codes %d and %d are %.3f apart under %s in the %s theme, need 0.09", code, o, apart, kind[k], theme[t]);
+      }
+    }
+  }
+}
+void rk_app_set_series(int code, rk_color light, rk_color dark) {
+  if (code < 1 || code > 8) { rk__error("rk_app_set_series: code %d is outside 1 to 8", code); return; }
+  rk__prefs.series[code - 1][0] = light; rk__prefs.series[code - 1][1] = dark ? dark : light;
+  series_check(code);
+  changed(false);
+}
+
+/* What a product may set (docs/platforms.md): the rest is the design's, said instead of set. */
+void rk_app_set_metric(rk_metric metric, float px) {
+  if (metric != RK_TILE_UNIT && metric != RK_PIVOT_WIDE) { rk__error("rk_app_set_metric: only RK_TILE_UNIT and RK_PIVOT_WIDE are a product's to set"); return; }
+  if (metric == RK_TILE_UNIT && px == 0) { rk__error("rk_app_set_metric: a tile unit of 0"); return; }
+  rk__prefs.metric_set[metric] = px >= 0; rk__prefs.metric[metric] = px;
+  changed(false);
+}
+void rk_app_set_timing(rk_duration timing, double ms) {
+  if (timing != RK_TIMING_TOAST && timing != RK_TIMING_STALE) { rk__error("rk_app_set_timing: only RK_TIMING_TOAST and RK_TIMING_STALE are a product's to set"); return; }
+  rk__prefs.timing_set[timing] = ms >= 0; rk__prefs.timing[timing] = ms;
+  changed(false);
+}
+
+/* The words: the English ones, and the app's over them. Every word the library says comes from here; test/words.sh
+   fails the tests when one is written anywhere else. */
+/* rk-strings-begin */
+static const rk_strings english = {
+  sizeof(rk_strings), "undo", "redo", "Undone: %s", "ok", "cancel", "choose one", "back", "move %s", "on", "off",
+};
+/* rk-strings-end */
+static rk_strings words;                                   /* the app's, copied; NULL fields: the English word */
+#define WORD_COUNT ((sizeof(rk_strings) - offsetof(rk_strings, undo)) / sizeof(const char *))
+static const char **word_at(rk_strings *s, size_t i) { return (const char **)((char *)s + offsetof(rk_strings, undo)) + i; }
+
+/* A format takes exactly one %s and no other conversion ("%%" is a percent sign). */
+static bool one_s(const char *f) {
+  int n = 0;
+  for (; *f; f++) if (*f == '%') { if (f[1] == '%') f++; else if (f[1] == 's') { n++; f++; } else return false; }
+  return n == 1;
+}
+
+const rk_strings *rk__words(void) {
+  static rk_strings now;
+  now = english;
+  for (size_t i = 0; i < WORD_COUNT; i++) if (*word_at(&words, i)) *word_at(&now, i) = *word_at(&words, i);
+  return &now;
+}
+
+/* The format's %s replaced by arg, by hand: the format is the app's, never handed to printf. */
+void rk__say(char *out, size_t size, const char *format, const char *arg) {
+  size_t n = 0;
+  bool used = false;
+  if (!size) return;
+  for (const char *f = format; *f && n + 1 < size; f++) {
+    if (f[0] == '%' && f[1] == '%') { out[n++] = '%'; f++; continue; }
+    if (f[0] == '%' && f[1] == 's' && !used) {
+      for (const char *a = arg ? arg : ""; *a && n + 1 < size; a++) out[n++] = *a;
+      used = true; f++; continue;
+    }
+    out[n++] = *f;
+  }
+  out[n] = 0;
+}
+
+void rk_app_set_strings(const rk_strings *strings) {
+  for (size_t i = 0; i < WORD_COUNT; i++) { free((void *)*word_at(&words, i)); *word_at(&words, i) = NULL; }
+  if (strings && RK__SIZED(strings, "rk_app_set_strings", "rk_strings")) {
+    rk_strings in;
+    memset(&in, 0, sizeof in);
+    memcpy(&in, strings, RK_MIN((size_t)strings->size, sizeof in));
+    for (size_t i = 0; i < WORD_COUNT; i++) {
+      const char *w = *word_at(&in, i);
+      bool format = word_at(&in, i) == &in.undone || word_at(&in, i) == &in.move;
+      if (w && format && !one_s(w)) { rk__error("rk_app_set_strings: \"%s\" needs exactly one %%s: the English word stays", w); continue; }
+      *word_at(&words, i) = w ? rk__strdup(w) : NULL;
+    }
+  }
+  changed(false);
+}
+
 uint32_t rk_app_on_change(void (*fn)(void *), void *user) {
   listeners = rk__grow(listeners, &lcap, nlisteners + 1, sizeof *listeners);
   uint32_t id = new_id();

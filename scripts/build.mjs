@@ -206,8 +206,11 @@ export function buildTokensJson(tokens, version) {
     layer: group(tokens.layer, ['layer']),
     breakpoint: group(tokens.breakpoint, ['breakpoint']),
     descriptions: all,
+    hooks: Object.fromEntries(Object.entries(loadHooks()).map(([k, v]) => [`--rk-${k}`, v])),
   };
 }
+// The public hooks (tokens/rekta.hooks.json): --rk- properties that are not tokens, by name without the prefix.
+export function loadHooks() { return JSON.parse(readFileSync(join(root, 'tokens', 'rekta.hooks.json'), 'utf8')).hooks; }
 
 function fontsCss() {
   const files = readdirSync(join(root, 'site', 'fonts', 'barlow')).filter((f) => f.endsWith('.woff2')).sort();
@@ -270,7 +273,15 @@ function check(tokens) {
   for (const g of ['color']) walk(tokens.color.light, ['color', 'light'], (p) => defined.add(tokenName(p)));
   for (const g of ['typography', 'spacing', 'radius', 'size', 'motion', 'timing', 'layer', 'breakpoint']) walk(tokens[g], [g], (p) => defined.add(tokenName(p)));
   walk(tokens.density.comfortable, ['density', 'comfortable'], (p) => defined.add(tokenName(p)));
-  const HOOKS = new Set(['i', 'v', 'titlebar-controls', 'sec-w', 'split-w', 'banner-h', 'pivot-scale', 'pivot-h', 'toast-left', ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `series-${n}`)]);
+  const HOOKS = new Set(Object.keys(loadHooks()));
+  // The docs' table of public hooks names exactly these (the product's series codes as one row, -1 to -8).
+  {
+    const doc = readFileSync(join(root, 'docs', 'behaviour.md'), 'utf8');
+    const a = doc.indexOf('### Public hooks'), b = doc.indexOf('\n### ', a + 1);
+    const table = new Set([...doc.slice(a, b).matchAll(/`--rk-([\w-]+)`/g)].map((m) => m[1]));
+    for (const h of HOOKS) if (!table.has(h) && !(/^series-[2-7]$/.test(h) && table.has('series-1') && table.has('series-8'))) problems.push(`docs/behaviour.md (Public hooks) lacks --rk-${h}`);
+    for (const h of table) if (!HOOKS.has(h)) problems.push(`docs/behaviour.md (Public hooks) lists --rk-${h}, which tokens/rekta.hooks.json does not`);
+  }
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }
