@@ -203,7 +203,6 @@ static void fill_layout(rk_view *v, void *st) {
   rk_insets p = v->padding;
   for (int i = 0; i < v->nkids; i++) rk__set_frame(v->kids[i], (rk_rect){ p.left, p.top, RK_MAX(0.0f, v->frame.w - p.left - p.right), RK_MAX(0.0f, v->frame.h - p.top - p.bottom) });
 }
-static const rk_class fill_class = { { sizeof(rk_view_class), "rk_fill", NULL, NULL, fill_layout, NULL, NULL }, NULL, NULL };
 
 /* A place shows a page of its own set in from the window's edges, as a pivot sets its facets in: space-xl at the
    sides (space-m in a compact window), space-l above and below. A panorama, a pivot or places inside set themselves. */
