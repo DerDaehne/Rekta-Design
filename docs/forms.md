@@ -54,6 +54,41 @@ Rekta's own.
   showing its own error.
 - Every error is cause and remedy in one sentence, at the field.
 
+The summary's markup, as `form()` writes it and as a server renders it
+for a form sent without the script:
+
+```html
+<form class="fields" novalidate>
+  <div class="rk-errors" role="group" tabindex="-1" aria-labelledby="f-errors">
+    <p id="f-errors">2 fields need attention</p>
+    <ul>
+      <li><a href="#start">start time: 25:00 is not a time of day. Use hh:mm, up to 23:59.</a></li>
+      <li><a href="#name">name: A project called “Release notes” already exists. Choose another name.</a></li>
+    </ul>
+  </div>
+  <div class="rk-field" data-status="error">
+    <label class="rk-label" for="start">start time</label>
+    <input class="rk-input" id="start" aria-invalid="true" aria-describedby="h-start" value="25:00">
+    <span class="rk-hint" id="h-start">25:00 is not a time of day. Use hh:mm, up to 23:59.</span>
+  </div>
+  …
+</form>
+```
+
+- It is the form's **first child**, a `group` named by its sentence,
+  focusable (`tabindex="-1"`) but not in the tab order.
+- **Focus:** it takes focus as the page arrives (a server-rendered
+  refusal: `autofocus` on it, or `focus()` on load) and each time the
+  form is sent with errors.
+- Each link names the field's label, a colon, then the field's own
+  sentence, and points at the field's `id`; following it moves focus to
+  the field (without the script, the fragment link does).
+- A refusal for the whole form is the sentence alone, without a list.
+- The fields keep their own errors (`data-status="error"`,
+  `aria-invalid`, the hint), so the summary is never the only place.
+
+The showcase's accent form shows it: send it with an empty name.
+
 ## When the server says no
 
 The send runs as a pending action (the button says "saving…"). A refusal
@@ -86,6 +121,49 @@ How much an action asks depends on what it costs to take back:
 Prefer making an action undoable over asking about it. A sheet never
 asks "Are you sure?": it names the action and its consequence.
 
+**The destructive button.** The button that takes an action that cannot
+be undone (in that sheet, and the one that opens it) is
+`.rk-btn[data-status="error"]`: its frame and words in
+`status-error-full`, never filled and never primary, since the safe
+answer is primary. `--check` holds its words to 4.5:1 on the ground and
+the surface in both themes. It is a frame colour, not a warning sign:
+an undoable action (archive) never wears it.
+
+```html
+<p class="rk-actions"><button class="rk-btn rk-btn--primary" value="cancel">keep the project</button><button class="rk-btn" data-status="error" value="ok">delete the project</button></p>
+```
+
+## A form in a sheet
+
+- **A visible way out.** Every sheet has one a finger can reach: its
+  safe answer ("cancel", "keep it"), or, where the sheet has no such
+  answer, a close button at its top corner. On a touch screen with
+  `closedby="closerequest"` neither Escape nor the shading closes it.
+
+  ```html
+  <dialog class="rk-sheet" closedby="closerequest" aria-labelledby="t">
+    <form method="dialog">
+      <p class="rk-kicker">group</p>
+      <h2 class="rk-group" id="t">Rename the group</h2>
+      …
+      <p class="rk-actions"><button class="rk-btn" value="cancel">cancel</button><button class="rk-btn rk-btn--primary" value="save">rename</button></p>
+      <button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-close"/></svg></button>
+    </form>
+  </dialog>
+  ```
+
+- **Unsaved input asks before it goes.** One modal at a time, so the
+  question is not a second sheet: it takes the sheet's place, inside it.
+  `sheet(dialog, { dirty: () => … })` asks while `dirty()` is true, on
+  every close request (Escape, the shading, a `value="cancel"` button):
+  "unsaved · Discard what you entered?", with "keep editing" as the
+  primary, focused answer and "discard changes" beside it. Escape or the
+  shading while it asks keep editing; focus goes back where it was. A
+  save closes without asking; so does `dialog.close()`, the app's own
+  decision. An unchanged form never asks. (A browser closes a dialog on
+  a second Escape pressed with no click or key in between, whatever a
+  page does; a question the user is answering has had one.)
+
 ## One size of control
 
 Rekta has one control height per density, `control-height`: 44px where
@@ -103,6 +181,18 @@ small button and no small field, on purpose:
 For actions on each row of a list, use a quiet icon button at the row's
 height, the row's context menu (right click, long press, the menu key),
 or the selection mode's app bar for several rows at once.
+
+**The icon button** is `.rk-btn--icon` (with `.rk-btn--quiet` for row
+actions and a sheet's close): square at `control-height`, at
+`row-height` inside `.rk-rows` and `.rk-table`, never smaller than
+`size.touch-target` under a coarse pointer, whatever the density. The
+glyph is 20px. It has no words, so it **needs an `aria-label`** (a
+tooltip, `data-rk-tip`, may repeat it for the mouse); the focus ring is
+the button's own.
+
+```html
+<button class="rk-btn rk-btn--icon rk-btn--quiet" type="button" aria-label="more for build 4182" data-rk-tip="more"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-more"/></svg></button>
+```
 
 ## Disabled controls say why
 

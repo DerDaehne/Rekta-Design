@@ -163,8 +163,11 @@ const wide = await p.evaluate(async () => {
     + [0, 1, 2, 3].map((i) => `<button role="tab" id="wt${i}" aria-controls="wf${i}" aria-selected="${i === 0}">facet ${i}</button>`).join('') + '</div>'
     + '<div id="wfs">' + [0, 1, 2, 3].map((i) => `<div role="tabpanel" id="wf${i}" ${i ? 'hidden' : ''}><p>${'text '.repeat(40)}</p></div>`).join('') + '</div>';
   document.body.append(box);
-  const pv = Rekta.pivot(box.firstChild), wfs = box.querySelector('#wfs'), wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const shown = () => [...wfs.children].filter((x) => !x.hidden).length;
+  // As a framework would: it binds hidden to the facet it holds, set from onSelect (#36).
+  let held = 0;
+  const pv = Rekta.pivot(box.firstChild, { onSelect: (i) => { held = i; [...box.querySelectorAll('[role=tabpanel]')].forEach((x, k) => { x.hidden = k !== held; }); } });
+  const wfs = box.querySelector('#wfs'), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const shown = () => [...wfs.children].filter((x) => getComputedStyle(x).display !== 'none').length;
   const out = { wide: pv.wide, shown: shown(), flex: getComputedStyle(wfs).display };
   box.querySelector('#wt2').click(); await wait(700);
   out.jumped = wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true';
@@ -172,8 +175,20 @@ const wide = await p.evaluate(async () => {
   out.tabbed = document.activeElement && document.activeElement.id === 'wf2';
   wfs.scrollTo({ left: 0, behavior: 'instant' }); await wait(200);
   out.followed = box.querySelector('#wt0').getAttribute('aria-selected') === 'true';
+  out.bound = shown() === 4;                            /* the framework hid the others; wide still shows them all */
+  const before = held;
+  pv.select(3, { silent: true }); await wait(50);
+  out.silent = held === before && box.querySelector('#wt3').getAttribute('aria-selected') === 'true';   /* #37 */
   box.style.width = '700px'; await wait(200);
   out.narrow = !pv.wide && shown() === 1;
+  // #38: an override in calc() reads as the length it is.
+  box.firstChild.style.setProperty('--rk-pivot-wide', 'calc(var(--rk-tile-unit) * 4)'); box.style.width = '650px'; pv.layout(); await wait(100);
+  out.calc = pv.wide;
+  box.style.width = '500px'; await wait(150);
+  // #39: a title's count changes: measured again, so the gap stays even.
+  const t1 = box.querySelector('#wt1'); t1.textContent = 'facet 1 · 128 new things'; await wait(150);
+  const r = [...box.querySelectorAll('[role=tab]')].map((e) => e.getBoundingClientRect());
+  out.gaps = r.slice(1).map((x, i) => Math.round(x.left - r[i].right)).join(',');
   pv.destroy(); box.remove();
   return out;
 });
@@ -181,6 +196,28 @@ ok(wide.wide && wide.shown === 4 && wide.flex === 'flex', 'a pivot above size.pi
 ok(wide.jumped && wide.followed, 'its strip jumps to a facet and follows the scroll', JSON.stringify(wide));
 ok(wide.tabbed, 'Tab from the strip goes into the facet chosen', JSON.stringify(wide));
 ok(wide.narrow, 'below it, one facet at a time again', JSON.stringify(wide));
+ok(wide.bound, 'wide, panels show even with hidden bound by a framework (data-rk-reveal)', JSON.stringify(wide));
+ok(wide.silent, 'select(i, { silent }) calls no onSelect', JSON.stringify(wide));
+ok(wide.calc, 'a --rk-pivot-wide written in calc() is read as its length', JSON.stringify(wide));
+ok(new Set(wide.gaps.split(',')).size === 1, 'a title whose words change is measured again: even gaps', wide.gaps);
+// strip(): a strip of links a router marks (#41); arrive() is exported (#42).
+const stripped = await p.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const n = document.createElement('nav'); n.className = 'rk-pivot rk-pivot--nav'; n.style.cssText = 'position:fixed;left:0;top:0;width:900px;z-index:-1';
+  n.innerHTML = '<a href="#x1" aria-current="page">home</a><a href="#x2">history and more</a><a href="#x3">files</a>';
+  document.body.append(n);
+  const s = Rekta.strip(n); await wait(100);
+  const gaps = () => { const r = [...n.children].map((e) => e.getBoundingClientRect()); return r.slice(1).map((x, i) => Math.round(x.left - r[i].right)).join(','); };
+  const out = { measured: n.hasAttribute('data-rk-measured'), before: gaps() };
+  n.children[0].removeAttribute('aria-current'); n.children[1].setAttribute('aria-current', 'page'); await wait(400);
+  out.after = gaps(); out.scaled = getComputedStyle(n.children[0]).transform !== 'none';
+  s.destroy(); n.remove();
+  const place = document.createElement('div'); document.body.append(place); Rekta.arrive(place);
+  out.arrive = place.hasAttribute('data-rk-arriving'); place.remove();
+  return out;
+});
+ok(stripped.measured && new Set(stripped.before.split(',')).size === 1 && new Set(stripped.after.split(',')).size === 1 && stripped.scaled, 'strip() measures a link strip and follows the mark', JSON.stringify(stripped));
+ok(stripped.arrive, 'arrive() is exported for framework routers', JSON.stringify(stripped));
 
 // A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.
 const codes = await p.evaluate(() => {
@@ -194,6 +231,19 @@ const codes = await p.evaluate(() => {
   return out;
 });
 ok(codes.tag === codes.want && codes.line === codes.want && codes.tagText === codes.ink, 'a domain colour code marks the tag and the chart line, never the text', JSON.stringify(codes));
+const shares = await p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const parts = [...document.querySelectorAll('#zones > span')], w = parts.map((x) => x.getBoundingClientRect().width);
+  const meter = document.querySelector('#zone-meter');
+  meter.setAttribute('data-status', 'warning'); const withStatus = getComputedStyle(meter, '::before').backgroundColor; meter.removeAttribute('data-status');
+  return {
+    colours: parts.every((x, i) => getComputedStyle(x).backgroundColor === rgb(`var(--rk-series-${i + 1})`)),
+    ratio: Math.abs(w[1] / w[0] - 31 / 12) < 0.15, gap: Math.round(parts[1].getBoundingClientRect().left - parts[0].getBoundingClientRect().right),
+    meter: getComputedStyle(meter, '::before').backgroundColor === rgb('var(--rk-series-2)'), status: withStatus === rgb('var(--rk-status-warning-full)'),
+  };
+});
+ok(shares.colours && shares.ratio && shares.gap === 2, 'a share bar: each share in its code, as wide as its share, 2px apart', JSON.stringify(shares));
+ok(shares.meter && shares.status, 'a meter fills in its code; a status wins', JSON.stringify(shares));
 
 // rekta.js in German (?lang=de): its words from the catalogue, its numbers in the locale; none of its English shows.
 {
@@ -423,6 +473,62 @@ ok((await text(p, '#data-now')) === 'frozen', 'offline freezes the figures');
 await p.click('#remedy'); await p.waitForTimeout(1500);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'retry reconnects');
 
+// The toaster for server-side undo and failures; the focus fallback; the banner's real start and a remedy that links.
+const tst = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const region = document.createElement('div'); region.className = 'rk-toasts'; region.setAttribute('role', 'status');
+  document.querySelector('.rk').append(region);
+  const t = Rekta.toaster(region), ends = [], holds = [];
+  region.addEventListener('rk:toasthold', (e) => holds.push(e.detail.held));
+  const plain = t.show('Plain.'); await wait(50);
+  const plainBg = getComputedStyle(plain.el).backgroundColor;
+  const err = t.show('Could not save the draft.', { status: 'error', onEnd: (w) => ends.push(w) }); await wait(50);
+  const status = err.el.dataset.status === 'error' && err.el.getAttribute('role') === 'alert' && getComputedStyle(err.el).backgroundColor !== plainBg;
+  let undone = 0;
+  const u = t.show('3 deleted', { undo: () => { undone += 1; }, windowMs: 3000, onEnd: (w) => ends.push(w) }); await wait(400);
+  const count = () => u.el.querySelector('.rk-toast-count').textContent;
+  const first = count();
+  u.setRemaining(1500); const set = count();
+  u.el.dispatchEvent(new PointerEvent('pointerenter')); const r0 = u.remaining; await wait(600);
+  const held = u.held && u.el.hasAttribute('data-rk-held') && Math.abs(u.remaining - r0) < 5;
+  u.setRemaining(0); await wait(50);
+  const t2 = t.show('2 archived', { undo: () => { undone += 1; }, onEnd: (w) => ends.push(w) }); await wait(50); t2.undo(); await wait(400);
+  // Focus comes back to the fallback when the control that raised the toast is gone.
+  const fb = document.createElement('p'); fb.textContent = 'fallback'; fb.setAttribute('data-rk-focus-fallback', '');
+  document.querySelector('#feedback').append(fb);
+  const gone = document.createElement('button');
+  const t3 = t.show('Sent.', { undo: () => {}, from: gone }); await wait(500);   /* in once the one before has gone */
+  t3.el.querySelector('button').focus(); t.dismiss(); await wait(50);
+  const fellBack = document.activeElement === fb;
+  fb.remove(); t.destroy(); await wait(300); region.remove();
+  return { status, first, set, held, holds: holds.join(), ends: ends.join(), undone, fellBack };
+});
+ok(tst.status, 'an error toast takes the error fill and is an alert');
+ok(tst.first === '3' && tst.set === '2', 'an undo window from windowMs, set by setRemaining', `${tst.first} ${tst.set}`);
+ok(tst.held && tst.holds.startsWith('true'), 'a held toast says so and its remaining time stands still', tst.holds);
+ok(tst.ends === 'replaced,expired,undone' && tst.undone === 1, 'onEnd says why a toast went; setRemaining(0) ends it while held', `${tst.ends} ${tst.undone}`);
+ok(tst.fellBack, 'focus goes to data-rk-focus-fallback when the toast\'s control is gone');
+const ban = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const h = document.documentElement.style.getPropertyValue('--rk-banner-h');
+  const el = document.createElement('div'); el.className = 'rk-banner';
+  el.innerHTML = '<div class="rk-banner-live"><p role="alert"></p><p role="status"></p></div><p class="rk-actions"><button class="rk-btn" type="button">x</button></p>';
+  document.querySelector('.rk').prepend(el);
+  const b = Rekta.banner(el, { order: ['halted', 'signedout'], states: { signedout: { word: 'signed out', status: 'warning', text: 'Sign in again.', action: { label: 'sign in', href: '/login' } }, halted: { word: 'halted', status: 'error', text: 'Stopped.', action: 'release' } } });
+  b.set('signedout', true, { since: false }); await wait(50);
+  const link = el.querySelector('a.rk-btn');
+  const r = { noTime: !el.querySelector('.rk-banner-time'), link: !!link && !link.hidden && link.getAttribute('href') === '/login' && link.textContent === 'sign in' && el.querySelector('button.rk-btn').hidden };
+  b.set('halted', true, { since: new Date(2026, 0, 2, 9, 5) }); await wait(50);
+  const time = el.querySelector('.rk-banner-time');
+  r.since = time ? time.textContent : '(none)'; r.dt = time ? time.dateTime : '';
+  r.button = !el.querySelector('button.rk-btn').hidden && el.querySelector('a.rk-btn').hidden && el.querySelector('button.rk-btn').textContent === 'release';
+  b.destroy(); el.remove(); document.documentElement.style.setProperty('--rk-banner-h', h);
+  return r;
+});
+ok(ban.noTime, 'a banner state whose start is unknown has no time line');
+ok(ban.link, 'a remedy with an href is a link');
+ok(/since .*2.*09:05|since .*09:05.*2/.test(ban.since) && ban.dt === new Date(2026, 0, 2, 9, 5).toISOString() && ban.button, 'a banner state gives its real start, with the day', `${ban.since} ${ban.dt}`);
+
 // Navigation: the palette, the shortcut sheet, a radio menu.
 await p.keyboard.press('Control+k'); await p.waitForTimeout(300);
 ok(await isOpen(p, '#palette') && await p.evaluate(() => document.activeElement === document.querySelector('#palette input')), 'Ctrl+K opens the palette');
@@ -452,6 +558,8 @@ await go(p, 'forms');
 ok((await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'remove says why it cannot act yet');
 await p.click('#a-save'); await p.waitForTimeout(300);
 ok((await text(p, '.rk-errors > p')) === '2 fields need attention' && await p.evaluate(() => document.activeElement.classList.contains('rk-errors')), 'sending empty: a summary takes focus', await text(p, '.rk-errors > p'));
+ok(await p.evaluate(() => { const b = document.querySelector('.rk-errors'), h = b && document.getElementById(b.getAttribute('aria-labelledby'));
+  return b === b.parentElement.firstElementChild && b.getAttribute('role') === 'group' && b.getAttribute('tabindex') === '-1' && h && h.tagName === 'P' && [...b.querySelectorAll('ul > li > a')].every((a) => /^#a-/.test(a.getAttribute('href'))); }), 'the summary has the markup forms.md gives');
 await p.click('.rk-errors a[href="#a-light"]');
 ok((await focused(p)) === 'a-light', 'a summary link focuses its field');
 await p.fill('#a-light', '#f7cb47'); await p.waitForTimeout(100);
@@ -467,8 +575,42 @@ ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(
 ok(!(await p.getAttribute('#a-remove', 'aria-disabled')), 'remove can act now');
 await p.click('#a-remove'); await p.waitForTimeout(400);
 ok((await sheetTitle(p)) === 'Remove “sea”?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep it', 'confirm: the safe answer first');
-await p.click('dialog[open] button[value=ok]'); await p.waitForTimeout(400);
-ok((await p.evaluate(() => document.documentElement.dataset.accent)) === undefined && (await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'removed, ink again');
+await p.click('dialog[open] button[value=ok]');
+await until(p, () => p.evaluate(() => !document.querySelector('dialog[open]')), 3000);   /* the sheet leaves first; its answer counts once it has gone */
+ok((await p.evaluate(() => document.documentElement.dataset.accent)) === undefined && (await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'removed, ink again', await p.evaluate(() => `accent ${document.documentElement.dataset.accent} remove ${document.querySelector('#a-remove').getAttribute('aria-disabled')} open ${!!document.querySelector('dialog[open]')} phase ${document.querySelector('dialog[open]')?.getAttribute('data-rk-phase')}`));
+
+// Buttons: a running one keeps its colours, a destructive one is framed in the error colour, an icon button is square.
+const btns = await p.evaluate(async () => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const row = document.createElement('p'); row.className = 'rk-actions';
+  row.innerHTML = '<button class="rk-btn rk-btn--primary" type="button">save</button><button class="rk-btn" type="button" data-status="error">delete</button>';
+  document.querySelector('#forms').append(row);
+  const [save, del] = row.children, before = getComputedStyle(save).backgroundColor;
+  let release; const run = Rekta.pending(save, new Promise((r) => { release = r; }));
+  await new Promise((r) => setTimeout(r, 50));
+  const out = { before, during: getComputedStyle(save).backgroundColor, disabled: rgb('var(--rk-disabled)'), ad: save.getAttribute('aria-disabled'),
+    pendingKeeps: save.getAttribute('aria-disabled') === 'true' && getComputedStyle(save).backgroundColor === before && getComputedStyle(save).color !== rgb('var(--rk-disabled)'),
+    danger: getComputedStyle(del).color === rgb('var(--rk-status-error-full)') && getComputedStyle(del).borderTopColor === rgb('var(--rk-status-error-full)') && getComputedStyle(del).backgroundColor === 'rgba(0, 0, 0, 0)' };
+  release(); await run; row.remove();
+  return out;
+});
+ok(btns.pendingKeeps, 'a running button keeps its colours (it is not disabled)', JSON.stringify(btns));
+ok(btns.danger, 'a destructive button: frame and words in the error colour, not filled', JSON.stringify(btns));
+// A form in a sheet: a close request asks while there is input; Escape while asking keeps editing; an untouched one closes.
+await p.click('#view-open'); await p.waitForTimeout(400);
+const closeBtn = await p.evaluate(() => { const r = document.querySelector('#view-sheet .rk-sheet-close').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), label: document.querySelector('#view-sheet .rk-sheet-close').getAttribute('aria-label') }; });
+ok(closeBtn.w === closeBtn.h && closeBtn.w >= 32 && closeBtn.label === 'close', 'the sheet has a visible way out: a square icon button with a name', JSON.stringify(closeBtn));
+await p.keyboard.press('Escape');
+ok(await until(p, () => p.evaluate(() => !document.querySelector('#view-sheet').open), 3000), 'an untouched form in a sheet just closes');
+await p.click('#view-open'); await p.waitForTimeout(400);
+await p.fill('#view-name', 'release review'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+const asked = await p.evaluate(() => { const d = document.querySelector('#view-sheet'), f = document.activeElement; return { open: d.open, asking: d.hasAttribute('data-rk-asking'), focus: f.textContent, field: document.querySelector('#view-name').getClientRects().length }; });
+ok(asked.open && asked.asking && asked.focus === 'keep editing' && asked.field === 0, 'with input, Escape asks in the sheet, "keep editing" first', JSON.stringify(asked));
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+ok(await p.evaluate(() => { const d = document.querySelector('#view-sheet'); return d.open && !d.hasAttribute('data-rk-asking') && document.activeElement.id === 'view-name' && document.activeElement.value === 'release review'; }), 'Escape while it asks keeps editing, focus back in the field');
+await p.click('#view-sheet .rk-sheet-close'); await p.waitForTimeout(200);
+await p.click('#view-sheet .rk-sheet-ask .rk-btn:not(.rk-btn--primary)');
+ok(await until(p, () => p.evaluate(() => !document.querySelector('#view-sheet').open), 3000), 'the close button asks too, and discarding closes');
 await p.fill('#a-name', 'sea-2');
 await go(p, 'overview');
 await p.click('#tile-notes'); await p.waitForTimeout(400);
@@ -565,8 +707,8 @@ ok((await p.evaluate(() => JSON.parse(localStorage.getItem('rekta-prefs')).theme
 // Sheet: the shading cancels; reset.
 await p.click('#reset'); await p.waitForTimeout(300);
 ok((await p.evaluate(() => getComputedStyle(document.documentElement).overflow)) === 'hidden', 'the page behind a sheet does not scroll');
-await p.mouse.click(700, 850); await p.waitForTimeout(400);
-ok(!(await p.evaluate(() => document.querySelector('#sheet').open)), 'a tap on the shading cancels');
+await p.mouse.click(700, 850);
+ok(await until(p, () => p.evaluate(() => !document.querySelector('#sheet').open), 3000), 'a tap on the shading cancels');
 await p.click('#reset'); await p.waitForTimeout(300); await p.click('#sheet button[value=reset]'); await p.waitForTimeout(600);
 ok((await toast(p)).startsWith('Demo reset') && (await text(p, '#presses')) === '0', 'reset restores the demo');
 
@@ -584,6 +726,14 @@ ok((await p.title()).startsWith('--rk-focus · '), 'the title names the token', 
 await p.screenshot({ path: join(shots, 'token.png') });
 await p.click('#tok-body tr[data-name="bg"]', { modifiers: ['Control'] }); await p.waitForTimeout(200);
 ok((await text(p, '.rk-ab-count')) === '2 selected', 'Ctrl+click in the tokens');
+// Plural forms follow the locale's rules (Intl.PluralRules): Polish says 3 and 5 differently.
+await p.evaluate(() => { Rekta.setLocale('pl'); Rekta.setStrings({ selected: { one: '1 zaznaczony', few: (n) => `${n} zaznaczone`, many: (n) => `${n} zaznaczonych`, other: (n) => `${n} zaznaczonego` } }); });
+await p.click('#tok-body tr[data-name="surface"]', { modifiers: ['Control'] }); await p.waitForTimeout(100);
+const pl3 = await text(p, '.rk-ab-count');
+await p.click('#tok-body tr[data-name="accent"]', { modifiers: ['Control'] }); await p.click('#tok-body tr[data-name="text-primary"]', { modifiers: ['Control'] }); await p.waitForTimeout(100);
+const pl5 = await text(p, '.rk-ab-count');
+await p.evaluate(() => { Rekta.setStrings(null); Rekta.setLocale(''); });
+ok(pl3 === '3 zaznaczone' && pl5 === '5 zaznaczonych', 'a count picks its plural form by the locale', `${pl3} / ${pl5}`);
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 ok(await visible(p, 'tokens'), 'Escape ends the selection before it goes back');
 await p.click('#tok-group'); await p.waitForTimeout(200); await p.click('#tok-group-menu [data-v=motion]'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
@@ -644,6 +794,40 @@ await m.tap('#ab-more'); await m.waitForTimeout(300);
 ok((await m.evaluate(() => [...document.querySelectorAll('.rk-ab-menu .rk-menu-item')].map((b) => b.textContent))).some((t) => t.includes('motion')), 'narrower: more repeats the moved controls');
 await m.keyboard.press('Escape');
 await m.setViewportSize({ width: 390, height: 844 }); await m.waitForTimeout(300);
+// An app bar of its own at 320px: a pinned control stays, the menu keeps a key hint apart, the places step the strip aside.
+const bar = await m.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';
+  const el = document.createElement('div'); el.className = 'rk-appbar'; el.style.cssText = 'width:320px;left:0;right:auto';
+  el.innerHTML = `<button class="rk-ab rk-ab-back" type="button">${icon}<span>back</span></button><span class="rk-ab-status"><i class="rk-pulse"></i><span class="rk-ab-k">live</span></span>`
+    + `<button class="rk-ab" id="t-search" type="button" data-rk-priority="pinned">${icon}<span>search</span></button>`
+    + `<button class="rk-ab" id="t-goto" type="button" aria-keyshortcuts="Control+K Meta+K">${icon}<span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl K</span></button>`
+    + `<button class="rk-ab" type="button" data-rk-priority="5">${icon}<span>other</span></button><button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+  const name = document.createElement('h1'); name.className = 'rk-place-name'; name.textContent = 'overview';
+  document.querySelector('[data-rk-place="home"]').prepend(name);
+  document.querySelector('.rk').append(el);
+  const a = Rekta.appbar(el); await wait(100);
+  const item = [...el.querySelectorAll('.rk-ab-menu .rk-menu-item')].find((b) => b._rkFor && b._rkFor.id === 't-goto');
+  const r = {
+    pinned: !el.querySelector('#t-search').hasAttribute('data-rk-overflow') && el.querySelector('#t-goto').hasAttribute('data-rk-overflow') && el.scrollWidth <= el.clientWidth + 1,
+    words: item ? item.firstChild.textContent : '(none)', key: item ? (item.querySelector('.rk-menu-key') || {}).textContent : '', ks: item ? item.getAttribute('aria-keyshortcuts') : '',
+    nameHidden: name.getBoundingClientRect().height <= 1,
+  };
+  const pl = document.createElement('nav'); pl.className = 'rk-ab-places';
+  pl.innerHTML = `<a class="rk-ab" href="#" aria-current="page">${icon}<span>today</span></a><a class="rk-ab" href="#">${icon}<span>plan</span></a>`;
+  el.querySelector('.rk-ab-status').after(pl); await wait(100);
+  r.places = el.hasAttribute('data-rk-places') && document.documentElement.hasAttribute('data-rk-places') && getComputedStyle(document.querySelector('#nav')).display === 'none'
+    && el.querySelector('#t-search').hasAttribute('data-rk-overflow');
+  r.nameShown = name.getBoundingClientRect().height > 20;
+  a.destroy(); el.remove(); await wait(50);
+  r.after = !document.documentElement.hasAttribute('data-rk-places') && getComputedStyle(document.querySelector('#nav')).display !== 'none';
+  name.remove();
+  return r;
+});
+ok(bar.pinned, 'a pinned control stays in the bar; one without a priority moves first');
+ok(bar.words === 'go to' && bar.key && bar.ks === 'Control+K Meta+K', 'a moved control\'s menu item keeps its key hint apart', JSON.stringify(bar));
+ok(bar.places && bar.after, 'places in the bar: data-rk-places on the bar and the root, the strip steps aside, back when it goes');
+ok(bar.nameHidden && bar.nameShown, '.rk-place-name shows only while the places are in the bar');
 await m.evaluate(() => scrollTo(0, 0)); await m.waitForTimeout(200);
 await m.tap('#tile-notes'); await m.waitForTimeout(TURN);
 ok(await visible(m, 'notes') && !(await m.evaluate(() => document.querySelector('#back').hidden)), 'phone: a tile opens the place, back shows');
@@ -658,6 +842,15 @@ await m.screenshot({ path: join(shots, 'phone-token.png') });
 await m.goBack(); await m.waitForTimeout(TURN);
 ok(await m.evaluate(() => !document.querySelector('#tokens-list').hidden), 'phone: back returns to the list', await focused(m));
 await m.close();
+
+// A sheet at 375px with classic scrollbars: the whole width, not short by the reserved gutter.
+{
+  const n = await open({ viewport: { width: 375, height: 800 } });
+  await n.evaluate(() => document.querySelector('#sheet').showModal()); await n.waitForTimeout(500);
+  const r = await n.evaluate(() => { const b = document.querySelector('#sheet').getBoundingClientRect(); return { x: Math.round(b.x), w: Math.round(b.width), vw: innerWidth }; });
+  ok(r.x === 0 && r.w === r.vw, 'a phone-wide sheet spans the viewport, scrollbar gutter or not', JSON.stringify(r));
+  await n.close();
+}
 
 // Motion that follows a change of content: tiles re-flow, flip and peek; rows come and go; a sheet leaves.
 const q = await open();

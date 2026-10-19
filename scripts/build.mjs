@@ -18,7 +18,7 @@
 //   node scripts/build.mjs --check   checks the tokens and the stylesheet instead of writing (exit 1 on failure),
 //                                    and that core/src/ is up to date
 
-import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -242,6 +242,7 @@ function check(tokens) {
       need('focus', bg, 3, 'focus ring');
       need('accent', bg, 3, 'accent');
       for (const s of STATUS) need(`status-${s}-full`, bg, 3, 'status mark');
+      need('status-error-full', bg, 4.5, 'a destructive button\'s words (.rk-btn[data-status=error])');
     }
     need('on-accent', 'accent', 4.5, 'text');
     for (const s of STATUS) {
@@ -297,12 +298,50 @@ function check(tokens) {
       }
     });
   }
-  // Each catalogue shipped in another language has exactly the English keys.
-  for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
-    const keys = (all) => { const text = all.replace(/^\s*\/\/.*$/gm, ''); return new Set([...text.matchAll(/^\s+(\w+): /gm), ...text.matchAll(/[{,] (\w+): '/g)].map((m) => m[1])); };
-    const en = keys(js.slice(js.indexOf('// rk-strings-begin'), js.indexOf('// rk-strings-end'))), other = keys(readFileSync(join(root, 'src', 'js', f), 'utf8'));
-    for (const k of en) if (!other.has(k)) problems.push(`src/js/${f} lacks ${k}`);
-    for (const k of other) if (!en.has(k)) problems.push(`src/js/${f} has ${k}, which rekta.js does not use`);
+  // Each catalogue shipped in another language has exactly the English keys. An entry that counts (COUNT_ARG in
+  // rekta.js) is a set of plural forms with at least one and other, each an Intl.PluralRules category; every other
+  // entry is a string or a function. The catalogues are imported, as a product would.
+  {
+    const counts = new Set(((js.match(/const COUNT_ARG = \{([^}]*)\}/) || [])[1] || '').match(/\w+(?=:)/g) || []);
+    if (!counts.size) problems.push('rekta.js names no counting entries (COUNT_ARG)');
+    const shape = (file, name) => {
+      const code = `const m = await import(${JSON.stringify(pathToFileURL(file).href)}); console.log(JSON.stringify(Object.fromEntries(Object.entries(m[${JSON.stringify(name)}]).map(([k, v]) => [k, v && typeof v === 'object' ? Object.keys(v) : typeof v]))));`;
+      try { return JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', code], { stdio: 'pipe' }).toString()); }
+      catch (e) { problems.push(`${file} cannot be imported: ${String(e.stderr || e.message).split('\n').find((l) => /Error/.test(l)) || e.message}`); return null; }
+    };
+    const CATEGORIES = new Set(['zero', 'one', 'two', 'few', 'many', 'other']);
+    const judge = (label, cat) => {
+      for (const [k, v] of Object.entries(cat)) {
+        if (counts.has(k)) {
+          if (!Array.isArray(v)) problems.push(`${label}: ${k} counts, so it is a set of plural forms ({ one, other, ... }), not a ${v}`);
+          else {
+            for (const f of ['one', 'other']) if (!v.includes(f)) problems.push(`${label}: ${k} lacks its "${f}" form`);
+            for (const f of v) if (!CATEGORIES.has(f)) problems.push(`${label}: ${k} has "${f}", which is not a plural category`);
+          }
+        } else if (Array.isArray(v)) problems.push(`${label}: ${k} has plural forms but does not count (add it to COUNT_ARG)`);
+      }
+    };
+    const en = shape(join(root, 'src', 'js', 'rekta.js'), 'strings');
+    if (en) judge('rekta.js', en);
+    for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
+      const lang = f.slice(8, -3).replace('-', '_'), other = shape(join(root, 'src', 'js', f), lang);
+      if (!en || !other) continue;
+      judge(`src/js/${f}`, other);
+      for (const k of Object.keys(en)) if (!(k in other)) problems.push(`src/js/${f} lacks ${k}`);
+      for (const k of Object.keys(other)) if (!(k in en)) problems.push(`src/js/${f} has ${k}, which rekta.js does not use`);
+    }
+  }
+  // The TypeScript declarations (src/js/rekta.d.ts, shipped as dist/rekta.d.ts) name exactly what rekta.js exports,
+  // and every catalogue has its own declaration.
+  {
+    const dts = readFileSync(join(root, 'src', 'js', 'rekta.d.ts'), 'utf8');
+    const exported = new Set([...js.matchAll(/^export (?:async )?(?:function|const|let) (\w+)/gm)].map((m) => m[1]));
+    const declared = new Set([...dts.matchAll(/^export declare (?:function|const|let) (\w+)/gm)].map((m) => m[1]));
+    for (const n of exported) if (!declared.has(n)) problems.push(`rekta.js exports ${n}, which src/js/rekta.d.ts does not declare`);
+    for (const n of declared) if (!exported.has(n)) problems.push(`src/js/rekta.d.ts declares ${n}, which rekta.js does not export`);
+    for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
+      if (!existsSync(join(root, 'src', 'js', f.replace(/\.js$/, '.d.ts')))) problems.push(`src/js/${f} has no declaration (${f.replace(/\.js$/, '.d.ts')})`);
+    }
   }
   // Importing the module touches no DOM, so a page that renders on the server can import it (call it in the browser).
   try { execFileSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(pathToFileURL(join(root, 'src', 'js', 'rekta.js')).href)})`], { stdio: 'pipe' }); }
@@ -382,10 +421,12 @@ export function buildDist() {
   const esm = readFileSync(join(root, 'src', 'js', 'rekta.js'), 'utf8').replace(/^export const version = '[^']*';/m, `export const version = '${pkg.version}';`);
   writeFileSync(join(dist, 'rekta.js'), esm);
   writeFileSync(join(dist, 'rekta.global.js'), toGlobal(esm));
+  copyFileSync(join(root, 'src', 'js', 'rekta.d.ts'), join(dist, 'rekta.d.ts'));
   // Catalogues in other languages: as a module (export const de), and as a classic script (window.RektaStrings.de).
   for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
     const text = readFileSync(join(root, 'src', 'js', f), 'utf8'), lang = f.split('.')[1];
     writeFileSync(join(dist, `rekta.${f}`), text);
+    if (existsSync(join(root, 'src', 'js', `strings.${lang}.d.ts`))) copyFileSync(join(root, 'src', 'js', `strings.${lang}.d.ts`), join(dist, `rekta.strings.${lang}.d.ts`));
     writeFileSync(join(dist, `rekta.strings.${lang}.global.js`), text.replace(new RegExp(`^export const ${lang.replace('-', '_')} = `, 'm'), `(window.RektaStrings = window.RektaStrings || {}).${lang.replace('-', '_')} = `));
   }
   const icons = loadIcons();

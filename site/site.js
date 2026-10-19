@@ -235,6 +235,7 @@
     ['Tree', 'content', 'success', '0.3'], ['Sortable', 'content', 'success', '0.3'], ['Long list', 'content', 'success', '0.3'], ['Undo history', 'feedback', 'success', '0.3'],
     ['Live contract', 'feedback', 'success', '0.3'], ['Chart', 'data', 'success', '0.3'], ['Meter', 'data', 'success', '0.3'], ['Progress dots', 'data', 'success', '0.3'],
     ['Icons', 'assets', 'success', '0.3'], ['Title bar', 'shell', 'success', '0.3'], ['App shell', 'shell', 'info', '0.3'],
+    ['Share bar', 'data', 'success', '0.4'], ['Icon button', 'actions', 'success', '0.4'], ['Status region', 'layout', 'success', '0.4'],
     ['Date range', 'forms', 'warning', 'next'], ['Notification centre', 'feedback', 'warning', 'next'], ['Rich text', 'forms', 'warning', 'next'],
   ];
   const compHtml = COMPONENTS.map(([name, group, status, since]) => `<tr data-name="${name}" data-status-v="${status}"><td class="rk-check"></td><th scope="row">${name}</th><td data-rk-edit data-rk-tip="double-click or F2 to edit">${group}</td><td><span class="rk-tag" data-status="${status}">${WORD[status]}</span></td><td class="rk-num" data-sort="${since === 'next' ? 9 : since}">${since}</td></tr>`).join('');
@@ -458,6 +459,13 @@
     customAccent = null; window.siteAccent(null); store.set('rekta-site-accent-def', null); store.set('rekta-site-accent', null); paintAccent();
     toasts.show('Accent removed.', { key: 'accent' });
   });
+  // A form in a sheet: a close request asks while the name has been typed in.
+  const viewSheet = $('#view-sheet');
+  Rekta.sheet(viewSheet, { dirty: () => $('#view-name').value.trim() !== '' });
+  $('#view-open').addEventListener('click', () => { $('#view-name').value = ''; viewSheet.showModal(); });
+  viewSheet.addEventListener('close', () => {
+    if (viewSheet.returnValue === 'save' && $('#view-name').value.trim()) toasts.show(`View “${$('#view-name').value.trim()}” saved.`, { key: 'view', from: $('#view-open') });
+  });
   if (customAccent) { $('#a-name').value = customAccent.name; $('#a-light').value = customAccent.light; $('#a-dark').value = customAccent.dark || ''; accentGuard.clean(); }
 
   /* ---------- desktop: a tree, tooltips, context menus, a sortable list, ten thousand lines ---------- */
@@ -680,12 +688,14 @@
     },
   });
   $('#text-size').addEventListener('input', (e) => { root.style.fontSize = +e.target.value === 100 ? '' : `${e.target.value}%`; env(); });
-  const today = new Date(); today.setDate(today.getDate() + 3);
-  $('#when-d').value = today.toISOString().slice(0, 10);
+  const later = new Date(); later.setDate(later.getDate() + 3);
+  $('#when-d').value = `${later.getFullYear()}-${String(later.getMonth() + 1).padStart(2, '0')}-${String(later.getDate()).padStart(2, '0')}`;
+  // Days are calendar days in the user's time zone, whatever the hour now.
+  const midnight = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
   function when() {
     const d = $('#when-d').value, t = $('#when-t').value || '09:00';
     if (!d) { $('#when-hint').textContent = 'No date: nothing to remind you of.'; return; }
-    const at = new Date(`${d}T${t}`), days = Math.round((at - Date.now()) / 864e5);
+    const at = new Date(`${d}T${t}`), days = Math.round((midnight(at) - midnight(new Date())) / 864e5);
     $('#when-hint').textContent = at < Date.now() ? 'That has passed: choose a later time.' : `${days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`}, at ${t}.`;
   }
   $('#when-d').addEventListener('input', when); $('#when-t').addEventListener('input', when); when();

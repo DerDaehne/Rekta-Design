@@ -32,6 +32,27 @@ word may be semibold while the rest of the title stays light (e.g. one
 bold word, one light word) — the one deliberate exception to "navigation
 titles are light."
 
+### A long main title
+
+The main title often comes from user data (a record's name, a ticket's
+title) and can be long. It keeps its size: a title never shrinks to fit.
+
+- It **wraps**, up to **three lines**; long words break (`.rk-title`
+  has `overflow-wrap: anywhere`), so a URL or an id never pushes the page
+  sideways.
+- Past three lines it ends in an ellipsis: `class="rk-title rk-clamp"`
+  (`line-clamp: 3`).
+- **The whole title stays reachable.** The clamp is visual only: a
+  screen reader reads all of it; `data-rk-tip="overflow"` shows it in a
+  tooltip to the mouse and on keyboard focus while it is cut; the
+  window title ("Title · Place · App") carries it whole. Where the full
+  text matters to the task (a ticket being edited), show it whole in the
+  body below as well.
+
+```html
+<h1 class="rk-title rk-clamp" data-rk-tip="overflow">Nightly build of release-2026-10 failed on runner 3 because …</h1>
+```
+
 ## Statement block
 
 Explanatory text in a section, without a tile, is a statement block on

@@ -89,6 +89,9 @@ rekta-core, call the setter.
 | a domain colour code (no token: a product slot) | `--rk-series-1` to `-8` | Colours its users already read, such as heart-rate zones, for small data marks; per theme, as the accent. Checked with `build.mjs --check-product`. | not yet |
 | density | `data-density` on the root | Not a token to override but a setting for the user: `Rekta.prefs` writes it (`auto`, `comfortable`, `compact`). | `rk_app_set_density` |
 
+A length may be written in any form, `px`, `rem` or a `calc()` of
+other tokens: `rekta.js` resolves it as the browser lays it out.
+
 The accent is set per theme, with the selectors `rekta.tokens.css`
 uses, so the dark value also wins over the system's dark mode and the
 in-app theme:

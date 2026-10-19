@@ -46,7 +46,7 @@
     <div class="rk-panorama" id="pan" tabindex="0" role="region" aria-label="Rekta Design, sections side by side">
 
       <section class="rk-sec sec-wide" id="overview" aria-labelledby="overview-title">
-        <p class="rk-kicker">Rekta Design · a design language · 0.3 · desktop and web</p>
+        <p class="rk-kicker">Rekta Design · a design language · 0.4 · desktop and web</p>
         <h1 class="rk-title" id="overview-title">Straight lines, live tiles, sideways motion.</h1>
         <p class="rk-facts">no cards · two independent themes · four status fills · every value a token · no framework</p>
         <p>Rekta Design is a platform-neutral design language; the name comes from Latin <i>recta</i>, the straight line. This site is built in it, and every part of it is a live example: you are inside a <b>panorama</b>, the <b>pivot</b> above names its sections in a fixed order, and the <b>app bar</b> below holds the global controls.</p>
@@ -438,8 +438,10 @@
             <input class="rk-input" id="a-dark" placeholder="#7fd1b9" aria-describedby="h-a-dark">
             <span class="rk-hint" id="h-a-dark">Left empty, dark keeps ink.</span>
           </div>
-          <p class="rk-actions"><button class="rk-btn rk-btn--primary" type="submit" id="a-save" data-rk-pending-label="applying…">apply accent</button><button class="rk-btn" type="button" id="a-remove">remove accent</button></p>
+          <p class="rk-actions"><button class="rk-btn rk-btn--primary" type="submit" id="a-save" data-rk-pending-label="applying…">apply accent</button><button class="rk-btn" type="button" id="a-remove" data-status="error">remove accent</button></p>
         </form>
+        <p>A form in a sheet: type a name, then press Escape or the close button. It asks in the sheet, “keep editing” first; an untouched sheet just closes.</p>
+        <p class="rk-actions"><button class="rk-btn" type="button" id="view-open">save this view…</button></p>
       </section>
 
       <section class="rk-sec sec-wide" id="inputs" aria-labelledby="inputs-title">
@@ -515,11 +517,12 @@
         </div>
         <div class="chart" id="chart-bars"></div>
         <p class="rk-kicker group-label">a domain's own colours: heart-rate zones</p>
-        <div class="zones" role="img" aria-label="Time in heart-rate zones, a 75 minute ride: zone 1 12 min, zone 2 31 min, zone 3 18 min, zone 4 10 min, zone 5 4 min">
-          <span style="flex-grow:12;background:var(--rk-series-1)"></span><span style="flex-grow:31;background:var(--rk-series-2)"></span><span style="flex-grow:18;background:var(--rk-series-3)"></span><span style="flex-grow:10;background:var(--rk-series-4)"></span><span style="flex-grow:4;background:var(--rk-series-5)"></span>
+        <div class="rk-shares" id="zones" role="img" aria-label="Time in heart-rate zones, a 75 minute ride: zone 1 12 min, zone 2 31 min, zone 3 18 min, zone 4 10 min, zone 5 4 min">
+          <span data-rk-code="1" style="--rk-v:12"></span><span data-rk-code="2" style="--rk-v:31"></span><span data-rk-code="3" style="--rk-v:18"></span><span data-rk-code="4" style="--rk-v:10"></span><span data-rk-code="5" style="--rk-v:4"></span>
         </div>
         <p class="rk-actions tag-row" aria-hidden="true"><span class="rk-tag" data-rk-code="1">z1 · 12 min</span><span class="rk-tag" data-rk-code="2">z2 · 31 min</span><span class="rk-tag" data-rk-code="3">z3 · 18 min</span><span class="rk-tag" data-rk-code="4">z4 · 10 min</span><span class="rk-tag" data-rk-code="5">z5 · 4 min</span></p>
-        <p class="note">Data is ink and grey. The one exception is a colour code the users already know, here five heart-rate zones from cool to warm: a product sets <code>--rk-series-1</code> to <code>-5</code> per theme, for small marks only, never text or a tile, and <code>build.mjs --check-product</code> holds the values to 3:1 and to colour-blind separation, as this page's are.</p>
+        <div class="zone-meter"><div class="rk-meter-head"><span>zone 2, endurance</span><b>31 min</b></div><div class="rk-meter" id="zone-meter" role="meter" aria-label="time in zone 2" aria-valuemin="0" aria-valuemax="75" aria-valuenow="31" aria-valuetext="31 of 75 minutes" data-rk-code="2" style="--rk-v:.41"></div></div>
+        <p class="note">Data is ink and grey. The one exception is a colour code the users already know, here five heart-rate zones from cool to warm, as one share bar (<code>.rk-shares</code>) and as a meter (<code>.rk-meter[data-rk-code]</code>): a product sets <code>--rk-series-1</code> to <code>-5</code> per theme, for small marks only, never text or a tile, and <code>build.mjs --check-product</code> holds the values to 3:1 and to colour-blind separation, as this page's are.</p>
         <p class="rk-kicker group-label">meters</p>
         <div class="meters">
           <div><div class="rk-meter-head"><span>processor</span><b id="m-cpu-v">42%</b></div><div class="rk-meter" id="m-cpu" role="meter" aria-label="processor" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" style="--rk-v:.42"></div></div>
@@ -771,6 +774,20 @@
       <h2 class="rk-group" id="press-title">A button tile opens a sheet.</h2>
       <p id="press-text">It never changes data itself.</p>
       <p class="rk-actions"><button class="rk-btn rk-btn--primary" value="ok">close</button></p>
+    </form>
+  </dialog>
+
+  <dialog class="rk-sheet" id="view-sheet" closedby="closerequest" aria-labelledby="view-title">
+    <form method="dialog">
+      <p class="rk-kicker">view</p>
+      <h2 class="rk-group" id="view-title">Save this view</h2>
+      <div class="rk-field">
+        <label class="rk-label" for="view-name">name</label>
+        <input class="rk-input" id="view-name" autocomplete="off" aria-describedby="h-view-name">
+        <span class="rk-hint" id="h-view-name">The sections, filters and theme you have now, under one name.</span>
+      </div>
+      <p class="rk-actions"><button class="rk-btn" value="cancel">cancel</button><button class="rk-btn rk-btn--primary" value="save">save view</button></p>
+      <button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close" data-rk-tip="close"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-close"/></svg></button>
     </form>
   </dialog>
 

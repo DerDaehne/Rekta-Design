@@ -137,14 +137,15 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
 .rk-btn .rk-icon { margin-left: -4px; }
 
 /* A domain colour code, set as a product would (docs/data.md): five heart-rate zones, cool to warm, per theme.
-   build.mjs --check holds them to 3:1 on the ground and to colour-blind separation. */
-:root { --rk-series-1: #608ab5; --rk-series-2: #147175; --rk-series-3: #679368; --rk-series-4: #805b21; --rk-series-5: #6d2a27; }
+   build.mjs --check holds them to 3:1 on the ground and to colour-blind separation; the light zones 1 and 3 are also
+   0.09 apart under tritanopia (zone 3 leans yellow, zone 1 a touch greener), where they once were 0.038. */
+:root { --rk-series-1: #5489b6; --rk-series-2: #147175; --rk-series-3: #7d8d5e; --rk-series-4: #805b21; --rk-series-5: #6d2a27; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --rk-series-1: #4f8ac6; --rk-series-2: #3ebfc6; --rk-series-3: #a3e4a4; --rk-series-4: #d79f4a; --rk-series-5: #c9635d; }
 }
 :root[data-theme="dark"] { --rk-series-1: #4f8ac6; --rk-series-2: #3ebfc6; --rk-series-3: #a3e4a4; --rk-series-4: #d79f4a; --rk-series-5: #c9635d; }
-.zones { display: flex; gap: 2px; height: 8px; max-width: calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s)); }
-.zones > span { min-width: 2px; }
+
+.zone-meter { max-width: calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s)); margin-top: var(--rk-space-m); }
 
 /* A phone, to show the places in the bar at its width (the bar decides by its own width). */
 .phone { position: relative; width: min(100%, 360px); height: 260px; margin: 0; overflow: hidden; border: 1px solid var(--rk-text-contrast-low); border-radius: var(--rk-radius-l); background: var(--rk-bg); }

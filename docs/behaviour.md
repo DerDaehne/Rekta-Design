@@ -33,6 +33,14 @@ it at the top of a module. Call its functions only in the browser, in a
 mount hook or an effect. `node scripts/build.mjs --check` imports it in
 plain Node, so this cannot break unnoticed.
 
+**TypeScript.** `dist/rekta.d.ts` declares the whole API (and
+`dist/rekta.strings.de.d.ts` the German catalogue); the package's
+`exports` point `types` at them, so `import * as Rekta from
+'rekta-design'` and `import { de } from 'rekta-design/strings.de.js'`
+are typed with no declarations of your own. The declarations live next
+to the script (`src/js/rekta.d.ts`), and `--check` fails when an export
+has none or a declaration names something the script does not export.
+
 ## Words and numbers
 
 Every word `rekta.js` shows or says (a toast's undo, a chart's name, a
@@ -44,13 +52,27 @@ times in live regions follow a locale.
 import * as Rekta from './rekta.js';
 import { de } from './rekta.strings.de.js';      // or rekta.strings.de.global.js: window.RektaStrings.de
 Rekta.start({ locale: 'de', strings: de });
-Rekta.setStrings({ selected: (n) => `${n} markiert` });   // any word on its own, later too
+Rekta.setStrings({ guardWhat: 'Dieser Entwurf' });        // any word on its own, later too
 ```
 
 - `start({ locale, strings })`, `setLocale(tag)`, `setStrings(partial)`
   (`setStrings(null)` gives back the English words). A value is a string
   or a function of the arguments below; a word changed later is used the
   next time it is shown.
+- **Counts.** An entry that says a count (`undoWindow`, `selected`,
+  `guardText`, `updatesWaiting`, `needAttention`) is a set of plural
+  forms, one per category of `Intl.PluralRules` for the locale (`zero`,
+  `one`, `two`, `few`, `many`, `other`), each a string or a function of
+  the entry's arguments. A missing category falls back to `other`.
+
+  ```js
+  Rekta.setLocale('pl');
+  Rekta.setStrings({ selected: { one: '1 zaznaczony', few: (n) => `${n} zaznaczone`,
+    many: (n) => `${n} zaznaczonych`, other: (n) => `${n} zaznaczonego` } });
+  ```
+
+  A plain function still works for a product's own replacement; the
+  catalogues that ship use forms.
 - `locale()` is the locale in use: the one set, else the document's
   `lang`, else the browser's. `number(v)` formats a figure the way charts
   do: compact from a thousand up (1.2K in English, 1234,5 and 2,5 Mio. in
@@ -58,8 +80,9 @@ Rekta.setStrings({ selected: (n) => `${n} markiert` });   // any word on its own
 - A German catalogue ships as `dist/rekta.strings.de.js` (and the classic
   `rekta.strings.de.global.js`); the showcase uses it at `?lang=de`.
 - `--check` fails when a phrase in `rekta.js` is written outside the
-  catalogue, and when a shipped catalogue lacks a word or has one the
-  script does not use.
+  catalogue, when a shipped catalogue lacks a word or has one the script
+  does not use, and when a counting entry lacks its `one` or `other`
+  form (or names something that is not a plural category).
 
 Words a caller passes in (a confirm's `ok`, a guard's `what`, a banner
 state's `word`) are the caller's, in its own language.
@@ -76,20 +99,21 @@ state's `word`) are the caller's, in its own language.
 | `field` | `form()` | “field” |
 | `noValue` | `chart()` | “no value” |
 | `reload` | `pwa()` | “reload” |
-| `undoWindow` | `toaster()` | (5, true) → “, 5 seconds to undo” |
+| `undoWindow` | `toaster()` | forms of (5, true) → “, 5 seconds to undo” |
 | `bannerStill` | `banner()` | ("Paused", "halted") → “Paused. The banner keeps showing “halted” until that ends.” |
 | `chosen` | `menu() summary` | ("status", "failed") → “status: failed” |
-| `selected` | `select()` | (3) → “3 selected” |
+| `selected` | `select()` | forms of (3) → “3 selected” |
 | `columnWidth` | `table()` | ("status") → “width of status” |
 | `cellRefused` | `table() edit` | “That value was not taken.” |
 | `paletteEmpty` | `palette()` | ("xyz") → “Nothing to go to or run matches “xyz”.” |
 | `saveFailed` | `form()` | “Could not save. Try again.” |
 | `guardWhat` | `guard()` | “This form” |
-| `guardKicker` | `guard()` | “unsaved” |
+| `guardKicker` | `guard()`, `sheet()` | “unsaved” |
 | `guardTitle` | `guard()` | “Leave without saving?” |
-| `guardText` | `guard()` | ("This form", 2) → “This form has 2 unsaved changes.” |
-| `guardDiscard` | `guard()` | “discard changes” |
-| `guardKeep` | `guard()` | “keep editing” |
+| `guardText` | `guard()` | forms of ("This form", 2), counting the second → “This form has 2 unsaved changes.” |
+| `guardDiscard` | `guard()`, `sheet()` | “discard changes” |
+| `guardKeep` | `guard()`, `sheet()` | “keep editing” |
+| `discardTitle` | `sheet()` | “Discard what you entered?” |
 | `move` | `sortable()` | ("Build") → “move Build” |
 | `nothingToUndo` | `undoStack()` | “Nothing to undo.” |
 | `undone` | `undoStack()` | ("archive 3 jobs") → “Undone: archive 3 jobs” |
@@ -101,14 +125,14 @@ state's `word`) are the caller's, in its own language.
 | `heldUpdated` | `live()` | ("just now") → “held while you look · updated just now” |
 | `staleFor` | `live()` | (40, 0, "14:02") → “stale · no update for 40 s” |
 | `offlineSince` | `live()` | ("4 min ago") → “offline · last update 4 min ago” |
-| `updatesWaiting` | `live()` | (2) → “2 updates waiting · show” |
+| `updatesWaiting` | `live()` | forms of (2) → “2 updates waiting · show” |
 | `chartName` | `chart()` | ("line", ["requests"], "Mon", "Sun") → “Line chart of requests, Mon to Sun. Use the arrow keys to read each value; a table follows.” |
 | `chartNumbers` | `chart()` | “show the numbers” |
 | `installed` | `pwa()` | “Installed. It opens in a window of its own.” |
 | `newVersion` | `pwa()` | “A new version is ready.” |
 | `noMatch` | `combobox()` | ("xyz") → “Nothing matches “xyz”.” |
 | `nothingYet` | `combobox()` | “Nothing to choose yet.” |
-| `needAttention` | `form()` | (2) → “2 fields need attention” |
+| `needAttention` | `form()` | forms of (2) → “2 fields need attention” |
 | `pickedUp` | `sortable()` | ("Build", 2, 4) → “Build picked up, position 2 of 4. ↑ ↓ to move, Space to put down, Escape to put back.” |
 | `putDown` | `sortable()` | ("Build", 3, 4) → “Build put down at position 3 of 4.” |
 | `putBack` | `sortable()` | ("Build") → “Build put back.” |
@@ -149,6 +173,7 @@ them:
 | `:root:has(dialog.rk-sheet[open])` | The page under an open sheet stops scrolling, and keeps its scrollbar's room so nothing shifts. |
 | `[data-status='…']` | Sets only the internal `--_rk-fill`, `--_rk-mark` and `--_rk-soft`, which nothing outside Rekta's components reads. |
 | `:root[data-theme]`, `[data-density]`, `[data-motion]`, `[data-rk-titlebar]` | The switches `prefs` and the installed app's title bar write on the root. |
+| `:root[data-rk-places]` | `appbar()` writes it while the bar holds the places: the places' top strip (`.rk-place > .rk-pivot--nav`) steps aside and `.rk-place-name` shows (`docs/navigation.md`). |
 | `:root[data-rk-crossfade]::view-transition-old(root)` and `-new(root)` | Rekta's cross-fade timing, only while `crossfade()` (or a theme change through `prefs`) runs its own view transition: an app's own root view transitions keep their timing. |
 
 ### State the script writes
@@ -175,6 +200,7 @@ them:
 | `data-rk-live` | a live region | `fresh`, `stale` or `offline`. |
 | `data-rk-held` | a live region | Held still while the pointer rests on it or focus is in it. |
 | `data-rk-phase="leaving"` | a sheet | Leaving, before it closes. |
+| `data-rk-asking` | a sheet | It asks before unsaved input goes (`sheet(dialog, { dirty })`). |
 | `data-rk-unselecting` | the app bar | Its own commands coming back after the selection mode. |
 | `data-rk-sliding` | segments, the chosen label | The accent block is sliding to the new choice. |
 | `data-rk-grow` | a chart's bars | Growing in on the first draw. |
@@ -187,6 +213,8 @@ them:
 | `data-value` | a combobox's input | The chosen option's value. |
 | `--_rk-v` | a slider | How far its value is along the track, for the fill. |
 | `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
+| `data-rk-places` | the app bar, the root | The bar holds the places (`appbar()`, compact). |
+| `data-rk-held` | a toast | Its window holds: the pointer rests on it or focus is in it. |
 | `data-theme`, `data-density`, `data-motion` | the root | Prefs overrides (see `prefs`). |
 
 ### Public hooks
@@ -194,7 +222,7 @@ them:
 | Property | Written by | Read by |
 |---|---|---|
 | `--rk-i` | the page | A tile's build-in order (0–10). |
-| `--rk-v` | the page | A meter's value, 0 to 1. |
+| `--rk-v` | the page | A meter's value, 0 to 1; a share of a `.rk-shares` bar, in any unit. |
 | `--rk-titlebar-controls` | a native shell | Room kept at the title bar's end for the window's own buttons (140px by default) when `data-rk-titlebar` shows it. |
 | `--rk-sec-w` | the page | A panorama section's width when sideways. |
 | `--rk-split-w` | the page, `split()` | The width of a split's list pane; the handle writes it while dragged. |
@@ -209,6 +237,7 @@ them:
 |---|---|---|
 | `rk:prefs` | `document` | `{ name, value }` after `prefs.set`. |
 | `rk:bannerchange` | the banner (bubbles) | `{ state }`, the state now shown or `null`. |
+| `rk:toasthold` | a toast (bubbles) | `{ held, remaining }` when its window starts or stops holding; `remaining` in ms. |
 | `rk:selectionchange` | a list, table body or virtual list (bubbles) | `{ count, mode, items }` (`indices` for a virtual list) after the selection changes. |
 | `rk:edit` | a table (bubbles) | `{ row, cell, value }` after an edit is kept. |
 | `rk:historychange` | `document` | `{ undo, redo }`, the labels next in line. |
@@ -217,7 +246,7 @@ them:
 
 ## API
 
-### `start({ root, restore })`
+### `start({ root, restore, locale, strings, focusFallback })`
 
 The defaults for a page: restores prefs (unless `restore: false`, for an
 embedded page whose host owns theme, density and motion), attaches
@@ -225,6 +254,22 @@ embedded page whose host owns theme, density and motion), attaches
 `stepper` to every `.rk-stepper`, keeps every `input.rk-range` filled
 to its value, gives every `.rk-toggle` checkbox `role="switch"`, turns on
 tooltips (`tips()`), and marks the first paint as an arrival. Returns `{ destroy }`.
+
+**Where focus goes back.** A toast or the banner that goes while it has
+focus returns focus to the control that raised it. When that control
+is gone (or hidden), focus goes to the first of these that exists and
+shows:
+
+1. `focusFallback()`, a function given to `start()` that returns an
+   element (or `null` to go on down the list);
+2. an element with `data-rk-focus-fallback`;
+3. the shown place's `.rk-title` (`places()` apps);
+4. the page's `h1` (in `main` first);
+5. `main`.
+
+An app with a framework router renders no `.rk-place`: it marks its
+page heading with `data-rk-focus-fallback`, or relies on its `h1`. An
+element that cannot take focus gets `tabindex="-1"`.
 
 ### `prefs`
 
@@ -247,17 +292,49 @@ One keyboard dispatcher for the whole page. The handler gets the
 then prevented and nothing below sees it. Returns a function that
 removes the handler. Composition (IME) events never reach a handler.
 
-| Priority | Layer |
-|---|---|
-| 40 | Floating surfaces: menu, palette, combobox list |
-| 30 | A toast that has focus (Escape dismisses it) |
-| 25 | The open toast's undo (Ctrl/Cmd+Z, not in a text field) |
-| 20 | A selection (Escape clears it) |
-| 10 | The place (Escape goes back) |
+The layers, highest first. An app's own layer picks its place among
+them; a floating surface of the app's own takes 40. A key nobody wants
+passes through.
+
+| Priority | Who | Keys | When |
+|---|---|---|---|
+| 45 | `tips()` | Escape | A tooltip shows. |
+| 40 | floating surfaces | | Rekta's menu, palette and combobox list take their keys on their own element (below), before the dispatcher. |
+| 30 | `toaster()` | Escape | Focus is in the toast. |
+| 25 | `toaster()` | Ctrl/Cmd+Z | An undo toast is open, focus not in a text field. |
+| 20 | `select()`, `virtual()` | Escape | In the selection mode, focus in the list or the app bar. |
+| 10 | `places()` | Escape | Away from home, and `escapeIsFree`. |
+| 5 | `palette()` | Ctrl/Cmd+K (its `shortcut`) | Always, while it is attached. |
+| 4 | `undoStack()` | Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y | Something to undo or redo, focus not in a text field. |
 
 `keys.escapeIsFree(event)` is false while focus is in a text field, a
 combobox, listbox, menu or expanded control, or while a modal or popover
 is open. Native `<dialog>` and popovers handle their own Escape.
+
+**An app's own key handlers skip what Rekta used.** The dispatcher
+listens on `document` and calls `preventDefault()` for every key a layer
+takes; component handlers (on the pivot, a menu, a table…) run on their
+element, before `document`, and prevent the keys they use too. An app
+that routes keys on `document` or `window` therefore starts with
+`if (e.defaultPrevented) return;`, or adds its handler as a layer with
+`keys.on()`, so one key never acts twice. The reverse holds already:
+Rekta ignores an event the app has prevented.
+
+Keys components take on their own element, while focus is in it:
+
+| Component | Keys |
+|---|---|
+| `menu()`, `contextMenu()` | ↑ ↓ Home End, Escape, Tab (closes); ↑ ↓ on the trigger open it; Shift+F10 and ContextMenu open a context menu |
+| `palette()` | ↑ ↓, Enter, Escape (clears, then closes), Tab (stays) |
+| `combobox()` | ↑ ↓, Enter, Escape, Tab (closes) |
+| `pivot()`, `strip()` | ← → (↑ ↓ on a side pivot), Home End; Tab into the chosen facet when wide |
+| `panorama()` | ← → PageUp PageDown, Home End |
+| `select()`, `table()` | ↑ ↓ (and ← → in a grid of tiles), Home End, Space/Enter (with Ctrl/Cmd or Shift), Ctrl/Cmd+A; F2 on a row edits its cell; ← → Home on a column's resize handle |
+| `virtual()` | ↑ ↓ PageUp PageDown, Home End, Space/Enter, Ctrl/Cmd+A |
+| `tree()` | ↑ ↓ ← →, Home End, Enter/Space, `*`, a letter (to the next item it starts) |
+| `split()` handle | ← → (Shift: four steps), Home End |
+| `sortable()` | Space/Enter picks up and puts down, ↑ ↓ move, Escape puts back; Alt+↑ ↓ moves at once |
+| `chart()` | ← → Home End |
 
 ### `press(scope)`
 
@@ -364,26 +441,65 @@ place sticks under the banner and publishes `--rk-pivot-h`.
 
 Returns `{ goTo(sectionOrId, { focus, instant }), current, destroy }`.
 
-### `pivot(el, { onSelect })`
+### `pivot(el, { onSelect, turn })`
 
 `el` is a `.rk-pivot[role=tablist]` of `[role=tab]` buttons with
 `aria-controls`. A click or ← → Home End selects a facet; the strip
-glides by the facet's place in the order (the ones before it stay in reach) and the panel slides in from its side. Facets
-add nothing to history.
+glides by the facet's place in the order (the ones before it stay in
+reach) and the panel slides in from its side. Facets add nothing to
+history.
+
+- **`hidden` on the panels** is `pivot()`'s: it sets it from the start
+  (every panel but the chosen one) and on every change. A framework may
+  bind `hidden` to the facet it holds, as long as that follows
+  `onSelect`; wide (below), `pivot()` leaves `hidden` as it is and shows
+  every panel with `data-rk-reveal`, so such a binding stays right in
+  both modes.
+- **`onSelect(index, tab)`** is called for the user's choice (a click,
+  the keys, a scroll in wide mode) and for `select(index)`;
+  `select(index, { silent: true })` changes the facet without it, for an
+  app that sets the facet from its own state.
+- **Measuring.** The titles are measured when the strip resizes, when
+  fonts load and when a title's words change (a count going from 2 to
+  12); `layout()` measures again by hand.
+- **A pivot that picks the place** (`.rk-pivot--nav`) turns the place
+  with the turn `places()` registers, or the one passed as `turn`
+  (`pivot(el, { turn: Rekta.turn })`); without either it slides like a
+  facet pivot. A facet pivot never refers to the turn, so a bundle that
+  only uses facets leaves it out (about 2 KB gzip).
 
 Wide: when the panels share a parent at least `--rk-pivot-wide` wide
-(`size.pivot-wide`, 1300px; 0 never), every facet shows, side by side as
-panorama sections sized in tile units, and both the pivot and that parent
-get `data-rk-wide`. The strip stays visible as a jump list: a title (a
-click, or ← → Home End with focus staying on the strip) glides its facet
-to the leading edge over `duration-pivot-glide`, Tab moves focus into the
-facet chosen, and the title follows the facet at the leading edge as the
-user scrolls. Narrower, it
-is one facet at a time again, the one last chosen. A pivot that picks the
-place (`.rk-pivot--nav`) never goes wide. The threshold is the product's
-to pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.
+(`size.pivot-wide`, 1300px; 0 never; any length, `calc()` included),
+every facet shows, side by side as panorama sections sized in tile
+units, and both the pivot and that parent get `data-rk-wide`. The strip
+stays visible as a jump list: a title (a click, or ← → Home End with
+focus staying on the strip) glides its facet to the leading edge over
+`duration-pivot-glide`, Tab moves focus into the facet chosen, and the
+title follows the facet at the leading edge as the user scrolls.
+Narrower, it is one facet at a time again, the one last chosen. A pivot
+that picks the place never goes wide. The threshold is the product's to
+pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.
 
-Returns `{ select(index, { focus }), wide, destroy }`.
+Returns `{ select(index, { focus, silent }), wide, layout, destroy }`.
+
+### `strip(el)`
+
+A strip of links whose current one a router marks with `aria-current`,
+such as a framework router's place strip (`nav.rk-pivot.rk-pivot--nav`
+of `<a>`): it measures the titles as `pivot()` does (even gaps, the
+inactive titles' scale), plays the size change when the mark moves and
+glides the strip when it does not fit. It routes nothing and switches no
+panels. `places()` calls it for its own place strips of links. Use it as
+a framework action: `strip(node)` on mount, `.destroy()` on unmount.
+Returns `{ layout, destroy }`.
+
+### `arrive(el)`
+
+Builds a place in: `el` (a place, or the root) carries `data-rk-arriving`
+for the arrival window, so its tiles rise and its sparklines draw
+([motion.md](motion.md)). `places()` and `start()` call it; a framework
+router calls it for a place it opened by client navigation, after the
+place is in the page.
 
 ### `toaster(region)`
 
@@ -391,15 +507,52 @@ Returns `{ select(index, { focus }), wide, destroy }`.
 `aria-atomic="false"`, placed after the content whose actions raise
 toasts.
 
-`toaster.show(text, { key, undo, from, action, act })` shows one toast,
-replacing the one open. With `undo`, the toast has an undo button and a
-`duration-toast` window that counts down once a second and holds while
-it is hovered or has focus. The same `key` with `undo` updates the open
-toast and restarts its window. Ctrl/Cmd+Z undoes while the window is
-open, except in a text field; Escape inside a toast dismisses it. When
-the toast had focus as it goes, focus returns to `from`, or to the
-place's title. Undo is a shortcut, never the only way back. `act:
-{ label, run }` adds a plain action without a countdown ("reload").
+`toaster.show(text, { key, undo, from, action, act, status, windowMs, onEnd })`
+shows one toast, replacing the one open. With `undo`, the toast has an
+undo button and a window (`windowMs`, or `duration-toast`) that counts
+down once a second and holds while it is hovered or has focus. The same
+`key` with `undo` updates the open toast and restarts its window; its
+`undo`, `onEnd` and `windowMs` are then the new ones. Ctrl/Cmd+Z undoes
+while the window is open, except in a text field; Escape inside a toast
+dismisses it. When the toast had focus as it goes, focus returns to
+`from`, or to the fallback (see `start()`). Undo is a shortcut, never
+the only way back. `act: { label, run }` adds a plain action without a
+countdown ("reload").
+
+- `status`: `info`, `success`, `warning` or `error` sets `data-status`
+  and the toast takes that fill. An `error` toast is `role="alert"`,
+  announced at once. Use it for a failure whose control has gone (a
+  background save); a failure at a control that is still there is said
+  at the control (`docs/states.md`).
+- `onEnd(reason)` is called once when the toast goes: `expired` (its
+  window ran out), `undone`, `replaced` (another toast took its place),
+  `acted` (its `act` ran) or `dismissed` (Escape, `dismiss()`).
+
+`show()` returns the toast: `{ key, el, undo(), leave(), setRemaining(ms),
+remaining, held }`.
+
+- `remaining` is what is left of its window, in ms; `held` is true
+  while hover or focus holds it. `rk:toasthold` (`{ held, remaining }`)
+  bubbles from the toast each time that changes, and `data-rk-held`
+  is on it meanwhile.
+- `setRemaining(ms)` sets what is left, e.g. the time the server
+  reports for its own undo window. `setRemaining(0)` ends the toast
+  as `expired`, held or not.
+
+**An undo window that protects a server effect.** The toast's window
+holds while the user rests on it; the server's does not. Give the
+toast the server's window (`windowMs`), complete the action in `onEnd`
+for every reason but `undone`, and when the server's window ends first,
+call `setRemaining(0)`, so a held toast never offers an undo that no
+longer works:
+
+```js
+const t = toasts.show('3 messages deleted', {
+  undo: () => api.restore(ids), windowMs: res.undoMs,
+  onEnd: (why) => { if (why !== 'undone') api.purge(ids); },
+});
+setTimeout(() => t.setRemaining(0), res.undoMs);   // the server's deadline does not hold
+```
 
 Returns `{ show, open, dismiss(), destroy }`.
 
@@ -416,6 +569,18 @@ sentence share a line and the action goes under them, about 105px on a
   `status` is the fill; `alert: true` only for a halt; `on` and `off`
   are the toast texts for a state that starts or ends while another
   holds the banner.
+- The time line says when the state started: "since 14:05" (the day
+  too, when it started on another day). The start is when `set(name,
+  true)` turned it on, or the one given: `set(name, true, { since })`
+  with a `Date` (or anything `new Date()` reads). A state the client
+  did not see start (it comes from the server after a reload) passes
+  the server's time, or `since: false` when nobody knows: then there is
+  no time line, rather than a wrong one. `until` (a text, "until 18:00")
+  replaces the line for a state with a known end; the state's own
+  `since` is only the word before the time.
+- `action` is the remedy's label. `action: { label, href }` makes it a
+  link (`a.rk-btn`, with the same classes as the markup's button) that
+  navigates (sign in → `/login`) instead of calling `onAction`.
 - `order`: most severe first. One banner at a time; the most severe
   state that is on holds it.
 - `appbar` gets `data-rk-state`; `liveWord` gets the state's word.
@@ -423,16 +588,26 @@ sentence share a line and the action goes under them, about 105px on a
   has gone.
 - The remedy button calls `onAction(name)`, or turns the state off.
 
-Returns `{ set(name, on, { from }), toggle(name), is(name), shown, destroy }`.
+Returns `{ set(name, on, { from, since }), toggle(name), is(name), shown, destroy }`.
 
-### `sheet(dialog)`
+### `sheet(dialog, { dirty })`
 
 For `<dialog class="rk-sheet">` opened with `showModal()`. A tap on the
 shading cancels where `closedby` is not supported. Use
 `closedby="closerequest"` on a sheet with unsaved input. The sheet leaves
 the way it came before it closes (`data-rk-phase="leaving"`): `close()`,
 Escape and a `method=dialog` form all wait for it, and `close` fires
-after. Returns `{ destroy }`.
+after.
+
+With `dirty` (a function), a close request while it returns true
+(Escape, the shading, a `method=dialog` submit with `value="cancel"`)
+asks first, inside the sheet (`.rk-sheet-ask`; the sheet gets
+`data-rk-asking` and shows only the question): `discardTitle` with
+"keep editing" (primary, focused) and "discard changes". Another close
+request while it asks keeps editing. `start()` attaches every sheet, so
+call `sheet(dialog, { dirty })` afterwards: it updates the options of the
+sheet already attached and returns the same handle. Returns
+`{ asking, destroy }`.
 
 ### `busy(region, work)`
 
@@ -530,10 +705,28 @@ anywhere; `trigger` (the app bar's "go to") toggles it too. Returns
 ### `appbar(el, { more })`
 
 Moves the app bar's controls that do not fit into the menu of `more` (a
-`.rk-ab.rk-ab-more` button, shown only while needed), the lowest
-`data-rk-priority` first, then from the end; writes `data-rk-overflow`
-on each moved control. Back, the live state and a selection's controls
-never move. Returns `{ layout(), destroy }`.
+`.rk-ab.rk-ab-more` button, shown only while needed); writes
+`data-rk-overflow` on each moved control. Returns `{ layout(), destroy }`.
+
+- **Order.** The lowest `data-rk-priority` moves first; a control
+  without one has 0, so it goes before any with a positive number.
+  Among equals, the last in the bar goes first.
+- **Never moves:** back, the live state, a selection's controls, and a
+  control with `data-rk-priority="pinned"` (a primary command such as
+  search or "go to"). Pinned controls take the bar's room for good.
+  Measured at 320px with words of about six letters: beside back, the
+  live state and "more", one pinned control fits; two fit only where
+  back is hidden (a top-level place). While the places hold the bar
+  they come first, and pinned controls move into "more" with the rest.
+- **The menu** repeats each moved control's words: its `aria-label`, or
+  its text without `aria-hidden` parts and `.rk-key` hints. A key hint
+  shows apart, at the item's end, as in the palette (`.rk-menu-key`,
+  from the control's `aria-keyshortcuts` or its `.rk-key`), and the item
+  carries the same `aria-keyshortcuts`.
+- **Places.** While `.rk-ab-places` shows (compact), every command is
+  in "more", and `data-rk-places` is on the bar and the
+  root (`docs/navigation.md`). The bar re-lays itself out when its
+  children change, so places a framework renders later count.
 
 ### `form(el, { validators, onSubmit, submit })`
 

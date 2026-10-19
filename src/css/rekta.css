@@ -93,6 +93,13 @@ a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit
 .rk-tile:focus-visible { outline: 2px solid currentColor; outline-offset: -5px; }
 .rk-tile-word { position: absolute; top: 10px; right: 12px; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); }
 .rk-stat b { display: block; font-size: var(--rk-font-size-xxl); font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; line-height: 1; }
+/* Figures outside a tile (a status region, docs/tiles.md): side by side, each its number over its words. */
+.rk-figures { display: flex; flex-wrap: wrap; gap: var(--rk-space-m) var(--rk-space-xl); margin: 0; }
+.rk-figures > .rk-stat > span { display: block; margin-top: var(--rk-space-xs); font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
+/* A title from user data (docs/typography.md): long words break, and past three lines an ellipsis; the whole title is
+   still read, and data-rk-tip="overflow" shows it to the mouse. */
+.rk-title { overflow-wrap: anywhere; }
+.rk-clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 .rk-tile-msg {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden;
   font-size: var(--rk-font-size-s); line-height: var(--rk-line-height-compact);
@@ -191,6 +198,7 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 [data-rk-wide]:not(.rk-pivot) > [role='tabpanel'] {
   flex: 0 0 var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))); min-width: 0;
 }
+[data-rk-wide]:not(.rk-pivot) > [role='tabpanel'][data-rk-reveal] { display: block; }   /* shown whatever hidden says */
 
 /* Buttons and switches ------------------------------------------------------------------------------------------- */
 /* Primary takes the accent slot (ink by default). Height follows the density: 44px for touch, 32px for a fine pointer. */
@@ -203,7 +211,16 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-btn:active, .rk-btn[aria-expanded='true'] { background-color: var(--rk-hover); }
 .rk-btn--primary, .rk-btn--primary:active { background-color: var(--rk-accent); border-color: var(--rk-accent); color: var(--rk-on-accent); }
 .rk-btn--primary:active { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+/* An action that cannot be undone (docs/forms.md): frame and words in the error colour, never filled, never primary. */
+.rk-btn[data-status='error'] { border-color: var(--rk-status-error-full); background-color: transparent; color: var(--rk-status-error-full); }
+.rk-btn[data-status='error']:active { background-color: var(--rk-hover); }
 .rk-btn:disabled, .rk-btn[aria-disabled='true'] { border-color: var(--rk-disabled); background: none; color: var(--rk-disabled); cursor: not-allowed; }
+/* An icon-only button: square at the control's height (the row's, in a row), 44px under a coarse pointer whatever the
+   density; it needs an aria-label. Quiet (.rk-btn--quiet) for row actions and a sheet's close. */
+.rk-btn--icon { width: var(--rk-control-height); min-width: var(--rk-control-height); padding: 0; }
+.rk-btn--icon > svg { width: 20px; height: 20px; flex: none; }
+.rk-rows .rk-btn--icon, .rk-table .rk-btn--icon { width: var(--rk-row-height); min-width: var(--rk-row-height); min-height: var(--rk-row-height); }
+@media (pointer: coarse) { .rk-btn--icon, .rk-rows .rk-btn--icon, .rk-table .rk-btn--icon { min-width: var(--rk-touch-target); min-height: var(--rk-touch-target); } }
 .rk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rk-space-s); }
 /* A checkbox or radio with its label; a group of them goes in .rk-choices. */
 .rk-switch { display: inline-flex; align-items: center; gap: var(--rk-space-s); min-height: var(--rk-control-height); font-weight: var(--rk-font-weight-semibold); cursor: pointer; }
@@ -507,14 +524,14 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-legend i { flex: none; background: var(--_rk-series); }
 /* A product's domain colour code (docs/data.md): series.code N draws in --rk-series-N, ink until the product sets it.
    Small marks only: a line, a bar, a legend key, a tag's square, a zone. Never text, never a tile fill. */
-.rk-chart [data-rk-code='1'], .rk-tag[data-rk-code='1'] { --_rk-series: var(--rk-series-1, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='2'], .rk-tag[data-rk-code='2'] { --_rk-series: var(--rk-series-2, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='3'], .rk-tag[data-rk-code='3'] { --_rk-series: var(--rk-series-3, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='4'], .rk-tag[data-rk-code='4'] { --_rk-series: var(--rk-series-4, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='5'], .rk-tag[data-rk-code='5'] { --_rk-series: var(--rk-series-5, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='6'], .rk-tag[data-rk-code='6'] { --_rk-series: var(--rk-series-6, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='7'], .rk-tag[data-rk-code='7'] { --_rk-series: var(--rk-series-7, var(--rk-text-primary)); }
-.rk-chart [data-rk-code='8'], .rk-tag[data-rk-code='8'] { --_rk-series: var(--rk-series-8, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='1'], .rk-tag[data-rk-code='1'], .rk-meter[data-rk-code='1'], .rk-shares > [data-rk-code='1'] { --_rk-series: var(--rk-series-1, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='2'], .rk-tag[data-rk-code='2'], .rk-meter[data-rk-code='2'], .rk-shares > [data-rk-code='2'] { --_rk-series: var(--rk-series-2, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='3'], .rk-tag[data-rk-code='3'], .rk-meter[data-rk-code='3'], .rk-shares > [data-rk-code='3'] { --_rk-series: var(--rk-series-3, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='4'], .rk-tag[data-rk-code='4'], .rk-meter[data-rk-code='4'], .rk-shares > [data-rk-code='4'] { --_rk-series: var(--rk-series-4, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='5'], .rk-tag[data-rk-code='5'], .rk-meter[data-rk-code='5'], .rk-shares > [data-rk-code='5'] { --_rk-series: var(--rk-series-5, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='6'], .rk-tag[data-rk-code='6'], .rk-meter[data-rk-code='6'], .rk-shares > [data-rk-code='6'] { --_rk-series: var(--rk-series-6, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='7'], .rk-tag[data-rk-code='7'], .rk-meter[data-rk-code='7'], .rk-shares > [data-rk-code='7'] { --_rk-series: var(--rk-series-7, var(--rk-text-primary)); }
+.rk-chart [data-rk-code='8'], .rk-tag[data-rk-code='8'], .rk-meter[data-rk-code='8'], .rk-shares > [data-rk-code='8'] { --_rk-series: var(--rk-series-8, var(--rk-text-primary)); }
 .rk-tag[data-rk-code]::before { background: var(--_rk-series); }
 .rk-chart-dot[data-rk-code], .rk-bar[data-rk-code][data-rk-hot] { fill: var(--_rk-series); }
 .rk-key-line { width: 14px; height: 2px; }
@@ -526,6 +543,14 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
    when the value means that status (a disk nearly full). The label and the value sit above it. */
 .rk-meter { position: relative; height: 6px; overflow: hidden; background: var(--rk-text-contrast-low); }
 .rk-meter::before { content: ''; position: absolute; inset: 0 auto 0 0; width: calc(var(--rk-v, 0) * 100%); background: var(--_rk-mark, var(--rk-text-primary)); transition: width var(--rk-duration-moderate) var(--rk-ease-base); }
+/* A meter whose bar is a domain mark (time in a heart-rate zone) fills in its code; a status still wins. */
+.rk-meter[data-rk-code]:not([data-status])::before { background: var(--_rk-series); }
+/* Shares of one whole as one bar (time per zone): each child's --rk-v is its share (any unit: minutes, a count),
+   2px apart like a category's bars, at least 2px so a small share still shows. A child takes its code's colour, ink
+   without one. The bar is an image (role="img") whose name says every share; the words go beside it, never in a
+   code colour (docs/data.md). */
+.rk-shares { display: flex; gap: 2px; height: var(--rk-space-s); max-width: calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s)); }
+.rk-shares > * { flex: var(--rk-v, 1) 1 0; min-width: 2px; background: var(--_rk-series, var(--rk-text-primary)); }
 .rk-meter-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rk-space-s); margin-bottom: var(--rk-space-xs); font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
 .rk-meter-head > b { font-size: var(--rk-font-size-s); font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; color: var(--rk-text-primary); }
 
@@ -639,6 +664,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-empty[data-status='error'] > :first-child::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--_rk-mark); }
 /* Pending: the button keeps its width and says what it is doing ("saving…"); the line runs under it. */
 .rk-btn[data-rk-pending] { cursor: progress; }
+/* A running action refuses clicks (aria-disabled) but is not disabled: it keeps its colours and says what it does. */
+.rk-btn[data-rk-pending][aria-disabled='true'] { border-color: currentColor; color: inherit; cursor: progress; }
+.rk-btn--primary[data-rk-pending][aria-disabled='true'] { background-color: var(--rk-accent); border-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk-btn[data-status='error'][data-rk-pending][aria-disabled='true'] { border-color: var(--rk-status-error-full); color: var(--rk-status-error-full); }
 .rk-btn[data-rk-pending]::after { inset: auto 0 -6px; }
 
 /* Table ---------------------------------------------------------------------------------------------------------- */
@@ -782,9 +811,11 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 
 /* Sheet ---------------------------------------------------------------------------------------------------------- */
 /* A short question from the top edge; everything behind it stays where it was and does not scroll. A tap on the
-   shading cancels (closedby="any", with a script fallback); with unsaved input, use closedby="closerequest". */
+   shading cancels (closedby="any", with a script fallback); with unsaved input, use closedby="closerequest".
+   Sized and centred against the viewport (100vw), not the box the root's reserved scrollbar gutter leaves: with
+   classic scrollbars that box is 15px narrower, and a phone-wide sheet stood short of the right edge. */
 .rk-sheet {
-  margin: 0 auto auto; width: min(32rem, 100%); max-width: 100%; max-height: calc(100dvh - var(--rk-space-xl)); overflow-y: auto; overscroll-behavior: contain;
+  margin: 0 auto auto calc((100vw - min(32rem, 100vw)) / 2); width: min(32rem, 100vw); max-width: none; max-height: calc(100dvh - var(--rk-space-xl)); overflow-y: auto; overscroll-behavior: contain;
   padding: var(--rk-space-l) var(--rk-space-m);
   border: 0; border-bottom: 1px solid var(--rk-text-contrast-low); border-radius: 0 0 var(--rk-radius-m) var(--rk-radius-m);
   background: var(--rk-bg); color: var(--rk-text-primary);
@@ -794,6 +825,12 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-sheet > * + *, .rk-sheet form > * + * { margin-top: var(--rk-space-m); }
 .rk-sheet .rk-kicker + * { margin-top: var(--rk-space-xs); }
 :root:has(dialog.rk-sheet[open]) { overflow: hidden; scrollbar-gutter: stable; }
+/* Every sheet has a visible way out (docs/states.md): its safe answer, or this close button at the top corner,
+   <button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close"> in its form. */
+.rk-sheet-close { position: absolute; top: var(--rk-space-xs); right: var(--rk-space-xs); margin: 0 !important; }
+.rk-sheet:has(> form > .rk-sheet-close) > form > .rk-kicker:first-child, .rk-sheet:has(> .rk-sheet-close) > .rk-kicker:first-child { padding-right: var(--rk-touch-target); }
+/* Asking before unsaved input goes (sheet(dialog, { dirty })): the question takes the sheet's place, in it. */
+.rk-sheet[data-rk-asking] > :not(.rk-sheet-ask) { display: none !important; }
 .rk-scrim { position: fixed; inset: 0; background: var(--rk-shading); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 @keyframes rk-from-top { from { opacity: 0; transform: translateY(-16px); } }
 /* Something that appears in place to say a thing (an error summary, a refusal, waiting updates): a fade and 8px. */
@@ -851,6 +888,8 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 }
 .rk-toasts > .rk-toast { grid-area: 1 / 1; }
 .rk-toast[data-rk-phase='leaving'] { pointer-events: none; animation: rk-toast-out var(--rk-duration-short) var(--rk-ease-in) reverse both; }
+/* A toast with a status takes its fill, as a banner does: a failure whose control has gone (docs/states.md). */
+.rk-toast[data-status] { background-color: var(--_rk-fill); color: var(--rk-text-primary); }
 .rk-toast-msg { flex: 1 1 auto; align-self: center; min-width: 0; padding: calc(var(--rk-space-s) + var(--rk-space-xs)) var(--rk-space-m); text-wrap: pretty; }
 .rk-toast-act {
   position: relative; flex: none; display: inline-flex; align-items: center; gap: var(--rk-space-s);
@@ -1010,7 +1049,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-range::-webkit-slider-thumb { background: CanvasText; }
   .rk-tip, .rk-cell-error { border: 1px solid CanvasText; }
   .rk-meter { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; }
-  .rk-meter::before, .rk-dots > i { forced-color-adjust: none; background: CanvasText; }
+  .rk-meter::before, .rk-meter[data-rk-code]:not([data-status])::before, .rk-dots > i, .rk-shares > * { forced-color-adjust: none; background: CanvasText; }
   .rk-chart .rk-s0, .rk-chart .rk-s1 { forced-color-adjust: none; --_rk-series: CanvasText; }
   .rk-chart .rk-s1 { stroke-dasharray: 4 3; }
   .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row { forced-color-adjust: none; background-color: Highlight; color: HighlightText; }
@@ -1076,6 +1115,16 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-appbar:has(> .rk-ab-places) > .rk-ab-status { flex-direction: column; justify-content: center; gap: 4px; min-width: 48px; margin-inline-end: 0; font-size: var(--rk-font-size-xxs); }
   .rk-appbar:has(> .rk-ab-places) > .rk-ab-more { flex-direction: column; justify-content: center; gap: 2px; font-size: var(--rk-font-size-xxs); }
   .rk-appbar[data-rk-selecting] > .rk-ab-places { display: none; }
+}
+/* While the bar holds the places, appbar() writes data-rk-places on it and on the root: the places' top strip would
+   say the same twice, so it steps aside (without the script it stays). The place is then named by the marked place
+   in the bar and by its .rk-place-name, screen-reader only while the strip shows, the strip's active title here. */
+:root[data-rk-places] .rk-place > .rk-pivot--nav { display: none; }
+.rk-place-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+:root[data-rk-places] .rk-place-name {
+  position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: normal;
+  margin: 0; padding: var(--rk-space-s) var(--rk-space-m) 0;
+  font-size: var(--rk-font-size-pivot-active); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-nav);
 }
 /* Narrow place: table rows stack. Check (if any), main cell and status on the first line, the other cells as
    "label value" below, labelled from data-label (rekta.js fills it from the head). The head becomes a row of sort

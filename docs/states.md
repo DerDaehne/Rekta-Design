@@ -31,6 +31,15 @@ schedule…". It refuses more clicks (`aria-disabled`), and after
 it. When the action ends, the label comes back and a toast reports the
 result; a failure is said at the control that caused it.
 
+A failure whose control has gone (a background save, an action from a
+sheet that has closed, a place the user has left) has nowhere else to
+be said: it goes in a toast with `status: 'error'` (`toaster.show(text,
+{ status })`). The toast takes the error fill and is announced at once
+(`role="alert"`); it names what failed and, where there is one, the way
+to try again (`act`). A failure that lasts, such as the server being
+unreachable, is a banner state, not a toast. Toasts that report a
+success carry no status: the plain toast is the success.
+
 ## Floating surfaces
 
 Menus, the command palette, the places list and a combobox's list float
@@ -72,6 +81,12 @@ From bottom to top:
   [navigation.md](navigation.md#who-gets-a-key)).
 - A sheet holds focus. Report the result of an action taken in a sheet
   after the sheet has closed, not as a toast beneath its shading.
+- **Every sheet has a visible way out**: its safe answer, or a close
+  button (`.rk-btn--icon.rk-btn--quiet.rk-sheet-close`, `value="cancel"`,
+  `aria-label="close"`) at its top corner. Escape and the shading are not
+  enough: a touch screen may have neither key nor gesture, and with
+  `closedby="closerequest"` the shading does nothing. The markup is in
+  [forms.md](forms.md#a-form-in-a-sheet).
 - **Toasts stay below sheets**, always: the toast region is never made a
   popover to reach the top layer. A sheet, or the palette, that has to
   say something while it is open says it inside itself, where the user

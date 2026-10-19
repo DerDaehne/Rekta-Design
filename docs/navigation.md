@@ -108,6 +108,34 @@ places its tiles and links open, each with one parent.
   item replaces the address while the list stays in view, and is a step
   of its own where the item replaces the list (compact); see
   [collections.md](collections.md#split-view).
+- **A facet is part of the address, as a query**, like filters:
+  `#runs?facet=history` (`/runs?facet=history` in path mode). Choosing a
+  facet replaces the address and never adds a history entry; a reload or
+  a shared link opens that facet. The first facet is the default and
+  leaves the parameter out. A pivot that is the place's whole content
+  uses `facet`; a place with two pivots names each (`?view=…`). A path
+  segment would make each facet a place of its own (and back would step
+  through them); a hash is the place's already.
+
+  ```js
+  const tabs = Rekta.pivot(strip, {
+    onSelect(i, tab) {
+      const p = router.params;                                 // a copy
+      if (i) p.set('facet', tab.dataset.facet); else p.delete('facet');
+      router.setParams(p);
+    },
+  });
+  router.onItem('runs', (item, { params }) => {             // arrival and back
+    const at = [...strip.children].findIndex((t) => t.dataset.facet === params.get('facet'));
+    tabs.select(Math.max(0, at), { silent: true });
+  });
+  ```
+
+  **The first paint** renders the addressed facet: the
+  server (or the framework's render) marks its tab `aria-selected="true"`
+  and leaves the other panels `hidden`; `pivot()` starts on the tab
+  marked selected and keeps it, so nothing jumps when the script arrives.
+  An unknown facet falls back to the first, without an error.
 
 ### Crumb
 
@@ -159,8 +187,22 @@ with an icon over a lowercase word.
   show); the live state stays, its square over its word.
 - **A selection** takes the bar over as always: the places step aside
   while the selection's commands show.
-- The strip at the top is then the product's to leave out on compact (it
-  would say the same twice); sideways it is the navigation.
+- **The strip at the top steps aside** (it would say the same twice).
+  `appbar()` writes `data-rk-places` on the bar and on the root while
+  the places show, and `rekta.css` hides `.rk-place > .rk-pivot--nav`
+  under it. The signal comes from the bar's own width, so it holds in a
+  narrow pane too, where a media query would disagree. Without the
+  script the strip stays, which is safe. Sideways the strip is the
+  navigation.
+- **What names the place then.** The marked place in the bar is its
+  visible name: the icon and word in `text-primary`, with
+  `aria-current="page"`. The page still starts with a heading: a place
+  whose first section opens with its own visible title needs nothing
+  more; one whose title was only the strip gives it
+  `<h1 class="rk-place-name">`, which `rekta.css` keeps for screen
+  readers only while the strip shows and shows, at the strip's active
+  size, while the places are in the bar. Never a kicker repeating the
+  bar's word.
 
 ### Go to
 
@@ -248,3 +290,6 @@ and once it uses it nothing else does.
 
 Escape never goes back while focus is in a text field or a list that
 uses it, and no shortcut fires while an input method is composing.
+An app's own shortcuts skip a key Rekta has used (`defaultPrevented`);
+the full table, per layer and component, is in
+[behaviour.md](behaviour.md#keysonpriority-handler).

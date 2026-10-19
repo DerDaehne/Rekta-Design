@@ -98,6 +98,41 @@ Rows follow the same split, one control per meaning:
 
 A row is never a single button that does one of these by surprise.
 
+### Status region: figures with their own controls
+
+A running job's figures next to pause, cancel and start is common, and
+it is not a tile: a tile never changes data. It is a **status region**,
+a plain region on the ground with the figures as a tile shows them and
+its controls below.
+
+```html
+<section class="rk-region" aria-labelledby="job">
+  <p class="rk-kicker" id="job">nightly build · <span class="rk-tag" data-status="info">running</span></p>
+  <div class="rk-figures">
+    <span class="rk-stat"><b>412</b><span>tests run</span></span>
+    <span class="rk-stat"><b>3</b><span>failed</span></span>
+    <span class="rk-stat"><b>6 min</b><span>left</span></span>
+  </div>
+  <p class="rk-actions"><button class="rk-btn">pause</button><button class="rk-btn" data-status="error">cancel the build</button></p>
+</section>
+```
+
+- **Not a tile:** no fill (its status is a tag in the kicker, never the
+  ground), no press, no focus on the region, no link around it.
+- **Figures** in `.rk-figures` (`.rk-stat` each: the number over its
+  words), live under the live contract ([live.md](live.md)) like any
+  region.
+- **Controls** in `.rk-actions` under the figures, verbs that act on
+  what the figures describe ("pause", "cancel the build"), the usual
+  rules: one primary at most, a destructive one framed in the error
+  colour ([forms.md](forms.md#dialog-levels)), a running one pending, one
+  that cannot act now disabled with its reason.
+- **Where it ends:** a region that opens something more is a tile (a
+  link) without controls, and its controls live in the place it opens.
+  Never both: a press on figures that sit next to a cancel button must
+  not be the way into the details. A board of many jobs stays tiles; the
+  status region is for the one thing a place is about.
+
 ## Press
 
 A tile that opens something tilts back towards where it is pressed, by
