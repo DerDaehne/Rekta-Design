@@ -118,6 +118,7 @@ rk_view *rk_controller_view(rk_controller *c) {
 
 static rk_controller *visible_child(rk_controller *c);
 static rk_controller *pivot_visible(rk_controller *c);
+static int pivot_others(rk_controller *c, rk_controller ***others);   /* a wide pivot's facets beside the chosen one */
 
 const char *rk_controller_title(rk_controller *c) { return c ? c->title : NULL; }
 
@@ -130,20 +131,24 @@ const char *rk__controller_shown_title(rk_controller *c) {
 
 void rk__controller_attach(rk_controller *c, rk_window *w) {
   c->window = w;
-  rk_controller *v = visible_child(c);
+  rk_controller *v = visible_child(c), **others;
   if (v && v != c) rk__controller_attach(v, w);
+  for (int i = 0, n = pivot_others(c, &others); i < n; i++) if (others[i] != v) rk__controller_attach(others[i], w);
   for (int i = 0; i < c->nembedded; i++) rk__controller_attach(c->embedded[i], w);
 }
 
 void rk__controller_appear(rk_controller *c, bool appear) {
   if (c->appeared == appear) return;
   c->appeared = appear;
-  rk_controller *v = visible_child(c);
+  rk_controller *v = visible_child(c), **others;
+  int nothers = pivot_others(c, &others);
   if (!appear) for (int i = 0; i < c->nembedded; i++) rk__controller_appear(c->embedded[i], false);
   if (!appear && v && v != c) rk__controller_appear(v, false);
+  if (!appear) for (int i = 0; i < nothers; i++) if (others[i] != v) rk__controller_appear(others[i], false);
   if (appear && c->cls.appear) c->cls.appear(c, c->state);
   if (!appear && c->cls.disappear) c->cls.disappear(c, c->state);
   if (appear && v && v != c) rk__controller_appear(v, true);
+  if (appear) for (int i = 0; i < nothers; i++) if (others[i] != v) rk__controller_appear(others[i], true);
   if (appear) for (int i = 0; i < c->nembedded; i++) rk__controller_appear(c->embedded[i], true);
 }
 
@@ -588,8 +593,10 @@ static void strip_draw(rk_view *v, rk_canvas *c, void *st) {
   if (strip_moving(s, now)) { rk__view_dirty(v); rk__app_request_frame(); }
 }
 
+static bool pivot_tab(rk_controller *pivot);
 static bool strip_event(rk_view *v, const rk_event *e, void *st) {
   strip *s = st;
+  if (e->type == RK_EVENT_KEY_DOWN && e->key == RK_KEY_TAB && !(e->mods & RK_MOD_SHIFT) && s->pivot && pivot_tab(s->pivot)) return true;
   if (e->type == RK_EVENT_POINTER_UP && e->button == 0 && s->side) {
     int i = side_hit(v, s, e->position.y);
     if (i >= 0 && s->select) s->select(s->owner, i);
@@ -1033,8 +1040,10 @@ void rk_panorama_set_width(rk_controller *c, int index, float width) {
 /* Keyboard focus never lands out of sight: the section scrolls it into view, the panorama brings the section. */
 void rk__reveal(rk_view *v) { rk__reveal_rect(v, (rk_rect){ 0, 0, v->frame.w, v->frame.h }); }
 
+static void pivot_reveal(rk_view *body, rk_view *v);
 void rk__reveal_rect(rk_view *v, rk_rect r) {
   for (rk_view *a = v->parent; a; a = a->parent) {
+    pivot_reveal(a, v);
     if (a->cls == &secbox_class && a->nkids) {
       rk_view *content = a->kids[0];
       float y = 0;
@@ -1071,6 +1080,9 @@ void rk__reveal_rect(rk_view *v, rk_rect r) {
 typedef struct pivot {
   rk_controller *self; rk_controller **facets; int n, cap, sel; rk_view *strip, *body;
   turn out; rk_controller *leaving; uint32_t timer; bool back;   /* a place change: the facet turning away */
+  float wide_at;                                           /* rk_pivot_set_wide: 0 the app's width, below 0 never */
+  bool wide, jump;                                         /* facets side by side; jump: the chosen one to the edge at once */
+  double following;                                        /* until then a glide is under way, not a scroll to follow */
 } pivot;
 
 static void pivot_select_cb(void *owner, int i) {         /* the user picked it */
@@ -1088,6 +1100,151 @@ static void pivot_free(void *st) {
 }
 
 static rk_controller *pivot_visible(rk_controller *c) { pivot *p = c->impl; return p->n ? p->facets[p->sel] : NULL; }
+static int pivot_others(rk_controller *c, rk_controller ***others) {
+  if (c->kind != K_PIVOT || !((pivot *)c->impl)->wide) return 0;
+  *others = ((pivot *)c->impl)->facets;
+  return ((pivot *)c->impl)->n;
+}
+
+/* Wide (navigation.md): every facet side by side as panorama sections, three tiles wide unless its page has a width
+   of its own, space-xl apart, in a body that scrolls sideways on the panorama's spring. The strip stays, a jump list:
+   a title glides its facet to the leading edge over pivot-glide; the facet at the leading edge after a scroll is the
+   one chosen, and the chosen one stays while it is whole in sight. */
+static float facet_w(pivot *p, int i) {
+  rk_view *f = rk_controller_view(p->facets[i]);
+  return f->fixed_w > 0 ? f->fixed_w : 3 * rk_metric_of(RK_TILE_UNIT) + 2 * rk_metric_of(RK_SPACE_S) + 2 * rk_metric_of(RK_SPACE_XL);
+}
+static float facet_x(pivot *p, int i) {                    /* from the start of the facets' room */
+  float x = 0;
+  for (int k = 0; k < i; k++) x += facet_w(p, k) + rk_metric_of(RK_SPACE_XL);
+  return x;
+}
+static float body_room(pivot *p) { rk_view *b = p->body; return RK_MAX(0.0f, b->frame.w - b->padding.left - b->padding.right); }
+static float body_max(pivot *p) { return p->n ? RK_MAX(0.0f, facet_x(p, p->n - 1) + facet_w(p, p->n - 1) - body_room(p)) : 0; }
+static float facet_start(pivot *p, int i) { return RK_CLAMP(facet_x(p, i), 0.0f, body_max(p)); }
+
+static void body_layout(rk_view *v, void *st) {
+  pivot *p = st;
+  if (!p->wide) { fill_layout(v, NULL); return; }
+  rk_insets pad = v->padding;
+  float h = RK_MAX(0.0f, v->frame.h - pad.top - pad.bottom);
+  for (int i = 0; i < p->n; i++) rk__set_frame(rk_controller_view(p->facets[i]), (rk_rect){ pad.left + facet_x(p, i), pad.top, facet_w(p, i), h });
+  float max = body_max(p);
+  if (p->jump && v->frame.w > 0) { rk__anim_cancel(v, RK_PROP_VALUE); v->value = v->pvalue = facet_start(p, p->sel); p->jump = false; }
+  if (v->value > max) { rk__anim_cancel(v, RK_PROP_VALUE); v->value = v->pvalue = max; }
+}
+
+static void body_draw(rk_view *v, rk_canvas *c, void *st) {
+  (void)c;
+  pivot *p = st;
+  if (p->wide) for (int i = 0; i < v->nkids; i++) v->kids[i]->ptransform.translate_x = v->kids[i]->transform.translate_x - v->pvalue;
+}
+
+/* The facet at the leading edge is the one chosen - unless the chosen one is still whole in sight, or a glide to it is
+   under way; at the end, the last. */
+static void pivot_follow(pivot *p) {
+  if (!p->wide || !p->n || rk_app_now() < p->following) return;
+  float at = p->body->value, room = body_room(p), max = body_max(p), left = facet_x(p, p->sel) - at;
+  if (left >= -1 && left + facet_w(p, p->sel) <= room + 1) return;
+  int i = -1;
+  for (int k = 0; k < p->n && i < 0; k++) if (facet_x(p, k) + facet_w(p, k) - at > 1 + facet_w(p, k) / 2) i = k;
+  if (at >= max - 1) i = p->n - 1;
+  if (i < 0 || i == p->sel) return;
+  p->sel = i;
+  strip_activate(p->strip, i);
+  rk_controller *c = p->self;
+  if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar);
+  tell(c, i);
+}
+
+/* One wheel gesture over the facets moves them sideways, as the panorama's sections, once what is under the pointer
+   can scroll no further; at either end it goes on to what holds the pivot. */
+static bool body_event(rk_view *v, const rk_event *e, void *st) {
+  pivot *p = st;
+  if (!p->wide || e->type != RK_EVENT_WHEEL) return false;
+  float d = fabsf(e->wheel_x) > fabsf(e->wheel_y) ? e->wheel_x : e->wheel_y, max = body_max(p);
+  float to = RK_CLAMP(v->value + d, 0.0f, max);
+  if (to == v->value) return false;
+  p->following = 0;                                         /* the user takes over from a glide */
+  scroll_value(v, to, max, SETTLE_WHEEL);
+  pivot_follow(p);
+  return true;
+}
+
+static const rk_class pivot_body_class = { { sizeof(rk_view_class), "rk_pivot_body", body_draw, NULL, body_layout, body_event, NULL }, NULL, NULL };
+
+static void pivot_glide(pivot *p, int i) {
+  rk_view *b = p->body;
+  if (b->frame.w <= 0) { p->jump = true; return; }         /* not laid out yet: there at once when it is */
+  float from = b->pvalue, to = facet_start(p, i);
+  double d = rk_duration_of(RK_DURATION_PIVOT_GLIDE);
+  b->value = to;
+  rk__animate(b, RK_PROP_VALUE, &from, &to, 1, d, 0, rk__ease_glide);
+  p->following = rk_app_now() + d + 50;
+  rk__view_dirty(b);
+}
+
+/* From the strip into the facet chosen, not the first in the page. */
+static bool pivot_tab(rk_controller *c) {
+  pivot *p = c->impl;
+  if (!p->wide || !p->n) return false;
+  rk_window *w = rk__view_window(p->body);
+  rk_view *f = rk__first_focusable(rk_controller_view(p->facets[p->sel]));
+  if (!w || !f) return false;
+  w->focus_visible = true;
+  return rk_window_focus(w, f);
+}
+
+/* Focus landing in a facet out of sight (Tab on through the facets) glides it in, and it is the one chosen. */
+static void pivot_reveal(rk_view *body, rk_view *v) {
+  if (body->cls != &pivot_body_class) return;
+  pivot *p = body->state;
+  if (!p->wide) return;
+  for (int i = 0; i < p->n; i++) {
+    rk_view *f = rk_controller_view(p->facets[i]);
+    if (!rk__view_within(v, f)) continue;
+    float left = facet_x(p, i) - body->value;
+    if (left >= -1 && left + facet_w(p, i) <= body_room(p) + 1) return;
+    bool told = i != p->sel;
+    p->sel = i;
+    strip_activate(p->strip, i);
+    pivot_glide(p, i);
+    if (told) tell(p->self, i);
+    return;
+  }
+}
+
+/* Wide or not, as the facets' room is now: going wide every facet comes in beside the chosen one, which stays where
+   it was (with the focus in it) and starts at the leading edge; going narrow only the chosen one stays. */
+static void pivot_widen(pivot *p, float room) {
+  strip *s = p->strip->state;
+  rk_controller *c = p->self;
+  strip_level(s);                                          /* whether it picks the place, before its first measure */
+  float at = p->wide_at > 0 ? p->wide_at : p->wide_at < 0 ? 0 : rk_metric_of(RK_PIVOT_WIDE);
+  bool wide = !s->nav && !s->side && at > 0 && room >= at && p->n > 0;
+  if (wide == p->wide) return;
+  p->wide = wide;
+  rk_view *b = p->body;
+  for (int i = 0; i < p->n; i++) {
+    if (i == p->sel) continue;
+    rk_controller *f = p->facets[i];
+    rk_view *fv = rk_controller_view(f);
+    if (wide) {
+      rk__view_insert(b, fv, i < p->sel ? i : b->nkids);
+      rk__controller_attach(f, c->window);
+      if (c->appeared) rk__controller_appear(f, true);
+    } else {
+      rk__view_detach(fv);
+      rk__controller_appear(f, false);
+      fv->ptransform.translate_x = fv->transform.translate_x;
+    }
+  }
+  rk__anim_cancel(b, RK_PROP_VALUE);
+  b->value = b->pvalue = 0;
+  p->jump = wide;
+  if (!wide && p->n) { rk_view *fv = rk_controller_view(p->facets[p->sel]); fv->ptransform.translate_x = fv->transform.translate_x; }
+  rk__view_relayout_up(b);
+}
 
 /* A pivot that is the place - the window's root, or a place among places - picks the place (navigation.md): its strip
    takes the nav level, as the panorama's does, and its facets start where the strip's first title does. Held in a
@@ -1125,6 +1282,7 @@ static void pivot_mode(pivot *p) {
 static void pivot_layout(rk_view *v, void *st) {
   pivot *p = st;
   pivot_mode(p);
+  pivot_widen(p, v->frame.w - v->padding.left - v->padding.right);
   rk__stack(v, !((strip *)p->strip->state)->side);
 }
 
@@ -1139,6 +1297,13 @@ void rk_pivot_set_layout(rk_controller *c, rk_pivot_layout layout) {
   rk__view_relayout_up(c->view);
 }
 
+void rk_pivot_set_wide(rk_controller *c, float width) {
+  if (!c || c->kind != K_PIVOT) { rk__error("rk_pivot_set_wide: not a pivot"); return; }
+  ((pivot *)c->impl)->wide_at = width;
+  rk__view_relayout_up(c->view);
+}
+bool rk_pivot_is_wide(rk_controller *c) { return c && c->kind == K_PIVOT && ((pivot *)c->impl)->wide; }
+
 rk_controller *rk_pivot(void) {
   rk_controller *c = rk_controller_create(NULL, NULL);
   pivot *p = rk__alloc(sizeof *p);
@@ -1151,7 +1316,7 @@ rk_controller *rk_pivot(void) {
   c->view = v; v->controller = c;
   p->strip = strip_create(false, pivot_select_cb, p);
   ((strip *)p->strip->state)->pivot = c;
-  p->body = rk__view_create(&fill_class, NULL);
+  p->body = rk__view_create(&pivot_body_class, p);
   p->body->grow = 1;
   p->body->clip = true;
   rk__view_add(v, p->strip); rk_release(p->strip);
@@ -1194,11 +1359,12 @@ void rk_pivot_insert_controller(rk_controller *c, int index, rk_controller *face
   p->n++;
   facet->parent = c;
   strip_insert(p->strip, index, facet->title);
-  if (p->n == 1) {
-    rk__view_add(p->body, rk_controller_view(facet));
+  if (p->n == 1 || p->wide) {                                  /* wide, every facet is in sight */
+    rk__view_insert(p->body, rk_controller_view(facet), index);
     rk__controller_attach(facet, c->window);
     if (c->appeared) rk__controller_appear(facet, true);
-  } else if (index <= p->sel) p->sel++;                        /* the facet in sight stays in sight */
+  }
+  if (p->n > 1 && index <= p->sel) p->sel++;                   /* the facet in sight stays in sight */
 }
 
 static void pivot_arrive(void *user);
@@ -1210,12 +1376,13 @@ void rk_pivot_remove(rk_controller *c, int index) {
   if (p->timer) { rk_app_cancel(p->timer); p->timer = 0; pivot_arrive(p); }   /* a turn under way ends first */
   rk_controller *gone = p->facets[index];
   bool shown = index == p->sel;
-  if (shown) { rk__view_detach(rk_controller_view(gone)); rk__controller_appear(gone, false); }
+  if (shown || p->wide) { rk__view_detach(rk_controller_view(gone)); rk__controller_appear(gone, false); }
   memmove(p->facets + index, p->facets + index + 1, (size_t)(p->n - index - 1) * sizeof *p->facets);
   p->n--;
   strip_remove(p->strip, index);
   if (p->sel > index || p->sel >= p->n) p->sel = RK_MAX(0, p->sel - 1);
-  if (shown && p->n) {
+  if (!p->n) p->wide = false;
+  if (shown && p->n && !p->wide) {
     rk_controller *to = p->facets[p->sel];
     rk__view_add(p->body, rk_controller_view(to));
     rk__controller_attach(to, c->window);
@@ -1248,7 +1415,15 @@ static void pivot_arrive(void *user) {
 void rk_pivot_select(rk_controller *c, int index) {
   if (c->kind != K_PIVOT) return;
   pivot *p = c->impl;
-  if (index < 0 || index >= p->n || index == p->sel) return;
+  if (index < 0 || index >= p->n) return;
+  if (p->wide) {                                               /* wide: it glides to the leading edge, chosen at once */
+    p->sel = index;
+    strip_activate(p->strip, index);
+    pivot_glide(p, index);
+    if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar);
+    return;
+  }
+  if (index == p->sel) return;
   if (p->timer) { rk_app_cancel(p->timer); pivot_arrive(p); }      /* a turn still running finishes at once */
   rk_controller *old = p->facets[p->sel], *to = p->facets[index];
   int dir = index > p->sel ? 1 : -1;
@@ -1395,7 +1570,7 @@ static void ask_gone(rk_controller *c, void *st) { (void)c; ask_tell(st, false);
 static void ask_free(void *st) { free(st); }
 
 rk_controller *rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user) {
-  rk_confirm_desc d = { sizeof d, "", NULL, NULL, "ok", "cancel", false };
+  rk_confirm_desc d = { sizeof d, "", NULL, NULL, NULL, NULL, false };
   if (RK__SIZED(desc, "rk_confirm", "rk_confirm_desc")) memcpy(&d, desc, RK_MIN((size_t)desc->size, sizeof d));
   if (!presenter || !presenter->window) { rk__error("rk_confirm: the presenter is in no window"); if (answered) answered(false, user); return NULL; }
   asking *a = rk__alloc(sizeof *a);
@@ -1405,8 +1580,8 @@ rk_controller *rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc,
   rk_add(page, rk_label(d.title ? d.title : "", RK_TEXT_GROUP));
   if (d.text && *d.text) rk_add(page, rk_label(d.text, RK_TEXT_BODY));
   rk_view *row = rk_add(page, rk_hstack());
-  rk_view *cancel = rk_add(row, rk_button(d.cancel ? d.cancel : "cancel", ask_cancel, a));
-  rk_view *ok = rk_add(row, rk_button(d.ok ? d.ok : "ok", ask_ok, a));
+  rk_view *cancel = rk_add(row, rk_button(d.cancel ? d.cancel : rk__words()->cancel, ask_cancel, a));
+  rk_view *ok = rk_add(row, rk_button(d.ok ? d.ok : rk__words()->ok, ask_ok, a));
   rk_view *safe = d.cancel_is_safe ? cancel : ok;
   rk_button_set_kind(safe, RK_BUTTON_PRIMARY);
   rk_controller_class cls = { sizeof cls, "rk_confirm", NULL, NULL, ask_gone, NULL, ask_free };

@@ -32,7 +32,7 @@ void rk_window_do(rk_window *w, const rk_action *action) {
   e->a = a; e->label = rk__strdup(a.label ? a.label : "");
   w->ndone = w->nhistory;
   if (a.run) a.run(a.user);
-  rk_window_toast(w, e->label, "undo", undo_toast, w);
+  rk_window_toast(w, e->label, rk__words()->undo, undo_toast, w);
 }
 
 bool rk_window_undo(rk_window *w) {
@@ -40,8 +40,8 @@ bool rk_window_undo(rk_window *w) {
   rk_history_entry *e = &w->history[--w->ndone];
   if (e->a.undo) e->a.undo(e->a.user);
   char text[256];
-  snprintf(text, sizeof text, "Undone: %s", e->label);
-  rk_window_toast(w, text, "redo", redo_toast, w);
+  rk__say(text, sizeof text, rk__words()->undone, e->label);
+  rk_window_toast(w, text, rk__words()->redo, redo_toast, w);
   return true;
 }
 
@@ -49,7 +49,7 @@ bool rk_window_redo(rk_window *w) {
   if (!w || w->ndone == w->nhistory) return false;
   rk_history_entry *e = &w->history[w->ndone++];
   if (e->a.run) e->a.run(e->a.user);
-  rk_window_toast(w, e->label, "undo", undo_toast, w);
+  rk_window_toast(w, e->label, rk__words()->undo, undo_toast, w);
   return true;
 }
 

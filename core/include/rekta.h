@@ -102,6 +102,7 @@ typedef enum rk_metric {
   RK_RADIUS_S, RK_RADIUS_M, RK_RADIUS_L, RK_RADIUS_TILE,
   RK_TILE_UNIT, RK_APPBAR_HEIGHT, RK_TOUCH_TARGET, RK_PANE_MIN,
   RK_CONTROL_HEIGHT, RK_ROW_HEIGHT, RK_CONTROL_PADDING,   /* these three follow the density */
+  RK_PIVOT_WIDE,                                   /* from what width a pivot shows its facets side by side; 0 never */
   RK_METRIC_FORCE32 = 0x7fffffff
 } rk_metric;
 
@@ -109,6 +110,7 @@ typedef enum rk_duration {
   RK_DURATION_PRESS, RK_DURATION_SHORT, RK_DURATION_MODERATE, RK_DURATION_LONG, RK_DURATION_STAGGER,
   RK_DURATION_FLOAT, RK_DURATION_PIVOT_GLIDE, RK_DURATION_PIVOT_SIZE,
   RK_TIMING_TOAST, RK_TIMING_TAP_DELAY, RK_TIMING_LONG_PRESS, RK_TIMING_TIP_DELAY,
+  RK_TIMING_STALE,                                 /* live data without an update this long is stale (the app's to show) */
   RK_DURATION_FORCE32 = 0x7fffffff
 } rk_duration;
 
@@ -147,6 +149,31 @@ RK_API void rk_app_set_motion(rk_motion_pref motion);
 RK_API bool rk_app_is_reduced_motion(void);
 RK_API void rk_app_set_density(rk_density density);
 RK_API void rk_app_set_accent(rk_color light, rk_color dark);    /* 0, 0: the ink of the theme */
+/* A domain's colour code, as the web's --rk-series-1 to -8 (docs/data.md): colours its users already read, such as
+   heart-rate zones, for small marks only - a tile's sparkline, a row's tag square (rk_tile_set_code, rk_row_set_code),
+   a custom view's marks - never text, never a fill. Per theme, as the accent; dark 0 takes light; 0, 0: ink again.
+   Each value should hold 3:1 on bg and surface and stand 0.09 apart (OKLab) under protanopia and deuteranopia from
+   every other code set; one that does not is still set, and said through rk_app_set_log. */
+RK_API void rk_app_set_series(int code, rk_color light, rk_color dark);   /* code 1 to 8 */
+RK_API rk_color rk_series_of(int code);            /* in the current theme; ink while it has no value */
+/* What a product may change (docs/platforms.md, Product overrides); motion, colours and the type scale stay the
+   design's. A metric: RK_TILE_UNIT, RK_PIVOT_WIDE (0: no pivot goes wide). A timing: RK_TIMING_TOAST (how long a
+   toast stays, and so the undo window), RK_TIMING_STALE. Below 0: the token's again. Any other is said, not set. */
+RK_API void rk_app_set_metric(rk_metric metric, float px);
+RK_API void rk_app_set_timing(rk_duration timing, double ms);
+/* The words the library says itself, as the web's Rekta.strings: English until an app sets its own (copied). A
+   field NULL keeps the English word; undone and move are formats with one %s. NULL: the English words again. */
+typedef struct rk_strings {
+  uint32_t size;                                   /* sizeof(rk_strings) */
+  const char *undo, *redo;                         /* a toast's action after rk_window_do, after an undo */
+  const char *undone;                              /* the toast after an undo: "Undone: %s", the action's label */
+  const char *ok, *cancel;                         /* a confirmation's answers, where its desc names none */
+  const char *choose;                              /* a select with nothing chosen yet: "choose one" */
+  const char *back;                                /* a split's crumb without a title: "back" */
+  const char *move;                                /* a grip, read aloud: "move %s", its row's title */
+  const char *on, *off;                            /* beside a toggle */
+} rk_strings;
+RK_API void rk_app_set_strings(const rk_strings *strings);
 /* A font file (TrueType or OpenType, or a collection's first face) for the characters Barlow lacks, tried before the
    system's: an app that writes Japanese may bring its own. False when it cannot be read or drawn with. */
 RK_API bool rk_app_add_font(const char *path);
@@ -401,12 +428,16 @@ RK_API void rk_tile_set_stat(rk_view *tile, const char *value, const char *label
 RK_API void rk_tile_set_message(rk_view *tile, const char *message);     /* NULL removes it */
 RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);   /* a sparkline; 0 removes it */
 RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1; < 0 removes it */
+RK_API void rk_tile_set_code(rk_view *tile, int code);   /* its sparkline in a domain colour (rk_app_set_series); 0: ink */
 
 /* Hairline rows: a title on the left, a meta or a status tag on the right. */
 RK_API rk_view *rk_rows(void);
 RK_API rk_view *rk_rows_add(rk_view *rows, const char *title, const char *meta, rk_status status);   /* the row, borrowed */
 /* A row is a view: rk_insert moves it, rk_view_remove takes it out, and it presses, has a tooltip or a menu like any. */
 RK_API void rk_row_set(rk_view *row, const char *title, const char *meta, rk_status status);
+/* A code (1 to 8, rk_app_set_series) makes the right side a tag: its square in the code's colour, its words (the meta,
+   or the status word) in ink. 0: none. */
+RK_API void rk_row_set_code(rk_view *row, int code);
 /* Rows the user puts in order: each gets a grip that drags it (4 px, then it lifts and the others step aside) or, from
    the keyboard, Space picks it up, Up and Down move it, Space puts it down and Escape puts it back; Alt with Up or Down
    moves it at once. moved() hears each move to keep the app's order (and its undo); rk_rows_move moves one, gliding. */
@@ -617,6 +648,14 @@ RK_API int rk_pivot_selected(rk_controller *pivot);
 RK_API void rk_pivot_on_change(rk_controller *pivot, void (*fn)(rk_controller *pivot, int index, void *user), void *user);   /* the user picked a facet */
 typedef enum rk_pivot_layout { RK_PIVOT_TOP, RK_PIVOT_SIDE, RK_PIVOT_LAYOUT_FORCE32 = 0x7fffffff } rk_pivot_layout;
 RK_API void rk_pivot_set_layout(rk_controller *pivot, rk_pivot_layout layout);   /* titles along the top or down the leading side */
+/* Wide: from a width of the facets' room up, every facet shows, side by side as panorama sections, and the strip is a
+   jump list that follows the scroll - a title (a click; Left, Right, Home, End with focus staying on the strip)
+   glides its facet to the leading edge over pivot-glide, Tab goes into the facet chosen, a facet scrolled to the
+   leading edge becomes the one chosen and the chosen one stays while it is whole in sight. Narrower, one facet at a
+   time again, the one last chosen. A pivot that picks the place, or with its titles down the side, never goes wide.
+   width 0: the app's (RK_PIVOT_WIDE, 1300 px until rk_app_set_metric); below 0: never. */
+RK_API void rk_pivot_set_wide(rk_controller *pivot, float width);
+RK_API bool rk_pivot_is_wide(rk_controller *pivot);
 
 /* Sheets: a short question from the top edge over a shaded backdrop. Escape or a click on the shading dismisses. */
 RK_API void rk_controller_present(rk_controller *presenter, rk_controller *sheet);   /* takes sheet */
@@ -627,7 +666,7 @@ RK_API void rk_controller_on_dismiss(rk_controller *sheet, void (*fn)(rk_control
 typedef struct rk_confirm_desc {
   uint32_t size;                                   /* sizeof(rk_confirm_desc) */
   const char *title, *text, *kicker;               /* the question; a line under it; a word above it */
-  const char *ok, *cancel;                         /* NULL: "ok", "cancel" */
+  const char *ok, *cancel;                         /* NULL: the app's words (rk_strings): "ok", "cancel" */
   bool cancel_is_safe;
 } rk_confirm_desc;
 RK_API rk_controller *rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc, void (*answered)(bool ok, void *user), void *user);   /* its sheet, borrowed: dismiss it to withdraw the question */
@@ -811,6 +850,11 @@ typedef struct rk_ui {
                                                       changes (0: at every build) */
   uint32_t pulse;                                  /* a new one plays its change again */
   rk_ui_change change;
+
+  /* added later, as rk_ui grows: at its end */
+  int code;                                        /* a tile's sparkline, a row's tag: a domain colour, 1 to 8 */
+  float wide;                                      /* a pivot's: from what width its facets show side by side (0: the
+                                                      app's, below 0: never) */
 } rk_ui;
 
 /* A window built from a declaration is made by rk_window_create (rk_window_desc.build). Elsewhere, a declared view

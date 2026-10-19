@@ -12,13 +12,13 @@ static const rk_color rk_tok_colors[2][RK__ROLE_COUNT] = {
 
 /* [density: comfortable, compact][rk_metric], logical px */
 static const float rk_tok_metrics[2][RK__METRIC_COUNT] = {
-  { 4.0f, 8.0f, 16.0f, 32.0f, 48.0f, 4.0f, 8.0f, 12.0f, 2.0f, 150.0f, 56.0f, 44.0f, 240.0f, 44.0f, 44.0f, 16.0f },
-  { 4.0f, 8.0f, 16.0f, 32.0f, 48.0f, 4.0f, 8.0f, 12.0f, 2.0f, 150.0f, 56.0f, 44.0f, 240.0f, 32.0f, 32.0f, 12.0f }
+  { 4.0f, 8.0f, 16.0f, 32.0f, 48.0f, 4.0f, 8.0f, 12.0f, 2.0f, 150.0f, 56.0f, 44.0f, 240.0f, 44.0f, 44.0f, 16.0f, 1300.0f },
+  { 4.0f, 8.0f, 16.0f, 32.0f, 48.0f, 4.0f, 8.0f, 12.0f, 2.0f, 150.0f, 56.0f, 44.0f, 240.0f, 32.0f, 32.0f, 12.0f, 1300.0f }
 };
 
 /* [rk_duration], ms; the first RK_TOK_MOTION_COUNT are motion (0 under reduced motion), the rest wall-clock timings */
 #define RK_TOK_MOTION_COUNT 8
-static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.0f, 600.0f, 30.0f, 150.0f, 500.0f, 220.0f, 5000.0f, 100.0f, 500.0f, 500.0f };
+static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.0f, 600.0f, 30.0f, 150.0f, 500.0f, 220.0f, 5000.0f, 100.0f, 500.0f, 500.0f, 30000.0f };
 
 /* Type sizes as min, max and the share of the hosting width that moves between them (_VW); fixed sizes have _VW 0. */
 #define RK_TOK_WEIGHT_LIGHT 300

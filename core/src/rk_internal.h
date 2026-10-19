@@ -43,8 +43,8 @@
 #define RK_COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
 /* how many there are of each token kind: ours, not the ABI's, so a new one breaks no app */
 #define RK__ROLE_COUNT (RK_ROLE_GLASS + 1)
-#define RK__METRIC_COUNT (RK_CONTROL_PADDING + 1)
-#define RK__DURATION_COUNT (RK_TIMING_TIP_DELAY + 1)
+#define RK__METRIC_COUNT (RK_PIVOT_WIDE + 1)
+#define RK__DURATION_COUNT (RK_TIMING_STALE + 1)
 #define RK__TEXT_STYLE_COUNT (RK_TEXT_NAV + 1)
 
 /* Objects --------------------------------------------------------------------------------------------------------- */
@@ -85,6 +85,9 @@ typedef struct rk_prefs {
   rk_theme theme; rk_motion_pref motion; rk_density density;
   bool system_dark, system_reduced, system_compact;
   rk_color accent[2];
+  rk_color series[8][2];                                   /* a domain's colour code, light and dark; 0: ink */
+  bool metric_set[RK__METRIC_COUNT]; float metric[RK__METRIC_COUNT];         /* a product's own (rk_app_set_metric) */
+  bool timing_set[RK__DURATION_COUNT]; double timing[RK__DURATION_COUNT];    /* (rk_app_set_timing) */
 } rk_prefs;
 extern rk_prefs rk__prefs;
 
@@ -94,6 +97,15 @@ int rk__density_index(void);
 float rk__ease(const float bezier[4], float t);            /* cubic-bezier timing, t in 0..1 */
 extern const float rk__ease_base[4], rk__ease_in[4], rk__ease_out[4], rk__ease_glide[4];
 rk_color rk__mix(rk_color a, rk_color b, float t);
+/* Colour maths as scripts/lib/color.mjs has it, for a product's colours: WCAG 2 contrast, and OKLab distance as seen
+   (kind 0) or simulated for protanopia (1), deuteranopia (2), tritanopia (3) - Machado 2009, severity 1. */
+double rk__contrast(rk_color a, rk_color b);
+double rk__distance(rk_color a, rk_color b, int kind);
+rk_color rk__series(int code);                             /* a code's colour now (0, or none set: ink) */
+
+/* The words the library says (app.c): rk_app_set_strings over the English ones. */
+const rk_strings *rk__words(void);
+void rk__say(char *out, size_t size, const char *format, const char *arg);   /* a word's format with its one %s */
 
 /* Raster (raster.c): premultiplied 32-bit pixels, 0xAARRGGBB in memory order B, G, R, A ------------------------------ */
 
@@ -419,7 +431,7 @@ const char *rk__status_word(rk_status s);                 /* "active", "done", .
 rk_role rk__status_full(rk_status s);                     /* the status in its full colour */
 
 /* A row of rk_rows (widgets.c); sort.c gives it a grip. */
-typedef struct rk__row { char *title, *meta; rk_status status; bool lifted; rk_view *grip; } rk__row;
+typedef struct rk__row { char *title, *meta; rk_status status; int code; bool lifted; rk_view *grip; } rk__row;
 extern const rk_class rk__row_class;
 bool rk__rows_last(rk_view *row);                         /* the last row in its order: a rule below as well */
 void rk__rows_added(rk_view *rows, rk_view *row);
