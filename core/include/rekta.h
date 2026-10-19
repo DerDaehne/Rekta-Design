@@ -30,7 +30,7 @@
 #include <stdint.h>
 
 #define RK_VERSION_MAJOR 0
-#define RK_VERSION_MINOR 3
+#define RK_VERSION_MINOR 4
 #define RK_VERSION_PATCH 0
 #define RK_VERSION ((RK_VERSION_MAJOR << 16) | (RK_VERSION_MINOR << 8) | RK_VERSION_PATCH)
 

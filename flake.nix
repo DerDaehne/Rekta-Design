@@ -22,7 +22,7 @@
       packages = each (pkgs: rec {
         rekta-core = pkgs.stdenv.mkDerivation {
           pname = "rekta-core";
-          version = "0.3.0";
+          version = "0.4.0";
           src = ./core;
           buildInputs = windowing pkgs;
           nativeBuildInputs = [ pkgs.pkg-config ];

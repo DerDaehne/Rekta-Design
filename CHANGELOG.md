@@ -5,10 +5,12 @@ tokens, public hooks, `data-rk-*` attributes, events and the `rekta.js`
 API are the public surface. Before 1.0, a minor version may still break
 it; each entry says how.
 
-## Unreleased
+## 0.4.0 — 2026-10-19
 
 Reports #36–#65, from products built on 0.3.0: Rekta Design in apps with a
-framework router and a server.
+framework router and a server. rekta-core is unchanged apart from its
+version: its soname follows the minor version (`librekta.so.0.4`), so apps
+linked against 0.3 relink.
 
 ### Changed (may need a change in an app)
 

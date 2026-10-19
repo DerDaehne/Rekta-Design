@@ -99,7 +99,7 @@ on every push to `main` (and by hand).
 
 ## Status
 
-**0.3: everything data-heavy desktop and web apps need, on the web and
+**0.4: everything data-heavy desktop and web apps need, on the web and
 natively.** 0.2 laid the foundation: one token source for every
 platform, the component stylesheet and a framework-free behaviour
 script, with routes and back, window-size classes, density and a
@@ -109,7 +109,12 @@ tables with Metro selection, columns and editing, trees, long lists,
 splits, a command palette, search and filters, forms and every input,
 the live contract and an undo history, charts, meters and progress, an
 icon set, the title bar of an installed app, and installing and offline.
-Next: date ranges, a notification centre, rich text. See
+0.4 makes the web part fit apps with a framework router and a server:
+`pivot()` and `strip()` for framework-held state, toasts with a server's
+undo window and a status, a banner that knows when a state began, the
+places in the app bar, forms in sheets that ask before input goes,
+destructive and icon buttons, plural-aware strings and TypeScript
+declarations. Next: date ranges, a notification centre, rich text. See
 [CHANGELOG.md](CHANGELOG.md).
 
 ## License

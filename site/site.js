@@ -235,6 +235,7 @@
     ['Tree', 'content', 'success', '0.3'], ['Sortable', 'content', 'success', '0.3'], ['Long list', 'content', 'success', '0.3'], ['Undo history', 'feedback', 'success', '0.3'],
     ['Live contract', 'feedback', 'success', '0.3'], ['Chart', 'data', 'success', '0.3'], ['Meter', 'data', 'success', '0.3'], ['Progress dots', 'data', 'success', '0.3'],
     ['Icons', 'assets', 'success', '0.3'], ['Title bar', 'shell', 'success', '0.3'], ['App shell', 'shell', 'info', '0.3'],
+    ['Share bar', 'data', 'success', '0.4'], ['Icon button', 'actions', 'success', '0.4'], ['Status region', 'layout', 'success', '0.4'],
     ['Date range', 'forms', 'warning', 'next'], ['Notification centre', 'feedback', 'warning', 'next'], ['Rich text', 'forms', 'warning', 'next'],
   ];
   const compHtml = COMPONENTS.map(([name, group, status, since]) => `<tr data-name="${name}" data-status-v="${status}"><td class="rk-check"></td><th scope="row">${name}</th><td data-rk-edit data-rk-tip="double-click or F2 to edit">${group}</td><td><span class="rk-tag" data-status="${status}">${WORD[status]}</span></td><td class="rk-num" data-sort="${since === 'next' ? 9 : since}">${since}</td></tr>`).join('');
