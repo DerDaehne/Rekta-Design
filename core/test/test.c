@@ -2932,6 +2932,317 @@ static void test_declared_warnings(void) {
   rk_release(v);
 }
 
+/* What a product makes its own (docs/platforms.md, Product overrides): the words, a domain's colour code, the toast
+   and stale timings, the tile unit and the pivot's wide threshold - and nothing else. */
+static rk_view *find_said(rk_view *v, const char *text) {   /* the view that says text, to a screen reader */
+  if (v->access_label && !strcmp(v->access_label, text)) return v;
+  for (int i = 0; i < v->nkids; i++) { rk_view *f = find_said(v->kids[i], text); if (f) return f; }
+  return NULL;
+}
+static int pixels_of(rk_window *w, rk_rect r, rk_color c) {   /* device pixels in r (window px) drawn in c, opaque */
+  int n = 0, x0 = (int)RK_MAX(0.0f, r.x), y0 = (int)RK_MAX(0.0f, r.y), x1 = (int)RK_MIN((float)w->fb->w, r.x + r.w), y1 = (int)RK_MIN((float)w->fb->h, r.y + r.h);
+  for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) {
+    uint32_t p = w->fb->px[(size_t)y * w->fb->stride + x];
+    int dr = abs((int)((p >> 16) & 255) - (int)(c >> 24)), dg = abs((int)((p >> 8) & 255) - (int)((c >> 16) & 255)), db = abs((int)(p & 255) - (int)((c >> 8) & 255));
+    if ((p >> 24) == 255 && dr <= 3 && dg <= 3 && db <= 3) n++;
+  }
+  return n;
+}
+static int product_told;
+static void product_tell(rk_controller *c, int i, void *u) { (void)c; (void)i; (void)u; product_told++; }
+
+static void test_product_words(void) {
+  const rk_strings *e = rk__words();
+  CHECK(!strcmp(e->undo, "undo") && !strcmp(e->undone, "Undone: %s") && !strcmp(e->choose, "choose one") && !strcmp(e->back, "back"), "English until an app says otherwise");
+  char said[64];
+  rk__say(said, sizeof said, "%s: 100%%", "done");
+  CHECK(!strcmp(said, "done: 100%"), "a word's format: its one %%s and a percent sign (%s)", said);
+  rk__say(said, 8, "Undone: %s", "a long label");
+  CHECK(!strcmp(said, "Undone:"), "cut to fit (%s)", said);
+  rk_strings de = { .size = sizeof de, .undo = "rückgängig", .redo = "wiederholen", .undone = "Rückgängig: %s", .ok = "ja", .cancel = "abbrechen",
+                    .choose = "bitte wählen", .back = "zurück", .move = "%s verschieben", .on = "an", .off = "aus" };
+  rk_app_set_strings(&de);
+  rk_window *w = window(700, 460);
+  rk_view *page = col(12, 16);
+  rk_view *sel = rk_add(page, rk_select((const char *const[]){ "a", "b" }, 2, -1));
+  rk_add(page, rk_toggle("wifi", true));
+  rk_view *rows = rk_add(page, rk_rows());
+  rk_view *row = rk_rows_add(rows, "schema.sql", NULL, RK_STATUS_NONE);
+  rk_rows_set_sortable(rows, NULL, NULL);
+  show(w, page, "words");
+  rk_controller *home = rk_window_root(w);
+  rk_textfmt body = rk__textfmt(RK_TEXT_BODY, 0);
+  CHECK(rk_view_measure(sel, (rk_size){ INFINITY, INFINITY }).w >= rk__text_width("bitte wählen", -1, &body) && !strcmp(rk__words()->choose, "bitte wählen"), "a select with none chosen says the app's word");
+  CHECK(((rk__row *)row->state)->grip && !strcmp(((rk__row *)row->state)->grip->access_label, "schema.sql verschieben"), "a grip says the app's move: %s", ((rk__row *)row->state)->grip ? ((rk__row *)row->state)->grip->access_label : "(none)");
+  int n = 0;
+  rk_window_do(w, &(rk_action){ .size = sizeof(rk_action), .label = "3 archiviert", .run = act_up, .undo = act_down, .user = &n });
+  rk_app_run_for(300);
+  CHECK(rk_view_find(w->toasts, "rückgängig") != NULL, "the toast offers the app's undo");
+  rk_window_undo(w);
+  rk_app_run_for(300);
+  CHECK(find_said(w->toasts, "Rückgängig: 3 archiviert") && rk_view_find(w->toasts, "wiederholen"), "an undo says so in the app's words, and offers its redo");
+  rk_confirm_desc d = { .size = sizeof d, .title = "Löschen?" };
+  rk_confirm(home, &d, NULL, NULL);
+  rk_app_run_for(500);
+  CHECK(rk_view_find(w->sheets, "ja") && rk_view_find(w->sheets, "abbrechen"), "a confirmation answers in the app's words");
+  rk_window_key(w, RK_KEY_ESCAPE);
+  rk_app_run_for(600);
+  rk_view *sp = rk_split(rk_label("list", RK_TEXT_BODY), rk_label("detail", RK_TEXT_BODY), NULL);
+  CHECK(sp && !strcmp(((split *)sp->state)->crumb->access_label, "zurück"), "a split's crumb without a title: the app's back");
+  rk_release(sp);
+  int was = logged;
+  rk_app_set_strings(&(rk_strings){ .size = sizeof(rk_strings), .undone = "Rückgängig: %d", .move = "%s und %s" });
+  CHECK(logged == was + 2 && !strcmp(rk__words()->undone, "Undone: %s") && !strcmp(rk__words()->move, "move %s") && !strcmp(rk__words()->ok, "ok"),
+        "a format without exactly one %%s is said and the English stays; a new table replaces the old (%s)", logged_last);
+  was = logged;
+  rk_app_set_strings(&(rk_strings){ .undo = "nope" });
+  CHECK(logged == was + 1 && !strcmp(rk__words()->undo, "undo"), "a table without its size: said, not read");
+  rk_app_set_strings(NULL);
+  CHECK(!strcmp(rk__words()->cancel, "cancel") && !strcmp(rk__words()->on, "on"), "NULL: the English words again");
+  done(w);
+}
+
+static void test_product_overrides(void) {
+  CHECK(rk_metric_of(RK_PIVOT_WIDE) == 1300 && rk_duration_of(RK_TIMING_STALE) == 30000, "size.pivot-wide and timing.stale from the tokens");
+  int was = logged;
+  rk_app_set_metric(RK_SPACE_M, 3);
+  rk_app_set_timing(RK_DURATION_SHORT, 1);
+  CHECK(logged == was + 2 && rk_metric_of(RK_SPACE_M) == 16 && rk_duration_of(RK_DURATION_SHORT) == 250, "the design's own values are said, not set");
+  rk_app_set_timing(RK_TIMING_STALE, 60000);
+  rk_app_set_motion(RK_MOTION_PREF_OFF);
+  CHECK(rk_duration_of(RK_TIMING_STALE) == 60000, "a product's stale timing, kept under reduced motion");
+  rk_app_set_motion(RK_MOTION_PREF_SYSTEM);
+  rk_app_set_timing(RK_TIMING_STALE, -1);
+  CHECK(rk_duration_of(RK_TIMING_STALE) == 30000, "below 0: the token's again");
+  rk_window *w = window(800, 500);
+  rk_view *page = col(16, 16);
+  rk_view *grid = rk_add(page, rk_tile_grid());
+  rk_view *t = rk_add(grid, rk_tile("12", "builds"));
+  show(w, page, "overrides");
+  CHECK(fabsf(rk_view_frame(t).w - 150) < 0.5f, "a tile of the token's unit");
+  rk_app_set_metric(RK_TILE_UNIT, 170);
+  rk_app_run_for(600);
+  CHECK(rk_metric_of(RK_TILE_UNIT) == 170 && fabsf(rk_view_frame(t).w - 170) < 0.5f, "the product's tile unit lays the grid out again (%g)", rk_view_frame(t).w);
+  rk_app_set_metric(RK_TILE_UNIT, -1);
+  rk_app_run_for(600);
+  CHECK(fabsf(rk_view_frame(t).w - 150) < 0.5f, "and back");
+  rk_app_set_timing(RK_TIMING_TOAST, 10000);
+  rk_window_toast(w, "kept longer", NULL, NULL, NULL);
+  rk_app_run_for(7000);
+  CHECK(w->toasts->nkids == 1, "a toast stays for the product's toast timing");
+  rk_app_run_for(5000);
+  CHECK(w->toasts->nkids == 0, "and then goes");
+  rk_app_set_timing(RK_TIMING_TOAST, -1);
+  CHECK(rk_duration_of(RK_TIMING_TOAST) == 5000, "the toast's token again");
+  done(w);
+}
+
+static void test_product_codes(void) {
+  CHECK(rk_series_of(1) == rk_color_of(RK_ROLE_TEXT) && rk_series_of(0) == rk_color_of(RK_ROLE_TEXT), "a code without a value is ink");
+  CHECK(CLOSE_TO(rk__contrast(0x000000ffu, 0xffffffffu), 21, 1e-9) && CLOSE_TO(rk__contrast(0x5489b6ffu, 0xffffffffu), 3.729549, 1e-5), "WCAG contrast, as color.mjs");
+  CHECK(CLOSE_TO(rk__distance(0x5489b6ffu, 0x7d8d5effu, 0), 0.139153, 1e-5) && CLOSE_TO(rk__distance(0x5489b6ffu, 0x7d8d5effu, 1), 0.137028, 1e-5)
+        && CLOSE_TO(rk__distance(0x5489b6ffu, 0x7d8d5effu, 2), 0.142140, 1e-5) && CLOSE_TO(rk__distance(0x5489b6ffu, 0x7d8d5effu, 3), 0.091339, 1e-5),
+        "OKLab distance seen and under protanopia, deuteranopia, tritanopia, as color.mjs (%f)", rk__distance(0x5489b6ffu, 0x7d8d5effu, 1));
+  int was = logged;
+  rk_app_set_series(6, 0xd8d8dbffu, 0);
+  CHECK(logged > was && strstr(logged_last, "code 6") && strstr(logged_last, "3:1"), "a code too faint on the ground is said: %s", logged_last);
+  CHECK(rk_series_of(6) == 0xd8d8dbffu, "and still set");
+  rk_app_set_series(6, 0, 0);
+  static const rk_color zones[5][2] = { { 0x5489b6ffu, 0x4f8ac6ffu }, { 0x147175ffu, 0x3ebfc6ffu }, { 0x7d8d5effu, 0xa3e4a4ffu }, { 0x805b21ffu, 0xd79f4affu }, { 0x6d2a27ffu, 0xc9635dffu } };
+  was = logged;
+  for (int i = 0; i < 5; i++) rk_app_set_series(i + 1, zones[i][0], zones[i][1]);
+  CHECK(logged == was, "the showcase's five heart-rate zones pass, as build.mjs --check holds them (%s)", logged == was ? "" : logged_last);
+  CHECK(rk_series_of(2) == 0x147175ffu, "a code's value in the light theme");
+  rk_app_set_theme(RK_THEME_DARK);
+  CHECK(rk_series_of(2) == 0x3ebfc6ffu, "and in the dark");
+  rk_app_set_theme(RK_THEME_SYSTEM);
+  was = logged;
+  rk_app_set_series(7, 0x5a8cb0ffu, 0x5a8cb0ffu);
+  CHECK(logged > was && strstr(logged_last, "apart") && strstr(logged_last, "0.09"), "a code too close to another under colour blindness is said: %s", logged_last);
+  rk_app_set_series(7, 0, 0);
+  was = logged;
+  rk_app_set_series(9, 0x147175ffu, 0);
+  CHECK(logged == was + 1 && strstr(logged_last, "1 to 8"), "a code outside 1 to 8 is said");
+  /* small marks take a code: a tile's sparkline, a row's tag square; the words stay ink */
+  rk_window *w = window(700, 460);
+  rk_view *page = col(16, 16);
+  rk_view *grid = rk_add(page, rk_tile_grid());
+  rk_view *t = rk_add(grid, rk_tile("142", "bpm"));
+  rk_view_set_span(t, 2, 1);
+  rk_tile_set_series(t, (const float[]){ 120, 128, 150, 142, 161, 139 }, 6);
+  rk_view *rows = rk_add(page, rk_rows());
+  rk_view *row = rk_rows_add(rows, "zone 2", "31 min", RK_STATUS_NONE);
+  show(w, page, "codes");
+  rk_app_run_for(100);
+  CHECK(pixels_of(w, rk__window_rect(t), 0x147175ffu) == 0 && pixels_of(w, rk__window_rect(row), 0x147175ffu) == 0, "without a code: nothing in the code's colour");
+  rk_tile_set_code(t, 2);
+  rk_row_set_code(row, 2);
+  rk_app_run_for(100);
+  int line = pixels_of(w, rk__window_rect(t), 0x147175ffu), square = pixels_of(w, rk__window_rect(row), 0x147175ffu);
+  CHECK(line > 40 && square >= 36, "the sparkline and the tag's square take code 2 (%d, %d pixels)", line, square);
+  CHECK(pixels_of(w, rk__window_rect(row), rk_color_of(RK_ROLE_TEXT)) > 20, "the tag's words stay ink");
+  shot(w, "codes");
+  rk_tile_set_code(t, 4);
+  rk_app_run_for(100);
+  CHECK(pixels_of(w, rk__window_rect(t), 0x147175ffu) == 0 && pixels_of(w, rk__window_rect(t), 0x805b21ffu) > 40, "another code, another colour");
+  for (int i = 1; i <= 8; i++) rk_app_set_series(i, 0, 0);
+  rk_app_run_for(100);
+  CHECK(pixels_of(w, rk__window_rect(t), 0x805b21ffu) == 0 && rk_series_of(4) == rk_color_of(RK_ROLE_TEXT), "a code without a value: ink, as on the web");
+  was = logged;
+  rk_tile_set_code(t, 12);
+  rk_row_set_code(t, 1);
+  CHECK(logged == was + 2, "a code out of range, a row's call on a tile: said");
+  done(w);
+}
+
+/* Facets side by side: from the pivot's wide width up, every facet shows; the strip is a jump list that follows. */
+static void test_wide_pivot(void) {
+  rk_window *w = window(1500, 700);
+  rk_view *page = col(16, 32);
+  rk_controller *owner = rk_controller_create_with_view(page, "record");
+  rk_controller *piv = rk_pivot();
+  static const char *const names[] = { "summary", "laps", "zones", "notes", "files" };
+  rk_view *facets[5], *buttons[5];
+  for (int i = 0; i < 5; i++) {
+    facets[i] = col(16, 0);
+    rk_add(facets[i], rk_label(names[i], RK_TEXT_GROUP));
+    buttons[i] = rk_add(facets[i], rk_button(names[i], NULL, NULL));
+    rk_pivot_add(piv, names[i], facets[i]);
+  }
+  rk_add(page, rk_label("Ride", RK_TEXT_TITLE));
+  rk_view *pv = rk_add(page, rk_controller_embed(owner, piv));
+  rk_view_set_grow(pv, 1);
+  rk_pivot_on_change(piv, product_tell, NULL);
+  rk_window_show(w, owner);
+  rk_app_run_for(200);
+  pivot *p = piv->impl;
+  CHECK(rk_pivot_is_wide(piv), "from size.pivot-wide (1300) up a facet pivot is wide");
+  bool all = true;
+  for (int i = 0; i < 5; i++) all = all && rk_view_window(facets[i]) == w;
+  rk_rect f0 = rk__window_rect(facets[0]), f1 = rk__window_rect(facets[1]);
+  float edge = f0.x, unit = 3 * rk_metric_of(RK_TILE_UNIT) + 2 * rk_metric_of(RK_SPACE_S) + 2 * rk_metric_of(RK_SPACE_XL);
+  CHECK(all && fabsf(f0.w - unit) < 0.5f && fabsf(f1.x - (f0.x + f0.w + rk_metric_of(RK_SPACE_XL))) < 0.5f, "every facet shows, side by side, three tiles wide and space-xl apart");
+  shot(w, "pivot-wide");
+  rk_window_focus(w, p->strip);
+  product_told = 0;
+  key(w, RK_KEY_RIGHT, 0);
+  CHECK(rk_pivot_selected(piv) == 1 && rk_window_focused(w) == p->strip && product_told == 1, "Right picks the next title; focus stays on the strip");
+  rk_app_run_for(rk_duration_of(RK_DURATION_PIVOT_GLIDE) / 2);
+  float mid = rk__window_rect(facets[1]).x;
+  rk_app_run_for(rk_duration_of(RK_DURATION_PIVOT_GLIDE));
+  CHECK(mid > edge + 1 && mid < f1.x - 1 && fabsf(rk__window_rect(facets[1]).x - edge) < 0.5f, "its facet glides to the leading edge over pivot-glide (%g half way)", mid);
+  key(w, RK_KEY_END, 0);
+  rk_app_run_for(800);
+  rk_rect last = rk__window_rect(facets[4]), body = rk__window_rect(p->body);
+  CHECK(rk_pivot_selected(piv) == 4 && fabsf(last.x + last.w - (body.x + body.w)) < 0.5f, "End: the last facet, as far as the facets scroll");
+  key(w, RK_KEY_HOME, 0);
+  key(w, RK_KEY_RIGHT, 0); key(w, RK_KEY_RIGHT, 0);
+  rk_app_run_for(800);
+  key(w, RK_KEY_TAB, 0);
+  CHECK(rk_window_focused(w) == buttons[2], "Tab goes into the facet chosen, not the first");
+  key(w, RK_KEY_TAB, 0);
+  rk_app_run_for(800);
+  CHECK(rk_window_focused(w) == buttons[3] && rk_pivot_selected(piv) == 2, "Tab on goes through the next facet; whole in sight, the chosen one stays");
+  key(w, RK_KEY_TAB, 0);
+  rk_app_run_for(800);
+  rk_rect f4 = rk__window_rect(facets[4]);
+  body = rk__window_rect(p->body);
+  CHECK(rk_window_focused(w) == buttons[4] && rk_pivot_selected(piv) == 4 && f4.x + f4.w <= body.x + body.w + 0.5f, "a facet out of sight that focus reaches comes in, and is chosen");
+  rk_window_focus(w, p->strip);
+  key(w, RK_KEY_HOME, 0);
+  rk_app_run_for(800);
+  product_told = 0;
+  rk_event wheel = { sizeof wheel, RK_EVENT_WHEEL, 0, { f0.x + 200, f0.y + 200 }, 0, 0, 600, 0, 0, NULL, NULL, 0 };
+  rk_window_inject(w, &wheel);
+  rk_app_run_for(600);
+  CHECK(rk_pivot_selected(piv) == 1 && product_told == 1, "a facet scrolled to the leading edge becomes the one chosen (%d)", rk_pivot_selected(piv));
+  wheel.wheel_y = 8;
+  rk_window_inject(w, &wheel);
+  rk_app_run_for(600);
+  CHECK(rk_pivot_selected(piv) == 1 && product_told == 1, "the chosen one stays while it is whole in sight");
+  /* narrower: one facet at a time again, the one last chosen */
+  rk__window_resized(w, 1000, 700, 1);
+  rk_app_run_for(200);
+  CHECK(!rk_pivot_is_wide(piv) && rk_view_window(facets[1]) == w && rk_view_window(facets[0]) != w && rk_view_window(facets[2]) != w, "narrower: the facet last chosen alone");
+  key(w, RK_KEY_RIGHT, 0);
+  rk_app_run_for(800);
+  CHECK(rk_pivot_selected(piv) == 2 && rk_view_window(facets[2]) == w && rk_view_window(facets[1]) != w, "and it picks one facet at a time");
+  rk_pivot_set_wide(piv, 900);
+  rk_app_run_for(200);
+  CHECK(rk_pivot_is_wide(piv) && fabsf(rk__window_rect(facets[2]).x - edge) < 0.5f, "a pivot's own threshold; wide again, the chosen facet at the leading edge");
+  rk_pivot_set_wide(piv, -1);
+  rk_app_run_for(200);
+  CHECK(!rk_pivot_is_wide(piv), "below 0: never");
+  rk_pivot_set_wide(piv, 0);
+  rk__window_resized(w, 1500, 700, 1);
+  rk_app_set_metric(RK_PIVOT_WIDE, 0);
+  rk_app_run_for(200);
+  CHECK(!rk_pivot_is_wide(piv), "the app's threshold 0: no pivot goes wide");
+  rk_app_set_metric(RK_PIVOT_WIDE, 1400);
+  rk_app_run_for(200);
+  CHECK(rk_pivot_is_wide(piv), "the app's own threshold (1400 at 1500)");
+  rk_app_set_metric(RK_PIVOT_WIDE, -1);
+  rk_pivot_remove(piv, 0);
+  rk_pivot_insert_controller(piv, 0, rk_controller_create_with_view(col(16, 0), "again"));
+  rk_app_run_for(200);
+  CHECK(p->n == 5 && rk_view_window(rk_controller_view(p->facets[0])) == w && rk_view_window(facets[4]) == w && p->body->nkids == 5, "wide, a facet goes and comes with the rest in sight");
+  done(w);
+  /* a pivot that picks the place never goes wide */
+  w = window(1500, 700);
+  rk_controller *nav = rk_pivot();
+  for (int i = 0; i < 3; i++) rk_pivot_add(nav, names[i], col(16, 0));
+  rk_window_show(w, nav);
+  rk_app_run_for(200);
+  CHECK(!rk_pivot_is_wide(nav), "a pivot that is the place stays one place at a time");
+  done(w);
+}
+
+/* Declared: a tile's and a row's .code, a pivot's .wide; and the turn is a new place's arrival: its tiles do not build
+   in again after it. */
+typedef struct dprod { int tab; bool open; } dprod;
+static void dprod_build(void *user) {
+  dprod *s = user;
+  RK_PLACES() {
+    RK_PLACE("ride") {
+      RK_LABEL("Ride", .style = RK_TEXT_TITLE);
+      RK_PIVOT(.key = "pivot", .wide = 800, .chosen = &s->tab) {
+        RK_PAGE("summary") {
+          RK_TILES() RK_TILE("142", .key = "bpm", .label = "bpm", .series = (const float[]){ 1, 3, 2, 4 }, .nseries = 4, .code = 2);
+          RK_ROWS() RK_ROW("zone 2", .key = "z2", .meta = "31 min", .code = 2);
+        }
+        RK_PAGE("laps") RK_LABEL("laps", .key = "laps");
+        RK_PAGE("notes") RK_LABEL("notes", .key = "notes");
+      }
+    }
+    RK_PLACE("detail", .open = &s->open) RK_TILES() RK_TILE("7", .key = "arrived", .label = "laps");
+  }
+}
+static void test_declared_product(void) {
+  dprod s = { 0 };
+  rk_window_desc d = { .size = sizeof d, .title = "product", .width = 1000, .height = 600, .build = dprod_build, .user = &s };
+  rk_window *w = rk_window_create(&d);
+  rk_app_run_for(600);
+  rk_view *pv = in_window(w, "pivot"), *bpm = in_window(w, "bpm"), *z2 = in_window(w, "z2");
+  CHECK(pv && pv->controller && rk_pivot_is_wide(pv->controller) && in_window(w, "laps") && in_window(w, "notes"), ".wide: every page side by side from 800 up");
+  CHECK(bpm && ((tile *)bpm->state)->code == 2 && z2 && ((rk__row *)z2->state)->code == 2, ".code on a tile and a row");
+  if (pv && pv->controller) {
+    rk_window_focus(w, ((pivot *)pv->controller->impl)->strip);
+    key(w, RK_KEY_RIGHT, 0);
+    rk_app_run_for(800);
+  }
+  CHECK(s.tab == 1, "wide, the user's page is written back (%d)", s.tab);
+  s.open = true;
+  rk_ui_update(NULL);
+  rk_app_run_for(140);
+  rk_view *arrived = in_window(w, "arrived");
+  CHECK(!arrived || !arrived->entering, "a new place's tiles are not built in: the turn is their arrival");
+  rk_app_run_for(1500);
+  arrived = in_window(w, "arrived");
+  CHECK(arrived && !arrived->entering && arrived->popacity == 1 && arrived->ptransform.rotate_y == 0 && arrived->ptransform.translate_y == 0, "turned in, and standing");
+  done(w);
+  rk_app_run_for(50);
+}
+
 /* Main ------------------------------------------------------------------------------------------------------------ */
 
 static void launch(void *user) {
@@ -2984,6 +3295,11 @@ static void launch(void *user) {
   { int lv = rk__live_views; test_declared_fixes(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "fixes alone: %d\n", rk__live_views - lv); test_declared_warnings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "fixes: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_in_place(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_in_place: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_skip(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_skip: %d views more\n", rk__live_views - lv); }
+  test_product_words();
+  test_product_overrides();
+  test_product_codes();
+  test_wide_pivot();
+  { int lv = rk__live_views; test_declared_product(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_product: %d views more\n", rk__live_views - lv); }
   scene_tiles("tiles", 1);
   scene_tiles("tiles-2x", 2);                                  /* twice the pixels: only sharper */
   scene_type();

@@ -236,9 +236,10 @@ static void give_grip(rk_view *rowv) {
   rk_view *g = rk__view_create(&grip_class, rowv);
   g->focusable = true; g->draws_focus = true;
   g->access = RK_ACCESS_BUTTON;
-  size_t len = strlen(r->title) + 8;
+  const char *move = rk__words()->move;
+  size_t len = strlen(r->title) + strlen(move) + 1;
   char *label = rk__alloc(len);
-  snprintf(label, len, "move %s", r->title);
+  rk__say(label, len, move, r->title);
   rk__setstr(&g->access_label, label);
   free(label);
   r->grip = g;

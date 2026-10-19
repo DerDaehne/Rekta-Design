@@ -1,7 +1,7 @@
 # rekta-core. Needs a C99 compiler and the system's windowing libraries (on Linux libwayland-client, libwayland-cursor,
 # libxkbcommon and Xlib; Cocoa on macOS); nothing else. On Linux, WAYLAND=0 builds for X11 alone.
 #   make            build/librekta.a and build/demo
-#   make test       headless tests and the reference images (needs node for the image comparison)
+#   make test       headless tests, the reference images (needs node for the image comparison), the built-in words
 #   make shots      the demo's script without a screen, as PNGs in build/shots
 #   make sanitize   the tests and the demo script under AddressSanitizer and UBSan
 #   make shared     the shared library: only the RK_API functions are seen from outside (make abi checks it)
@@ -132,6 +132,7 @@ test: $(BUILD)/test$(EXE) $(BUILD)/hello-headless$(EXE)
 	node test/compare.mjs test/ref $(BUILD)/test-out
 	$(BUILD)/hello-headless$(EXE)
 	sh test/examples.sh
+	sh test/words.sh
 
 $(BUILD)/gallery-bin$(EXE): test/gallery.c $(SOURCES) | $(BUILD)
 	$(CC) $(CFLAGS) -DRK_HEADLESS_ONLY -Iinclude test/gallery.c src/rekta.c $(HEADLESS_LIBS) -o $@

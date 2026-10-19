@@ -16,15 +16,17 @@ const ROLES = ['bg', 'surface', 'surface-2', 'text-primary', 'text-contrast-low'
   'status-info-full', 'status-info-soft', 'status-info-tile', 'status-success-full', 'status-success-soft', 'status-success-tile',
   'status-warning-full', 'status-warning-soft', 'status-warning-tile', 'status-error-full', 'status-error-soft', 'status-error-tile',
   'focus', 'hover', 'disabled', 'shading', 'glass'];
-// rk_metric: [group, key]; the last three come from the density.
+// rk_metric: [group, key]; the three from the density, then those added after them.
 const METRICS = [['spacing', 'space-xs'], ['spacing', 'space-s'], ['spacing', 'space-m'], ['spacing', 'space-l'], ['spacing', 'space-xl'],
   ['radius', 'radius-s'], ['radius', 'radius-m'], ['radius', 'radius-l'], ['radius', 'radius-tile'],
   ['size', 'tile-unit'], ['size', 'appbar-height'], ['size', 'touch-target'], ['size', 'pane-min'],
-  ['density', 'control-height'], ['density', 'row-height'], ['density', 'control-padding']];
+  ['density', 'control-height'], ['density', 'row-height'], ['density', 'control-padding'],
+  ['size', 'pivot-wide']];
 // rk_duration; motion durations first (zero under reduced motion), then wall-clock timings.
 const DURATIONS = [['motion', 'duration-press'], ['motion', 'duration-short'], ['motion', 'duration-moderate'], ['motion', 'duration-long'],
   ['motion', 'duration-stagger'], ['motion', 'duration-float'], ['motion', 'duration-pivot-glide'], ['motion', 'duration-pivot-size'],
-  ['timing', 'duration-toast'], ['timing', 'duration-tap-delay'], ['timing', 'duration-long-press'], ['timing', 'duration-tip-delay']];
+  ['timing', 'duration-toast'], ['timing', 'duration-tap-delay'], ['timing', 'duration-long-press'], ['timing', 'duration-tip-delay'],
+  ['timing', 'duration-stale']];
 const MOTION_COUNT = 8;
 
 const rgba = (css) => {

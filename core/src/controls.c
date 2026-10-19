@@ -210,7 +210,7 @@ static float toggle_track_x(const toggle *t) {
   rk_textfmt f = strong_fmt();
   return t->label && *t->label ? rk__text_width(t->label, -1, &f) + 2 * rk_metric_of(RK_SPACE_S) : 0;
 }
-static float word_room(void) { rk_textfmt f = word_fmt(); return RK_MAX(2.2f * f.size, RK_MAX(rk__text_width("on", -1, &f), rk__text_width("off", -1, &f))); }
+static float word_room(void) { rk_textfmt f = word_fmt(); return RK_MAX(2.2f * f.size, RK_MAX(rk__text_width(rk__words()->on, -1, &f), rk__text_width(rk__words()->off, -1, &f))); }
 
 static rk_size toggle_measure(rk_view *v, rk_size avail, void *st) {
   (void)v; (void)avail;
@@ -229,7 +229,7 @@ static void toggle_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_canvas_stroke_rect(c, track, 2, ink);
   if (p > 0 && !off) rk_canvas_fill_rect(c, (rk_rect){ x + 4, y + 4, p * (TRACK_W - 8 - 14), TRACK_H - 8 }, rk_color_of(RK_ROLE_ACCENT));
   rk_canvas_fill_rect(c, (rk_rect){ x + p * (TRACK_W - 12), y, 12, TRACK_H }, ink);
-  rk__text_draw(c, t->c.value ? "on" : "off", -1, x + TRACK_W + rk_metric_of(RK_SPACE_S), (h - wf.size) / 2, &wf, rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT_HIGH));
+  rk__text_draw(c, t->c.value ? rk__words()->on : rk__words()->off, -1, x + TRACK_W + rk_metric_of(RK_SPACE_S), (h - wf.size) / 2, &wf, rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT_HIGH));
   if (rk__shows_focus(v)) rk__focus_ring(c, (rk_rect){ x, y, TRACK_W, TRACK_H }, 4);
 }
 
@@ -626,7 +626,7 @@ static rk_size select_measure(rk_view *v, rk_size avail, void *st) {
   (void)v; (void)avail;
   select_box *s = st;
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
-  float w = rk__text_width("choose one", -1, &f);
+  float w = rk__text_width(rk__words()->choose, -1, &f);
   for (int i = 0; i < s->n; i++) w = RK_MAX(w, rk__text_width(s->labels[i], -1, &f));
   return (rk_size){ RK_MAX(160.0f, ceilf(w + SELECT_PAD + SELECT_CHEVRON)), rk_metric_of(RK_CONTROL_HEIGHT) };
 }
@@ -643,7 +643,7 @@ static void select_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0);
   f.line = 1;
   int at = (int)s->c.value;
-  const char *text = at >= 0 && at < s->n ? s->labels[at] : "choose one";
+  const char *text = at >= 0 && at < s->n ? s->labels[at] : rk__words()->choose;
   rk_canvas_push_clip(c, (rk_rect){ 1, 0, W - SELECT_CHEVRON, h });
   rk__text_draw(c, text, -1, SELECT_PAD, (h - f.size) / 2, &f, rk_color_of(off ? RK_ROLE_DISABLED : at >= 0 ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM));
   rk_canvas_pop_clip(c);
