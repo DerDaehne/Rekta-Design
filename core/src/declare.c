@@ -86,6 +86,7 @@ struct ui_node {
   bool still;                                      /* in a scope declared RK_UI_IN_PLACE: nothing it holds moves */
   bool closed_by_user, warned;                     /* closed by the user without .open; that it came back was said */
   bool reorder;                                    /* a tree or an item: its items stand in another order */
+  bool revealing;                                  /* a split: a new .pulse, its detail's next item to slide in */
 };
 
 struct ui_root {
@@ -495,7 +496,7 @@ enum {
   G_TEXT, G_LABEL, G_META, G_MESSAGE, G_HINT, G_PLACEHOLDER, G_ICON, G_SHORTCUT, G_ACCEPT, G_ANSWERS, G_STYLE, G_COLOR,
   G_BUTTON, G_STATUS, G_FIT, G_SIDE, G_PROGRESS, G_SERIES, G_OPTIONS, G_COUNT, G_VALUE, G_RANGE, G_INPUT, G_CHECK,
   G_LINES, G_DATA, G_ON, G_CHOSEN, G_NUMBER, G_DAY, G_BUFFER, G_OPEN, G_GAP, G_FLAGS, G_ON_CHANGE, G_ON_SUBMIT,
-  G_ON_CLOSE, G_ON_SELECT, G_ITEM, G_CELL, G_ON_MOVE, G_ON_FILES, G_HOST, G_VERSION, G_CODE, G_WIDE, G_COUNT_OF
+  G_ON_CLOSE, G_ON_SELECT, G_ITEM, G_CELL, G_ON_MOVE, G_ON_FILES, G_HOST, G_VERSION, G_CODE, G_WIDE, G_REVEAL, G_COUNT_OF
 };
 #define B(g) (1ull << (g))
 static const char *const ui_group_names[G_COUNT_OF] = {
@@ -504,7 +505,7 @@ static const char *const ui_group_names[G_COUNT_OF] = {
   ".series", ".options", ".count", ".value", ".min, .max or .step", ".input", ".check", ".lines or .secret", ".data",
   ".on", ".chosen", ".number", ".day", ".buffer", ".open", ".gap, .padding, .align or .cross", ".flags or .sort",
   ".on_change", ".on_submit", ".on_close", ".on_select", ".item or .item_key", ".cell, .on_sort or .on_edit",
-  ".on_move", ".on_files", ".make or .update", ".version", ".code", ".wide",
+  ".on_move", ".on_files", ".make or .update", ".version", ".code", ".wide", ".reveal",
 };
 static uint64_t ui_present(const rk_ui *d) {
   uint64_t m = 0;
@@ -554,6 +555,7 @@ static uint64_t ui_present(const rk_ui *d) {
   if (d->version) m |= B(G_VERSION);
   if (d->code) m |= B(G_CODE);
   if (d->wide) m |= B(G_WIDE);
+  if (d->reveal) m |= B(G_REVEAL);
   return m;
 }
 static uint64_t ui_reads(rk_ui_kind k, bool in_menu) {
@@ -561,7 +563,7 @@ static uint64_t ui_reads(rk_ui_kind k, bool in_menu) {
   switch (k) {
     case RK_UI_VSTACK: case RK_UI_HSTACK: case RK_UI_TILES: case RK_UI_SCROLL: return box;
     case RK_UI_ROWS: return box | B(G_ON_MOVE);
-    case RK_UI_SPLIT: return B(G_TEXT) | B(G_OPEN) | B(G_ON_CLOSE) | B(G_VERSION);
+    case RK_UI_SPLIT: return B(G_TEXT) | B(G_OPEN) | B(G_ON_CLOSE) | B(G_VERSION) | B(G_REVEAL);
     case RK_UI_LABEL: return B(G_TEXT) | B(G_STYLE) | B(G_COLOR);
     case RK_UI_BUTTON: return B(G_TEXT) | B(G_BUTTON) | B(G_ICON);
     case RK_UI_TILE: return B(G_TEXT) | B(G_LABEL) | B(G_META) | B(G_STATUS) | B(G_MESSAGE) | B(G_PROGRESS) | B(G_SERIES) | B(G_CODE);
@@ -643,6 +645,7 @@ static void ui_update(ui_node *n, const rk_ui *d, bool fresh) {
   bool set_val = ui_given_value(d) && !fresh && (k == RK_UI_LIST || k == RK_UI_TABLE ? moved : bound || moved);
   n->moved = fresh || moved;
   switch (k) {
+    case RK_UI_SPLIT: if (pulse) n->revealing = true; break;   /* the next item: it slides once its detail is built */
     case RK_UI_LABEL:
       if (CHANGED_S(text) && !fresh) { ui_transition(n, d, RK_UI_IN_PLACE, fresh); rk_label_set_text(v, d->text); layout = true; }
       if (CHANGED(style) && !fresh) { rk_label_set_style(v, d->style); layout = true; }
@@ -1326,7 +1329,9 @@ static void ui_sync_nav(ui_root *r, ui_node *n) {
     }
     case RK_UI_SPLIT: {
       int open = ui_open_of(d);
-      if (open >= 0 && (bool)open != rk_split_is_detail_shown(n->outer)) rk_split_set_detail_shown(n->outer, open);
+      if (n->revealing && open != 0) rk_split_reveal(n->outer, d->reveal < 0 ? -1 : 1);   /* a new .pulse: a real advance */
+      else if (open >= 0 && (bool)open != rk_split_is_detail_shown(n->outer)) rk_split_set_detail_shown(n->outer, open);
+      n->revealing = false;
       n->opened = rk_split_is_detail_shown(n->outer);
       break;
     }

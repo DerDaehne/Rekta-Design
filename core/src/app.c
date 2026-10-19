@@ -203,14 +203,22 @@ void rk_app_set_timing(rk_duration timing, double ms) {
 
 /* The words: the English ones, and the app's over them. Every word the library says comes from here; test/words.sh
    fails the tests when one is written anywhere else. */
+static int english_plural(long n) { return n == 1 ? RK_PLURAL_ONE : RK_PLURAL_OTHER; }
 /* rk-strings-begin */
 static const rk_strings english = {
   sizeof(rk_strings), "undo", "redo", "Undone: %s", "ok", "cancel", "choose one", "back", "move %s", "on", "off",
+  { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" },
+  { "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su" },
+  { "idle", "active", "done", "waiting", "failed" },
+  { NULL, "%s item", NULL, NULL, NULL, "%s items" },
+  "minimize", "maximize", "close", "files", ".", ",", "%sK", "%sM", "%sB", "%sT", 1, english_plural,
 };
 /* rk-strings-end */
 static rk_strings words;                                   /* the app's, copied; NULL fields: the English word */
-#define WORD_COUNT ((sizeof(rk_strings) - offsetof(rk_strings, undo)) / sizeof(const char *))
+/* the words are every field from undo to group_min (a word added after plural, as rk_strings grows, is a second run) */
+#define WORD_COUNT ((offsetof(rk_strings, group_min) - offsetof(rk_strings, undo)) / sizeof(const char *))
 static const char **word_at(rk_strings *s, size_t i) { return (const char **)((char *)s + offsetof(rk_strings, undo)) + i; }
+#define RK__PLURAL_COUNT (RK_PLURAL_OTHER + 1)
 
 /* A format takes exactly one %s and no other conversion ("%%" is a percent sign). */
 static bool one_s(const char *f) {
@@ -223,37 +231,97 @@ const rk_strings *rk__words(void) {
   static rk_strings now;
   now = english;
   for (size_t i = 0; i < WORD_COUNT; i++) if (*word_at(&words, i)) *word_at(&now, i) = *word_at(&words, i);
+  bool forms = false;                                      /* a counting word the app gives is its own in every form */
+  for (int f = 0; f < RK__PLURAL_COUNT; f++) forms |= words.items[f] != NULL;
+  if (forms) memcpy(now.items, words.items, sizeof now.items);
+  if (!now.items[RK_PLURAL_OTHER]) now.items[RK_PLURAL_OTHER] = english.items[RK_PLURAL_OTHER];
+  if (words.group_min > 0) now.group_min = words.group_min;
+  if (words.plural) now.plural = words.plural;
   return &now;
 }
 
+/* Bytes into out while they fit, counted either way: what snprintf returns. */
+static void put(char *out, size_t size, size_t *n, const char *s, size_t len) {
+  for (size_t i = 0; i < len; i++, (*n)++) if (*n + 1 < size) out[*n] = s[i];
+}
+static size_t put_end(char *out, size_t size, size_t n) { if (size) out[RK_MIN(n, size - 1)] = 0; return n; }
+
 /* The format's %s replaced by arg, by hand: the format is the app's, never handed to printf. */
-void rk__say(char *out, size_t size, const char *format, const char *arg) {
+static size_t say(char *out, size_t size, const char *format, const char *arg) {
   size_t n = 0;
   bool used = false;
-  if (!size) return;
-  for (const char *f = format; *f && n + 1 < size; f++) {
-    if (f[0] == '%' && f[1] == '%') { out[n++] = '%'; f++; continue; }
-    if (f[0] == '%' && f[1] == 's' && !used) {
-      for (const char *a = arg ? arg : ""; *a && n + 1 < size; a++) out[n++] = *a;
-      used = true; f++; continue;
-    }
-    out[n++] = *f;
+  for (const char *f = format; *f; f++) {
+    if (f[0] == '%' && f[1] == '%') { put(out, size, &n, "%", 1); f++; continue; }
+    if (f[0] == '%' && f[1] == 's' && !used) { put(out, size, &n, arg ? arg : "", arg ? strlen(arg) : 0); used = true; f++; continue; }
+    put(out, size, &n, f, 1);
   }
-  out[n] = 0;
+  return put_end(out, size, n);
+}
+void rk__say(char *out, size_t size, const char *format, const char *arg) { say(out, size, format, arg); }
+
+/* v in the app's digits: rounded to max decimals, the zeros at the end dropped down to min, with its decimal sign and
+   digit groups. */
+static size_t figure(char *out, size_t size, double v, int min, int max, const rk_strings *w) {
+  char digits[400];
+  snprintf(digits, sizeof digits, "%.*f", max, fabs(v));
+  size_t ni = strspn(digits, "0123456789"), n = 0;
+  const char *frac = digits + ni;
+  while (*frac && (*frac < '0' || *frac > '9')) frac++;   /* past the C library's decimal point, whatever its locale */
+  size_t nf = strlen(frac);
+  while (nf > (size_t)min && frac[nf - 1] == '0') nf--;
+  bool zero = strspn(digits, "0") == ni && strspn(frac, "0") == strlen(frac);
+  if (v < 0 && !zero) put(out, size, &n, "-", 1);          /* never -0 */
+  bool grouped = *w->group && ni >= (size_t)(3 + RK_MAX(1, w->group_min));
+  for (size_t i = 0; i < ni; i++) {
+    put(out, size, &n, digits + i, 1);
+    if (grouped && i + 1 < ni && (ni - i - 1) % 3 == 0) put(out, size, &n, w->group, strlen(w->group));
+  }
+  if (nf) { put(out, size, &n, w->decimal, strlen(w->decimal)); put(out, size, &n, frac, nf); }
+  return put_end(out, size, n);
+}
+size_t rk__figure(char *out, size_t size, double v, int digits) { return figure(out, size, v, digits, digits, rk__words()); }
+
+/* As the web's number(): Intl.NumberFormat with two decimals at most, or its compact notation with one. */
+size_t rk_format_number(char *out, size_t size, double v, bool compact) {
+  const rk_strings *w = rk__words();
+  if (!out) size = 0;
+  if (!isfinite(v)) { size_t n = 0; const char *s = v != v ? "NaN" : v < 0 ? "-Infinity" : "Infinity"; put(out, size, &n, s, strlen(s)); return put_end(out, size, n); }
+  if (!compact || fabs(v) < 1e3) return figure(out, size, v, 0, 2, w);
+  const char *const forms[4] = { w->thousand, w->million, w->billion, w->trillion };
+  double a = fabs(v);
+  int e = a >= 1e12 ? 3 : a >= 1e9 ? 2 : a >= 1e6 ? 1 : 0;
+  if (e < 3 && *forms[e] && round(a / pow(1e3, e + 1) * 10) >= 10000) e++;   /* 999,950 is 1M, not 1000K */
+  if (!*forms[e]) return figure(out, size, v, 0, 1, w);   /* not shortened at this size */
+  char num[512];
+  figure(num, sizeof num, v / pow(1e3, e + 1), 0, 1, w);
+  return say(out, size, forms[e], num);
+}
+
+/* A counting word for n: its form for n's plural category, or its other, with n's figure for the %s. */
+void rk__count(char *out, size_t size, const char *const *forms, long n) {
+  const rk_strings *w = rk__words();
+  int cat = w->plural(n);
+  if (cat < 0 || cat >= RK__PLURAL_COUNT || !forms[cat]) cat = RK_PLURAL_OTHER;
+  char num[64];
+  rk_format_number(num, sizeof num, (double)n, false);
+  say(out, size, forms[cat], num);
 }
 
 void rk_app_set_strings(const rk_strings *strings) {
-  for (size_t i = 0; i < WORD_COUNT; i++) { free((void *)*word_at(&words, i)); *word_at(&words, i) = NULL; }
+  for (size_t i = 0; i < WORD_COUNT; i++) free((void *)*word_at(&words, i));
+  memset(&words, 0, sizeof words);
   if (strings && RK__SIZED(strings, "rk_app_set_strings", "rk_strings")) {
     rk_strings in;
     memset(&in, 0, sizeof in);
     memcpy(&in, strings, RK_MIN((size_t)strings->size, sizeof in));
     for (size_t i = 0; i < WORD_COUNT; i++) {
-      const char *w = *word_at(&in, i);
-      bool format = word_at(&in, i) == &in.undone || word_at(&in, i) == &in.move;
+      const char **at = word_at(&in, i), *w = *at;
+      bool compact = at >= &in.thousand && at <= &in.trillion;   /* "" too: not shortened at that size */
+      bool format = at == &in.undone || at == &in.move || (at >= in.items && at < in.items + RK__PLURAL_COUNT) || (compact && w && *w);
       if (w && format && !one_s(w)) { rk__error("rk_app_set_strings: \"%s\" needs exactly one %%s: the English word stays", w); continue; }
       *word_at(&words, i) = w ? rk__strdup(w) : NULL;
     }
+    words.group_min = in.group_min; words.plural = in.plural;
   }
   changed(false);
 }

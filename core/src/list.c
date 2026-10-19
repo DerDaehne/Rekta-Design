@@ -374,8 +374,16 @@ static rk_size list_measure(rk_view *v, rk_size avail, void *st) {
   return (rk_size){ isfinite(avail.w) ? avail.w : 320, head_height(l) + l->count * row_height() };
 }
 
+/* read aloud: how many items, in the app's words as they are now */
+static void list_count_said(rk_view *v, const list *l) {
+  char buf[96];
+  rk__count(buf, sizeof buf, rk__words()->items, l->count);
+  rk__setstr(&v->access_value, buf);
+}
+
 static void list_layout(rk_view *v, void *st) {
   list *l = st;
+  list_count_said(v, l);
   float max = max_scroll(v, l);
   if (v->value > max) { v->value = v->pvalue = max; }
   place_editor(v, l);
@@ -532,9 +540,7 @@ void rk_list_set_count(rk_view *v, int count) {
   l->count = count;
   follow_items(l, false, l->active_key, l->anchor_key);   /* the app changed them: not told back */
   list_remember(l);
-  char buf[32];
-  snprintf(buf, sizeof buf, "%d items", count);
-  rk__setstr(&v->access_value, buf);
+  list_count_said(v, l);
   rk__view_relayout_up(v);
   rk__view_dirty(v);
 }
