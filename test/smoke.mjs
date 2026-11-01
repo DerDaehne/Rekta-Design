@@ -1944,7 +1944,7 @@ ok(await sp.evaluate(() => !document.querySelector('#t-group').hidden && documen
 const leaving = await sp.evaluate(async () => {
   const d = document.querySelector('#t-panel'); d.close();
   // What it does is read from its own leaving animation, not sampled at a moment a busy runner may not have reached.
-  const own = d.getAnimations().find((a) => !a.effect.pseudoElement), frames = own ? own.effect.getKeyframes() : [];
+  const own = d.getAnimations().find((a) => !(a instanceof CSSAnimation) && !a.effect.pseudoElement), frames = own ? own.effect.getKeyframes() : [];
   return { phase: d.dataset.rkPhase, to: frames.length ? frames.at(-1).transform : '', fades: frames.some((f) => 'opacity' in f), d: own ? own.effect.getTiming().duration : 0 };
 });
 ok(leaving.phase === 'leaving' && leaving.to === 'translateX(100%)' && !leaving.fades && leaving.d > 0, 'it leaves whole towards its trailing edge', JSON.stringify(leaving));
