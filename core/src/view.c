@@ -251,7 +251,7 @@ rk_point rk_view_to_window(rk_view *v, rk_point p) {
 /* Look ------------------------------------------------------------------------------------------------------------ */
 
 rk_color rk__resolve_fill(rk_view *v) {
-  if (v->fill_role) return rk_color_of(v->fill_role);
+  if (v->fill_role) return rk_color_of(rk__is_tile(v) ? rk__tile_fill(v) : v->fill_role);
   return v->fill[rk__dark() ? 1 : 0];
 }
 

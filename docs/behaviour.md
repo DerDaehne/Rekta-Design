@@ -176,6 +176,7 @@ them:
 | `:root:has(dialog.rk-sheet[open])` | The page under an open sheet stops scrolling; the root keeps its scrollbar's room as right padding (`--rk-scrollbar`, measured by `sheet()` as it opens), so nothing shifts and the sheet spans the viewport. |
 | `[data-status='…']` | Sets only the internal `--_rk-fill`, `--_rk-mark` and `--_rk-soft`, which nothing outside Rekta's components reads. |
 | `:root[data-theme]`, `[data-density]`, `[data-motion]`, `[data-contrast]`, `[data-transparency]`, `[data-rk-titlebar]` | The switches `prefs` and the installed app's title bar write on the root. |
+| `:root[data-accent='…']` (in `rekta.tokens.css`) | A named accent (`prefs` `accent`): sets `--rk-accent` and `--rk-on-accent` per theme and contrast set, over the product's own. |
 | `:root[data-rk-places]` | `appbar()` writes it while the bar holds the places: the places' top strip (`.rk-place > .rk-pivot--nav`) steps aside and `.rk-place-name` shows (`docs/navigation.md`). |
 | `:root[data-rk-crossfade]::view-transition-old(root)` and `-new(root)` | Rekta's cross-fade timing, only while `crossfade()` (or a theme change through `prefs`) runs its own view transition: an app's own root view transitions keep their timing. |
 
@@ -228,7 +229,7 @@ them:
 | `data-rk-probe` | a `span` inside a measured element (a pivot strip; any element whose length token is a `calc()`) | A measuring probe, in and out within one call: an app's own `MutationObserver` on such an element should ignore it. |
 | `data-rk-places` | the app bar, the root | The bar holds the places (`appbar()`, compact). |
 | `data-rk-held` | a toast | Its window holds: the pointer rests on it or focus is in it. |
-| `data-theme`, `data-density`, `data-motion`, `data-contrast`, `data-transparency` | the root | Prefs overrides (see `prefs`). |
+| `data-theme`, `data-density`, `data-motion`, `data-contrast`, `data-transparency`, `data-accent` | the root | Prefs overrides (see `prefs`). |
 
 ### Public hooks
 
@@ -304,12 +305,16 @@ element that cannot take focus gets `tabindex="-1"`.
 | `motion` | `system`, `on`, `off` | `system` |
 | `contrast` | `system`, `more`, `normal` | `system`: more when the system asks (`prefers-contrast: more`) |
 | `transparency` | `system`, `reduce`, `normal` | `system`: reduced when the system asks (`prefers-reduced-transparency: reduce`) |
+| `accent` | `product`, or a named accent: `ink`, `teal`, `steel`, `violet`, `mauve`, `pink`, `magenta` | `product`: the product's own `--rk-accent`, ink when it sets none |
 
 More contrast takes the contrast colours (every text pair at 7:1, opaque
 glass) and frames each status tile in its full colour; reduced
 transparency makes glass the ground and takes every blur away
-([colour.md](colour.md#more-contrast-less-transparency)). A theme or
-contrast the user picks cross-fades. The default removes the attribute from the root. Values are remembered
+([colour.md](colour.md#more-contrast-less-transparency)). A named
+accent holds every accent rule in each theme and contrast set
+([colour.md](colour.md#named-accents)); a product that offers its own
+names styles `:root[data-accent="NAME"]` itself, and `prefs` writes any
+name. A theme, contrast or accent the user picks cross-fades. The default removes the attribute from the root. Values are remembered
 in `localStorage` under `rekta-prefs`; pass `{ remember: false }` to
 skip that.
 

@@ -3457,6 +3457,68 @@ static void test_contrast(void) {
   done(w);
 }
 
+/* The accent's rules and the named accents (docs/colour.md), and content fills in a tile grid (docs/tiles.md). */
+static void test_accents(void) {
+  double chroma;
+  CHECK(CLOSE_TO(rk__hue(0x2762ecffu, &chroma), 263.393, 1e-2) && CLOSE_TO(chroma, 0.217, 1e-3), "OKLCH hue and chroma, as color.mjs (%f, %f)", rk__hue(0x2762ecffu, NULL), chroma);
+  int was = logged;
+  rk_app_set_accent(0x7a2a8cffu, 0xd39be0ffu);
+  CHECK(logged == was, "the docs' plum holds every rule (%s)", logged == was ? "" : logged_last);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x7a2a8cffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0xffffffffu, "the text on a dark accent is the ground");
+  rk_app_set_accent(0x2762ecffu, 0);
+  CHECK(logged > was && strstr(logged_last, "hue") && strstr(logged_last, "info"), "an accent in a status's hue is said: %s", logged_last);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x2762ecffu, "and still set");
+  was = logged;
+  CHECK(rk_app_set_accent_named("teal") && logged == was, "a named accent");
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x049896ffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0x010205ffu, "teal with ink on it in light");
+  rk_app_set_theme(RK_THEME_DARK);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x00aba9ffu, "its dark value in dark");
+  rk_app_set_contrast(true);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x0daeacffu && rk__contrast(rk_color_of(RK_ROLE_ACCENT), rk_color_of(RK_ROLE_ON_ACCENT)) >= 7, "its own pair at 7:1 under more contrast");
+  rk_app_set_contrast(false);
+  rk_app_set_theme(RK_THEME_SYSTEM);
+  was = logged;
+  CHECK(!rk_app_set_accent_named("plum") && logged == was + 1 && rk_color_of(RK_ROLE_ACCENT) == 0x049896ffu, "a name that is not one: said, the accent stays");
+  rk_app_set_accent(0, 0);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == rk_color_of(RK_ROLE_TEXT), "0, 0: ink again");
+
+  /* content fills: only in a grid that opts in, never beside a status, plain under more contrast */
+  rk_window *w = window(700, 300);
+  rk_view *page = col(16, 16);
+  rk_view *grid = rk_add(page, rk_tile_grid());
+  rk_view *mail = rk_add(grid, rk_tile("mail", NULL)), *notes = rk_add(grid, rk_tile("notes", NULL)), *plain = rk_add(grid, rk_tile("files", NULL));
+  rk_tile_set_content(mail, RK_ROLE_CONTENT_TEAL);
+  rk_tile_set_content(notes, RK_ROLE_CONTENT_VIOLET);
+  show(w, page, "content");
+  rk_app_run_for(100);
+  rk_color teal = rk_color_of(RK_ROLE_CONTENT_TEAL), violet = rk_color_of(RK_ROLE_CONTENT_VIOLET), surface = rk_color_of(RK_ROLE_SURFACE);
+  CHECK(pixels_of(w, rk__window_rect(mail), teal) == 0, "without the grid's opt-in a tile stays plain");
+  rk_tile_grid_set_content(grid, true);
+  rk_app_run_for(100);
+  CHECK(pixels_of(w, rk__window_rect(mail), teal) > 1000 && pixels_of(w, rk__window_rect(notes), violet) > 1000 && pixels_of(w, rk__window_rect(plain), surface) > 1000, "opted in: each tile its content fill, one without stays surface");
+  CHECK(rk__contrast(rk_color_of(RK_ROLE_TEXT), teal) >= 4.5 && rk__contrast(rk_color_of(RK_ROLE_TEXT), violet) >= 4.5, "ink at AA on them");
+  shot(w, "content");
+  was = logged;
+  rk_tile_set_status(plain, RK_STATUS_ERROR, NULL);
+  rk_app_run_for(400);
+  CHECK(logged == was + 1 && pixels_of(w, rk__window_rect(mail), teal) == 0 && pixels_of(w, rk__window_rect(mail), surface) > 1000, "a status tile in the grid: said, and every tile plain");
+  rk_tile_set_status(plain, RK_STATUS_NONE, NULL);
+  rk_app_run_for(400);
+  CHECK(pixels_of(w, rk__window_rect(mail), teal) > 1000, "the status gone, the fills come back");
+  rk_app_set_contrast(true);
+  rk_app_run_for(400);
+  CHECK(rk_color_of(RK_ROLE_CONTENT_TEAL) == rk_color_of(RK_ROLE_SURFACE) && pixels_of(w, rk__window_rect(mail), teal) == 0, "more contrast: the set is plain");
+  rk_app_set_contrast(false);
+  rk_tile_grid_set_content(grid, false);
+  rk_app_run_for(400);
+  CHECK(pixels_of(w, rk__window_rect(mail), teal) == 0, "one switch off: the whole set plain");
+  was = logged;
+  rk_tile_set_content(mail, RK_ROLE_ERROR_TILE);
+  rk_tile_grid_set_content(page, true);
+  CHECK(logged == was + 2, "a status's role as content, a grid that is not one: said");
+  done(w);
+}
+
 /* Facets side by side: from the pivot's wide width up, every facet shows; the strip is a jump list that follows. */
 static void test_wide_pivot(void) {
   rk_window *w = window(1500, 700);
@@ -3702,6 +3764,7 @@ static void launch(void *user) {
   test_product_overrides();
   test_product_codes();
   test_contrast();
+  test_accents();
   test_type_ahead();
   test_wide_pivot();
   { int lv = rk__live_views; test_declared_product(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_product: %d views more\n", rk__live_views - lv); }

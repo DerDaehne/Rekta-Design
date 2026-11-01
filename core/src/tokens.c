@@ -17,14 +17,8 @@ int rk__density_index(void) {
 
 rk_color rk_color_of(rk_role role) {
   if (role <= RK_ROLE_NONE || role >= RK__ROLE_COUNT) return 0;
-  int t = rk__dark() ? 1 : 0;
-  if (role == RK_ROLE_ACCENT && rk__prefs.accent[t]) return rk__prefs.accent[t];
-  if (role == RK_ROLE_ON_ACCENT && rk__prefs.accent[t]) {
-    /* text on a custom accent: the ground that reads on it */
-    rk_color a = rk__prefs.accent[t];
-    float l = 0.2126f * ((a >> 24) & 255) + 0.7152f * ((a >> 16) & 255) + 0.0722f * ((a >> 8) & 255);
-    return l > 140 ? rk_tok_colors[0][RK_ROLE_TEXT] : 0xffffffffu;
-  }
+  int t = rk__dark() ? 1 : 0, k = t + (rk__prefs.contrast ? 2 : 0);
+  if ((role == RK_ROLE_ACCENT || role == RK_ROLE_ON_ACCENT) && rk__prefs.accent[k][0]) return rk__prefs.accent[k][role == RK_ROLE_ON_ACCENT];
   return (rk__prefs.contrast ? rk_tok_colors_contrast : rk_tok_colors)[t][role];
 }
 
@@ -115,6 +109,14 @@ static void oklab(rk_color c, int kind, double out[3]) {
   out[0] = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
   out[1] = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
   out[2] = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+}
+
+double rk__hue(rk_color c, double *chroma) {
+  double p[3];
+  oklab(c, 0, p);
+  if (chroma) *chroma = sqrt(p[1] * p[1] + p[2] * p[2]);
+  double h = atan2(p[2], p[1]) * 180 / 3.14159265358979323846;
+  return h < 0 ? h + 360 : h;
 }
 
 double rk__distance(rk_color a, rk_color b, int kind) {

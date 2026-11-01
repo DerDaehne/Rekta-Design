@@ -5,7 +5,8 @@
    classes, so a framework that owns className keeps working. Each controller returns { destroy() }.
 
    The parts:
-     prefs      theme, density, motion, contrast and transparency switches on the root element, remembered per user
+     prefs      theme, density, motion, contrast, transparency and accent switches on the root element, remembered per
+                user
      keys       one layered keyboard dispatcher: the innermost thing that owns a key gets it (Escape, Ctrl/Cmd+Z)
      press      tiles nudge back where they are pressed; dragging or selecting text never activates them
      turn       the place change (turnstile) as two primitives, leave() and enter(), any router can call
@@ -222,9 +223,11 @@ function focusHeading(scope) {
 // Prefs --------------------------------------------------------------------------------------------------------------
 // theme: system | light | dark; density: auto | comfortable | compact; motion: system | on | off; contrast: system |
 // more | normal (more: every text pair at 7:1, a frame on status tiles); transparency: system | reduce | normal
-// (reduce: glass is the ground, nothing blurs). The default removes the attribute, so the system setting (or the
-// pointer, for density) decides. Set them before first paint.
-const PREF_DEFAULT = { theme: 'system', density: 'auto', motion: 'system', contrast: 'system', transparency: 'system' };
+// (reduce: glass is the ground, nothing blurs); accent: product | a named accent (ink, teal, steel, violet, mauve,
+// pink, magenta: tokens/rekta.accents.json, which rekta.tokens.css carries as [data-accent]). The default removes the
+// attribute, so the system setting (or the pointer, for density; the product's own --rk-accent, for the accent)
+// decides. Set them before first paint.
+const PREF_DEFAULT = { theme: 'system', density: 'auto', motion: 'system', contrast: 'system', transparency: 'system', accent: 'product' };
 export const prefs = {
   key: 'rekta-prefs',
   read() { try { return JSON.parse(localStorage.getItem(this.key) || '{}'); } catch { return {}; } },
@@ -237,9 +240,9 @@ export const prefs = {
       if (remember) { const all = this.read(); all[name] = this.get(name); this.write(all); }
       document.dispatchEvent(new CustomEvent('rk:prefs', { detail: { name, value: this.get(name) } }));
     };
-    // A theme or contrast chosen by the user cross-fades (view transitions); a restored one applies before the first
-    // paint.
-    if ((name === 'theme' || name === 'contrast') && remember && this.get(name) !== (value || PREF_DEFAULT[name])) crossfade(commit);
+    // A theme, contrast or accent chosen by the user cross-fades (view transitions); a restored one applies before the
+    // first paint.
+    if ((name === 'theme' || name === 'contrast' || name === 'accent') && remember && this.get(name) !== (value || PREF_DEFAULT[name])) crossfade(commit);
     else commit();
   },
   restore() { const all = this.read(); for (const name of Object.keys(PREF_DEFAULT)) if (all[name]) this.set(name, all[name], { remember: false }); },

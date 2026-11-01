@@ -94,6 +94,8 @@ typedef enum rk_role {
   RK_ROLE_WARNING_FULL, RK_ROLE_WARNING_SOFT, RK_ROLE_WARNING_TILE,
   RK_ROLE_ERROR_FULL, RK_ROLE_ERROR_SOFT, RK_ROLE_ERROR_TILE,
   RK_ROLE_FOCUS, RK_ROLE_HOVER, RK_ROLE_DISABLED, RK_ROLE_SHADING, RK_ROLE_GLASS,
+  /* added later, at its end: the content fills, a tile's fill in a set without a status (rk_tile_set_content) */
+  RK_ROLE_CONTENT_TEAL, RK_ROLE_CONTENT_STEEL, RK_ROLE_CONTENT_VIOLET, RK_ROLE_CONTENT_PLUM, RK_ROLE_CONTENT_ROSE,
   RK_ROLE_FORCE32 = 0x7fffffff
 } rk_role;
 
@@ -149,7 +151,12 @@ RK_API bool rk_app_is_dark(void);
 RK_API void rk_app_set_motion(rk_motion_pref motion);
 RK_API bool rk_app_is_reduced_motion(void);
 RK_API void rk_app_set_density(rk_density density);
-RK_API void rk_app_set_accent(rk_color light, rk_color dark);    /* 0, 0: the ink of the theme */
+/* The product's accent, per theme (docs/colour.md): the text on it is the theme's ground or ink, whichever stands out
+   more, and under more contrast the same accent. Each value should hold 3:1 on bg and surface, its text 4.5:1 (7:1 under
+   more contrast), and stay apart from status - 0.09 (OKLab) from every status colour, 0.05 under protanopia and
+   deuteranopia, its hue 20 degrees from each status hue unless its chroma is below 0.05; one that does not is still
+   set, and said through rk_app_set_log. Dark 0 takes light; 0, 0: the ink of the theme. */
+RK_API void rk_app_set_accent(rk_color light, rk_color dark);
 /* More contrast (docs/colour.md): the contrast colours, every text pair at 7:1, and a 2px frame in its full colour on
    each status tile. Off until set: an app that reads the system's high-contrast setting passes it on. */
 RK_API void rk_app_set_contrast(bool more);
@@ -159,6 +166,9 @@ RK_API void rk_app_set_contrast(bool more);
    Each value should hold 3:1 on bg and surface and stand 0.09 apart (OKLab) under protanopia and deuteranopia from
    every other code set; one that does not is still set, and said through rk_app_set_log. */
 RK_API void rk_app_set_series(int code, rk_color light, rk_color dark);   /* code 1 to 8 */
+/* A named accent (tokens/rekta.accents.json): "ink", "teal", "steel", "violet", "mauve", "pink" or "magenta", a checked
+   pair for each theme and for more contrast. False, and said, for a name that is not one; the accent stays. */
+RK_API bool rk_app_set_accent_named(const char *name);
 RK_API rk_color rk_series_of(int code);            /* in the current theme; ink while it has no value */
 /* What a product may change (docs/platforms.md, Product overrides); motion, colours and the type scale stay the
    design's. A metric: RK_TILE_UNIT, RK_PIVOT_WIDE (0: no pivot goes wide). A timing: RK_TIMING_TOAST (how long a
@@ -463,6 +473,12 @@ RK_API void rk_tile_set_message(rk_view *tile, const char *message);     /* NULL
 RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);   /* a sparkline (one value: flat); 0 removes it */
 RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1; < 0 removes it */
 RK_API void rk_tile_set_code(rk_view *tile, int code);   /* its sparkline in a domain colour (rk_app_set_series); 0: ink */
+/* Content fills (docs/tiles.md): in a tile grid that opts in, a tile without a status takes the main colour of what it
+   opens, RK_ROLE_CONTENT_TEAL to RK_ROLE_CONTENT_ROSE (RK_ROLE_NONE: plain). A grid with a status tile in it shows
+   none: every tile is plain, and the status keeps its fill. Off again with false: the whole grid plain. Under more
+   contrast the content fills are the surface. */
+RK_API void rk_tile_grid_set_content(rk_view *grid, bool on);
+RK_API void rk_tile_set_content(rk_view *tile, rk_role fill);
 
 /* Hairline rows: a title on the left, a meta or a status tag on the right. */
 RK_API rk_view *rk_rows(void);
@@ -913,6 +929,8 @@ typedef struct rk_ui {
   int reveal;                                      /* a split's: a new .pulse is its detail's next item (rk_split_reveal),
                                                       from the trailing side (0 or 1) or the leading side (-1); the same
                                                       .pulse, the same item: no slide */
+  rk_role content;                                 /* a tile's content fill (rk_tile_set_content), RK_ROLE_CONTENT_* */
+  bool content_fills;                              /* a tile grid's: its tiles without a status take their content fill */
 } rk_ui;
 
 /* A window built from a declaration is made by rk_window_create (rk_window_desc.build). Elsewhere, a declared view

@@ -15,7 +15,8 @@ allowed on a tile (always the dampened `status.<name>.tile` form, never
 A tile's background communicates its status before the user reads a
 single word on it. Fills come only from the status token set (see
 [colour.md](colour.md)); a tile with no particular status uses the plain
-neutral `surface` fill. Text on a tile is always the theme's primary
+neutral `surface` fill. The one exception is a set of tiles that has no
+status at all, which may opt in to content fills (below). Text on a tile is always the theme's primary
 text colour (checked for AA against every status fill — see
 [colour.md](colour.md)), never a status-matching text colour.
 
@@ -24,6 +25,52 @@ a uniform grid cell: something that needs the user's attention (an open
 question, something failed) is given a larger tile than something
 merely informative. A grid of tiles therefore reads as a priority map at
 a glance, before any individual value is read.
+
+## Content fills
+
+A set of objects without a status, such as a launcher's programs,
+documents or bookmarks, may give each tile the main colour of what it
+opens: the Metro way of a tile carrying its app's colour. The tile's
+colour then says "this program", not a status, and that is why it has
+limits ([colour.md](colour.md#content-fills)):
+
+```html
+<div class="rk-tiles" data-rk-fills="content">
+  <a class="rk-tile" href="/mail" data-rk-fill="teal"><span class="rk-stat"><b>mail</b></span></a>
+  <a class="rk-tile" href="/notes" data-rk-fill="violet"><span class="rk-stat"><b>notes</b></span></a>
+  <a class="rk-tile" href="/files"><span class="rk-stat"><b>files</b></span></a>
+</div>
+```
+
+- **Opt-in on the set:** `data-rk-fills="content"` on the `.rk-tiles`.
+  Without it, or with `plain`, every tile of the set is `surface`: one
+  switch, and a product hands that switch to its users.
+- **Five fills:** `teal`, `steel`, `violet`, `plum`, `rose`, as
+  `data-rk-fill` on a tile (`content-*` tokens). Each is muted so ink
+  holds 4.5:1 on it, and stands apart from every status colour (0.09
+  OKLab seen, 0.05 under red-green colour blindness, its hue 20° from
+  each status hue): `--check` holds both. No secondary text colour on
+  them: as on a status tile, secondary text takes ink.
+- **Never with a status.** A set that has a status tile in it shows no
+  content fill at all: the status tile keeps its fill and every other
+  tile is plain. Do not build such a set: a colourful grid hides the one
+  tile that failed. Put status tiles in a set of their own.
+- **Off under more contrast and forced colours:** the set is plain, the
+  tiles' words and icons stay.
+- **Picking a tile's fill:** from the main colour of the icon of what it
+  opens, the same way every time. Take the icon's opaque pixels with a
+  chroma (OKLCH) of 0.05 or more; their most common hue, in 10° bins, is
+  its main hue. Without such pixels (a grey icon, one drawn in the text
+  colour), or with a main hue more than 30° from every fill's hue, the
+  tile stays plain: a red, yellow or green icon does not become a
+  colour that is not its own. Otherwise the fill whose hue is nearest.
+  The same icon gives the same fill.
+- **The icon on it** keeps its own colours, as the product draws it;
+  Rekta's own icons on a tile are drawn in ink.
+
+rekta-core: `rk_tile_grid_set_content(grid, true)` and
+`rk_tile_set_content(tile, RK_ROLE_CONTENT_TEAL)`, declared `.content`
+and `.content_fills`.
 
 ## Radius 0–2
 

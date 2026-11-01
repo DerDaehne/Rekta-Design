@@ -61,9 +61,6 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
 .keys-list > li { align-items: center; }
 
 /* The accent slot, set as a product would: one value per theme, apart from every status hue. */
-:root[data-accent='plum'] { --rk-accent: #7d29ad; --rk-on-accent: #ffffff; }
-@media (prefers-color-scheme: dark) { :root[data-accent='plum']:not([data-theme='light']) { --rk-accent: #c38aed; --rk-on-accent: #0e0e12; } }
-:root[data-accent='plum'][data-theme='dark'] { --rk-accent: #c38aed; --rk-on-accent: #0e0e12; }
 
 @media (min-width: 760px) and (min-height: 481px) {
   html, body { height: 100%; }

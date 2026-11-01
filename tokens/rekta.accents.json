@@ -1,0 +1,54 @@
+{
+  "$description": "Rekta Design's named accents: values for the accent slot (accent, on-accent) that a product, or its user, picks by name instead of finding two colours per theme by hand. Each holds the accent rules in every theme: 3:1 on bg and surface, on-accent 4.5:1 on it (7:1 in light-contrast and dark-contrast), apart from status (docs/colour.md). Ink, the default, is one of them. Not tokens: a product's choice of values for two tokens. build.mjs ships them as `accents` in rekta.tokens.json and as :root[data-accent=\"NAME\"] in rekta.tokens.css; --check holds every value to the rules; rekta-core has them as rk_app_set_accent_named().",
+  "accents": {
+    "ink": {
+      "$description": "The default: the theme's text colour, with the ground on it. Picked by name, it wins over a product's own accent.",
+      "light": { "accent": "{color.light.text.primary}", "on-accent": "{color.light.bg}" },
+      "dark": { "accent": "{color.dark.text.primary}", "on-accent": "{color.dark.bg}" },
+      "light-contrast": { "accent": "{color.light.text.primary}", "on-accent": "{color.light.bg}" },
+      "dark-contrast": { "accent": "{color.dark.text.primary}", "on-accent": "{color.dark.bg}" }
+    },
+    "teal": {
+      "$description": "Between success and info. Dark text on it in light and dark; under more contrast a deep teal with white in light.",
+      "light": { "accent": "#049896", "on-accent": "#010205" },
+      "dark": { "accent": "#00aba9", "on-accent": "#0e0e12" },
+      "light-contrast": { "accent": "#005f5e", "on-accent": "#ffffff" },
+      "dark-contrast": { "accent": "#0daeac", "on-accent": "#0e0e12" }
+    },
+    "steel": {
+      "$description": "A blue grey, so low in chroma that it reads as grey beside info.",
+      "light": { "accent": "#637586", "on-accent": "#ffffff" },
+      "dark": { "accent": "#6c7e8f", "on-accent": "#0e0e12" },
+      "light-contrast": { "accent": "#495a6a", "on-accent": "#ffffff" },
+      "dark-contrast": { "accent": "#8d9fb1", "on-accent": "#0e0e12" }
+    },
+    "violet": {
+      "$description": "The furthest from every status, under colour blindness too.",
+      "light": { "accent": "#65389f", "on-accent": "#ffffff" },
+      "dark": { "accent": "#c2a7f4", "on-accent": "#0e0e12" },
+      "light-contrast": { "accent": "#65389f", "on-accent": "#ffffff" },
+      "dark-contrast": { "accent": "#c2a7f4", "on-accent": "#0e0e12" }
+    },
+    "mauve": {
+      "$description": "A greyed violet.",
+      "light": { "accent": "#756089", "on-accent": "#ffffff" },
+      "dark": { "accent": "#7a648e", "on-accent": "#fbfcff" },
+      "light-contrast": { "accent": "#655078", "on-accent": "#ffffff" },
+      "dark-contrast": { "accent": "#aa93c0", "on-accent": "#0e0e12" }
+    },
+    "pink": {
+      "$description": "Between violet and error; dark text on it in light and dark.",
+      "light": { "accent": "#d858b6", "on-accent": "#010205" },
+      "dark": { "accent": "#f472d0", "on-accent": "#0e0e12" },
+      "light-contrast": { "accent": "#9e1c81", "on-accent": "#ffffff" },
+      "dark-contrast": { "accent": "#f472d0", "on-accent": "#0e0e12" }
+    },
+    "magenta": {
+      "$description": "The nearest to error the rules allow: 27° of hue and 0.05 under deuteranopia apart.",
+      "light": { "accent": "#d70473", "on-accent": "#ffffff" },
+      "dark": { "accent": "#d70473", "on-accent": "#fbfcff" },
+      "light-contrast": { "accent": "#95004e", "on-accent": "#ffffff" },
+      "dark-contrast": { "accent": "#ff9bbb", "on-accent": "#0e0e12" }
+    }
+  }
+}
