@@ -85,6 +85,7 @@ typedef struct rk_prefs {
   rk_theme theme; rk_motion_pref motion; rk_density density;
   bool system_dark, system_reduced, system_compact;
   rk_color accent[2];
+  bool contrast;                                           /* more contrast (rk_app_set_contrast) */
   rk_color series[8][2];                                   /* a domain's colour code, light and dark; 0: ink */
   bool metric_set[RK__METRIC_COUNT]; float metric[RK__METRIC_COUNT];         /* a product's own (rk_app_set_metric) */
   bool timing_set[RK__DURATION_COUNT]; double timing[RK__DURATION_COUNT];    /* (rk_app_set_timing) */

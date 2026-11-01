@@ -149,6 +149,9 @@ RK_API void rk_app_set_motion(rk_motion_pref motion);
 RK_API bool rk_app_is_reduced_motion(void);
 RK_API void rk_app_set_density(rk_density density);
 RK_API void rk_app_set_accent(rk_color light, rk_color dark);    /* 0, 0: the ink of the theme */
+/* More contrast (docs/colour.md): the contrast colours, every text pair at 7:1, and a 2px frame in its full colour on
+   each status tile. Off until set: an app that reads the system's high-contrast setting passes it on. */
+RK_API void rk_app_set_contrast(bool more);
 /* A domain's colour code, as the web's --rk-series-1 to -8 (docs/data.md): colours its users already read, such as
    heart-rate zones, for small marks only - a tile's sparkline, a row's tag square (rk_tile_set_code, rk_row_set_code),
    a custom view's marks - never text, never a fill. Per theme, as the accent; dark 0 takes light; 0, 0: ink again.

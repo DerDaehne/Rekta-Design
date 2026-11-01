@@ -149,6 +149,14 @@ void rk_app_set_theme(rk_theme theme) {
   changed(true);
 }
 bool rk_app_is_dark(void) { return rk__dark(); }
+/* More contrast: the contrast colours (every text pair at 7:1, opaque glass) and a frame on each status tile. No
+   platform layer reads the system's setting yet, so the app passes it on. */
+void rk_app_set_contrast(bool more) {
+  if (rk__prefs.contrast == more) return;
+  look_changes();
+  rk__prefs.contrast = more;
+  changed(true);
+}
 void rk_app_set_motion(rk_motion_pref m) { rk__prefs.motion = m; changed(false); }
 bool rk_app_is_reduced_motion(void) { return rk__reduced(); }
 void rk_app_set_density(rk_density d) { rk__prefs.density = d; changed(false); }

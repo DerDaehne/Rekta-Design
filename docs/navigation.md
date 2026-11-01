@@ -201,7 +201,8 @@ with an icon over a lowercase word.
   `.rk-ab-places` is not shown and the pivot holds the places as always.
   A landscape phone (wide but short) keeps the pivot.
 - **Where you are:** the place you are in is in `text-primary`, the
-  others in `text-contrast-medium`; `aria-current="page"` marks it, and
+  others in `text-contrast-high` (on glass nothing lower, [colour.md](colour.md#text-on-glass));
+  `aria-current="page"` marks it, and
   `places()` keeps the mark on the bar's links. On a place below it (a
   detail), the place you came from stays marked, and choosing it goes
   back to its top.

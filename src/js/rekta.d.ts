@@ -35,7 +35,7 @@ export declare const tokens: {
   px(name: string, el?: Element): number;
 };
 
-type PrefName = 'theme' | 'density' | 'motion';
+type PrefName = 'theme' | 'density' | 'motion' | 'contrast' | 'transparency';
 export declare const prefs: {
   key: string;
   read(): Partial<Record<PrefName, string>>;
@@ -43,9 +43,15 @@ export declare const prefs: {
   get(name: 'theme'): 'system' | 'light' | 'dark';
   get(name: 'density'): 'auto' | 'comfortable' | 'compact';
   get(name: 'motion'): 'system' | 'on' | 'off';
+  get(name: 'contrast'): 'system' | 'more' | 'normal';
+  get(name: 'transparency'): 'system' | 'reduce' | 'normal';
   set(name: 'theme', value: 'system' | 'light' | 'dark', options?: { remember?: boolean }): void;
   set(name: 'density', value: 'auto' | 'comfortable' | 'compact', options?: { remember?: boolean }): void;
   set(name: 'motion', value: 'system' | 'on' | 'off', options?: { remember?: boolean }): void;
+  /** more: every text pair at 7:1 and a frame on status tiles; normal: as designed, whatever the system asks. */
+  set(name: 'contrast', value: 'system' | 'more' | 'normal', options?: { remember?: boolean }): void;
+  /** reduce: glass is the ground and nothing blurs; normal: glass, whatever the system asks. */
+  set(name: 'transparency', value: 'system' | 'reduce' | 'normal', options?: { remember?: boolean }): void;
   restore(): void;
 };
 

@@ -37,8 +37,8 @@
   const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
   const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   function measure() {
-    for (const b of $$('[data-contrast]')) {
-      const [fg, bg] = b.dataset.contrast.split(' '), r = ratio(rgb(fg), rgb(bg));
+    for (const b of $$('[data-ratio]')) {
+      const [fg, bg] = b.dataset.ratio.split(' '), r = ratio(rgb(fg), rgb(bg));
       b.textContent = `${r.toFixed(1)} : 1`;
       if (b.dataset.min) b.closest('tr').querySelector('th').title = r >= +b.dataset.min ? 'passes' : 'fails';
     }
@@ -57,9 +57,10 @@
   }
   addEventListener('resize', env);
 
-  /* ---------- look: theme, density, motion (Rekta prefs) and the accent slot ---------- */
+  /* ---------- look: theme, density, motion, contrast, transparency (Rekta prefs) and the accent slot ---------- */
+  const PREFS = ['theme', 'density', 'motion', 'contrast', 'transparency'];
   function paintPrefs() {
-    for (const name of ['theme', 'density', 'motion']) { const r = $(`input[name=${name}][value="${prefs.get(name)}"]`); if (r) r.checked = true; }
+    for (const name of PREFS) { const r = $(`input[name=${name}][value="${prefs.get(name)}"]`); if (r) r.checked = true; }
     $('#theme-word').textContent = prefs.get('theme');
     const m = prefs.get('motion');
     $('#motion-word').textContent = m === 'system' ? (reduced.matches ? 'reduced' : 'on') : m;
@@ -71,7 +72,8 @@
   document.addEventListener('rk:prefs', paintPrefs);
   reduced.addEventListener('change', paintPrefs);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintPrefs);
-  for (const name of ['theme', 'density', 'motion']) $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => prefs.set(name, r.value)));
+  matchMedia('(prefers-contrast: more)').addEventListener('change', paintPrefs);
+  for (const name of PREFS) $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => prefs.set(name, r.value)));
   $$('input[name=accent]').forEach((r) => r.addEventListener('change', () => Rekta.crossfade(() => {
     if (r.value === 'plum') { root.dataset.accent = 'plum'; store.set('rekta-site-accent', 'plum'); }
     else if (r.value === 'custom' && customAccent) { window.siteAccent(customAccent); store.set('rekta-site-accent', 'custom'); }

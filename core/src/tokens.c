@@ -25,7 +25,7 @@ rk_color rk_color_of(rk_role role) {
     float l = 0.2126f * ((a >> 24) & 255) + 0.7152f * ((a >> 16) & 255) + 0.0722f * ((a >> 8) & 255);
     return l > 140 ? rk_tok_colors[0][RK_ROLE_TEXT] : 0xffffffffu;
   }
-  return rk_tok_colors[t][role];
+  return (rk__prefs.contrast ? rk_tok_colors_contrast : rk_tok_colors)[t][role];
 }
 
 float rk_metric_of(rk_metric metric) {

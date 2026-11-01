@@ -179,6 +179,8 @@ static void tile_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_color ink = rk_color_of(RK_ROLE_TEXT);
   rk_textfmt word = rk__textfmt(RK_TEXT_LABEL, 0);
   word.color = RK_ROLE_TEXT;
+  /* more contrast: the status no longer rests on the fill alone, a frame in its full colour says it too */
+  if (rk__prefs.contrast && t->status != RK_STATUS_NONE) rk__canvas_ring(c, (rk_rect){ 0, 0, W, H }, v->radius, 2, rk_color_of(rk__status_full(t->status)));
   const char *wd = t->word ? t->word : rk__status_word(t->status);
   rk__text_draw(c, wd, -1, W - 12 - rk__text_width(wd, -1, &word), 10 - (word.size * word.line - word.size) / 2, &word, ink);
   /* from the bottom up: progress, sparkline, message, stat (a column justified to the end) */

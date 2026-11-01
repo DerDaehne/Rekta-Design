@@ -88,6 +88,57 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
   await p.close();
 }
 
+// More contrast and less transparency (#156): from the system (emulated) and from the prefs. Every text pair measured
+// at 7:1, each status tile framed in its full colour, glass opaque and nothing blurred; text on glass (#130) over
+// white and black.
+{
+  const measure = (p) => p.evaluate(() => {
+    const rgba = (c) => c.match(/[\d.]+/g).map(Number);
+    const lum = (c) => { const [r, g, b] = rgba(c).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+    const over = (top, under) => { const t = rgba(top), u = rgba(under), a = t[3] ?? 1; return `rgb(${[0, 1, 2].map((i) => t[i] * a + u[i] * (1 - a)).join(',')})`; };
+    const host = document.createElement('div');
+    host.className = 'rk';
+    host.innerHTML = ['bg', 'surface'].map((g) => `<div style="background:var(--rk-${g})"><span class="rk-meta">m</span><span class="rk-facts">f</span><span class="rk-hint">h</span><span style="color:var(--rk-text-contrast-medium)">p</span><span class="rk-tag">t</span></div>`).join('')
+      + ['info', 'success', 'warning', 'error'].map((st) => `<div class="rk-tile" data-status="${st}"><span class="rk-tile-word">w</span><span class="rk-meta">m</span></div>`).join('')
+      + '<div class="rk-tag rk-tag--soft" data-status="error">soft</div><button class="rk-btn rk-btn--primary">ok</button><button class="rk-btn" data-status="error">delete</button>';
+    document.body.append(host);
+    let low = { r: 99, what: '' };
+    for (const el of host.querySelectorAll('span, .rk-tag--soft, .rk-btn')) {
+      let fill = el; while (fill && rgba(getComputedStyle(fill).backgroundColor)[3] === 0) fill = fill.parentElement;
+      const bgc = fill ? getComputedStyle(fill).backgroundColor : 'rgb(255,255,255)', r = ratio(getComputedStyle(el).color, bgc);
+      if (r < low.r) low = { r, what: `${el.className || el.textContent} on ${fill ? fill.className || fill.getAttribute('style') : 'body'}` };
+    }
+    const tiles = [...host.querySelectorAll('.rk-tile')].map((t) => getComputedStyle(t).boxShadow);
+    host.remove();
+    const bar = document.querySelector('#bar'), cs = getComputedStyle(bar), glass = cs.backgroundColor;
+    const onGlass = [...bar.querySelectorAll('.rk-ab-status, .rk-ab')].filter((e) => e.getClientRects().length).flatMap((e) => ['rgb(255,255,255)', 'rgb(0,0,0)'].map((b) => ratio(getComputedStyle(e).color, over(glass, b))));
+    return { low, framed: tiles.every((s) => /2px/.test(s) && s.includes('inset')), tiles, opaque: (rgba(glass)[3] ?? 1) === 1, blur: cs.backdropFilter, glassLow: Math.min(...onGlass) };
+  });
+  for (const scheme of ['light', 'dark']) {
+    const c = await open({ colorScheme: scheme, contrast: 'more' });
+    const m = await measure(c);
+    ok(m.low.r >= 7, `${scheme}, the system asks for more contrast: every text pair holds 7:1`, `${m.low.what} ${m.low.r.toFixed(2)}:1`);
+    ok(m.framed, `${scheme}, more contrast: every status tile has a 2px frame`, m.tiles.join(' | '));
+    ok(m.opaque && m.glassLow >= 7, `${scheme}, more contrast: glass is opaque, its text at 7:1`, `${m.opaque} ${m.glassLow.toFixed(2)}`);
+    await c.evaluate(() => Rekta.prefs.set('contrast', 'normal', { remember: false })); await c.waitForTimeout(100);
+    const n = await measure(c);
+    ok(n.low.r < 7 && !n.framed && !n.opaque && n.glassLow >= 4.5, `${scheme}: contrast "normal" keeps the design's colours against the system's setting; text on glass over white and black holds 4.5:1`, `${n.low.r.toFixed(2)} ${n.framed} ${n.opaque} ${n.glassLow.toFixed(2)}`);
+    await c.close();
+  }
+  const c = await open();
+  const plain = await measure(c);
+  ok(!plain.framed && !plain.opaque && /blur/.test(plain.blur), 'in the normal case nothing changes: no frame, glass with its blur', JSON.stringify(plain));
+  await c.evaluate(() => { Rekta.prefs.set('contrast', 'more', { remember: false }); Rekta.prefs.set('transparency', 'reduce', { remember: false }); });
+  await c.waitForTimeout(400);
+  const more = await measure(c);
+  ok(more.low.r >= 7 && more.framed, 'contrast "more" from the prefs: 7:1 and the frames', `${more.low.what} ${more.low.r.toFixed(2)}`);
+  ok(more.opaque && /^(none)?$/.test(more.blur) && await c.evaluate(() => { const s = document.createElement('div'); s.className = 'rk-scrim'; document.body.append(s); const b = getComputedStyle(s).backdropFilter; s.remove(); return b === 'none'; }),
+    'transparency "reduce": glass is opaque, the bar and the scrim do not blur', more.blur);
+  await c.evaluate(() => { Rekta.prefs.set('contrast', 'system', { remember: false }); Rekta.prefs.set('transparency', 'system', { remember: false }); });
+  await c.close();
+}
+
 const p = await open();
 ok(await p.evaluate(() => getComputedStyle(document.querySelector('#pan')).display === 'flex'), 'desktop panorama is sideways');
 ok(await p.evaluate(() => document.querySelector('#back').hidden), 'app bar back hidden at home');
@@ -96,7 +147,7 @@ ok(await p.evaluate(() => { const n = document.querySelector('#nav'); return n.s
 // Generated from the tokens, measured live.
 const count = await p.evaluate(() => JSON.parse(document.querySelector('#tokens-data').textContent).length);
 ok((await text(p, '#token-count')) === String(count), 'the tokens tile counts the tokens');
-ok(await p.evaluate(() => [...document.querySelectorAll('[data-contrast]')].every((b) => /^\d+\.\d : 1$/.test(b.textContent))), 'contrast is measured live');
+ok(await p.evaluate(() => [...document.querySelectorAll('[data-ratio]')].every((b) => /^\d+\.\d : 1$/.test(b.textContent))), 'contrast is measured live');
 ok(!(await p.evaluate(() => /\{\{|<!--@/.test(document.body.innerHTML))), 'every placeholder was filled at build time');
 ok((await p.evaluate(() => { const seen = new Set(), twice = []; document.querySelectorAll('[id]').forEach((e) => { if (seen.has(e.id)) twice.push(e.id); seen.add(e.id); }); return twice.join(); })) === '', 'every id is unique');
 

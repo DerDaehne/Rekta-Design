@@ -258,6 +258,12 @@ tells you when any of them changed and returns an id for
 and
 .Fn rk_app_is_reduced_motion
 say how things stand.
+.It Fn rk_app_set_contrast "bool more"
+More contrast: the contrast colours, every text pair at 7:1, and a 2px frame
+in its full colour on each status tile.
+Off until set; an app that reads the system's high-contrast setting passes it
+on.
+A change cross-fades the windows.
 .It Fn rk_app_set_series "int code" "rk_color light" "rk_color dark"
 A domain's colour code, as the web's
 .Li --rk-series-1

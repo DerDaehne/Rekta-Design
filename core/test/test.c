@@ -3242,6 +3242,34 @@ static void test_product_codes(void) {
   done(w);
 }
 
+/* More contrast: the contrast colours (the tokens' light-contrast and dark-contrast) and a frame on status tiles. */
+static void test_contrast(void) {
+  rk_color high = rk_color_of(RK_ROLE_TEXT_HIGH), tile = rk_color_of(RK_ROLE_ERROR_TILE), bg = rk_color_of(RK_ROLE_BG);
+  rk_window *w = window(400, 240);
+  rk_view *page = col(16, 16);
+  rk_view *grid = rk_add(page, rk_tile_grid());
+  rk_view *t = rk_add(grid, rk_tile("3", "failed"));
+  rk_tile_set_status(t, RK_STATUS_ERROR, NULL);
+  show(w, page, "contrast");
+  rk_app_run_for(100);
+  rk_color full = rk_color_of(RK_ROLE_ERROR_FULL);
+  CHECK(pixels_of(w, rk__window_rect(t), full) == 0, "no frame on a status tile in the normal case");
+  rk_app_set_contrast(true);
+  rk_app_run_for(400);
+  CHECK(rk_color_of(RK_ROLE_TEXT_HIGH) != high && rk__contrast(rk_color_of(RK_ROLE_TEXT_HIGH), rk_color_of(RK_ROLE_SURFACE)) >= 7, "more contrast: secondary text at 7:1 on surface (%.2f)", rk__contrast(rk_color_of(RK_ROLE_TEXT_HIGH), rk_color_of(RK_ROLE_SURFACE)));
+  CHECK(rk_color_of(RK_ROLE_ERROR_TILE) != tile && rk__contrast(rk_color_of(RK_ROLE_TEXT), rk_color_of(RK_ROLE_ERROR_TILE)) >= 7, "the error tile shifted until ink holds 7:1");
+  CHECK(rk_color_of(RK_ROLE_GLASS) == bg && rk_color_of(RK_ROLE_BG) == bg, "glass is the ground");
+  CHECK(pixels_of(w, rk__window_rect(t), rk_color_of(RK_ROLE_ERROR_FULL)) > 100, "a status tile is framed in its full colour (%d pixels)", pixels_of(w, rk__window_rect(t), rk_color_of(RK_ROLE_ERROR_FULL)));
+  rk_app_set_theme(RK_THEME_DARK);
+  rk_app_run_for(400);
+  CHECK(rk__contrast(rk_color_of(RK_ROLE_TEXT), rk_color_of(RK_ROLE_SUCCESS_TILE)) >= 7 && rk__contrast(rk_color_of(RK_ROLE_TEXT), rk_color_of(RK_ROLE_WARNING_TILE)) >= 7, "and in the dark");
+  rk_app_set_theme(RK_THEME_SYSTEM);
+  rk_app_set_contrast(false);
+  rk_app_run_for(400);
+  CHECK(rk_color_of(RK_ROLE_TEXT_HIGH) == high && rk_color_of(RK_ROLE_ERROR_TILE) == tile, "and back");
+  done(w);
+}
+
 /* Facets side by side: from the pivot's wide width up, every facet shows; the strip is a jump list that follows. */
 static void test_wide_pivot(void) {
   rk_window *w = window(1500, 700);
@@ -3482,6 +3510,7 @@ static void launch(void *user) {
   test_product_counts();
   test_product_overrides();
   test_product_codes();
+  test_contrast();
   test_wide_pivot();
   { int lv = rk__live_views; test_declared_product(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_product: %d views more\n", rk__live_views - lv); }
   scene_tiles("tiles", 1);

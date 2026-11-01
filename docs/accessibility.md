@@ -33,6 +33,15 @@ driven by both the OS-level `prefers-reduced-motion` signal and an
 explicit in-app override, so a user who wants it off can turn it off
 even on a platform/OS that doesn't expose the system setting.
 
+## More contrast, less transparency
+
+Someone who asks the system for more contrast gets it without forced
+colours: every text pair at 7:1, a frame in its full colour on every
+status tile (the word stays), opaque glass. Someone who asks for less
+transparency gets a solid app bar and no blur. Both follow the system
+and an in-app override (`Rekta.prefs`: `contrast`, `transparency`),
+like reduced motion. The values are in [colour.md](colour.md#more-contrast-less-transparency).
+
 ## Touch targets
 
 Any interactive control reachable on a touch surface has a minimum
@@ -65,7 +74,9 @@ reach.
   and trend in words, not just a line).
 - **Contrast is checked, not assumed.** See [colour.md](colour.md) and
   `node scripts/build.mjs --check`, which fails the build when a text,
-  mark, focus or soft pair drops below its minimum, or when two statuses
+  mark, focus or soft pair drops below its minimum (7:1 for text under
+  more contrast), when text on glass over white or black does, or when
+  two statuses
   come closer than 0.09 (OKLab) under protanopia or deuteranopia. Under
   tritanopia (blue-yellow, far rarer) light info and success come to
   about 0.07: the check reports the measured distances on every build

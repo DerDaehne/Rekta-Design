@@ -10,8 +10,9 @@
      apply on .rk and inside it; the theme, density and motion switches go on the root element.
    - Rules outside .rk-*, on purpose (docs/behaviour.md lists them): :root's scroll-padding below the banner and above
      the app bar; :root stops scrolling while a .rk-sheet is open; [data-status] sets only internal --_rk-* properties,
-     inert outside Rekta's components; the root's data-theme, data-density, data-motion and data-rk-titlebar
-     switches; the view-transition timing, only while rekta.js marks the root data-rk-crossfade.
+     inert outside Rekta's components; the root's data-theme, data-density, data-motion, data-contrast,
+     data-transparency and data-rk-titlebar switches; the view-transition timing, only while rekta.js marks the root
+     data-rk-crossfade.
    - Hide with the hidden attribute: inside .rk it wins over every display rule, Rekta's and the page's (!important).
      data-rk-reveal on the element is the way out: hidden stays (for the script, for a page without CSS) and the
      page's own display applies.
@@ -1111,7 +1112,8 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 
 /* Places in the bar (docs/navigation.md): opt-in, compact only, up to five. The bar decides by its own width, so a
    pane-sized bar (a preview, a narrow window) behaves as a phone's. The top-level places sit in the thumb's reach,
-   each an icon over a word; the one you are in is in text-primary. The live state stacks the same way, its word still
+   each an icon over a word; the one you are in is in text-primary, the others in text-contrast-high (on glass nothing
+   lower: docs/colour.md). The live state stacks the same way, its word still
    shown; every command moves into "more" (appbar()); back stays first; a selection takes the bar over. Sideways the
    places are not in the bar: the pivot holds them. */
 .rk-appbar { container: rk-appbar / inline-size; }
@@ -1120,7 +1122,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-ab-places { display: flex; flex: 1 1 auto; min-width: 0; align-self: stretch; }
   .rk-ab-places > .rk-ab {
     flex: 1 1 0; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; padding: 0 2px;
-    font-size: var(--rk-font-size-xxs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-medium); text-decoration: none;
+    font-size: var(--rk-font-size-xxs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-high); text-decoration: none;
   }
   .rk-ab-places > .rk-ab > :not(svg) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rk-ab-places > .rk-ab[aria-current] { color: var(--rk-text-primary); }
@@ -1221,3 +1223,22 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 :root[data-motion='off'] .rk-region[aria-busy='true']::before, :root[data-motion='off'] .rk-btn[data-rk-pending]::after { background-size: 100% 100%; background-color: var(--rk-text-contrast-medium); background-image: none; }
 :root[data-motion='off'] .rk-dots > i { animation: none; opacity: 1; left: calc(50% - 22px + var(--_rk-n, 0) * 10px); }
 :root[data-motion='off'] .rk-progress:indeterminate { animation: none; background-size: 100% 100%; }
+
+/* More contrast (docs/colour.md): rekta.tokens.css switches to the contrast colours, every text pair at 7:1; these are
+   the parts that are not colours. A status tile keeps its word and gains a 2px frame in its full colour, so the status
+   no longer rests on the calm fill alone; a destructive button's words take ink inside its error frame. Forced colours
+   stay as they are (they drop the frame with every shadow). */
+@media (prefers-contrast: more) {
+  :root:not([data-contrast='normal']) .rk-tile[data-status] { box-shadow: inset 0 0 0 2px var(--_rk-mark); }
+  :root:not([data-contrast='normal']) .rk-btn[data-status='error']:not(:disabled, [aria-disabled='true']) { color: var(--rk-text-primary); }
+}
+:root[data-contrast='more'] .rk-tile[data-status] { box-shadow: inset 0 0 0 2px var(--_rk-mark); }
+:root[data-contrast='more'] .rk-btn[data-status='error']:not(:disabled, [aria-disabled='true']) { color: var(--rk-text-primary); }
+
+/* Reduced transparency: glass is the ground (rekta.tokens.css), and nothing blurs what is behind it. */
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-transparency='normal']) :is(.rk-appbar, .rk-scrim) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  :root:not([data-transparency='normal']) .rk-sheet::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+:root[data-transparency='reduce'] :is(.rk-appbar, .rk-scrim) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-transparency='reduce'] .rk-sheet::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
