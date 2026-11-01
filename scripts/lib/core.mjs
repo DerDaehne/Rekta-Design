@@ -26,7 +26,7 @@ const METRICS = [['spacing', 'space-xs'], ['spacing', 'space-s'], ['spacing', 's
 const DURATIONS = [['motion', 'duration-press'], ['motion', 'duration-short'], ['motion', 'duration-moderate'], ['motion', 'duration-long'],
   ['motion', 'duration-stagger'], ['motion', 'duration-float'], ['motion', 'duration-pivot-glide'], ['motion', 'duration-pivot-size'],
   ['timing', 'duration-toast'], ['timing', 'duration-tap-delay'], ['timing', 'duration-long-press'], ['timing', 'duration-tip-delay'],
-  ['timing', 'duration-stale']];
+  ['timing', 'duration-stale'], ['timing', 'duration-type-ahead']];
 const MOTION_COUNT = 8;
 
 const rgba = (css) => {

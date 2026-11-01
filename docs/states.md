@@ -55,7 +55,7 @@ next to the control that opened them.
 - **Rows:** one item per row at the density's row height, a lowercase
   verb or option. A chosen option shows a filled square. A key hint
   sits at the end in `rk-meta`. A hairline separates groups.
-- **Keys:** ↑ ↓ (wrapping), Home End, a letter jumps to the next item
+- **Keys:** ↑ ↓ (wrapping), Home End, letters jump to the next item
   starting with it, Enter or Space chooses, Escape closes and returns
   focus to the control, Tab closes and moves on. A click outside closes.
 - A disabled item stays in the list, greyed, and says why in its label

@@ -297,6 +297,10 @@ Every pointer action has a keyboard path.
 | A section strip | Enter on a title | Aligns the section and moves focus to its heading |
 | A facet pivot (tabs) | ← → Home End | The previous, next, first or last facet; focus follows |
 | A tile | Enter (Space on a button tile) | Presses it; release activates |
+| A grid of tiles that open | ← → ↑ ↓ | The nearest tile that way: one in the same row (column) first, on a tie the better-aligned one; on into the grids of the panorama's other sections; at the edge focus stays |
+| | Home End | The grid's first or last tile |
+| | Tab | Leaves the grid: it is one tab stop, the tile last focused |
+| A list, a table, a long list, a tile grid, a tree, a menu | a letter or digit | The next entry that starts with it; letters typed within `timing.type-ahead` form a prefix (below) |
 | Anywhere | Escape | Closes the innermost thing that is open (see below) |
 | Anywhere but a text field | Ctrl/Cmd+Z | Undoes the last action (the open toast's first) |
 | Anywhere but a text field | Ctrl/Cmd+Shift+Z, Ctrl+Y | Does the undone action again |
@@ -310,6 +314,40 @@ Every pointer action has a keyboard path.
 
 The keyboard shortcuts are listed in the app itself (a sheet behind `?`
 and an entry in the palette), never only in a manual.
+
+### Typing: filter or jump
+
+Where there is a field, typing filters; where there is none, typing
+jumps.
+
+- **Filter:** the palette, a combobox and a search field narrow their
+  list as you type. Focus stays in the field.
+- **Jump:** in a collection whose entries take focus (a list or table
+  with `select()`, a long list, a grid of tiles that open, a tree, a
+  menu), a letter or digit moves focus to the next entry whose text
+  starts with it, and the view scrolls along. Letters typed less than
+  `timing.type-ahead` (1s) apart form one prefix ("ma" finds "march"
+  after "may"); the same letter again moves on to the next entry with
+  it, round to the first. Nothing that matches: focus stays. A jump
+  never selects or acts: it only moves focus.
+- A place offers one or the other for one collection, never both: a
+  long alphabetical list ("all apps") jumps; the start surface, with
+  its search field, filters.
+
+### A grid of tiles
+
+A grid of tiles that open (a start screen, a dashboard) is one tab stop,
+like a list: Tab reaches the tile last focused (the first, to begin
+with) and the next Tab leaves the grid. The arrows move the way the eye
+does, by position, not by order in the page: the nearest tile that way,
+one that shares the row (or column) before one that does not, and of
+two as near the one better aligned; a tile in no shared row counts
+only while it lies more that way than across. In a panorama they go on
+into the next section's grid (sideways → reaches the section beside,
+compact ↓ the one below); at the edge focus stays where it is (no
+wrap). Home and End go to the grid's first and last tile, letters
+jump. A grid of tiles that only inform takes no focus at all
+([tiles.md](tiles.md#what-a-tile-does)).
 
 ### Who gets a key
 

@@ -24,7 +24,7 @@ static const float rk_tok_metrics[2][RK__METRIC_COUNT] = {
 
 /* [rk_duration], ms; the first RK_TOK_MOTION_COUNT are motion (0 under reduced motion), the rest wall-clock timings */
 #define RK_TOK_MOTION_COUNT 8
-static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.0f, 600.0f, 30.0f, 150.0f, 500.0f, 220.0f, 5000.0f, 100.0f, 500.0f, 500.0f, 30000.0f };
+static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.0f, 600.0f, 30.0f, 150.0f, 500.0f, 220.0f, 5000.0f, 100.0f, 500.0f, 500.0f, 30000.0f, 1000.0f };
 
 /* Type sizes as min, max and the share of the hosting width that moves between them (_VW); fixed sizes have _VW 0. */
 #define RK_TOK_WEIGHT_LIGHT 300
@@ -95,6 +95,7 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_TIMING_TIP_DELAY 500.0f
 #define RK_TOK_TIMING_LONG_PRESS 500.0f
 #define RK_TOK_TIMING_STALE 30000.0f
+#define RK_TOK_TIMING_TYPE_AHEAD 1000.0f
 #define RK_TOK_BP_MOBILE 375.0f
 #define RK_TOK_BP_SIDEWAYS_SCROLL_MIN 760.0f
 #define RK_TOK_BP_SHORT_HEIGHT 480.0f

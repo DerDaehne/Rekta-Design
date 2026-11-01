@@ -208,6 +208,7 @@ them:
 | `data-rk-sorting` | a sortable list | An item is being dragged. |
 | `data-rk-editing` | a table cell | Being edited in place. |
 | `data-rk-active` | a virtual row | The active row (`aria-activedescendant`). |
+| `data-rk-grid` | a `.rk-tiles` | A grid of tiles that open: one tab stop, with the arrows (`grid()`). |
 | `data-rk-wco` | the root | An installed app's window-controls overlay is visible. |
 | `data-rk-titlebar` | the root | Set by a native shell: show the title bar. |
 | `data-value` | a combobox's input | The chosen option's value. |
@@ -259,8 +260,9 @@ product that lints its own `--rk-` use can tell a hook from a typo.
 
 The defaults for a page: restores prefs (unless `restore: false`, for an
 embedded page whose host owns theme, density and motion), attaches
-`press` to `root`, attaches `sheet` to every `dialog.rk-sheet` and
-`stepper` to every `.rk-stepper`, keeps every `input.rk-range` filled
+`press` to `root`, attaches `sheet` to every `dialog.rk-sheet`,
+`stepper` to every `.rk-stepper` and `grid` to every `.rk-tiles` that
+holds a tile that opens (unless it is a selection), keeps every `input.rk-range` filled
 to its value, gives every `.rk-toggle` checkbox `role="switch"`, turns on
 tooltips (`tips()`), and marks the first paint as an arrival. Returns `{ destroy }`.
 
@@ -339,14 +341,23 @@ Keys components take on their own element, while focus is in it:
 
 | Component | Keys |
 |---|---|
-| `menu()`, `contextMenu()` | ↑ ↓ Home End, Escape, Tab (closes); ↑ ↓ on the trigger open it; Shift+F10 and ContextMenu open a context menu |
+| `menu()`, `contextMenu()` | ↑ ↓ Home End, letters, Escape, Tab (closes); ↑ ↓ on the trigger open it; Shift+F10 and ContextMenu open a context menu |
 | `palette()` | ↑ ↓, Enter, Escape (clears, then closes), Tab (stays) |
 | `combobox()` | ↑ ↓, Enter, Escape, Tab (closes) |
 | `pivot()`, `strip()` | ← → (↑ ↓ on a side pivot), Home End; Tab into the chosen facet when wide |
 | `panorama()` | ← → PageUp PageDown, Home End |
-| `select()`, `table()` | ↑ ↓ (and ← → in a grid of tiles), Home End, Space/Enter (with Ctrl/Cmd or Shift), Ctrl/Cmd+A; F2 on a row edits its cell; ← → Home on a column's resize handle |
-| `virtual()` | ↑ ↓ PageUp PageDown, Home End, Space/Enter, Ctrl/Cmd+A |
-| `tree()` | ↑ ↓ ← →, Home End, Enter/Space, `*`, a letter (to the next item it starts) |
+| `select()`, `table()` | ↑ ↓ (and ← → in a grid of tiles), Home End, letters, Space/Enter (with Ctrl/Cmd or Shift), Ctrl/Cmd+A; F2 on a row edits its cell; ← → Home on a column's resize handle |
+| `virtual()` | ↑ ↓ PageUp PageDown, Home End, letters, Space/Enter, Ctrl/Cmd+A |
+| `grid()` | ← → ↑ ↓ (the nearest tile that way), Home End, letters |
+| `tree()` | ↑ ↓ ← →, Home End, Enter/Space, `*`, letters |
+
+Letters, in each of these: a letter or digit goes to the next entry
+whose text starts with it; typed less than `timing.type-ahead` apart
+they form a prefix, and the same letter again moves on
+([navigation.md](navigation.md#typing-filter-or-jump)). Never in a
+text field, and never with Ctrl, Cmd or Alt held. An entry's text is
+its `aria-label`, else a table row's `th`, else its text; a tile's
+status word is left out.
 | `split()` handle | ← → (Shift: four steps), Home End |
 | `sortable()` | Space/Enter picks up and puts down, ↑ ↓ move, Escape puts back; Alt+↑ ↓ moves at once |
 | `chart()` | ← → Home End |
@@ -884,6 +895,21 @@ browser's menu); `onSelect(item, target)` acts. Keys as in a menu;
 Escape or a choice returns focus to the target; a press outside,
 scrolling or resizing closes it. Returns `{ open(target), close, target, destroy }`.
 
+### `grid(el)`
+
+`el` is a `.rk-tiles` holding tiles that open (`a.rk-tile`,
+`button.rk-tile`). It becomes one tab stop (a roving `tabindex`: the
+tile last focused, the first to begin with) and gets `data-rk-grid`.
+← → ↑ ↓ move to the nearest tile that way among every grid of the
+panorama it is in (or of `el` alone): a tile wholly that way that
+shares the row (column) comes before one that does not (which counts
+only while it lies more that way than across, within 45°), then the
+nearest, then on a tie the one sharing more of it; at the edge focus
+stays. Home End go to `el`'s first and last tile; letters jump (a
+tile's `aria-label`, else its words without `.rk-tile-word`). It follows
+tiles a framework adds or removes. `start()` attaches it to the grids
+in the page; a grid rendered later calls it. Returns `{ refresh, destroy }`.
+
 ### `tree(el, { onShow, onToggle })`
 
 `el` is a `ul.rk-tree` of `li`s, each its row first, then a `ul` of
@@ -891,7 +917,7 @@ children (`aria-expanded` on an `li` sets it open). The script adds the
 roles, levels, a `.rk-tree-row` and a `.rk-tree-twisty` (the chevron), and
 a roving tab stop. A click selects and calls `onShow(li)`; the chevron or
 a double click opens and closes (`onToggle(li, open)`). Keys: ↑ ↓, → ←,
-Home End, Enter Space, `*`, letters. Returns `{ expand(li, open), expandAll(open), select(li, show), selected(), refresh(), destroy }`.
+Home End, Enter Space, `*`, letters (a prefix within `timing.type-ahead`). Returns `{ expand(li, open), expandAll(open), select(li, show), selected(), refresh(), destroy }`.
 
 ### `sortable(list, { items, handle, onMove })`
 
@@ -903,7 +929,7 @@ Keys on the grip: Space or Enter picks up (`data-rk-grabbed`,
 Alt+↑ ↓ moves at once. A live region after the list says each move.
 `onMove(from, to, item)` follows a move. Returns `{ move(item, to), refresh(), destroy }`.
 
-### `virtual(el, { count, render, onShow, onChange, appbar, label })`
+### `virtual(el, { count, render, text, onShow, onChange, appbar, label })`
 
 `el` is a `.rk-virtual` with a bounded height. Only the rows in view and
 six either side exist (`.rk-virtual-row`, placed by `top`, the density's
@@ -911,7 +937,9 @@ row height); `render(i, row)` fills one. It is a listbox with one tab
 stop (`aria-activedescendant`, `aria-posinset`, `aria-setsize`) chosen the
 Metro way like `select()`, on indices: `onShow(i)`, `onChange(indices, { mode })`,
 `rk:selectionchange` with `{ count, mode, indices }`, the app bar's mode.
-Returns `{ refresh(count), scrollTo(i), selected(), only(i), clear(), mode, count, destroy }`.
+Letters jump by `text(i)`, an item's words; without it, by the text
+`render()` writes into a row that is not shown (once per item, until
+`refresh()`). Returns `{ refresh(count), scrollTo(i), selected(), only(i), clear(), mode, count, destroy }`.
 
 ### `undoStack({ toaster, limit })`
 

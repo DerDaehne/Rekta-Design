@@ -322,6 +322,9 @@ export declare function contextMenu(scope: Element, el: HTMLElement, options?: {
   onSelect?: ((item: HTMLElement, target: HTMLElement) => void) | null;
 }): Destroyable & { open(target: HTMLElement): void; close(): void; readonly target: HTMLElement | null };
 
+/** A grid of tiles that open: one tab stop, ← → ↑ ↓ to the nearest tile that way (across a panorama's grids), Home
+ * End, letters jump. start() attaches it to every .rk-tiles holding a tile that opens. */
+export declare function grid(el: HTMLElement): Destroyable & { refresh(): void };
 export declare function tree(el: HTMLElement, options?: {
   onShow?: ((li: HTMLElement) => void) | null;
   onToggle?: ((li: HTMLElement, open: boolean) => void) | null;
@@ -342,6 +345,8 @@ export declare function sortable(list: HTMLElement, options?: {
 export declare function virtual(el: HTMLElement, options: {
   count?: number;
   render: (i: number, row: HTMLElement) => void;
+  /** An item's words, for the letter jump; without it, the text render() writes. */
+  text?: ((i: number) => string) | null;
   onShow?: ((i: number) => void) | null;
   onChange?: ((indices: number[], info: { mode: boolean }) => void) | null;
   appbar?: HTMLElement | null;

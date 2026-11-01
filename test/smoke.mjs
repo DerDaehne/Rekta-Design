@@ -195,6 +195,46 @@ await p.mouse.move(700, 500); await p.mouse.wheel(0, 300); await p.waitForTimeou
 ok((await p.evaluate(() => document.querySelector('#pan').scrollLeft)) > x0, 'a vertical wheel moves the panorama sideways');
 ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures frames', await text(p, '[data-live=fps] [data-v]'));
 
+// Tile grids (#129): one tab stop; the arrows by position, the shared row or column first, a tie to the better-aligned
+// one, on into the next grid of the panorama, no wrap; Home End; letters jump (#134). A fixture with a known layout.
+{
+  const at = () => p.evaluate(() => document.activeElement.textContent);
+  ok(await p.evaluate(() => { const g = document.querySelector('#tile-tokens').closest('.rk-tiles'); return g.hasAttribute('data-rk-grid') && [...g.querySelectorAll('a.rk-tile')].filter((t) => t.tabIndex === 0).length === 1; }),
+    'start(): the overview\'s grid of tiles that open is one tab stop');
+  await p.evaluate(() => {
+    const pan = document.createElement('div'); pan.className = 'rk-panorama'; pan.id = 't-pan';
+    pan.style.cssText = 'display:block;position:fixed;inset:0 auto auto 0;width:800px;height:400px;padding:0;overflow:visible;z-index:999;background:var(--rk-bg)';
+    const grid = (left, top, names) => `<div class="rk-tiles" style="position:absolute;left:${left}px;top:${top}px;display:grid;grid-template-columns:repeat(3,100px);grid-auto-rows:100px;gap:8px">${names.map((n, i) => `<a class="rk-tile${n === 'alpha' ? ' rk-w2' : ''}" href="#" id="t-${n}">${n}</a>`).join('')}</div>`;
+    pan.innerHTML = grid(0, 0, ['alpha', 'beta', 'bravo', 'charlie', 'delta']) + grid(400, 50, ['echo', 'foxtrot']);
+    pan.addEventListener('click', (e) => e.preventDefault());
+    document.querySelector('.rk').append(pan);
+    window.tGrids = [...pan.querySelectorAll('.rk-tiles')].map((g) => Rekta.grid(g));
+  });
+  ok(await p.evaluate(() => [...document.querySelectorAll('#t-pan .rk-tiles')].every((g) => [...g.children].filter((t) => t.tabIndex === 0).length === 1)), 'grid(): each grid one tab stop');
+  await p.focus('#t-alpha');
+  const keys = async (...k) => { for (const x of k) await p.keyboard.press(x); };
+  await keys('ArrowRight'); const r1 = await at();
+  await keys('ArrowDown'); const d1 = await at();
+  await keys('ArrowLeft', 'ArrowLeft'); const l2 = await at();
+  await keys('ArrowLeft'); const edge = await at();
+  await keys('ArrowUp'); const up = await at();
+  ok(r1 === 'beta' && d1 === 'delta' && l2 === 'bravo' && edge === 'bravo' && up === 'alpha', 'the arrows: → beta, ↓ delta, ← ← bravo, ← at the edge stays, ↑ alpha (a wide tile above)', [r1, d1, l2, edge, up].join(' '));
+  await keys('ArrowRight', 'ArrowRight'); const across = await at();
+  const stops = await p.evaluate(() => [...document.querySelectorAll('#t-pan a')].filter((t) => t.tabIndex === 0).map((t) => t.textContent).join());
+  ok(across === 'echo' && stops === 'beta,echo', '→ at a grid\'s end goes on into the next grid of the panorama; each keeps its tab stop', `${across} / ${stops}`);
+  await keys('ArrowDown'); const below = await at();
+  await keys('ArrowLeft'); const tie = await at();
+  ok(below === 'echo' && tie === 'beta', '↓ with nothing below stays; ← on a tie takes the better-aligned tile', `${below} ${tie}`);
+  await keys('End'); const end = await at(); await keys('Home'); const home = await at();
+  ok(end === 'delta' && home === 'alpha', 'Home and End: the grid\'s first and last tile', `${end} ${home}`);
+  await keys('b'); const b1 = await at(); await keys('r'); const br = await at();
+  await p.waitForTimeout(1100); await keys('e'); const e1 = await at();
+  ok(b1 === 'beta' && br === 'bravo' && e1 === 'echo', 'letters jump: b to beta, b r to bravo, after a pause e to echo in the next grid', `${b1} ${br} ${e1}`);
+  await p.focus('#t-alpha'); await keys('Tab');
+  ok(await p.evaluate(() => !document.activeElement.closest('#t-pan .rk-tiles:first-child')), 'Tab leaves the grid', await p.evaluate(() => document.activeElement.id || document.activeElement.tagName));
+  await p.evaluate(() => { window.tGrids.forEach((g) => g.destroy()); document.querySelector('#t-pan').remove(); });
+}
+
 // Tiles: a button tile opens a sheet.
 await go(p, 'tiles');
 await p.click('#tile-presses'); await p.waitForTimeout(300);
@@ -415,6 +455,16 @@ await p.keyboard.press('Escape');
 await p.focus(row(1)); await p.keyboard.press('ArrowDown'); await p.keyboard.press(' '); await p.waitForTimeout(150);
 ok(JSON.stringify(await sel()) === '["Sparkline"]', '↓ moves, Space selects', await sel());
 await p.keyboard.press('Escape');
+// Letters jump (#134): the next row whose name starts with them; the same letter again moves on; typed together they
+// are a prefix. Focus moves, the selection stays.
+{
+  await p.focus(row(1)); await p.waitForTimeout(1100);
+  const at = () => p.evaluate(() => document.activeElement.dataset.name);
+  await p.keyboard.press('s'); const s1 = await at(); await p.keyboard.press('s'); const s2 = await at();
+  await p.waitForTimeout(1100); await p.keyboard.press('p'); await p.keyboard.press('a'); await p.keyboard.press('n'); const pan = await at();
+  const stop = await p.evaluate(() => [...document.querySelectorAll('#comp-body tr')].filter((r) => r.tabIndex === 0).map((r) => r.dataset.name).join());
+  ok(s1 === 'Sparkline' && s2 === 'Sheet' && pan === 'Panorama' && stop === 'Panorama' && (await sel()).length === 0, 'letters jump in a table: s, s again, then "pan"; the tab stop follows, nothing is selected', `${s1} ${s2} ${pan} / ${stop} / ${await sel()}`);
+}
 await p.click('#comp-table thead th:nth-child(2) .rk-sort'); await p.waitForTimeout(500);
 ok((await p.evaluate(() => document.querySelector('#comp-body tr').dataset.name)) === 'App bar', 'sort by component');
 await p.click('#comp-status'); await p.waitForTimeout(200); await p.click('#comp-status-menu [data-v=warning]'); await p.waitForTimeout(200);
@@ -513,6 +563,8 @@ await p.keyboard.press('ArrowRight'); await p.keyboard.press('Enter'); await p.w
 ok((await text(p, '#file-name')) === 'rekta.css' && (await text(p, '#file-path')) === 'src / css', '→ goes in, Enter shows the file', `${await text(p, '#file-path')} ${await text(p, '#file-name')}`);
 await p.keyboard.press('ArrowLeft'); await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(150);
 ok((await p.evaluate(() => document.activeElement.getAttribute('aria-expanded'))) === 'false', '← goes up, then closes');
+await p.waitForTimeout(1100); await p.keyboard.press('s'); await p.keyboard.press('i'); await p.waitForTimeout(100);
+ok((await p.evaluate(() => document.activeElement.querySelector(':scope > .rk-tree-row').textContent.trim())) === 'site', 'letters typed together jump in the tree: "si" finds site');
 await p.click('#tree > li:nth-child(1) li > .rk-tree-row', { button: 'right' }); await p.waitForTimeout(200);
 ok(await isOpen(p, '#tree-menu') && (await text(p, '#file-name')) === 'rekta.tokens.json', 'a right click on a file selects it and opens its menu');
 await p.keyboard.press('Escape'); await p.waitForTimeout(150);
@@ -532,6 +584,10 @@ await p.click('#log .rk-virtual-row:nth-child(3)'); await p.waitForTimeout(150);
 ok((await text(p, '#log-shown')).startsWith('Line 3 · 00:00:14'), 'a click on a line selects and shows it', await text(p, '#log-shown'));
 await p.keyboard.press('End'); await p.waitForTimeout(300);
 ok((await p.evaluate(() => document.querySelector('#log [data-rk-active]') && document.querySelector('#log [data-rk-active]').getAttribute('aria-posinset'))) === '10000', 'End reaches line 10 000; it exists once it is in view');
+const logAt = () => p.evaluate(() => { const r = document.querySelector('#log [data-rk-active]'); return r ? `${r.getAttribute('aria-posinset')} ${r.querySelector('.rk-tag').dataset.status}` : '(none)'; });
+await p.waitForTimeout(1100); await p.keyboard.press('f'); await p.waitForTimeout(150); const f1 = await logAt();
+await p.keyboard.press('f'); await p.waitForTimeout(150); const f2 = await logAt();
+ok(/ error$/.test(f1) && / error$/.test(f2) && +f2.split(' ')[0] > +f1.split(' ')[0], 'letters jump in the long list: f to the first failed line, f again to the next', `${f1} / ${f2}`);
 await p.click('.rk-filters input[value=error]', { force: true }); await p.waitForTimeout(200);
 ok(/^\d+ of 10,000/.test(await text(p, '#log-facts')) && (await p.evaluate(() => [...document.querySelectorAll('#log .rk-tag')].every((t) => t.dataset.status === 'error'))), 'segments filter the long list', await text(p, '#log-facts'));
 await p.click('#log .rk-virtual-row:nth-child(1)'); await p.click('#log .rk-virtual-row:nth-child(4)', { modifiers: ['Control'] }); await p.waitForTimeout(150);

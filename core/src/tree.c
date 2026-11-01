@@ -6,9 +6,9 @@
    A branch opens over its height with a fade (duration-short, ease-in) and closes in 0.7 of that (ease-out); the rows
    below make room as it goes. Selection never follows focus: Up and Down, Home and End move the active row; Right
    opens a closed branch or goes into an open one, Left closes an open one or goes up to the parent; Enter or Space
-   selects and shows; * opens every sibling; a letter goes to the next row that starts with it. A click selects and
-   shows; a click on the twisty opens or closes without selecting; a double click opens or closes. Included after
-   widgets.c, whose status helpers it shares. */
+   selects and shows; * opens every sibling; letters go to the next row that starts with them (typed within
+   timing.type-ahead, one prefix). A click selects and shows; a click on the twisty opens or closes without selecting;
+   a double click opens or closes. Included after widgets.c, whose status helpers it shares. */
 #include "rk_internal.h"
 
 typedef struct node {
@@ -28,6 +28,7 @@ typedef struct tree {
   trow *rows; int nrows, rcap;
   void (*show)(rk_view *tree, int item, void *user); void *show_user;
   void (*toggle)(rk_view *tree, int item, bool open, void *user); void *toggle_user;
+  rk__typed typed;                                         /* letters typed to jump to a row */
 } tree;
 
 static float tree_row_h(void) { return rk_metric_of(RK_ROW_HEIGHT); }
@@ -212,8 +213,6 @@ static bool on_twisty(tree *t, int k, float x) {
   return t->nodes[t->rows[k].item].first >= 0 && x >= left && x < left + TWISTY + rk_metric_of(RK_SPACE_XS);
 }
 
-static int tree_fold(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }   /* the locale's case rules are not the tree's */
-static int first_letter(const char *s) { return s && *s ? tree_fold((unsigned char)*s) : -1; }
 
 static bool tree_event(rk_view *v, const rk_event *e, void *st) {
   tree *t = st;
@@ -268,12 +267,15 @@ static bool tree_event(rk_view *v, const rk_event *e, void *st) {
         for (int x = p >= 0 ? t->nodes[p].first : t->first; x >= 0; x = t->nodes[x].next) tree_open(v, t, x, true);
         return true;
       }
-      int want = tree_fold((unsigned char)e->text[0]);
-      for (int x = next_reachable(t, a, 1), guard = 0; guard <= t->n; guard++) {
-        if (x < 0) x = t->first;
-        if (first_letter(t->nodes[x].title) == want) { tree_set_active(v, t, x); return true; }
-        if (x == a) break;
-        x = next_reachable(t, x, 1);
+      bool again;                                           /* letters: the next row that starts with them */
+      const char *want = rk__type_ahead(&t->typed, e->text, now, &again);
+      if (!want) return true;
+      int from = again ? next_reachable(t, a, 1) : a;
+      if (from < 0) from = t->first;
+      for (int x = from, guard = 0; guard <= t->n; guard++) {
+        if (rk__starts_with(t->nodes[x].title, want)) { tree_set_active(v, t, x); return true; }
+        if ((x = next_reachable(t, x, 1)) < 0) x = t->first;
+        if (x == from) break;
       }
       return true;
     }

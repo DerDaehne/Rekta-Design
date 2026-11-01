@@ -3242,6 +3242,38 @@ static void test_product_codes(void) {
   done(w);
 }
 
+/* Letters jump in a list and a tree (docs/navigation.md): typed within timing.type-ahead they form a prefix, the same
+   letter again moves on. */
+static const char *const fruit[] = { "apple", "apricot", "banana", "blueberry", "Cherry" };
+static void fruit_item(int i, rk_list_item *out, void *u) { (void)u; out->title = fruit[i]; }
+static void test_type_ahead(void) {
+  rk_window *w = window(400, 400);
+  rk_view *page = col(16, 16);
+  rk_view *l = rk_add(page, rk_list(5, fruit_item, NULL));
+  rk_view_set_size(l, 300, 200);
+  rk_view *tr = rk_add(page, rk_tree());
+  rk_tree_add(tr, -1, "alpha"); rk_tree_add(tr, -1, "beta"); rk_tree_add(tr, -1, "bravo"); rk_tree_add(tr, -1, "charlie");
+  show(w, page, "type-ahead");
+  rk_window_focus(w, l);
+  type_text(w, "b");
+  CHECK(rk_list_active(l) == 2, "a letter goes to the first row that starts with it (%d)", rk_list_active(l));
+  type_text(w, "b");
+  CHECK(rk_list_active(l) == 3, "the same letter again: the next one (%d)", rk_list_active(l));
+  type_text(w, "c");
+  CHECK(rk_list_active(l) == 3, "typed at once, \"bbc\" is a prefix nothing starts with: it stays (%d)", rk_list_active(l));
+  rk_app_run_for(1100);
+  type_text(w, "a"); type_text(w, "p"); type_text(w, "r");
+  CHECK(rk_list_active(l) == 1, "after a pause a new prefix: \"apr\" finds apricot (%d)", rk_list_active(l));
+  rk_app_run_for(1100);
+  type_text(w, "C");
+  CHECK(rk_list_active(l) == 4, "case does not matter (%d)", rk_list_active(l));
+  rk_window_focus(w, tr);
+  rk_app_run_for(1100);
+  type_text(w, "b"); type_text(w, "r");
+  CHECK(((tree *)tr->state)->active == 2, "in a tree too: \"br\" finds bravo (%d)", ((tree *)tr->state)->active);
+  done(w);
+}
+
 /* More contrast: the contrast colours (the tokens' light-contrast and dark-contrast) and a frame on status tiles. */
 static void test_contrast(void) {
   rk_color high = rk_color_of(RK_ROLE_TEXT_HIGH), tile = rk_color_of(RK_ROLE_ERROR_TILE), bg = rk_color_of(RK_ROLE_BG);
@@ -3511,6 +3543,7 @@ static void launch(void *user) {
   test_product_overrides();
   test_product_codes();
   test_contrast();
+  test_type_ahead();
   test_wide_pivot();
   { int lv = rk__live_views; test_declared_product(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_product: %d views more\n", rk__live_views - lv); }
   scene_tiles("tiles", 1);

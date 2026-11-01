@@ -999,6 +999,11 @@
       "$type": "duration",
       "$value": "30000ms",
       "$description": "A live region with no update or heartbeat for this long is stale: it says so, and its values stop looking current."
+    },
+    "type-ahead": {
+      "$type": "duration",
+      "$value": "1000ms",
+      "$description": "In a collection whose entries take focus, letters typed less than this apart form one prefix to jump to; after a pause a letter starts again. Wall time: reduced motion leaves it alone."
     }
   },
   "layer": {

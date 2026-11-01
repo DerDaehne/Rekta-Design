@@ -522,6 +522,7 @@
   let logMap = Array.from({ length: LOG_N }, (_, i) => i);
   const logList = Rekta.virtual($('#log'), {
     count: LOG_N, label: 'log lines', appbar: $('#bar'),
+    text(k) { const l = logLine(logMap[k]); return `${WORD[l.level]} ${l.msg}`; },   // a letter jumps by the line's word
     render(k, row) {
       const l = logLine(logMap[k]);
       row.innerHTML = `<span class="rk-meta">#${String(l.n).padStart(5, '0')}</span><span class="rk-tag" data-status="${l.level}">${WORD[l.level]}</span><span></span><span class="rk-meta">${l.time}</span>`;

@@ -111,6 +111,7 @@ typedef enum rk_duration {
   RK_DURATION_FLOAT, RK_DURATION_PIVOT_GLIDE, RK_DURATION_PIVOT_SIZE,
   RK_TIMING_TOAST, RK_TIMING_TAP_DELAY, RK_TIMING_LONG_PRESS, RK_TIMING_TIP_DELAY,
   RK_TIMING_STALE,                                 /* live data without an update this long is stale (the app's to show) */
+  RK_TIMING_TYPE_AHEAD,                            /* letters typed less than this apart form one prefix to jump to */
   RK_DURATION_FORCE32 = 0x7fffffff
 } rk_duration;
 
@@ -544,7 +545,8 @@ RK_API void rk_field_set_options(rk_view *field, const char *const *options, int
 /* A long list: only the rows in sight are drawn and nothing is kept for each item - item() fills a row while it is
    drawn, so the strings it gives need to last only for the call (out->size says how much of the struct this library
    knows). Hairline rows, selected the Metro way: a click selects one and shows it (on_show); Ctrl+click toggles and
-   starts selecting several; Shift+click takes a range. In a stack it fills what the others leave, and scrolls. */
+   starts selecting several; Shift+click takes a range. Letters go to the next row whose title starts with them, as
+   in a tree. In a stack it fills what the others leave, and scrolls. */
 typedef struct rk_list_item { uint32_t size; const char *title, *meta; rk_status status; } rk_list_item;
 RK_API rk_view *rk_list(int count, void (*item)(int index, rk_list_item *out, void *user), void *user);
 RK_API void rk_list_set_count(rk_view *list, int count);   /* the items changed: drawn again */
@@ -570,7 +572,8 @@ RK_API rk_view *rk_drop(const char *title, const char *hint, const char *accept,
 /* A tree: items that hold items, opened and closed in place. The app adds the items and keeps their numbers; parent
    -1 is the top. A click, Enter or Space selects an item and shows it (on_show); selection never follows focus. A
    click on the chevron or a double click opens or closes; Right and Left open and close or go in and up; * opens every
-   sibling; a letter goes to the next item that starts with it. Long trees go in an rk_scroll. */
+   sibling; letters go to the next item that starts with them (one prefix while typed within timing.type-ahead). Long
+   trees go in an rk_scroll. */
 RK_API rk_view *rk_tree(void);
 RK_API int rk_tree_add(rk_view *tree, int parent, const char *title);   /* the new item's number, or -1 */
 RK_API void rk_tree_set_meta(rk_view *tree, int item, const char *meta, rk_status status);   /* on the right, as a row's */
