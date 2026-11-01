@@ -185,11 +185,17 @@ typedef struct places {
   bool leaving_owned;
   uint32_t timer;
   struct swap *pending;
+  struct carry *carry;                                     /* a title carried into the next place */
+  rk_view *lift; uint32_t lift_timer;                      /* that title, until its part starts to turn */
 } places;
 
+static void carry_end(struct carry *cr);
 static void places_free(void *p) {
   places *pl = p;
   if (pl->timer) rk_app_cancel(pl->timer);
+  if (pl->lift_timer) rk_app_cancel(pl->lift_timer);
+  rk_release(pl->lift);
+  if (pl->carry) carry_end(pl->carry);
   free(pl->pending);
   if (pl->leaving_owned) rk_release(pl->leaving);
   for (int i = 0; i < pl->fcap; i++) rk_release(pl->focus_return[i]);
@@ -355,7 +361,7 @@ static void turn_pivot(rk_transform *t, rk_view *u, rk_view *place, float reach)
    duration-short by its heft; the pressed tile keeps its press and goes last, once its press has sunk in
    (duration-press), and the press gives way along its turn. Returns when the place can go: its last unit turn-overlap
    through, fading, so the next swings in without a gap. */
-static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
+static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back, rk_view *lift, double *lift_at) {
   plan pl = turn_gather(t, place, pressed);
   int n = pl.n;
   double *hs = pl.hs, *starts = pl.starts;
@@ -367,6 +373,9 @@ static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
     rk_view *u = t->units[i];
     double h = hs[i], at = u == pressed ? last : starts[i], d = out * h;
     if (u == pressed) at = RK_MAX(at, rk_duration_of(RK_DURATION_PRESS) - (rk_app_now() - u->press_since));
+    /* a carried title stands: at once when it is a part of its own, else when its part starts to turn */
+    if (lift && u == lift) { *lift_at = 0; continue; }
+    if (lift && rk__view_within(lift, u)) *lift_at = at;
     rk_transform from = u->ptransform, to = u->transform;
     turn_pivot(&to, u, place, pl.reach[pl.slots[i]]);
     to.rotate_y = angle; to.rotate_x = 0; to.scale_x = to.scale_y = 1;
@@ -391,25 +400,126 @@ static void turn_reset(turn *t) {
   turn_release(t);
 }
 
+/* The carried title (motion.md): a view marked rk_view_set_carry in the part that opens a place is its title. It does
+   not turn away with its part: when the part starts to turn, a picture of it stands where it was (the view itself
+   goes transparent) while the rest of the place turns away. Then it travels over duration-moderate on
+   ease-pivot-glide to the new place's title (its first RK_TEXT_TITLE label) and lands on it: the new title's picture
+   grows from the old one's place and size to its own, under the old picture, which fades over the first half, so the
+   same words never change. The new place's parts arrive from the middle of the travel on; the part that holds a title
+   carried back lands with it. Back runs it the other way, from the place's title into the part that opened it. The
+   pictures stand in the window's carries, above the content. */
+typedef struct carry {
+  places *pl;
+  rk_view *layer, *from, *to;                              /* to: NULL while the title stands */
+  rk_bitmap *a, *b; rk_rect ra, rb;
+  bool flown, held;
+  bool over, ending; int calls;                            /* ended; callbacks still to come: freed after the last */
+} carry;
+
+static const float ease_glide[4] = RK_TOK_EASE_PIVOT_GLIDE, ease_linear[4] = { 0, 0, 1, 1 };
+
+static void carry_picture(rk_canvas *c, rk_bitmap *b, float x, float y, float s, float alpha) {
+  float k = c->scale, w = b->w * s, h = b->h * s, x0 = c->ox + x * k, y0 = c->oy + y * k;
+  float q[8] = { x0, y0, x0 + w, y0, x0 + w, y0 + h, x0, y0 + h };
+  rk__composite(c->target, rk__canvas_clip(c), b, q, alpha * c->alpha);
+}
+
+static void carry_draw(rk_view *v, rk_canvas *c, void *st) {
+  carry *cr = st;
+  if (!cr->a) return;
+  if (!cr->b) { carry_picture(c, cr->a, cr->ra.x, cr->ra.y, 1, 1); return; }   /* standing */
+  float t = RK_CLAMP(v->pvalue, 0.0f, 1.0f), e = rk__ease(ease_glide, t), k0 = cr->rb.h > 0 ? cr->ra.h / cr->rb.h : 1;
+  float s = k0 + (1 - k0) * e, x = cr->ra.x + (cr->rb.x - cr->ra.x) * e, y = cr->ra.y + (cr->rb.y - cr->ra.y) * e;
+  carry_picture(c, cr->b, x, y, s, 1);
+  if (t < 0.5f) carry_picture(c, cr->a, x, y, s / k0, 1 - t / 0.5f);
+}
+static const rk_class carry_class = { { sizeof(rk_view_class), "rk_carry", carry_draw, NULL, NULL, NULL, NULL }, NULL, NULL };
+
+static void carry_end(carry *cr) {
+  if (cr->over) return;
+  cr->over = cr->ending = true;
+  if (cr->pl->carry == cr) cr->pl->carry = NULL;
+  for (int i = 0; i < 2; i++) {
+    rk_view *v = i ? cr->to : cr->from;
+    if (!v) continue;
+    v->popacity = v->opacity; rk__view_dirty(v);
+    rk_release(v);
+  }
+  rk__anim_cancel(cr->layer, RK_PROP_VALUE);
+  rk__view_detach(cr->layer);
+  rk__bitmap_free(cr->a); rk__bitmap_free(cr->b);
+  cr->ending = false;
+  if (!cr->calls) free(cr);
+}
+/* a callback has come: true when the carry has ended meanwhile (and is freed after the last one) */
+static bool carry_called(carry *cr) {
+  cr->calls--;
+  if (!cr->over) return false;
+  if (!cr->ending && !cr->calls) free(cr);
+  return true;
+}
+
+/* the title leaves its part: its picture stands where it was */
+static void carry_lift(places *pl, rk_view *from) {
+  rk_window *w = rk__view_window(from);
+  if (!w || !w->carries || !rk__view_visible(from)) return;
+  carry *cr = rk__alloc(sizeof *cr);
+  cr->pl = pl; cr->from = rk_retain(from); cr->ra = rk__window_rect(from); cr->a = rk__snapshot(from, true);
+  cr->layer = rk__view_create(&carry_class, cr); cr->layer->passthrough = true;
+  rk__view_add(w->carries, cr->layer); rk_release(cr->layer);
+  rk__set_frame(cr->layer, (rk_rect){ 0, 0, w->size.w, w->size.h });
+  from->popacity = 0; rk__view_dirty(from); rk__view_dirty(cr->layer);
+  pl->carry = cr;
+  if (!cr->a) carry_end(cr);
+}
+static void carry_lift_now(void *user) {
+  places *pl = user;
+  pl->lift_timer = 0;
+  if (pl->lift) carry_lift(pl, pl->lift);
+  rk_release(pl->lift); pl->lift = NULL;
+}
+
+/* it has arrived; it is the place's own once the part that holds it has landed too */
+static void carry_flown(rk_view *v, void *user) { (void)v; carry *cr = user; if (carry_called(cr)) return; cr->flown = true; if (!cr->held) carry_end(cr); }
+static void carry_landed(rk_view *v, void *user) { (void)v; carry *cr = user; if (carry_called(cr)) return; cr->held = false; if (cr->flown) carry_end(cr); }
+
+static bool carry_fly(carry *cr, double d) {
+  cr->rb = rk__window_rect(cr->to); cr->b = rk__snapshot(cr->to, true);
+  if (!cr->b) { carry_end(cr); return false; }
+  cr->to->popacity = 0; rk__view_dirty(cr->to);
+  float a = 0, b = 1;
+  cr->calls++;
+  rk__animate_cb(cr->layer, RK_PROP_VALUE, &a, &b, 1, d, 0, ease_linear, carry_flown, cr);
+  return true;
+}
+
 /* Arriving: each unit swings in from the other side, fading in over turn-in-whole, light ones first, over
    duration-moderate by its heft. The place assembles itself; nothing builds in after it. Back runs it the other
-   way round. */
-static void turn_in(rk_view *place, bool back) {
+   way round. A carried title travels in, the rest from the middle of its travel on. */
+static void turn_in(rk_view *place, bool back, carry *cr) {
   turn t = { 0 };
   rk__layout_pending();
   plan pl = turn_gather(&t, place, NULL);
   int n = pl.n;
   double *hs = pl.hs, *starts = pl.starts;
   double in = rk_duration_of(RK_DURATION_MODERATE);
+  rk_view *host = NULL;
+  if (cr) {
+    for (int i = 0; i < n; i++) if (t.units[i] != cr->to && rk__view_within(cr->to, t.units[i])) host = t.units[i];
+    cr->held = host != NULL;
+    if (!carry_fly(cr, in)) { cr = NULL; host = NULL; }
+  }
   for (int i = 0; i < n; i++) {
     rk_view *u = t.units[i];
-    double h = hs[i], at = starts[i], d = in * h;
+    if (cr && u == cr->to) continue;                       /* it stands, transparent, while its picture travels */
+    double h = hs[i], d = in * h, at = !cr ? starts[i] : u == host ? RK_MAX(0.0, in - d) : starts[i] + in / 2;
     rk_transform from = u->transform, to = u->transform;
     turn_pivot(&from, u, place, pl.reach[pl.slots[i]]);
     to.origin_x = from.origin_x; to.origin_y = from.origin_y; to.perspective = from.perspective;
     from.rotate_y = back ? -RK_TOK_TURNSTILE_IN_ANGLE : RK_TOK_TURNSTILE_IN_ANGLE;
     float o0 = 0, o1 = u->opacity;
-    rk__animate_transform(u, &from, &to, d, at, turn_ease_in);
+    if (u == host) { cr->calls++; rk__animate_transform_cb(u, &from, &to, d, at, turn_ease_in, carry_landed, cr); }
+    else rk__animate_transform(u, &from, &to, d, at, turn_ease_in);
     rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, RK_TOK_TURN_IN_WHOLE * d, at, rk__ease_base);
   }
   plan_free(&pl);
@@ -420,9 +530,17 @@ static void turn_in(rk_view *place, bool back) {
 /* The turn for what is not a controller: the panes of a split, which turn as places do. */
 struct turn *rk__turn_new(void) { return rk__alloc(sizeof(turn)); }
 void rk__turn_free(struct turn *t) { if (t) { turn_reset(t); free(t->units); free(t); } }
-double rk__turn_away(struct turn *t, rk_view *place, bool back) { return turn_out(t, place, NULL, back); }
+double rk__turn_away(struct turn *t, rk_view *place, bool back) { return turn_out(t, place, NULL, back, NULL, NULL); }
 void rk__turn_settle(struct turn *t) { turn_reset(t); }
-void rk__turn_arrive(rk_view *place, bool back) { turn_in(place, back); }
+void rk__turn_arrive(rk_view *place, bool back) { turn_in(place, back, NULL); }
+
+/* the first view in v marked to carry, or the first place title */
+static rk_view *find_view(rk_view *v, bool title) {
+  if (!v || v->hidden) return NULL;
+  if (title ? rk__is_title(v) : v->carry) return v;
+  for (int i = 0; i < v->nkids; i++) { rk_view *f = find_view(v->kids[i], title); if (f) return f; }
+  return NULL;
+}
 
 typedef struct swap { rk_controller *places, *to; bool back; } swap;
 
@@ -436,17 +554,25 @@ static void swap_now(void *user) {
   bool owned = pl->leaving_owned;
   pl->leaving = NULL; pl->leaving_owned = false;
   turn_reset(&pl->out);
+  if (pl->lift_timer) { rk_app_cancel(pl->lift_timer); pl->lift_timer = 0; rk_release(pl->lift); pl->lift = NULL; }   /* not lifted yet: no travel */
   if (old) { rk__view_detach(rk_controller_view(old)); rk__controller_appear(old, false); }
   rk_view *nv = rk_controller_view(s->to);
   nv->ptransform = nv->transform; nv->popacity = nv->opacity;
   rk__view_add(c->view, nv);
   rk__controller_attach(s->to, c->window);
-  turn_in(turning_view(s->to), s->back);
+  int at = pl->n - 1;
+  rk_view *opener = s->back && at >= 0 && at < pl->fcap ? pl->focus_return[at] : NULL;
+  carry *cr = pl->carry;
+  if (cr) {                                                /* where the standing title lands */
+    rk__layout_pending();
+    rk_view *to = s->back ? find_view(opener, false) : find_view(turning_view(s->to), true);
+    if (to && rk__view_visible(to) && rk_duration_of(RK_DURATION_MODERATE) > 0) cr->to = rk_retain(to); else { carry_end(cr); cr = NULL; }
+  }
+  turn_in(turning_view(s->to), s->back, cr);
   if (c->appeared) rk__controller_appear(s->to, true);
   rk_window *w = c->window;
   if (w) {
-    int at = pl->n - 1;
-    rk_view *f = s->back && at >= 0 && at < pl->fcap ? pl->focus_return[at] : NULL;
+    rk_view *f = opener;
     if (f && rk__view_window(f) == w) rk_window_focus(w, f); else rk_window_focus(w, NULL);
     if (w->titlebar) rk__titlebar_update(w->titlebar);
   }
@@ -457,10 +583,23 @@ static void swap_now(void *user) {
 static void start_turn(rk_controller *c, rk_controller *old, bool owned, rk_controller *to, bool back, rk_view *pressed) {
   places *pl = c->impl;
   if (pl->pending) { rk_app_cancel(pl->timer); swap_now(pl->pending); }   /* a turn still running finishes at once */
+  if (pl->carry) carry_end(pl->carry);
   pl->leaving = old; pl->leaving_owned = owned;
   swap *s = rk__alloc(sizeof *s);
   s->places = c; s->to = to; s->back = back;
-  double wait = old && old->view && rk__view_visible(old->view) ? turn_out(&pl->out, turning_view(old), pressed, back) : 0;
+  /* a title to carry: forward the opened part's into the new place's title, back the place's into the part that
+     opened it; only when both are there */
+  rk_view *lift = NULL;
+  if (old && old->view && rk_duration_of(RK_DURATION_MODERATE) > 0) {
+    int at = pl->n - 1;
+    rk_view *opener = back && at >= 0 && at < pl->fcap ? pl->focus_return[at] : NULL;
+    lift = back ? find_view(turning_view(old), true) : find_view(pressed, false);
+    if (lift && !(back ? find_view(opener, false) : find_view(turning_view(to), true))) lift = NULL;
+  }
+  double lift_at = -1;
+  double wait = old && old->view && rk__view_visible(old->view) ? turn_out(&pl->out, turning_view(old), pressed, back, lift, &lift_at) : 0;
+  if (lift_at == 0) carry_lift(pl, lift);
+  else if (lift_at > 0) { pl->lift = rk_retain(lift); pl->lift_timer = rk_app_after(lift_at, carry_lift_now, pl); }
   if (wait <= 0) { swap_now(s); return; }
   pl->pending = s;
   pl->timer = rk_app_after(wait, swap_now, s);
@@ -1453,7 +1592,7 @@ static void pivot_arrive(void *user) {
   nv->ptransform = nv->transform; nv->popacity = nv->opacity;
   rk__view_add(p->body, nv);
   rk__controller_attach(to, c->window);
-  turn_in(turning_view(to), p->back);
+  turn_in(turning_view(to), p->back, NULL);
   if (c->appeared) rk__controller_appear(to, true);
   if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar);
 }
@@ -1478,7 +1617,7 @@ void rk_pivot_select(rk_controller *c, int index) {
   strip_activate(p->strip, index);
   if (((strip *)p->strip->state)->nav) {
     p->leaving = old; p->back = dir < 0;
-    double wait = rk__view_visible(rk_controller_view(old)) ? turn_out(&p->out, turning_view(old), NULL, p->back) : 0;
+    double wait = rk__view_visible(rk_controller_view(old)) ? turn_out(&p->out, turning_view(old), NULL, p->back, NULL, NULL) : 0;
     if (wait > 0) p->timer = rk_app_after(wait, pivot_arrive, p); else pivot_arrive(p);
     return;
   }

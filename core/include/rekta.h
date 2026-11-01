@@ -321,6 +321,9 @@ RK_API rk_transform rk_view_transform(rk_view *view);
 RK_API void rk_view_set_hidden(rk_view *view, bool hidden);
 RK_API bool rk_view_is_hidden(rk_view *view);
 RK_API void rk_view_set_clip(rk_view *view, bool clip);
+/* The title of the part it is in: when the part opens a place (rk_places_go), the title travels into the place's
+   title (its first RK_TEXT_TITLE label) instead of turning away, and back into the part. */
+RK_API void rk_view_set_carry(rk_view *view, bool carry);
 
 /* layout: the view's own, then what its parent's layout reads from it */
 RK_API void rk_view_set_layout(rk_view *view, rk_layout layout);

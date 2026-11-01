@@ -80,8 +80,9 @@ export declare function press(scope?: Document | Element): Destroyable;
 
 export declare function arrive(el: Element): void;
 export declare const turn: {
-  leave(place: Element, options?: { pressed?: Element | null; back?: boolean }): Promise<void>;
-  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean }): Promise<void>;
+  /** `carry`: a title that does not turn away but stands for the next enter(), which takes it to its own `carry`. */
+  leave(place: Element, options?: { pressed?: Element | null; back?: boolean; carry?: Element | null }): Promise<void>;
+  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean; carry?: Element | null }): Promise<void>;
   finish(): void;
   readonly running: boolean;
 };

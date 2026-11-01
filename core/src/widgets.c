@@ -38,6 +38,8 @@ static void label_draw(rk_view *v, rk_canvas *c, void *st) {
 static void label_destroy(void *st) { label *l = st; free(l->text); free(l); }
 static const rk_class label_class = { { sizeof(rk_view_class), "rk_label", label_draw, label_measure, NULL, NULL, label_destroy }, NULL, NULL };
 
+bool rk__is_title(rk_view *v) { return v && v->cls == &label_class && ((label *)v->state)->style == RK_TEXT_TITLE; }
+
 rk_view *rk_label(const char *text, rk_text_style style) {
   label *l = rk__alloc(sizeof *l);
   l->text = rk__strdup(text ? text : ""); l->style = style;

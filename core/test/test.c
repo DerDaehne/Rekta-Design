@@ -223,6 +223,54 @@ static void test_panorama_edge(void) {
   done(w);
 }
 
+/* A carried title (motion.md): the opened part's title stands while its place turns away, travels into the new place's
+   title and lands on it, the rest of the new place arriving from the middle of the travel; back, the other way. */
+static void test_carry(void) {
+  rk_window *w = window(800, 600);
+  rk_view *home = col(16, 0), *part = rk_add(home, col(4, 8));
+  rk_view *name = rk_add(part, rk_label("Nightly import", RK_TEXT_GROUP));
+  rk_add(part, rk_label("failed twice this week", RK_TEXT_META));
+  for (int i = 0; i < 3; i++) rk_add(home, rk_label("A line of the home place.", RK_TEXT_BODY));
+  rk_view_set_carry(name, true);
+  part->focusable = true;
+  rk_controller *pc = rk_places(rk_controller_create_with_view(home, "home"));
+  rk_window_show(w, pc);
+  rk_app_run_for(50);
+  rk_view *there = col(16, 0), *title = rk_add(there, rk_label("Nightly import", RK_TEXT_TITLE));
+  rk_view *rows = rk_add(there, rk_rows());
+  rk_rows_add(rows, "Last run", "2:14", RK_STATUS_ERROR);
+  rk_window_focus(w, part);
+  w->activated = part;
+  rk_rect from = rk__window_rect(name);
+  rk_places_go(pc, rk_controller_create_with_view(there, "nightly"));
+  places *pl = pc->impl;
+  rk_app_run_for(30);
+  CHECK(pl->carry && name->popacity == 0 && !pl->carry->to, "leaving, the title stands as a picture while its place turns away");
+  double t0 = rk_app_now();
+  while (pl->carry && !pl->carry->to && rk_app_now() - t0 < 2000) rk_app_run_for(8);
+  CHECK(pl->carry && pl->carry->to == title && title->popacity == 0, "then it travels to the new place's title");
+  rk_app_run_for(100);
+  float t = pl->carry ? pl->carry->layer->pvalue : -1;
+  rk_view *row = rows->nkids ? rows->kids[0] : rows;              /* a unit: the rows turn one by one */
+  CHECK(t > 0.1f && t < 0.5f && fabsf(row->ptransform.rotate_y) > RK_TOK_TURNSTILE_IN_ANGLE - 1, "the rest wait for the middle of the travel (%g, %g)", t, row->ptransform.rotate_y);
+  rk_app_run_for(1500);
+  rk_rect to = rk__window_rect(title);
+  CHECK(!pl->carry && title->popacity == 1 && name->popacity == 1 && w->carries->nkids == 0, "it lands, and the title is the place's own; nothing is left");
+  CHECK(fabsf(to.y - from.y) > 0 || fabsf(to.x - from.x) > 0, "it went somewhere");
+  rk_places_back(pc);
+  rk_app_run_for(30);
+  CHECK(pl->carry && title->popacity == 0, "back, the place's title stands");
+  rk_app_run_for(1800);
+  CHECK(!pl->carry && name->popacity == 1 && w->carries->nkids == 0, "and travels into the part that opened it");   /* the place it left is gone, title and all */
+  rk_app_set_motion(RK_MOTION_PREF_OFF);
+  w->activated = part;
+  rk_places_go(pc, rk_controller_create_with_view(col(16, 0), "plain"));
+  CHECK(!pl->carry && name->popacity == 1, "reduced motion: nothing travels");
+  rk_app_set_motion(RK_MOTION_PREF_SYSTEM);
+  rk_app_run_for(100);
+  done(w);
+}
+
 /* A gesture hint: nudge-distance the gesture's way, then back to rest; nothing under reduced motion. */
 static void test_nudge(void) {
   rk_window *w = window(600, 400);
@@ -3694,6 +3742,7 @@ static void launch(void *user) {
   test_bar_motion();
   test_nudge();
   test_panorama_edge();
+  test_carry();
   { int lv = rk__live_views; test_declare(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declare_same_pixels(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare_same_pixels: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }

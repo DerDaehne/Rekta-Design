@@ -970,6 +970,12 @@ turns the current place away and the new one in;
 Escape or the back button turn back, and
 .Fn rk_places_on_back
 hears it.
+A view marked with
+.Fn rk_view_set_carry
+is the title of the part it is in: when that part opens a place, the title
+does not turn away but travels into the new place's title (its first
+.Dv RK_TEXT_TITLE
+label), and back into the part.
 .It Fn rk_panorama , Fn rk_panorama_add
 One place laid out sideways in sections under a strip of their titles.
 .Fn rk_panorama_insert ,

@@ -193,6 +193,7 @@ them:
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
+| `data-rk-carry` | an element inside a part that opens a place (written by the page) | The part's title: it travels into the new place's `.rk-title` instead of turning away, and back into the part ([motion.md](motion.md#place-change-in-detail)). |
 | `data-rk-align` | a control that opens a floating surface (written by the page) | `center`: the control stands in the middle of its container, and `place()` (so `menu()` and `combobox()`) centres the surface on it instead of starting at its leading edge. |
 | `aria-busy` | a `.rk-region` | Loading (`busy()`). |
 | `data-rk-select` | a list or table body | Its items are chosen the Metro way (`select()`). |
@@ -385,13 +386,16 @@ The place change as two primitives that any router can call.
 
 | Member | Does |
 |---|---|
-| `turn.leave(place, { pressed, back })` | Turns the visible units of `place` away, each by its weight ([motion.md](motion.md)), `pressed` last from its pressed pose once its press has sunk in; then hides `place`. Resolves when it is gone. |
-| `turn.enter(place, { back, focus, arriving })` | Shows `place` and turns it in, then focuses `focus`. Its tiles build in unless `arriving` is false (the default for `back`). |
+| `turn.leave(place, { pressed, back, carry })` | Turns the visible units of `place` away, each by its weight ([motion.md](motion.md)), `pressed` last from its pressed pose once its press has sunk in; then hides `place`. Resolves when it is gone. `carry` is a title that does not turn away: it stands for the next `turn.enter()`. |
+| `turn.enter(place, { back, focus, arriving, carry })` | Shows `place` and turns it in, then focuses `focus`. Its tiles build in unless `arriving` is false (the default for `back`). `carry` is where the title the leave kept lands (the place's `.rk-title` forward, the opening part's title back); the rest arrive from the middle of its travel. Without it, a kept title goes. |
 | `turn.finish()` | Ends a running turn in its end state. Call it before any navigation that does not wait: a navigation is never refused. |
 | `turn.running` | Whether a turn runs. |
 
 With a framework router: `await turn.leave(oldEl, { pressed })`, render
-the new route, then `await turn.enter(newEl, { focus: heading })`.
+the new route, then `await turn.enter(newEl, { focus: heading })`. To
+carry the opened part's title, pass `carry: pressed.querySelector('[data-rk-carry]')`
+to the leave and `carry: newEl.querySelector('.rk-title')` to the enter;
+`places()` does it by itself, both ways.
 
 ### `places({ mode, base, home, title, onChange })`
 

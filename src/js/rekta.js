@@ -482,11 +482,68 @@ export function arrive(el) {
   clearTimeout(el._rkArrive);
   el._rkArrive = setTimeout(() => el.removeAttribute('data-rk-arriving'), wait);
 }
+// The title a part carries into the place it opens (motion.md): it does not turn away with its part. Leaving, a copy
+// stands where it was (the title itself turns transparent, keeping its room, and can still take focus) while the rest
+// of the place turns away. Arriving, it travels over duration-moderate on ease-pivot-glide to where the new place
+// rests its title: a copy of that title
+// travels from the old one's place and size to its own, under the old copy, which fades over the first half, so the
+// same words never change and other words cross over. The new place's parts arrive from the middle of the travel on.
+// The copies stand in the body, fixed (a place is a container, which would hold a fixed box), with the look
+// they had where they stood. Back runs it the other way.
+let lifted = null;
+const COPIED = ['font-family', 'font-size', 'font-weight', 'font-style', 'font-variant-numeric', 'line-height', 'letter-spacing', 'text-transform', 'text-align', 'white-space', 'overflow-wrap', 'color', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left'];
+function copyOf(el, r) {
+  const s = getComputedStyle(el), c = el.cloneNode(true);
+  for (const x of [c, ...c.querySelectorAll('[id]')]) x.removeAttribute('id');
+  c.removeAttribute('data-rk-carry'); c.removeAttribute('class'); c.setAttribute('aria-hidden', 'true');
+  // An inline title keeps its one line: a block as wide as its box would round it onto two.
+  const w = s.display === 'inline' ? Math.ceil(r.width) + 1 : r.width;
+  c.style.cssText = `${COPIED.map((k) => `${k}:${s.getPropertyValue(k)}`).join(';')};position:fixed;left:${r.left}px;top:${r.top}px;width:${w}px;height:${r.height}px;margin:0;border:0;box-sizing:border-box;display:block;overflow:visible;visibility:visible;pointer-events:none;transform-origin:0 0;z-index:var(--rk-layer-sticky)`;
+  return c;
+}
+function liftTitle(el) {
+  const r = el.getBoundingClientRect(), copy = copyOf(el, r);
+  document.body.appendChild(copy);
+  lifted = { el, copy, r, size: parseFloat(getComputedStyle(el).fontSize) || 1, was: el.style.opacity };
+  el.style.opacity = '0';
+}
+function dropTitle() {
+  if (!lifted) return;
+  lifted.copy.remove(); lifted.el.style.opacity = lifted.was;
+  lifted = null;
+}
+function flyTitle(to, d) {
+  const from = lifted, r = to.getBoundingClientRect(), copy = copyOf(to, r), was = to.style.opacity;
+  lifted = null;
+  from.copy.before(copy);
+  to.style.opacity = '0';
+  const k = from.size / (parseFloat(getComputedStyle(to).fontSize) || from.size), dx = from.r.left - r.left, dy = from.r.top - r.top, ease = css('--rk-ease-pivot-glide');
+  const anims = [
+    copy.animate([{ transform: `translate(${dx}px, ${dy}px) scale(${k})` }, { transform: 'none' }], { duration: d, easing: ease, fill: 'forwards' }),
+    from.copy.animate([{ transform: 'none' }, { transform: `translate(${-dx}px, ${-dy}px) scale(${1 / k})` }], { duration: d, easing: ease, fill: 'forwards' }),
+    from.copy.animate([{ opacity: 1 }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], { duration: d, fill: 'forwards' }),
+  ];
+  let over = false;
+  const f = {
+    d, host: null, flown: false, held: false,
+    // The title shows itself when it has arrived and the part that holds it has come to rest, in the same frame.
+    end() {
+      if (over) return;
+      over = true;
+      anims.forEach((a) => a.cancel()); copy.remove(); from.copy.remove();
+      from.el.style.opacity = from.was; to.style.opacity = was;
+    },
+    landed() { f.held = false; if (f.flown) f.end(); },
+  };
+  f.finished = finished(anims).then(() => { f.flown = true; if (!f.held) f.end(); });
+  return f;
+}
 export const turn = {
   get running() { return !!turning; },
   finish() { if (turning) turning.finish(); },
-  leave(place, { pressed = null, back = false } = {}) {
+  leave(place, { pressed = null, back = false, carry = null } = {}) {
     turn.finish();
+    dropTitle();
     // A place still building in leaves from its end state: the turn wins over the arrival.
     for (const el of [place, docEl()]) { clearTimeout(el._rkArrive); el.removeAttribute('data-rk-arriving'); }
     return new Promise((resolve) => {
@@ -504,6 +561,11 @@ export const turn = {
       if (held) held.setAttribute('data-rk-pressed', '');
       const out = ms('--rk-duration-short'), overlap = num('--rk-turn-overlap');
       const u = turnUnits(place, held), kind = back ? 'back-out' : 'out';
+      // A title carried into the next place stands: it is lifted when the part that holds it starts to turn, at once
+      // when it is a part of its own.
+      const title = carry && ms('--rk-duration-moderate') && carry.getClientRects().length ? carry : null;
+      if (title && u.list.includes(title)) { u.list.splice(u.list.indexOf(title), 1); liftTitle(title); }
+      const titleHost = title && !lifted ? u.list.find((el) => el.contains(title)) : null;
       turnRows(u, place, held);
       // the pressed tile goes when the last of the others does, or later
       const starts = turnStarts(u.list, u.at, held), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
@@ -512,6 +574,7 @@ export const turn = {
         const h = starts[i].h, d = out * h;
         let at = el === held ? lastStart : starts[i].at;
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
+        if (el === titleHost) timers.push(later(() => liftTitle(title), el === held ? Math.max(at, hold) : at));
         if (el === held) {
           at = Math.max(at, hold);
           timers.push(later(() => { if (el.matches(':hover')) el.style.setProperty('--_rk-tint', 'var(--rk-hover)'); el.setAttribute('data-rk-turn', 'pressed'); }, at));
@@ -534,7 +597,7 @@ export const turn = {
       timers.push(later(done, u.list.length ? end : 0));
     });
   },
-  enter(place, { back = false, focus = null, arriving = !back } = {}) {
+  enter(place, { back = false, focus = null, arriving = !back, carry = null } = {}) {
     turn.finish();
     return new Promise((resolve) => {
       place.hidden = false;
@@ -544,11 +607,17 @@ export const turn = {
       // Its units turn in from the other side, light ones first, each in its own time.
       const d0 = ms('--rk-duration-moderate');
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
+      // The carried title travels in; the part that holds it lands with it, the others arrive from its middle on.
+      const flight = lifted && carry && d0 && carry.getClientRects().length ? flyTitle(carry, d0) : null;
+      if (!flight) dropTitle();
+      else if (u.list.includes(carry)) u.list.splice(u.list.indexOf(carry), 1);
+      else if ((flight.host = u.list.find((el) => el.contains(carry)) || null)) flight.held = true;
       turnRows(u, place, null);
-      let end = 0;
+      let end = flight ? d0 : 0;
       const starts = turnStarts(u.list, u.at, null);
       u.list.forEach((el, i) => {
-        const { h, at } = starts[i], d = d0 * h;
+        const { h } = starts[i], d = d0 * h;
+        const at = !flight ? starts[i].at : el === flight.host ? Math.max(0, flight.d - d) : starts[i].at + flight.d / 2;
         el.style.setProperty('--_rk-turn-delay', `${at}ms`);
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
         el.setAttribute('data-rk-turn', kind);
@@ -561,20 +630,21 @@ export const turn = {
       // one let go a frame early would jump, one held after it stopped would keep its layer and sharpen a moment
       // later. The parts fill backwards only, so motion, animation and layer all end in the same frame.
       let over = false;
-      const release = (el) => { el.removeAttribute('data-rk-turn'); TURN_PROPS.forEach((p) => el.style.removeProperty(p)); unalignLayer(el); };
+      const release = (el) => { el.removeAttribute('data-rk-turn'); TURN_PROPS.forEach((p) => el.style.removeProperty(p)); unalignLayer(el); if (flight && el === flight.host) flight.landed(); };
       const done = () => {
         if (over) return;
         over = true;
         clearTimeout(timer);
         u.list.forEach(release);
+        if (flight) flight.end();
         turning = null;
         resolve();
       };
       turning = { finish: done };
-      Promise.all(u.list.map((el) => {
+      Promise.all([...u.list.map((el) => {
         const own = el.getAnimations().filter((a) => /^rk-turn-(back-)?in$/.test(a.animationName));
         return Promise.all(own.map((a) => a.finished)).then(() => { if (!over) release(el); }, () => {});
-      })).then(done);
+      }), flight && flight.finished]).then(done);
       const timer = later(done, end + 250);                      // a part that never animates (hidden meanwhile)
     });
   },
@@ -660,6 +730,14 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     const w = watchers.get(current), named = w ? w.fn(item, { ...opts, params: new URLSearchParams(params) }) : null;
     document.title = typeof named === 'string' && named ? `${named} · ${titleOf(current)}` : titleOf(current);
   }
+  // The title that travels (motion.md): forward, the opened part's [data-rk-carry] to the new place's title; back, the
+  // place's title to the [data-rk-carry] of the part that opened it.
+  const carried = (el) => (el ? (el.matches('[data-rk-carry]') ? el : el.querySelector('[data-rk-carry]')) : null);
+  function carryOf(from, to, state, back, pressed) {
+    const opener = back && state && state.opener ? [...to.querySelectorAll('a[href]')].find((a) => a.getAttribute('href') === state.opener) : null;
+    const pair = back ? [from.querySelector('.rk-title'), carried(opener)] : [carried(pressed), to.querySelector('.rk-title')];
+    return pair[0] && pair[1] ? pair : [null, null];
+  }
   function show(name, state, { instant = false, back = false, pressed = null } = {}) {
     const prev = current, from = byName(prev), to = byName(name);
     current = name;
@@ -668,14 +746,15 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     params = (state && state.params) || '';
     showBack();
     const run = async () => {
+      const [lifts, lands] = from && from !== to && !instant ? carryOf(from, to, state, back, pressed) : [null, null];
       if (from && from !== to) {
-        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed });
+        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed, carry: lifts });
       }
       to.hidden = false;
       setItem(state && state.item, { back, place: true });
       restore(to, state);
       const f = focusTarget(to, state, back);
-      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f });
+      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f, carry: lands });
       if (onChange) onChange({ from: prev, to: name, back });
       document.dispatchEvent(new CustomEvent('rk:placechange', { detail: { from: prev, to: name, back } }));
     };

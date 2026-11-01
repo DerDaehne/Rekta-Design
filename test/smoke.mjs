@@ -192,6 +192,37 @@ ok((await focused(p)) === 'notes-title', 'focus on the place title', await focus
 await p.click('[data-rk-place=notes] .rk-crumb'); await p.waitForTimeout(TURN);
 ok(await visible(p, 'home') && (await p.evaluate(() => location.hash)) === '', 'the crumb goes back home');
 ok((await focused(p)) === 'tile-notes', 'focus back on the opening tile', await focused(p));
+// The tapped part carries its title into the place it opens (#145): the title stands while the rest turns away, then
+// travels on ease-pivot-glide over duration-moderate to the new place's title and lands on its pixels; the new place's
+// parts arrive from the middle of the travel on. Back runs it the other way. Nothing is left behind, and focus lands.
+{
+  const copies = () => p.evaluate(() => [...document.body.children].filter((c) => c.getAttribute('aria-hidden') === 'true' && c.style.position === 'fixed').map((c) => c.textContent.trim()));
+  await p.click('#tile-notes');
+  let leaving = null;
+  await until(p, async () => (leaving = await p.evaluate(() => ({ source: getComputedStyle(document.querySelector('#tile-notes [data-rk-carry]')).opacity, home: !document.querySelector('[data-rk-place=home]').hidden }))) && leaving.source === '0', 800);
+  const standing = await copies();
+  let flight = null;
+  await until(p, async () => (flight = await p.evaluate(() => {
+    const t = document.querySelector('#notes-title'), copy = [...document.body.children].find((c) => c.style.position === 'fixed' && c.textContent.trim() === 'Rekta 0.2');
+    if (!copy) return null;
+    const a = copy.getAnimations()[0], r = t.getBoundingClientRect(), delays = [...document.querySelectorAll('[data-rk-place=notes] [data-rk-turn]')].map((u) => parseFloat(u.style.getPropertyValue('--_rk-turn-delay')));
+    return { at: [Math.round(parseFloat(copy.style.left) - r.left), Math.round(parseFloat(copy.style.top) - r.top)].join(), lands: a.effect.getKeyframes().at(-1).transform, d: a.effect.getTiming().duration, ease: a.effect.getTiming().easing, title: getComputedStyle(t).opacity, first: Math.min(...delays) };
+  })), 2000);
+  const settled = () => p.evaluate(() => ({ title: getComputedStyle(document.querySelector('#notes-title')).opacity, source: document.querySelector('#tile-notes [data-rk-carry]').style.opacity, left: [...document.body.children].filter((c) => c.style.position === 'fixed' && c.getAttribute('aria-hidden') === 'true').length }));
+  let after = null;
+  await until(p, async () => (after = await settled()) && after.title === '1' && !after.left, 3000);
+  ok(leaving.source === '0' && leaving.home && standing.includes('0.2'), 'leaving, the tapped tile\'s title stands while its tile turns away', JSON.stringify({ leaving, standing }));
+  ok(flight && flight.at === '0,0' && flight.lands === 'none' && flight.d === 400 && flight.ease === 'cubic-bezier(0.65, 0, 0.35, 1)' && flight.title === '0' && flight.first >= 200, 'the title travels to the new place\'s title on ease-pivot-glide and lands on its pixels; the rest arrive from the middle', JSON.stringify(flight));
+  ok(after.title === '1' && after.source === '' && !after.left && (await focused(p)) === 'notes-title', 'once landed the title is the place\'s own and has focus; nothing is left behind', JSON.stringify(after));
+  await p.waitForTimeout(TURN);
+  await p.click('[data-rk-place=notes] .rk-crumb');
+  let back = [];
+  await until(p, async () => (back = await copies()).includes('Rekta 0.2'), 1500);
+  let home = null;
+  await until(p, async () => (home = await p.evaluate(() => ({ tile: getComputedStyle(document.querySelector('#tile-notes [data-rk-carry]')).opacity, title: document.querySelector('#notes-title').style.opacity, left: [...document.body.children].filter((c) => c.style.position === 'fixed' && c.getAttribute('aria-hidden') === 'true').length }))) && home.tile === '1' && !home.left, 3000);
+  ok(back.includes('Rekta 0.2') && home.tile === '1' && home.title === '' && !home.left && (await visible(p, 'home')) && (await focused(p)) === 'tile-notes', 'back, the place\'s title travels into the tile that opened it, and focus returns to the tile', JSON.stringify({ back, home }));
+  await p.waitForTimeout(TURN);
+}
 
 // Browser back and forward; Escape; a navigation during a turn.
 await p.click('#tile-tokens'); await p.waitForTimeout(TURN);
