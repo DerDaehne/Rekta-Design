@@ -225,6 +225,18 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 /* A running action (data-rk-pending) refuses clicks with aria-disabled but is not disabled: every variant keeps its
    colours by itself, and only the line and the cursor say it runs. */
 .rk-btn:disabled, .rk-btn[aria-disabled='true']:not([data-rk-pending]) { border-color: var(--rk-disabled); background: none; color: var(--rk-disabled); cursor: not-allowed; }
+/* A toggle button (aria-pressed): one state a press switches at once, for a compact row of them (quick settings).
+   Pressed, the accent fill with on-accent words, like a chosen segment; not pressed, a quiet button. The icon sits
+   beside the word, a state word (.rk-btn-state: "on", a network's name) below it; with data-on and data-off it writes
+   the one that holds, as the toggle switch does. Disabled, it keeps its state: pressed, a disabled fill. */
+.rk-btn[aria-pressed='true'], .rk-btn[aria-pressed='true']:active { border-color: var(--rk-accent); background-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk-btn[aria-pressed='true']:active { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+.rk-btn[aria-pressed='false'] { border-color: transparent; color: var(--rk-text-contrast-high); }
+.rk-btn[aria-pressed='true']:is(:disabled, [aria-disabled='true']:not([data-rk-pending])) { border-color: var(--rk-disabled); background-color: var(--rk-disabled); color: var(--rk-bg); }
+.rk-btn[aria-pressed] { justify-content: flex-start; text-align: start; }
+.rk-btn-state { display: block; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-regular); line-height: var(--rk-line-height-compact); }
+.rk-btn-state[data-on]::before { content: attr(data-off); }
+.rk-btn[aria-pressed='true'] .rk-btn-state[data-on]::before { content: attr(data-on); }
 /* An icon-only button: square at the control's height (the row's, in a row), 44px under a coarse pointer whatever the
    density; it needs an aria-label. Quiet (.rk-btn--quiet) for row actions and a sheet's close. */
 .rk-btn--icon { width: var(--rk-control-height); min-width: var(--rk-control-height); padding: 0; }
@@ -1062,6 +1074,9 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-btn:hover { background-color: var(--rk-hover); }
   .rk-btn--primary:hover { background-color: var(--rk-accent); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
   .rk-btn:disabled:hover, .rk-btn[aria-disabled='true']:not([data-rk-pending]):hover { background: none; }
+  .rk-btn[aria-pressed='true']:hover { background-color: var(--rk-accent); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+  .rk-btn[aria-pressed='true']:is(:disabled, [aria-disabled='true']:not([data-rk-pending])):hover { background: var(--rk-disabled); }
+  .rk-btn[aria-pressed='false']:hover { color: var(--rk-text-primary); }
   .rk-input:hover:not(:disabled, [aria-disabled='true']) { border-color: var(--rk-text-primary); }
   .rk-ab:hover { background-color: var(--rk-hover); }
   .rk-crumb:hover { color: var(--rk-text-primary); }
@@ -1097,7 +1112,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-split-handle::after { background: CanvasText; }
   .rk-toggle-track { forced-color-adjust: none; border-color: CanvasText; background-image: linear-gradient(Highlight, Highlight); }
   .rk-toggle-track::after { background: CanvasText; }
-  .rk-segments > label:has(> input:checked) { forced-color-adjust: none; border-color: Highlight; background-color: Highlight; color: HighlightText; }
+  .rk-segments > label:has(> input:checked), .rk-btn[aria-pressed='true'] { forced-color-adjust: none; border-color: Highlight; background-color: Highlight; color: HighlightText; }
   .rk-range::-webkit-slider-runnable-track { background: linear-gradient(Highlight, Highlight) 0 / var(--_rk-v) 100% no-repeat, GrayText; }
   .rk-range::-webkit-slider-thumb { background: CanvasText; }
   .rk-tip, .rk-cell-error { border: 1px solid CanvasText; }

@@ -858,6 +858,26 @@ await p.fill('#b-value', '999'); await p.dispatchEvent('#b-value', 'input');
 ok((await p.getAttribute('.rk-stepper [data-rk-step="1"]', 'aria-disabled')) === 'true', 'the stepper says when its limit is reached');
 await p.click('#builder .rk-segments label:nth-child(3)'); await p.waitForTimeout(100);
 ok(await p.evaluate(() => document.querySelector('#built').matches('.rk-w2.rk-h2')), 'segments choose the size');
+// Toggle buttons: pressed in the accent like a chosen segment, not pressed a quiet button; icon beside the word, the
+// state word below; a press switches at once (#140).
+const quick = () => p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const [on, off] = document.querySelectorAll('#quick .rk-btn'), word = on.querySelector('span'), state = on.querySelector('.rk-btn-state');
+  const icon = on.querySelector('svg').getBoundingClientRect(), w = word.getBoundingClientRect(), st = state.getBoundingClientRect();
+  return {
+    pressed: on.getAttribute('aria-pressed'), state: getComputedStyle(state, '::before').content,
+    on: getComputedStyle(on).backgroundColor === rgb('var(--rk-accent)') && getComputedStyle(on).color === rgb('var(--rk-on-accent)') && getComputedStyle(on).borderTopColor === rgb('var(--rk-accent)'),
+    off: getComputedStyle(off).borderTopColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(off).color === rgb('var(--rk-text-contrast-high)') && getComputedStyle(off).backgroundColor === 'rgba(0, 0, 0, 0)',
+    beside: icon.right <= w.left, below: st.top >= w.top + 8 && st.left === w.left,
+  };
+});
+const q0 = await quick();
+ok(q0.on && q0.off, 'a toggle button: pressed takes the accent, not pressed is quiet', JSON.stringify(q0));
+ok(q0.beside && q0.below && q0.state === '"on"', 'its icon beside the word, the state word below', JSON.stringify(q0));
+await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
+const q1 = await quick();
+ok(q1.pressed === 'false' && q1.state === '"off"', 'a press switches it at once; the state word follows', JSON.stringify(q1));
+await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
 await p.click('#builder .rk-toggle'); await p.waitForTimeout(100);
 ok((await p.getAttribute('#b-spark', 'role')) === 'switch' && !!(await p.$('#built .rk-spark')), 'a toggle is a switch; it adds a sparkline at once');
 await p.selectOption('#b-status', 'success'); await p.waitForTimeout(100);

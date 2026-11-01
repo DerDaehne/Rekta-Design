@@ -30,6 +30,7 @@ Rekta's own.
 | on or off, acting at once | toggle switch (`rk-toggle`) | `role="switch"`; outside forms that are sent |
 | on or off, sent with a form | checkbox (`rk-switch`) | waits for "save" |
 | a row's state (a task done, a setting on) | toggle switch (`rk-toggle`) | it acts at once, so it is a switch, never a checkbox |
+| a frequent state in a compact row of them (quick settings) | toggle button (`.rk-btn[aria-pressed]`) | acts at once; pressed in the accent; icon, word and state word |
 | a whole number | stepper (`rk-stepper`) | − field +, repeats while held, says when its limit is reached |
 | a value on a scale | slider (`rk-range`) | the accent fills up to the value; an `<output>` shows it |
 | a date or a time | `input[type=date | time].rk-input` | the browser's own pickers |
@@ -38,17 +39,35 @@ Rekta's own.
 **Acts at once, or waits for "save".** This is the one rule for on/off
 controls, wherever they stand. A state that takes effect the moment it
 changes (a row's done or enabled state, a setting, a filter that applies
-as it is ticked) is a **toggle switch** (`rk-toggle`, `role="switch"`).
-A choice that is only collected, and takes effect when the form is sent,
-is a **checkbox** (`rk-switch`). The names are close; the behaviour
-decides, not the look wanted. A checkbox in a selection (`.rk-check`) is
-neither: it chooses rows, it sets nothing.
+as it is ticked) is a **toggle switch** (`rk-toggle`, `role="switch"`),
+or, in a compact row of frequent states, a **toggle button**. A choice
+that is only collected, and takes effect when the form is sent, is a
+**checkbox** (`rk-switch`). The names are close; the behaviour decides,
+not the look wanted. A checkbox in a selection (`.rk-check`) is neither:
+it chooses rows, it sets nothing.
 
 - **Toggle switch, the Metro way:** a square-cornered frame (2px
   `text-primary`), the `accent` fill growing from the leading edge when
   on, a solid ink bar as the thumb, and the state word ("on", "off")
   beside it. It acts at once, so it never sits in a form that waits for
   "save": use a checkbox there.
+- **Toggle button:** where a row of frequent on/off states has no room
+  for form rows (wireless, do not disturb, dark appearance), each is a
+  button with `aria-pressed` (the platform's pressed state elsewhere):
+  its icon beside its word, a state word below in `font-size-xs`
+  (`.rk-btn-state`: "on", "off", or a short value such as the network's
+  name). Pressed, it takes the accent fill with on-accent words, as a
+  chosen segment does; not pressed, it is a quiet button. A press
+  switches it at once and, like the toggle switch, needs no undo. Focus,
+  and disabled with a reason, are every button's; disabled, it keeps
+  its state (pressed, a `disabled` fill). A state word that only says
+  on or off is `aria-hidden`, since `aria-pressed` says it; with
+  `data-on` and `data-off` it writes the one that holds.
+
+  ```html
+  <button class="rk-btn" type="button" aria-pressed="true"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-bell"/></svg><span>alerts<span class="rk-btn-state" data-on="on" data-off="off" aria-hidden="true"></span></span></button>
+  ```
+
 - **Combobox:** ↓ or Alt+↓ opens, ↑ ↓ move, Enter chooses, Escape
   closes, then clears (it never goes back while it has something to
   close or clear). The current choice carries a tick without a box. A
