@@ -54,9 +54,12 @@ export function coreTokens(json) {
     } else if (k.startsWith('font-weight-')) defs.push(`#define RK_TOK_WEIGHT_${C(k.slice(12))} ${v}`);
     else if (k.startsWith('line-height-')) defs.push(`#define RK_TOK_LINE_${C(k.slice(12))} ${f(v)}`);
   }
+  // A curve is an initializer for a float[4]; a motion duration without an rk_duration (busy, dots, ...) is a plain
+  // define in ms, which the code zeroes itself under reduced motion.
   for (const [k, v] of Object.entries(json.motion)) {
     if (k.startsWith('ease-')) defs.push(`#define RK_TOK_EASE_${C(k.slice(5))} { ${v.map(f).join(', ')} }`);
-    else if (!k.startsWith('duration-')) defs.push(`#define RK_TOK_${C(k)} ${f(v)}`);
+    else if (Array.isArray(v)) defs.push(`#define RK_TOK_${C(k)} { ${v.map(f).join(', ')} }`);
+    else if (!k.startsWith('duration-') || !DURATIONS.some(([g, n]) => g === 'motion' && n === k)) defs.push(`#define RK_TOK_${C(k)} ${f(v)}`);
   }
   for (const [k, v] of Object.entries(json.timing)) defs.push(`#define RK_TOK_TIMING_${C(k.replace(/^duration-/, ''))} ${f(v)}`);
   for (const [k, v] of Object.entries(json.breakpoint)) defs.push(`#define RK_TOK_${C(k)} ${f(v)}`);

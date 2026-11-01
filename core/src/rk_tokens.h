@@ -70,6 +70,10 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_LINE_TIGHT 1.15f
 #define RK_TOK_LINE_TITLE 1.1f
 #define RK_TOK_LINE_NAV 1.3f
+#define RK_TOK_DURATION_PULSE 1400.0f
+#define RK_TOK_DURATION_BUSY 1200.0f
+#define RK_TOK_DURATION_DOTS 2400.0f
+#define RK_TOK_DURATION_BEADS 3000.0f
 #define RK_TOK_EASE_BASE { 0.25f, 0.1f, 0.25f, 1.0f }
 #define RK_TOK_EASE_IN { 0.0f, 0.0f, 0.2f, 1.0f }
 #define RK_TOK_EASE_OUT { 0.4f, 0.0f, 0.5f, 1.0f }
@@ -100,6 +104,23 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_HEFT_MIN 0.5f
 #define RK_TOK_HEFT_MAX 1.4f
 #define RK_TOK_HEFT_SPREAD 6.0f
+#define RK_TOK_BUSY_SEGMENT 0.3f
+#define RK_TOK_BUSY_FROM -0.35f
+#define RK_TOK_BUSY_TO 1.05f
+#define RK_TOK_DOTS_STAGGER 0.07f
+#define RK_TOK_DOTS_FROM -0.02f
+#define RK_TOK_DOTS_MIDDLE_START 0.44f
+#define RK_TOK_DOTS_MIDDLE_START_AT 0.35f
+#define RK_TOK_DOTS_MIDDLE_END 0.56f
+#define RK_TOK_DOTS_MIDDLE_END_AT 0.62f
+#define RK_TOK_DOTS_TO 1.02f
+#define RK_TOK_DOTS_WHOLE_AT 0.06f
+#define RK_TOK_DOTS_FADE_AT 0.9f
+#define RK_TOK_DOTS_EASE_ARRIVE { 0.1f, 0.7f, 0.4f, 1.0f }
+#define RK_TOK_DOTS_EASE_LEAVE { 0.6f, 0.0f, 0.9f, 0.3f }
+#define RK_TOK_BEADS_TRACK 0.8f
+#define RK_TOK_BEADS_SPACING 0.16f
+#define RK_TOK_BEADS_FADE 0.12f
 #define RK_TOK_TIMING_TOAST 5000.0f
 #define RK_TOK_TIMING_WHEEL_LATCH 200.0f
 #define RK_TOK_TIMING_TAP_DELAY 100.0f

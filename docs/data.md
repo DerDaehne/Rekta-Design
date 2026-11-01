@@ -136,11 +136,27 @@ in `duration-moderate`.
 | a button's action | the line under the button, its label saying what it does |
 | a known amount | `progress.rk-progress` with a value, the label and the percentage above |
 | an unknown amount, in place | `progress.rk-progress` without a value: a segment runs along it |
-| a wait that blocks everything (signing in, installing, the first load) | the dots (`rk-dots`) |
+| a short wait that blocks the screen (the first load, applying a change) | the dots (`rk-dots`) |
+| a long wait that holds the whole screen (starting up, signing in, installing) | the beads (`rk-dots rk-dots--beads`) |
 
 **The dots, the Metro way:** five small squares fly in from the leading
 edge, bunch up slowly through the middle and speed off to the far edge,
 one after another (`motion.duration.dots` per flight). They are for a
-wait that holds the whole screen; everywhere else, the calm line. Under
-reduced motion they stand still in the middle, with the words beside
-them saying what is happening.
+short wait that blocks the screen; everywhere else, the calm line.
+
+**The beads** are the calm form of the dots, for a long wait: three
+squares cross the middle of the track one after another, each on one
+even curve, without bunching up or speeding off. Markup:
+`<div class="rk-dots rk-dots--beads" role="progressbar" aria-label="…"><i></i><i></i><i></i></div>`.
+
+Under reduced motion the dots and the beads stand still in the middle,
+with the words beside them saying what is happening.
+
+The movements, for a native implementation (places are shares of the
+track's width; a dot's or bead's place is its leading edge):
+
+| Form | Movement |
+|---|---|
+| busy line | A segment `busy-segment` (0.3) of the track's width; its leading edge passes from `busy-from` (−0.35) to `busy-to` (1.05) of the width, linear, every `duration-busy`. Under reduced motion it stands at full width. |
+| dots | Five 4px squares, each `dots-stagger` (0.07) × `duration-dots` after the one before. Over its flight (`duration-dots`) a dot goes from `dots-from` (−0.02) to `dots-middle-start` (0.44) by `dots-middle-start-at` (35%) of its time, on `dots-ease-arrive`; on to `dots-middle-end` (0.56) by `dots-middle-end-at` (62%), linear; and on to `dots-to` (1.02) on `dots-ease-leave`. It fades in until `dots-whole-at` (6%) and out from `dots-fade-at` (90%), on `ease-base`. Under reduced motion they stand in the middle, 10px apart. |
+| beads | Three 6px squares on the middle `beads-track` (0.8) of the width, each `beads-spacing` (0.16) × `duration-beads` after the one before. A bead crosses the track over `duration-beads` (3s) on `ease-in-out`, fading in over the first `beads-fade` (12%) and out over the last. Under reduced motion they stand in the middle, 12px apart. |

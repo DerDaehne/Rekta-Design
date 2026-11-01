@@ -443,11 +443,13 @@ static void progress_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_color ink = rk_color_of(RK_ROLE_TEXT);
   rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, 4 }, with_alpha(ink, 0.2f));
   if (v->value < 0) {
-    /* working on it: a 30% piece passes every duration-busy; under reduced motion it stands at full width */
-    double busy = rk_duration_of(RK_DURATION_LONG) > 0 ? 1200.0 : 0;
+    /* working on it: a busy-segment piece passes from busy-from to busy-to of the width every duration-busy, as on the
+       web; under reduced motion it stands at full width */
+    double busy = rk__reduced() ? 0 : RK_TOK_DURATION_BUSY;
     if (busy <= 0) { rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, 4 }, ink); return; }
-    float t = (float)fmod(rk_app_now(), busy) / (float)busy, x = (-0.3f + 1.3f * t) * W;
-    rk_canvas_fill_rect(c, (rk_rect){ RK_MAX(0.0f, x), 0, RK_MIN(W, x + 0.3f * W) - RK_MAX(0.0f, x), 4 }, ink);
+    float t = (float)fmod(rk_app_now(), busy) / (float)busy, x = (RK_TOK_BUSY_FROM + (RK_TOK_BUSY_TO - RK_TOK_BUSY_FROM) * t) * W;
+    float x0 = RK_CLAMP(x, 0.0f, W), x1 = RK_CLAMP(x + RK_TOK_BUSY_SEGMENT * W, 0.0f, W);
+    if (x1 > x0) rk_canvas_fill_rect(c, (rk_rect){ x0, 0, x1 - x0, 4 }, ink);
     rk__view_dirty(v);
     rk__app_request_frame();
     return;

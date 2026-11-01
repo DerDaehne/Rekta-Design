@@ -814,6 +814,17 @@ await p.click('#signin'); await p.waitForTimeout(200);
 ok(!(await p.evaluate(() => document.querySelector('#dots').hidden)) && (await p.evaluate(() => getComputedStyle(document.querySelector('#dots i')).animationName)) === 'rk-dots', 'the dots fly while a sign-in blocks');
 await p.waitForTimeout(2700);
 ok((await p.evaluate(() => document.querySelector('#dots').hidden)) && (await toast(p)) === 'Signed in.', 'and stop when it is done');
+// The busy line, the dots and the beads move by their tokens (motion.busy, motion.dots, motion.beads).
+const waits = await p.evaluate(() => {
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:0;top:0;width:500px;z-index:-1';
+  box.innerHTML = '<progress class="rk-progress"></progress><div class="rk-dots"><i></i><i></i><i></i><i></i><i></i></div><div class="rk-dots rk-dots--beads"><i></i><i></i><i></i></div>';
+  document.body.append(box);
+  const [bar, dots, beads] = box.children, s = getComputedStyle(bar), d = getComputedStyle(dots.children[1]), b = getComputedStyle(beads.children[2]);
+  const out = { size: s.backgroundSize.split(',')[0], from: bar.getAnimations()[0] && bar.getAnimations()[0].effect.getKeyframes()[0].backgroundPosition, dots: `${d.animationDelay} ${d.animationTimingFunction}`, beads: `${b.animationName} ${b.animationDelay} ${b.animationTimingFunction} ${b.width}`, count: beads.children.length };
+  box.remove();
+  return out;
+});
+ok(/^calc\(30%\)$|^30%/.test(waits.size) && waits.dots === '0.168s cubic-bezier(0.25, 0.1, 0.25, 1)' && waits.beads === 'rk-beads 0.96s cubic-bezier(0.42, 0, 0.58, 1) 6px', 'the busy segment, the dots and the beads take their tokens', JSON.stringify(waits));
 
 // Look: prefs, density, motion, the accent slot.
 await go(p, 'look');
@@ -1062,6 +1073,13 @@ await r.click('#tile-notes'); await r.waitForTimeout(150);
 ok(await visible(r, 'notes') && !(await visible(r, 'home')), 'reduced motion: the place changes at once');
 await setSize(r, 'w2'); await filterComp(r, 'spark'); await r.waitForTimeout(20);
 ok(await r.evaluate(() => document.querySelector('#built').getAnimations().length === 0 && document.querySelector('#built').classList.contains('rk-w2') && document.querySelectorAll('#comp-body tr:not([hidden])').length === 1), 'reduced motion: a resize and a filter apply at once');
+ok(await r.evaluate(() => {
+  const box = document.createElement('div'); box.className = 'rk-dots rk-dots--beads'; box.style.cssText = 'position:fixed;left:0;top:0;width:500px';
+  box.innerHTML = '<i></i><i></i><i></i>'; document.body.append(box);
+  const lefts = [...box.children].map((i) => Math.round(i.getBoundingClientRect().left)), still = [...box.children].every((i) => !i.getAnimations().length && getComputedStyle(i).opacity === '1');
+  box.remove();
+  return still && lefts.join() === '235,247,259';
+}), 'reduced motion: the beads stand still in the middle');
 await r.close();
 
 await browser.close();

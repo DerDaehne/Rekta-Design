@@ -3,8 +3,8 @@
    Load order: rekta.tokens.css, rekta.fonts.css, rekta.css. Every colour, space, type size, radius, duration and
    shared easing comes from a --rk- token. Literal values are fixed geometry, the same in every theme and density
    (hairlines of 1-2px, icon boxes, marks, the toggle's track, the tile's inner padding). A keyframe's offset cannot
-   read a property: where one stands for a token (the place change's 40% and 35%), build.mjs --check holds it to
-   that token.
+   read a property, nor can a curve inside a keyframe: where one stands for a token (the place change's 40% and 35%,
+   the dots' and beads' stops and curves), build.mjs --check holds it to that token.
 
    Contract
    - Rekta defines only .rk-* classes and --rk-* properties. data-status, data-theme, data-density and data-motion
@@ -131,7 +131,7 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-progress::-webkit-progress-value { background: currentColor; transition: width var(--rk-duration-moderate) var(--rk-ease-base); }
 .rk-progress::-moz-progress-bar { background: currentColor; }
 /* Without a value, the bar does not know how far it is: a segment runs along it, like the loading line. */
-.rk-progress:indeterminate { background: linear-gradient(currentColor, currentColor) no-repeat -50% 0 / 30% 100%, color-mix(in srgb, currentColor 20%, transparent); animation: rk-busy var(--rk-duration-busy) linear infinite; }
+.rk-progress:indeterminate { background: linear-gradient(currentColor, currentColor) no-repeat var(--_rk-busy-from) 0 / var(--_rk-busy-size) 100%, color-mix(in srgb, currentColor 20%, transparent); animation: rk-busy var(--rk-duration-busy) linear infinite; }
 .rk-progress:indeterminate::-moz-progress-bar { background: transparent; }
 
 /* Sparkline: an inline trend. Status mark colour on the ground; the tile's text colour on a tile. It draws in on
@@ -326,7 +326,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-combo-list [data-rk-chosen]::before { border: solid currentColor; border-width: 0 0 2px 2px; transform: rotate(-45deg); }
 .rk-combo-list[aria-busy='true']::before {
   content: ''; position: absolute; inset: 0 0 auto; height: 2px;
-  background: linear-gradient(var(--rk-text-primary), var(--rk-text-primary)) no-repeat -50% 0 / 30% 100%; animation: rk-busy var(--rk-duration-busy) linear infinite;
+  background: linear-gradient(var(--rk-text-primary), var(--rk-text-primary)) no-repeat var(--_rk-busy-from) 0 / var(--_rk-busy-size) 100%; animation: rk-busy var(--rk-duration-busy) linear infinite;
 }
 
 /* Toggle switch, the Metro way: a square-cornered frame, the accent fill growing from the leading edge when on, a solid
@@ -563,22 +563,37 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-meter-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rk-space-s); margin-bottom: var(--rk-space-xs); font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
 .rk-meter-head > b { font-size: var(--rk-font-size-s); font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; color: var(--rk-text-primary); }
 
-/* Progress dots, the Metro way, for a wait that blocks (signing in, installing, the first load): five small squares
-   fly in from the leading edge, bunch up slowly through the middle and speed off, one after another. Regions keep
-   the calm 2px line. Under reduced motion they stand still in the middle. */
+/* Progress dots, the Metro way, for a short wait that blocks the screen (the first load, applying a change): five
+   small squares fly in from the leading edge, bunch up slowly through the middle and speed off, one after another
+   (motion.dots). Regions keep the calm 2px line. Under reduced motion they stand still in the middle. A keyframe
+   cannot read a property: its times and curves are written out, and build.mjs --check holds them to the tokens. */
 .rk-dots { position: relative; display: block; width: 100%; height: 4px; overflow: hidden; color: var(--rk-text-primary); }
-.rk-dots > i { position: absolute; top: 0; left: -2%; width: 4px; height: 4px; background: currentColor; opacity: 0; animation: rk-dots var(--rk-duration-dots) infinite; animation-delay: calc(var(--_rk-n, 0) * var(--rk-duration-dots) * 0.07); }
+.rk-dots > i { position: absolute; top: 0; left: calc(var(--rk-dots-from) * 100%); width: 4px; height: 4px; background: currentColor; opacity: 0; animation: rk-dots var(--rk-duration-dots) var(--rk-ease-base) infinite; animation-delay: calc(var(--_rk-n, 0) * var(--rk-duration-dots) * var(--rk-dots-stagger)); }
 .rk-dots > i:nth-child(2) { --_rk-n: 1; }
 .rk-dots > i:nth-child(3) { --_rk-n: 2; }
 .rk-dots > i:nth-child(4) { --_rk-n: 3; }
 .rk-dots > i:nth-child(5) { --_rk-n: 4; }
 @keyframes rk-dots {
-  0% { left: -2%; opacity: 0; animation-timing-function: cubic-bezier(0.1, 0.7, 0.4, 1); }
+  0% { left: calc(var(--rk-dots-from) * 100%); opacity: 0; animation-timing-function: cubic-bezier(0.1, 0.7, 0.4, 1); }
   6% { opacity: 1; }
-  35% { left: 44%; animation-timing-function: linear; }
-  62% { left: 56%; animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.3); }
+  35% { left: calc(var(--rk-dots-middle-start) * 100%); animation-timing-function: linear; }
+  62% { left: calc(var(--rk-dots-middle-end) * 100%); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.3); }
   90% { opacity: 1; }
-  100% { left: 102%; opacity: 0; }
+  100% { left: calc(var(--rk-dots-to) * 100%); opacity: 0; }
+}
+/* The beads, for a long wait that holds the whole screen (starting up, signing in): three 6px squares cross the middle
+   beads-track of the width, one after another, beads-spacing of the run apart, each on one even curve, fading in and
+   out at the ends (motion.beads). Calmer than the dots: nothing bunches up or speeds off. */
+.rk-dots--beads { height: 6px; }
+.rk-dots--beads > i {
+  left: calc((1 - var(--rk-beads-track)) * 50%); width: 6px; height: 6px;
+  animation: rk-beads var(--rk-duration-beads) var(--rk-ease-in-out) infinite; animation-delay: calc(var(--_rk-n, 0) * var(--rk-duration-beads) * var(--rk-beads-spacing));
+}
+@keyframes rk-beads {
+  0% { left: calc((1 - var(--rk-beads-track)) * 50%); opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { left: calc((1 + var(--rk-beads-track)) * 50% - 6px); opacity: 0; }
 }
 
 /* Shell ---------------------------------------------------------------------------------------------------------- */
@@ -666,10 +681,17 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-region { position: relative; }
 .rk-region[aria-busy='true']::before, .rk-btn[data-rk-pending]::after {
   content: ''; position: absolute; inset: 0 0 auto; z-index: 1; height: 2px; pointer-events: none;
-  background: linear-gradient(var(--rk-text-primary), var(--rk-text-primary)) no-repeat -50% 0 / 30% 100%;
+  background: linear-gradient(var(--rk-text-primary), var(--rk-text-primary)) no-repeat var(--_rk-busy-from) 0 / var(--_rk-busy-size) 100%;
   animation: rk-busy var(--rk-duration-busy) linear infinite, rk-wait 0s linear var(--rk-duration-busy-delay) backwards;
 }
-@keyframes rk-busy { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+/* The busy line's segment (busy-segment of the track) runs from busy-from to busy-to of the width. A background's
+   position is a share of the room left beside it, hence the division. */
+:root {
+  --_rk-busy-size: calc(var(--rk-busy-segment) * 100%);
+  --_rk-busy-from: calc(var(--rk-busy-from) / (1 - var(--rk-busy-segment)) * 100%);
+  --_rk-busy-to: calc(var(--rk-busy-to) / (1 - var(--rk-busy-segment)) * 100%);
+}
+@keyframes rk-busy { from { background-position: var(--_rk-busy-from) 0; } to { background-position: var(--_rk-busy-to) 0; } }
 @keyframes rk-wait { from { visibility: hidden; } }
 .rk-ghost { display: block; flex: none; width: 8em; max-width: 100%; height: 0.75em; border-radius: var(--rk-radius-s); background: var(--rk-surface); }
 .rk-rows > li:has(> .rk-ghost) { align-items: center; min-height: var(--rk-row-height); }
@@ -1214,6 +1236,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   :root:not([data-motion='on']) [data-rk-press]:not(.rk-tile)[data-rk-pressed] { transform: scale(var(--rk-row-press-scale)); }
   :root:not([data-motion='on']) .rk-region[aria-busy='true']::before, :root:not([data-motion='on']) .rk-btn[data-rk-pending]::after { background-size: 100% 100%; background-color: var(--rk-text-contrast-medium); background-image: none; }
   :root:not([data-motion='on']) .rk-dots > i { animation: none; opacity: 1; left: calc(50% - 22px + var(--_rk-n, 0) * 10px); }
+  :root:not([data-motion='on']) .rk-dots--beads > i { left: calc(50% - 15px + var(--_rk-n, 0) * 12px); }
   :root:not([data-motion='on']) .rk-progress:indeterminate { animation: none; background-size: 100% 100%; }
 }
 :root[data-motion='off'] :is(.rk-panorama, .rk-pivot) { scroll-behavior: auto; }
@@ -1222,4 +1245,5 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 :root[data-motion='off'] [data-rk-press]:not(.rk-tile)[data-rk-pressed] { transform: scale(var(--rk-row-press-scale)); }
 :root[data-motion='off'] .rk-region[aria-busy='true']::before, :root[data-motion='off'] .rk-btn[data-rk-pending]::after { background-size: 100% 100%; background-color: var(--rk-text-contrast-medium); background-image: none; }
 :root[data-motion='off'] .rk-dots > i { animation: none; opacity: 1; left: calc(50% - 22px + var(--_rk-n, 0) * 10px); }
+:root[data-motion='off'] .rk-dots--beads > i { left: calc(50% - 15px + var(--_rk-n, 0) * 12px); }
 :root[data-motion='off'] .rk-progress:indeterminate { animation: none; background-size: 100% 100%; }

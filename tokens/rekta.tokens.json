@@ -765,7 +765,7 @@
       "busy": {
         "$type": "duration",
         "$value": "1200ms",
-        "$description": "One pass of the indeterminate 2px line that says a region is loading or an action is pending. Under reduced motion the line stands still at full width."
+        "$description": "One pass of the indeterminate 2px line that says a region is loading or an action is pending (motion.busy). Under reduced motion the line stands still at full width."
       },
       "float": {
         "$type": "duration",
@@ -775,7 +775,12 @@
       "dots": {
         "$type": "duration",
         "$value": "2400ms",
-        "$description": "One flight of the five progress dots across their track: fast in from the leading edge, slow through the middle, fast out. The dots leave one after another."
+        "$description": "One flight of the five progress dots across their track: fast in from the leading edge, slow through the middle, fast out. The dots leave one after another (motion.dots)."
+      },
+      "beads": {
+        "$type": "duration",
+        "$value": "3000ms",
+        "$description": "One run of the beads, the calm form of the dots for a long full-screen wait: three dots cross the middle of the track on ease-in-out, one after another (motion.beads). Under reduced motion they stand still."
       }
     },
     "easing": {
@@ -1016,6 +1021,110 @@
         "$type": "number",
         "$value": 6,
         "$description": "A part starts (heft − heft-min) × this × duration-stagger after the turn begins: light parts first, heavy ones later."
+      }
+    },
+    "busy": {
+      "$description": "The busy line: a segment passing along a track, linear, once every duration-busy. Shares of the track's width.",
+      "segment": {
+        "$type": "number",
+        "$value": 0.3,
+        "$description": "How much of the track the passing segment covers."
+      },
+      "from": {
+        "$type": "number",
+        "$value": -0.35,
+        "$description": "Where the segment's leading edge starts, outside the track's start."
+      },
+      "to": {
+        "$type": "number",
+        "$value": 1.05,
+        "$description": "Where the segment's leading edge ends, past the track's end."
+      }
+    },
+    "dots": {
+      "$description": "The progress dots: five small squares, each flying across the track over duration-dots. Places are a dot's leading edge as a share of the track's width; times (-at) are shares of the flight. A keyframe cannot read a property, so rekta.css writes the times and curves out and build.mjs --check holds them to these.",
+      "stagger": {
+        "$type": "number",
+        "$value": 0.07,
+        "$description": "Each dot leaves this share of duration-dots after the one before."
+      },
+      "from": {
+        "$type": "number",
+        "$value": -0.02,
+        "$description": "Where a dot starts, just outside the track."
+      },
+      "middle-start": {
+        "$type": "number",
+        "$value": 0.44,
+        "$description": "Where a dot, braking, reaches the slow middle."
+      },
+      "middle-start-at": {
+        "$type": "number",
+        "$value": 0.35,
+        "$description": "When it gets there."
+      },
+      "middle-end": {
+        "$type": "number",
+        "$value": 0.56,
+        "$description": "Where it leaves the slow middle, which it crosses at an even pace."
+      },
+      "middle-end-at": {
+        "$type": "number",
+        "$value": 0.62,
+        "$description": "When it leaves it."
+      },
+      "to": {
+        "$type": "number",
+        "$value": 1.02,
+        "$description": "Where a dot ends, just past the track."
+      },
+      "whole-at": {
+        "$type": "number",
+        "$value": 0.06,
+        "$description": "A dot fades in until this share of its flight (ease-base)."
+      },
+      "fade-at": {
+        "$type": "number",
+        "$value": 0.9,
+        "$description": "A dot fades out from this share of its flight (ease-base)."
+      },
+      "ease-arrive": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.1,
+          0.7,
+          0.4,
+          1.0
+        ],
+        "$description": "A dot flying in from the leading edge and braking into the middle."
+      },
+      "ease-leave": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.6,
+          0.0,
+          0.9,
+          0.3
+        ],
+        "$description": "A dot speeding off out of the middle."
+      }
+    },
+    "beads": {
+      "$description": "The beads: three 6px dots that cross the middle of the track one after another, on ease-in-out over duration-beads. Shares of the track's width or of the run.",
+      "track": {
+        "$type": "number",
+        "$value": 0.8,
+        "$description": "The share of the width the beads cross, centred."
+      },
+      "spacing": {
+        "$type": "number",
+        "$value": 0.16,
+        "$description": "Each bead starts this share of duration-beads after the one before."
+      },
+      "fade": {
+        "$type": "number",
+        "$value": 0.12,
+        "$description": "A bead fades in over this first share of its run and out over the same last share."
       }
     }
   },

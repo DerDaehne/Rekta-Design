@@ -296,9 +296,22 @@ function check(tokens) {
     const want = (name, prop, token, value) => {
       if (!at(name, prop).some((x) => Math.abs(x - value) < 1e-9)) problems.push(`rekta.css @keyframes ${name} has no ${prop} stop at ${+(value * 100).toFixed(4)}% (${token})`);
     };
+    const curve = (name, stop, token) => {
+      const body = (new RegExp(`\\b${stop}% \\{([^}]*)\\}`).exec(frames(name)) || [])[1] || '';
+      const v = `cubic-bezier(${t.motion[token].join(', ')})`;
+      if (!body.includes(`animation-timing-function: ${v}`)) problems.push(`rekta.css @keyframes ${name} ${stop}% does not run on ${token}, ${v}`);
+    };
     const m = t.motion;
     for (const k of ['rk-turn-out', 'rk-turn-back-out', 'rk-turn-pressed']) want(k, 'opacity: 1', 'turn-out-whole', m['turn-out-whole']);
     for (const k of ['rk-turn-in', 'rk-turn-back-in']) want(k, 'opacity: 1', 'turn-in-whole', m['turn-in-whole']);
+    want('rk-dots', 'opacity: 1', 'dots-whole-at', m['dots-whole-at']);
+    want('rk-dots', 'opacity: 1', 'dots-fade-at', m['dots-fade-at']);
+    want('rk-dots', 'var(--rk-dots-middle-start)', 'dots-middle-start-at', m['dots-middle-start-at']);
+    want('rk-dots', 'var(--rk-dots-middle-end)', 'dots-middle-end-at', m['dots-middle-end-at']);
+    curve('rk-dots', '0', 'dots-ease-arrive');
+    curve('rk-dots', String(+(m['dots-middle-end-at'] * 100).toFixed(4)), 'dots-ease-leave');
+    want('rk-beads', 'opacity: 1', 'beads-fade', m['beads-fade']);
+    want('rk-beads', 'opacity: 1', '1 - beads-fade', 1 - m['beads-fade']);
   }
   // The script reads tokens by name too (and builds the pivot's font-size names from a stem).
   const js = readFileSync(join(root, 'src', 'js', 'rekta.js'), 'utf8');
