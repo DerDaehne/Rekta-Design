@@ -235,6 +235,25 @@ ok(facets.byName, 'a facet chosen by name', JSON.stringify(facets));
 ok(facets.gone.selected === 'drafts' && facets.gone.stops === 1 && facets.gone.told === 'drafts' && facets.gone.shown, 'the chosen facet goes: its neighbour is chosen, one tab stop stays', JSON.stringify(facets.gone));
 ok(facets.added, 'a facet that comes takes no tab stop, its panel hidden', JSON.stringify(facets));
 ok(facets.scroll, 'scrollState captures every scrolled box and puts it back', JSON.stringify(facets));
+// The first paint of facets that may go wide: .rk-facets is a container, so before the script the row is laid out from
+// the same width pivot() measures. In a 900px pane of a 1440px window (a media query would say wide) both say narrow.
+const fp = await p.evaluate(async () => {
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const out = {};
+  for (const w of [900, 1400]) {
+    const host = document.createElement('div'); host.style.cssText = `position:absolute;left:0;top:0;width:${w}px;z-index:-1`;
+    host.innerHTML = '<div class="rk-pivot" role="tablist" aria-label="fp">' + [0, 1, 2].map((i) => `<button role="tab" id="fpt${w}-${i}" aria-controls="fpp${w}-${i}" aria-selected="${i === 0}">facet ${i}</button>`).join('') + '</div>'
+      + '<div class="rk-facets"><div>' + [0, 1, 2].map((i) => `<section role="tabpanel" id="fpp${w}-${i}"${i ? ' hidden data-rk-reveal' : ''}><p>${'text '.repeat(60)}</p></section>`).join('') + '</div></div>';
+    document.querySelector('.rk').append(host); await frames();
+    const shown = () => [...host.querySelectorAll('[role=tabpanel]')].filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().left)).join();
+    const before = shown(), pv = Rekta.pivot(host.querySelector('.rk-pivot')); await frames();
+    out[w] = { before, after: shown(), wide: pv.wide };
+    pv.destroy(); host.remove();
+  }
+  return out;
+});
+ok(fp[900].before.split(',').length === 1 && !fp[900].wide && fp[900].after === fp[900].before, 'in a narrow container the first paint and pivot() both show one facet', JSON.stringify(fp[900]));
+ok(fp[1400].before.split(',').length === 3 && fp[1400].wide && fp[1400].after === fp[1400].before, 'in a wide container the first paint lays the facets out where pivot() does', JSON.stringify(fp[1400]));
 // Data that renders after the navigation: restore() waits for the boxes to appear and grow; a user scroll first wins.
 const late = await p.evaluate(async () => {
   const wait = (t) => new Promise((r) => setTimeout(r, t));

@@ -139,7 +139,11 @@ places its tiles and links open, each with one parent.
   server (or the framework's render) marks its tab `aria-selected="true"`
   and leaves the other panels `hidden`; `pivot()` starts on the tab
   marked selected and keeps it, so nothing jumps when the script arrives.
-  An unknown facet falls back to the first, without an error.
+  An unknown facet falls back to the first, without an error. Where the
+  facets may show side by side, `.rk-facets` around the panels' parent
+  and `data-rk-reveal` on the hidden panels let the first paint lay them
+  out wide from the same width `pivot()` measures
+  ([behaviour.md](behaviour.md), `pivot()`).
 
 ### Back with a router of your own
 

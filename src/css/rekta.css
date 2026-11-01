@@ -216,6 +216,27 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
   overflow-y: auto; scrollbar-width: thin; scroll-margin-top: var(--rk-stage-top, var(--rk-banner-h, 0px));
 }
 [data-rk-wide]:not(.rk-pivot) > [role='tabpanel'][data-rk-reveal] { display: block; }   /* shown whatever hidden says */
+/* The first paint, before pivot() has decided (server rendering): .rk-facets around the panels' common parent is a
+   container, so the row is laid out wide from the same width pivot() measures, the container's. The panels the server
+   leaves hidden carry data-rk-reveal: shown wide, kept hidden narrower. Once pivot() marks the parent data-rk-wide or
+   data-rk-narrow, these step back. A container query cannot read a custom property: build.mjs writes size.pivot-wide's
+   value into the query in dist/rekta.css, and a product that changes --rk-pivot-wide repeats its value in a query of
+   its own (docs/behaviour.md, pivot()). */
+.rk-facets { container: rk-facets / inline-size; }
+.rk-facets > :not([data-rk-wide], [data-rk-narrow]) > [role='tabpanel'][hidden][data-rk-reveal] { display: none; }
+@container rk-facets (min-width: var(--rk-pivot-wide)) {
+  .rk-facets > :not([data-rk-wide], [data-rk-narrow]) {
+    display: flex; gap: var(--rk-space-xl); overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+    scrollbar-width: thin; scrollbar-color: var(--rk-text-contrast-low) transparent;
+    max-height: calc(100dvh - var(--rk-stage-top, var(--rk-banner-h, 0px)) - var(--rk-appbar-height) - env(safe-area-inset-bottom, 0px));
+    scroll-margin-top: var(--rk-stage-top, var(--rk-banner-h, 0px));
+  }
+  .rk-facets > :not([data-rk-wide], [data-rk-narrow]) > [role='tabpanel'] {
+    flex: 0 0 var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))); min-width: 0;
+    overflow-y: auto; scrollbar-width: thin; scroll-margin-top: var(--rk-stage-top, var(--rk-banner-h, 0px));
+  }
+  .rk-facets > :not([data-rk-wide], [data-rk-narrow]) > [role='tabpanel'][hidden][data-rk-reveal] { display: block; }
+}
 
 /* Buttons and switches ------------------------------------------------------------------------------------------- */
 /* Primary takes the accent slot (ink by default). Height follows the density: 44px for touch, 32px for a fine pointer. */

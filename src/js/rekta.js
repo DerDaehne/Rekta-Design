@@ -1068,9 +1068,18 @@ export function pivot(el, { onSelect, turn: placeTurn = null, gone = 'select' } 
   // Who owns hidden on the panels: pivot() sets it one facet at a time (from the start, too); wide, it leaves hidden as
   // it is and shows every panel with data-rk-reveal, so a framework that binds hidden to the chosen facet stays right.
   function narrow() { const i = Math.max(0, chosen()); panels().forEach((p, k) => { if (p) { p.removeAttribute('data-rk-reveal'); p.hidden = k !== i; } }); }
+  // The width that decides: the panels' common parent's, or with .rk-facets around it, that container's content
+  // width, the one rekta.css's first paint queries, so the two never disagree.
+  const widthOf = (parent) => {
+    const box = parent.parentElement && parent.parentElement.classList.contains('rk-facets') ? parent.parentElement : null;
+    if (!box) return parent.clientWidth;
+    const s = getComputedStyle(box);
+    return box.clientWidth - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0);
+  };
   function layout() {
     const ps = panels(), parent = ps.length && ps.every((p) => p && p.parentElement === ps[0].parentElement) ? ps[0].parentElement : null;
-    const min = px('--rk-pivot-wide', el), now = !nav && !!parent && min > 0 && parent.clientWidth >= min;
+    const min = px('--rk-pivot-wide', el), now = !nav && !!parent && min > 0 && widthOf(parent) >= min;
+    if (parent && !nav) parent.toggleAttribute('data-rk-narrow', !now);    /* decided: the first paint's rules step back */
     if (now === wide) return;
     wide = now; host = now ? parent : null;
     el.toggleAttribute('data-rk-wide', now);
@@ -1191,6 +1200,7 @@ export function pivot(el, { onSelect, turn: placeTurn = null, gone = 'select' } 
   mo.observe(el, { childList: true, characterData: true, subtree: true });
   const first = tabs().map(panel).find(Boolean);
   if (first && first.parentElement) ro.observe(first.parentElement);
+  if (first && first.parentElement && first.parentElement.parentElement && first.parentElement.parentElement.classList.contains('rk-facets')) ro.observe(first.parentElement.parentElement);
   last = Math.max(0, chosen());
   sync({ quiet: true });
   resize();

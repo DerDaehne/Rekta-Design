@@ -187,6 +187,7 @@ them:
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
 | `data-rk-measured` | a pivot | `rekta.js` has measured its titles: inactive ones shrink by a scale that animates, instead of the stylesheet's measure-free font-size. |
 | `data-rk-wide` | a pivot and its facets' parent | The facets show side by side (`pivot()`, from `size.pivot-wide` up). |
+| `data-rk-narrow` | the facets' parent | One facet at a time: `pivot()` has decided (below `size.pivot-wide`). With `data-rk-wide`, it tells the first paint's rules (`.rk-facets`) to step back. |
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
@@ -497,9 +498,52 @@ stays visible as a jump list: a title (a click, or ← → Home End with
 focus staying on the strip) glides its facet to the leading edge over
 `duration-pivot-glide`, Tab moves focus into the facet chosen, and the
 title follows the facet at the leading edge as the user scrolls.
-Narrower, it is one facet at a time again, the one last chosen. A pivot
-that picks the place never goes wide. The threshold is the product's to
-pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.
+Narrower, it is one facet at a time again, the one last chosen
+(`data-rk-narrow` on the parent). A pivot that picks the place never
+goes wide. The threshold is the product's to pick, per pivot if need
+be: `style="--rk-pivot-wide: 1100px"`.
+
+**The first paint** (server rendering, before the script) decides
+"wide" from the same width as `pivot()`. Put `.rk-facets` around the
+panels' common parent: `rekta.css` makes it a container
+(`container: rk-facets / inline-size`), and `pivot()` then measures
+that container's content width instead of the parent's. The server
+renders the chosen panel and leaves the others `hidden` with
+`data-rk-reveal`; from `size.pivot-wide` up the container query lays
+the row out wide and shows them, narrower they stay hidden. Once
+`pivot()` has decided (`data-rk-wide` or `data-rk-narrow` on the
+parent) these rules step back. A pivot in a narrow pane is narrow from
+the first paint, whatever the window's width.
+
+```html
+<div class="rk-pivot" role="tablist">…</div>
+<div class="rk-facets">
+  <div>
+    <section role="tabpanel" id="p-all">…</section>
+    <section role="tabpanel" id="p-runs" hidden data-rk-reveal>…</section>
+  </div>
+</div>
+```
+
+`.rk-facets` is a wrapper, not the parent itself, because a container
+query styles what is inside its container, never the container: the
+parent is the row it lays out. A container query cannot read
+`--rk-pivot-wide` either, so `dist/rekta.css` carries the token's value
+(1300px), written there by `build.mjs`. A product that changes
+`--rk-pivot-wide` (or a pivot that sets its own) names its container
+itself and repeats its value in one query, with the three rules of
+`@container rk-facets` from `dist/rekta.css`:
+
+```css
+.rk-facets { container-name: product-facets; }   /* rekta.css's own 1300px query steps back */
+@container product-facets (min-width: 1100px) {
+  /* the three rules of @container rk-facets in dist/rekta.css */
+}
+```
+
+`node scripts/build.mjs --check-product product.css` warns when a
+product sets `--rk-pivot-wide` and no container query repeats its value.
+With `0` (never wide), leave `.rk-facets` out.
 
 Wide below a title block (a record, a profile), the row is a stage: at
 most as tall as the window under the sticky chrome (`--rk-stage-top`,
