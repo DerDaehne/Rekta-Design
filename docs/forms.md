@@ -6,6 +6,15 @@ A label above, the control, a hint below that turns into the error when
 there is one (see the Field component). Required fields carry no mark;
 an optional one says "(optional)" in its label (`rk-optional`).
 
+The caret is the text colour, one pixel wide. Selected text takes the
+accent with on-accent text, as any selection does (on an accent fill,
+such as a selected row, it turns over: on-accent with accent text). The
+caret's height and its blinking are the platform's; rekta-core draws
+its own, as a platform does: as high as the text plus 4px, blinking for
+ten seconds after the last edit, then standing still.
+Typed text that stands as a title (a search that names the place it
+shows) follows the same rules at the title's size.
+
 ## Inputs
 
 Native where it can be: a select, a number, a date and a time are the
@@ -15,7 +24,7 @@ Rekta's own.
 
 | Need | Control | Notes |
 |---|---|---|
-| one of many, a list you know | `select.rk-input` | a chevron, the system's list |
+| one of many, a list you know | `select.rk-input` | a chevron, the platform's own list (see below) |
 | one of many, a long list or one to search | combobox (`rk-combo`, `Rekta.combobox()`) | filters as you type; floats below like a menu; without `free`, keeps only a choice from its list |
 | two to five options seen at a glance | segments (`rk-segments`) | joined buttons, the chosen one in the accent; radios underneath |
 | on or off, acting at once | toggle switch (`rk-toggle`) | `role="switch"`; outside forms that are sent |
@@ -42,8 +51,27 @@ neither: it chooses rows, it sets nothing.
   "save": use a checkbox there.
 - **Combobox:** ↓ or Alt+↓ opens, ↑ ↓ move, Enter chooses, Escape
   closes, then clears (it never goes back while it has something to
-  close or clear). The current choice carries a check. A remote list
-  shows the loading line while it waits, and says so when it fails.
+  close or clear). The current choice carries a tick without a box. A
+  remote list shows the loading line while it waits, and says so when it
+  fails.
+- **Select:** the field's frame with the chosen option and, at its end,
+  the combobox's chevron: 8 × 4px, a 1.6px stroke in the text colour,
+  pointing down. Where the platform has a list of its own (a browser, a
+  phone), the select opens that, and the chevron stays as it is. Where
+  Rekta is the platform and draws the list (rekta-core, a desktop shell),
+  the chevron turns up while the list is open, and the list is the
+  combobox's: it floats under the field, at least as wide as it, with
+  the chosen option marked by a tick without a box (a value, not a
+  setting, so not a menu's square). Enter, Space or Alt+↓ open it; in it
+  the keys of every floating surface ([states.md](states.md#floating-surfaces)):
+  ↑ ↓ wrapping, Home End, a letter, Enter or Space chooses, Escape
+  closes and focus stays on the field. Closed, ↑ ↓ Home End and a letter
+  change the choice without opening it, as a platform's select does. A
+  list too long to fit under the field is a combobox's, not a select's.
+  Expanding in place (the options as rows in the field's box, pushing
+  what is below down) is declined: it moves the content below, which
+  none of Rekta's floating surfaces do; a list that floats leaves the
+  page where it was.
 - **Segments** are for options that fit on one line; more than five, or
   long labels, go in a select.
 - **Files:** each file becomes a row with its size, a progress bar while

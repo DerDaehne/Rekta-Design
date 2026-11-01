@@ -773,6 +773,28 @@ const joints = await p.evaluate(() => {
   return out;
 });
 ok(joints.left && joints.right && joints.overlap === 2, 'the chosen segment\'s frame lies on top at both joints', JSON.stringify(joints));
+// A select's chevron is the combobox's, stroked in the text colour (#135); the caret and selected text (#136).
+const writing = await p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const box = document.createElement('div');
+  box.innerHTML = '<p>words</p><select class="rk-input"><option>daily</option></select><div class="rk-combo"><input class="rk-input" value="Berlin"><button class="rk-combo-btn" type="button" aria-label="open"></button></div>'
+    + '<ul class="rk-rows" data-rk-select><li aria-selected="true"><span>picked</span></li></ul>';
+  document.querySelector('.rk').append(box);
+  const sel = box.querySelector('select'), input = box.querySelector('input'), ink = rgb('var(--rk-text-primary)');
+  const chevron = getComputedStyle(sel).backgroundImage, text = getComputedStyle(box.querySelector('p'), '::selection'), row = getComputedStyle(box.querySelector('li span'), '::selection');
+  const out = {
+    stroked: (chevron.match(/linear-gradient/g) || []).length === 2 && chevron.split(ink).length === 5 && getComputedStyle(sel).backgroundSize === '4px 6px, 4px 6px',
+    same: chevron === getComputedStyle(box.querySelector('.rk-combo-btn'), '::before').backgroundImage,
+    selection: text.backgroundColor === rgb('var(--rk-accent)') && text.color === rgb('var(--rk-on-accent)'),
+    onAccent: row.backgroundColor === rgb('var(--rk-on-accent)') && row.color === rgb('var(--rk-accent)'),
+    caret: getComputedStyle(input).caretColor === getComputedStyle(input).color,
+  };
+  box.remove();
+  return out;
+});
+ok(writing.stroked && writing.same, 'a select\'s chevron is the combobox\'s: two strokes in the text colour', JSON.stringify(writing));
+ok(writing.selection && writing.onAccent, 'selected text takes the accent with on-accent text, turned over on an accent fill', JSON.stringify(writing));
+ok(writing.caret, 'the caret is the text colour', JSON.stringify(writing));
 // A form in a sheet: a close request asks while there is input; Escape while asking keeps editing; an untouched one closes.
 await p.click('#view-open'); await p.waitForTimeout(400);
 const closeBtn = await p.evaluate(() => { const r = document.querySelector('#view-sheet .rk-sheet-close').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), label: document.querySelector('#view-sheet .rk-sheet-close').getAttribute('aria-label') }; });

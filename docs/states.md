@@ -58,8 +58,12 @@ next to the control that opened them.
 - **Motion:** a fade and a 4px shift away from the control over
   `motion.duration.float` (150ms); it leaves at once.
 - **Rows:** one item per row at the density's row height, a lowercase
-  verb or option. A chosen option shows a filled square. A key hint
-  sits at the end in `rk-meta`. A hairline separates groups.
+  verb or option. In a menu, a chosen option (a checkbox or radio item,
+  a setting the menu toggles) shows a filled square. In a list that
+  picks a field's value (a select's, a combobox's), the chosen option
+  carries a tick without a box instead: it is the field's value, not a
+  setting. A key hint sits at the end in `rk-meta`. A hairline
+  separates groups.
 - **Keys:** ↑ ↓ (wrapping), Home End, a letter jumps to the next item
   starting with it, Enter or Space chooses, Escape closes and returns
   focus to the control, Tab closes and moves on. A click outside closes.

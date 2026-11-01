@@ -273,6 +273,13 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 }
 textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-input::placeholder { color: var(--rk-text-contrast-medium); opacity: 1; }
+/* Writing and choosing text (forms.md, "Fields"): the caret in the text colour, the browser's 1px, its height and
+   blinking the platform's; selected text takes the accent with on-accent text, as any selection does. On an accent
+   fill (a selected row) it turns over, so it still shows. */
+.rk-input { caret-color: currentColor; }
+.rk ::selection { background-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk :is([data-rk-select] > [aria-selected='true'], .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row) ::selection,
+.rk :is([data-rk-select] > [aria-selected='true'], .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row)::selection { background-color: var(--rk-on-accent); color: var(--rk-accent); }
 .rk-input:focus-visible { border-color: var(--rk-text-primary); outline: 2px solid var(--rk-focus); outline-offset: 2px; }
 .rk-input:is(:disabled, [aria-disabled='true']) { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
 .rk-hint { font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
@@ -296,10 +303,19 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 /* Inputs --------------------------------------------------------------------------------------------------------- */
 /* Native where it can be: a select, number, date and time are the platform's own controls in Rekta's frame, so
    their pickers, keyboard and screen-reader support come for free. */
+/* The chevron of a select and a combobox, as rekta-core draws it: 8 × 4px, a 1.6px stroke in the text colour, centred
+   18px before the end. A select takes no pseudo-element and a background image cannot take currentColor, so each arm
+   is a diagonal stroke drawn by a gradient in a 4 × 6px box; the two boxes meet at the middle, where the arms join in
+   a point. The browser opens its own list, so the chevron does not turn (rekta-core, which draws the list, turns it
+   up while it is open). */
+.rk-input, .rk-combo-btn {
+  --_rk-chevron:
+    linear-gradient(45deg, transparent calc(50% - 1.05px), currentColor calc(50% - 0.55px) calc(50% + 0.55px), transparent calc(50% + 1.05px)),
+    linear-gradient(-45deg, transparent calc(50% - 1.05px), currentColor calc(50% - 0.55px) calc(50% + 0.55px), transparent calc(50% + 1.05px));
+}
 select.rk-input {
   appearance: none; padding-right: 36px; cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
+  background-image: var(--_rk-chevron); background-position: right 18px center, right 14px center; background-size: 4px 6px; background-repeat: no-repeat;
 }
 select.rk-input[multiple] { padding: var(--rk-space-xs) 0; background-image: none; }
 select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary); }
@@ -322,7 +338,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-combo-btn {
   position: absolute; inset: 1px 1px 1px auto; width: 36px; border: 0; border-radius: 0 var(--rk-radius-s) var(--rk-radius-s) 0; background: none; color: inherit; cursor: pointer;
 }
-.rk-combo-btn::before { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -5px 0 0 -3px; border: solid currentColor; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); }
+.rk-combo-btn::before { content: ''; position: absolute; inset: 0; background: var(--_rk-chevron); background-position: 14px center, 18px center; background-size: 4px 6px; background-repeat: no-repeat; }
 .rk-combo:has(> .rk-input:is(:disabled, [aria-disabled='true'])) > .rk-combo-btn { color: var(--rk-disabled); cursor: not-allowed; }
 .rk-combo-list { padding: var(--rk-space-xs) 0; margin: 0; list-style: none; }
 .rk-combo-list [role='option'][aria-selected='true'] { outline: 2px solid var(--rk-focus); outline-offset: -2px; background-color: var(--rk-hover); }
