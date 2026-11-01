@@ -218,9 +218,9 @@ static void tile_draw(rk_view *v, rk_canvas *c, void *st) {
     float a = c->alpha;
     rk_canvas_push_clip(c, (rk_rect){ 0, 0, W, H });
     c->alpha = a * (1 - e0);
-    draw_stat(c, t->old_value, t->old_label, pad, y - 0.4f * sh * e0, &num, &lab, ink);
+    draw_stat(c, t->old_value, t->old_label, pad, y - RK_TOK_PEEK_TRAVEL * sh * e0, &num, &lab, ink);
     c->alpha = a * e1;
-    draw_stat(c, t->value, t->label, pad, y + 0.4f * sh * (1 - e1), &num, &lab, ink);
+    draw_stat(c, t->value, t->label, pad, y + RK_TOK_PEEK_TRAVEL * sh * (1 - e1), &num, &lab, ink);
     c->alpha = a;
     rk_canvas_pop_clip(c);
   } else draw_stat(c, t->value, t->label, pad, y, &num, &lab, ink);

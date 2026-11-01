@@ -288,6 +288,23 @@ const stripped = await p.evaluate(async () => {
   return out;
 });
 ok(stripped.measured && new Set(stripped.before.split(',')).size === 1 && new Set(stripped.after.split(',')).size === 1 && stripped.scaled, 'strip() measures a link strip and follows the mark', JSON.stringify(stripped));
+
+// Live tile news: the peek travels peek-travel of the content's height, the flip turns flip-angle.
+const news = await p.evaluate(async () => {
+  const grid = document.createElement('div'); grid.className = 'rk-tiles'; grid.style.cssText = 'position:fixed;left:0;top:0;width:640px;z-index:-1';
+  grid.innerHTML = '<div class="rk-tile"><span class="rk-stat">12</span></div><div class="rk-tile"><span class="rk-stat">ok</span></div>';
+  document.body.append(grid);
+  const [a, b] = grid.children, out = {};
+  const peek = Rekta.tileUpdate(a, () => { a.firstChild.textContent = '13'; });
+  const ghost = a.querySelector('.rk-stat[aria-hidden]');
+  out.leaves = ghost && ghost.getAnimations()[0].effect.getKeyframes().at(-1).transform;
+  out.rises = a.querySelector('.rk-stat:not([aria-hidden])').getAnimations()[0].effect.getKeyframes()[0].transform;
+  const flip = Rekta.tileUpdate(b, () => { b.firstChild.textContent = 'down'; }, { kind: 'flip' });
+  out.flips = b.getAnimations()[0].effect.getKeyframes().at(-1).transform;
+  await Promise.all([peek, flip]); grid.remove();
+  return out;
+});
+ok(news.leaves === 'translateY(-40%)' && news.rises === 'translateY(40%)' && /rotateX\(-90deg\)/.test(news.flips), 'tile news peeks by peek-travel and flips by flip-angle', JSON.stringify(news));
 ok(stripped.arrive, 'arrive() is exported for framework routers', JSON.stringify(stripped));
 
 // A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.

@@ -89,6 +89,8 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_TILE_PRESS_SCALE 0.97f
 #define RK_TOK_ROW_TILT 2.0f
 #define RK_TOK_ROW_PRESS_SCALE 0.99f
+#define RK_TOK_PEEK_TRAVEL 0.4f
+#define RK_TOK_FLIP_ANGLE 90.0f
 #define RK_TOK_TURN_OUT_WHOLE 0.4f
 #define RK_TOK_TURN_IN_WHOLE 0.35f
 #define RK_TOK_TURN_OVERLAP 0.75f

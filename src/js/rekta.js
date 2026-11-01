@@ -3452,19 +3452,19 @@ export async function presence(scope, { items = () => [...scope.children], show 
   if (presenceRuns.get(scope) === run) presenceRuns.delete(scope);
 }
 // tileUpdate(tile, change, { kind }): a live tile has news. 'peek' (a new number or line): the new content rises
-// from below while the old one leaves upwards, over duration-moderate. 'flip' (a new status): the tile turns away
-// around its horizontal axis, changes, and turns back. A continuous reading (frames a second) is no news: it updates
+// from peek-travel of its height below while the old one leaves upwards by as much, over duration-moderate. 'flip' (a
+// new status): the tile turns flip-angle away around its horizontal axis, changes, and turns back. A continuous reading (frames a second) is no news: it updates
 // in place. Inside a live region (live()) the change already waits while the region is held.
 export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
   const d = ms('--rk-duration-moderate');
   if (!d || !shown(tile)) { change(); return Promise.resolve(); }
   if (kind === 'flip') {
-    const p = num('--rk-turnstile-perspective') || 800;
-    const a = tile.animate([{ transform: `perspective(${p}px) rotateX(0deg)` }, { transform: `perspective(${p}px) rotateX(-90deg)` }], { duration: d / 2, easing: css('--rk-ease-out'), fill: 'forwards' });
+    const p = num('--rk-turnstile-perspective') || 800, turn = num('--rk-flip-angle');
+    const a = tile.animate([{ transform: `perspective(${p}px) rotateX(0deg)` }, { transform: `perspective(${p}px) rotateX(${-turn}deg)` }], { duration: d / 2, easing: css('--rk-ease-out'), fill: 'forwards' });
     return a.finished.catch(() => {}).then(() => {
       change();
       a.cancel();
-      return tile.animate([{ transform: `perspective(${p}px) rotateX(90deg)` }, { transform: `perspective(${p}px) rotateX(0deg)` }], { duration: d / 2, easing: css('--rk-ease-in') }).finished.catch(() => {});
+      return tile.animate([{ transform: `perspective(${p}px) rotateX(${turn}deg)` }, { transform: `perspective(${p}px) rotateX(0deg)` }], { duration: d / 2, easing: css('--rk-ease-in') }).finished.catch(() => {});
     });
   }
   const target = tile.querySelector('.rk-stat') || tile;
@@ -3477,8 +3477,9 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
   ghost.style.cssText = `position:absolute;left:${r.left - tr.left}px;top:${r.top - tr.top}px;width:${r.width}px;margin:0;pointer-events:none`;
   tile.appendChild(ghost);
   tile.style.overflow = 'hidden';                                                    // the old number leaves through the edge
-  const out = ghost.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-40%)' }], { duration: d * 0.6, easing: css('--rk-ease-out'), fill: 'forwards' });
-  const inn = target.animate([{ opacity: 0, transform: 'translateY(40%)' }, { opacity: 1, transform: 'none' }], { duration: d * 0.8, delay: d * 0.2, easing: css('--rk-ease-in'), fill: 'backwards' });
+  const travel = num('--rk-peek-travel') * 100;
+  const out = ghost.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateY(${-travel}%)` }], { duration: d * 0.6, easing: css('--rk-ease-out'), fill: 'forwards' });
+  const inn = target.animate([{ opacity: 0, transform: `translateY(${travel}%)` }, { opacity: 1, transform: 'none' }], { duration: d * 0.8, delay: d * 0.2, easing: css('--rk-ease-in'), fill: 'backwards' });
   return finished([out, inn]).then(() => { ghost.remove(); if (!tile.querySelector('.rk-stat[aria-hidden]')) tile.style.overflow = ''; });
 }
 // sparkTo(line, points): a live line moves to its new points over duration-long instead of jumping. Points are an

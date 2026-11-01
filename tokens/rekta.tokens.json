@@ -947,6 +947,21 @@
         "$type": "number",
         "$value": 0.99,
         "$description": "How far a selectable row or entry sinks while pressed."
+      },
+      "peek-travel": {
+        "$type": "number",
+        "$value": 0.4,
+        "$description": "Live tile news, peek: the old content leaves upwards by this share of its own height (ease-out) while the new one rises from this far below (ease-in)."
+      },
+      "flip-angle": {
+        "$type": "number",
+        "$value": 90,
+        "$description": "Live tile news, flip: the tile turns this far away around its horizontal axis (ease-out), changes, and turns back from this far on the other side (ease-in). Degrees.",
+        "$extensions": {
+          "rekta": {
+            "unit": "deg"
+          }
+        }
       }
     },
     "proportion": {

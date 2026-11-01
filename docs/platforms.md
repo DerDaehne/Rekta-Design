@@ -57,7 +57,7 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 | Duration | Milliseconds. | The platform's duration type. |
 | Easing | `[x1, y1, x2, y2]`, a CSS cubic-bezier. | Every animation system takes a cubic Bézier: `KeySpline` (XAML), `QEasingCurve::BezierSpline` (Qt), `Animation.timingCurve` (SwiftUI), `CubicBezierEasing` (Compose), `Cubic` (Flutter). |
 | Angle | Degrees. | Degrees or radians as the platform wants. |
-| Share | A plain number, mostly 0 to 1: of the movement's own time (`turn-out-whole`), or of the length its description names. | The same number. |
+| Share | A plain number, mostly 0 to 1: of the movement's own time (`turn-out-whole`), or of the length its description names (`peek-travel`, of the content's height). | The same number. |
 | Layer | An integer order. | Only the order matters: sticky strip < app bar < banner < toast; sheets and modals sit above all of them in the platform's own modal layer. |
 
 ## Switching
