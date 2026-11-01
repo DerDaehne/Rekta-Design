@@ -353,6 +353,12 @@ function check(tokens) {
     for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
       if (!existsSync(join(root, 'src', 'js', f.replace(/\.js$/, '.d.ts')))) problems.push(`src/js/${f} has no declaration (${f.replace(/\.js$/, '.d.ts')})`);
     }
+    // No `any` in a declaration: a product that keeps dist/ in its own tree lints these files with its code, and
+    // typescript-eslint's recommended rules refuse it. Comments are prose and may say "any".
+    for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => x.endsWith('.d.ts'))) {
+      const code = readFileSync(join(root, 'src', 'js', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+      code.split('\n').forEach((l, i) => { if (/(?<![\w$])any(?![\w$])/.test(l.replace(/'[^']*'|"[^"]*"/g, ''))) problems.push(`src/js/${f} uses the type any (${l.trim().slice(0, 60)})`); });
+    }
   }
   // Importing the module touches no DOM, so a page that renders on the server can import it (call it in the browser).
   try { execFileSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(pathToFileURL(join(root, 'src', 'js', 'rekta.js')).href)})`], { stdio: 'pipe' }); }
