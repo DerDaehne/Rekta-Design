@@ -1313,6 +1313,18 @@ static const char *comp_commit(rk_view *t, int row, int col, const char *value, 
   return NULL;
 }
 
+/* A month to look at: the picker's month without its edge, choosing nothing, named for a screen reader. */
+static void test_month(void) {
+  rk_view *m = rk_month(2026, 10);
+  rk_size sz = month_measure(m, (rk_size){ 1000, 1000 }, m->state);
+  CHECK(fabsf(sz.w - sheet_size().w) < 0.5f && fabsf(sz.w - (7 * RK_TOK_DAY_CELL + 2 * rk_metric_of(RK_SPACE_S))) < 0.5f, "a month is seven day cells wide (%g)", sz.w);
+  CHECK(!m->focusable && m->access_label && !strcmp(m->access_label, "October 2026"), "it takes no focus and is named by its month (%s)", m->access_label ? m->access_label : "(none)");
+  rk_month_set(m, 0, 0);
+  int now = today();
+  CHECK(((month_view *)m->state)->cur == ymd(now / 10000, now / 100 % 100, 1), "0, 0: this month");
+  rk_release(m);
+}
+
 static void test_cell_edit(void) {
   rk_window *w = window(560, 360);
   rk_view *page = col(8, 16);
@@ -3655,6 +3667,7 @@ static void launch(void *user) {
   test_focus();
   test_navigation();
   test_called_place();
+  test_month();
   test_side_pivot();
   test_tree();
   test_split();

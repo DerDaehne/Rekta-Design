@@ -885,6 +885,18 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
   });
   ok(called.half > 0.35 * called.full && called.half < 0.65 * called.full && called.byAttr < 0.65 * called.full, 'a place called up (data-rk-called) turns at half the pace', JSON.stringify(called));
   ok(Math.abs(called.size - called.nav) < 1 && called.weight === '300' && called.nums === 'tabular-nums', '.rk-display: twice nav-active, light, tabular figures', JSON.stringify(called));
+  // A month to look at (#127): day-cell squares, seven wide, today framed 2px inside its cell.
+  const month = await p.evaluate(() => {
+    const t = document.createElement('table'); t.className = 'rk-month';
+    t.innerHTML = '<caption>October 2026</caption><thead><tr>' + ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => `<th scope="col">${d}</th>`).join('') + '</tr></thead>'
+      + '<tbody><tr><td></td><td></td><td></td><td>1</td><td>2</td><td>3</td><td aria-current="date">4</td></tr></tbody>';
+    document.querySelector('.rk-place:not([hidden])').append(t);
+    const cell = t.querySelector('td').getBoundingClientRect(), today = getComputedStyle(t.querySelector('[aria-current]'));
+    const r = { cell: [cell.width, cell.height], width: t.getBoundingClientRect().width, unit: Rekta.tokens.px('--rk-day-cell'), frame: [today.outlineWidth, today.outlineOffset, today.outlineStyle] };
+    t.remove();
+    return r;
+  });
+  ok(month.unit === 36 && Math.abs(month.cell[0] - 36) < 0.5 && Math.abs(month.cell[1] - 36) < 0.5 && Math.abs(month.width - 7 * 36) < 0.5 && month.frame.join() === '1px,-3px,solid', '.rk-month: day-cell squares, seven wide, today framed inside its cell', JSON.stringify(month));
 }
 await p.mouse.move(5, 5);
 await p.click('#tree > li:nth-child(1) > .rk-tree-row'); await p.waitForTimeout(100);

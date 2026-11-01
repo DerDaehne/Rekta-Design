@@ -685,6 +685,12 @@ The calendar, Alt+Down or Enter opens the month below it, Monday first:
 the arrows go by day and week, Page Up and Page Down by month (with
 Shift, by year), Home and End to the month's ends, Enter takes a day,
 Escape closes.
+.It Fn rk_month "int year" "int month" , Fn rk_month_set
+A month to look at, such as a calendar at a clock: the picker's month on
+the ground, its name over the weekdays, Monday first, today framed.
+It chooses nothing and takes no focus;
+.Fn rk_month 0 0
+shows this month.
 .It Fn rk_control_value , Fn rk_control_set_value , Fn rk_control_on_change
 Every control holds a number: 0 or 1, the chosen index, the number, or
 the date as yyyymmdd

@@ -769,6 +769,14 @@
       },
       "$description": "Between a tooltip and its control: a little more than a floating surface's space-xs, so the ink strip does not touch the control's focus ring."
     },
+    "day-cell": {
+      "$type": "dimension",
+      "$value": {
+        "value": 36,
+        "unit": "px"
+      },
+      "$description": "A day's square in a month (a date picker's, a month to look at): seven make the month's width; today's frame stands 2px inside it."
+    },
     "pivot-wide": {
       "$type": "dimension",
       "$value": {

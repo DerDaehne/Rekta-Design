@@ -526,6 +526,10 @@ RK_API rk_view *rk_select(const char *const *options, int count, int chosen);   
 RK_API rk_view *rk_date(int year, int month, int day);    /* 0, 0, 0: none yet */
 RK_API bool rk_date_value(rk_view *date, int *year, int *month, int *day);   /* false: none yet */
 RK_API void rk_date_set_value(rk_view *date, int year, int month, int day);   /* 0, 0, 0 clears it */
+/* A month to look at (a calendar at a clock): the picker's month on the ground, Monday first, today framed; it
+   chooses nothing and takes no focus. 0, 0: this month. */
+RK_API rk_view *rk_month(int year, int month);
+RK_API void rk_month_set(rk_view *view, int year, int month);
 RK_API double rk_control_value(rk_view *control);
 RK_API void rk_control_set_value(rk_view *control, double value);   /* a number snaps to the range and step; an index it lacks is ignored */
 RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, void *user), void *user);

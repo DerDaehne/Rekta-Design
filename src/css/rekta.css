@@ -899,6 +899,15 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-split-handle { display: none; }
 .rk-split-detail .rk-split-back { display: inline-flex; }
 
+/* A month to look at (docs/forms.md, a calendar at a clock): a table, the month's name as its caption, the weekdays
+   in the label's voice, Monday first, only the month's own days in day-cell squares, today framed by a 1px line in
+   the text colour 2px inside its cell (aria-current="date"). It chooses nothing: no hover, no focus. rekta-core draws
+   the same (rk_month). */
+.rk-month { border-collapse: collapse; table-layout: fixed; width: calc(7 * var(--rk-day-cell)); font-variant-numeric: tabular-nums; }
+.rk-month caption { height: var(--rk-control-height); line-height: var(--rk-control-height); font-weight: var(--rk-font-weight-semibold); text-align: center; }
+.rk-month th { padding: 0 0 var(--rk-space-xs); font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-high); text-align: center; }
+.rk-month td { width: var(--rk-day-cell); height: var(--rk-day-cell); padding: 0; text-align: center; }
+.rk-month td[aria-current='date'] { outline: 1px solid currentColor; outline-offset: -3px; }
 /* Floating surfaces ---------------------------------------------------------------------------------------------- */
 /* Menus and lists that float next to their control: bg, a 1px text-contrast-medium edge, radius-s, no shadow. They
    live in the top layer (popover); rekta.js places them below the control, or above when there is no room. */

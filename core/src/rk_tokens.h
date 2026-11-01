@@ -150,5 +150,6 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_BP_ULTRAWIDE 2560.0f
 #define RK_TOK_TILE_UNIT_ULTRAWIDE 170.0f
 #define RK_TOK_TIP_GAP 6.0f
+#define RK_TOK_DAY_CELL 36.0f
 
 #endif
