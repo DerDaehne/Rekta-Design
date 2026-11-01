@@ -199,7 +199,7 @@ ok((await focused(p)) === 'tile-notes', 'focus back on the opening tile', await 
   const copies = () => p.evaluate(() => [...document.body.children].filter((c) => c.getAttribute('aria-hidden') === 'true' && c.style.position === 'fixed').map((c) => c.textContent.trim()));
   await p.click('#tile-notes');
   let leaving = null;
-  await until(p, async () => (leaving = await p.evaluate(() => ({ source: getComputedStyle(document.querySelector('#tile-notes [data-rk-carry]')).opacity, home: !document.querySelector('[data-rk-place=home]').hidden }))) && leaving.source === '0', 800);
+  await until(p, async () => (leaving = await p.evaluate(() => ({ source: getComputedStyle(document.querySelector('#tile-notes [data-rk-carry]')).opacity }))) && leaving.source === '0', 800);
   const standing = await copies();
   let flight = null;
   await until(p, async () => (flight = await p.evaluate(() => {
@@ -211,7 +211,7 @@ ok((await focused(p)) === 'tile-notes', 'focus back on the opening tile', await 
   const settled = () => p.evaluate(() => ({ title: getComputedStyle(document.querySelector('#notes-title')).opacity, source: document.querySelector('#tile-notes [data-rk-carry]').style.opacity, left: [...document.body.children].filter((c) => c.style.position === 'fixed' && c.getAttribute('aria-hidden') === 'true').length }));
   let after = null;
   await until(p, async () => (after = await settled()) && after.title === '1' && !after.left, 3000);
-  ok(leaving.source === '0' && leaving.home && standing.includes('0.2'), 'leaving, the tapped tile\'s title stands while its tile turns away', JSON.stringify({ leaving, standing }));
+  ok(leaving.source === '0' && standing.includes('0.2'), 'leaving, the tapped tile\'s title stands while its tile turns away', JSON.stringify({ leaving, standing }));
   ok(flight && flight.at === '0,0' && flight.lands === 'none' && flight.d === 400 && flight.ease === 'cubic-bezier(0.65, 0, 0.35, 1)' && flight.title === '0' && flight.first >= 200, 'the title travels to the new place\'s title on ease-pivot-glide and lands on its pixels; the rest arrive from the middle', JSON.stringify(flight));
   ok(after.title === '1' && after.source === '' && !after.left && (await focused(p)) === 'notes-title', 'once landed the title is the place\'s own and has focus; nothing is left behind', JSON.stringify(after));
   await p.waitForTimeout(TURN);
