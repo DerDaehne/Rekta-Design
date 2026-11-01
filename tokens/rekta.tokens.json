@@ -940,6 +940,11 @@
       "$type": "duration",
       "$value": "30000ms",
       "$description": "A live region with no update or heartbeat for this long is stale: it says so, and its values stop looking current."
+    },
+    "restore": {
+      "$type": "duration",
+      "$value": "5000ms",
+      "$description": "How long scrollState().restore() waits for content that renders after a navigation (a fetch on mount, streamed data) to put a saved scroll offset back; it gives up sooner when the user scrolls."
     }
   },
   "layer": {

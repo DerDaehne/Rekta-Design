@@ -119,7 +119,9 @@ export declare function pivot(el: HTMLElement, options?: {
 
 /** Every scrolled box of a place, and the window, as plain data for a router's history entry. */
 export interface ScrollState { y: number; at: Record<string, [number, number]>; }
-export declare function scrollState(root: Element): { capture(): ScrollState; restore(state: ScrollState | null | undefined): void };
+/** A restore that waits for content rendered after the navigation; `pending` until every offset is set or it gives up. */
+export interface ScrollRestore { readonly pending: boolean; cancel(): void; }
+export declare function scrollState(root: Element): Destroyable & { capture(): ScrollState; restore(state: ScrollState | null | undefined): ScrollRestore };
 
 export declare function strip(el: HTMLElement): Destroyable & { layout(): void };
 

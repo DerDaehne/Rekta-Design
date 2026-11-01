@@ -235,6 +235,25 @@ ok(facets.byName, 'a facet chosen by name', JSON.stringify(facets));
 ok(facets.gone.selected === 'drafts' && facets.gone.stops === 1 && facets.gone.told === 'drafts' && facets.gone.shown, 'the chosen facet goes: its neighbour is chosen, one tab stop stays', JSON.stringify(facets.gone));
 ok(facets.added, 'a facet that comes takes no tab stop, its panel hidden', JSON.stringify(facets));
 ok(facets.scroll, 'scrollState captures every scrolled box and puts it back', JSON.stringify(facets));
+// Data that renders after the navigation: restore() waits for the boxes to appear and grow; a user scroll first wins.
+const late = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const content = '<div data-rk-scroll="late" style="height:100px;overflow:auto"><div style="height:800px"></div></div><div style="height:900px"></div>';
+  const mk = () => { const el = document.createElement('div'); el.style.cssText = 'position:fixed;left:0;top:0;width:300px;height:200px;overflow:auto;z-index:-1'; document.body.append(el); return el; };
+  const st = { y: scrollY, at: { root: [0, 300], '@late': [0, 400] } };
+  const a = mk(), run = Rekta.scrollState(a).restore(st), waited = run.pending;
+  setTimeout(() => { a.innerHTML = content; }, 300); await wait(800);
+  const out = { waited, root: a.scrollTop, late: a.querySelector('[data-rk-scroll]').scrollTop, done: !run.pending };
+  a.remove();
+  const b = mk(), run2 = Rekta.scrollState(b).restore(st);
+  b.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 40 }));
+  setTimeout(() => { b.innerHTML = content; }, 300); await wait(800);
+  out.user = { pending: run2.pending, root: b.scrollTop, late: b.querySelector('[data-rk-scroll]').scrollTop };
+  b.remove();
+  return out;
+});
+ok(late.waited && late.root === 300 && late.late === 400 && late.done, 'restore() waits for sections that render 300ms later and puts them at their offsets', JSON.stringify(late));
+ok(!late.user.pending && late.user.root === 0 && late.user.late === 0, 'a user scroll before they render keeps the user\'s position', JSON.stringify(late.user));
 const stage = await p.evaluate(async () => {
   const wait = (t) => new Promise((r) => setTimeout(r, t));
   const rec = document.createElement('section'); rec.id = 'rec';

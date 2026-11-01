@@ -1212,22 +1212,73 @@ export function pivot(el, { onSelect, turn: placeTurn = null, gone = 'select' } 
 // scrollState(root): every scrolled box of a place (the place, a panorama and its sections, a wide facet row and its
 // facets, a split's panes, anything marked data-rk-scroll) and the window, as plain data a router can keep with its
 // history entry (history.state, SvelteKit's snapshot), and put back on back. Boxes are known by their id or
-// data-rk-scroll value, else by their order. Restore once the place is rendered and laid out.
+// data-rk-scroll value, else by their order.
+// restore(state) sets every offset it can at once. One it cannot set yet (its box is not there, or still too short or
+// narrow for it: data that renders after the navigation, a fetch on mount, a stream) waits, and is set as the boxes
+// appear and grow (a MutationObserver and a ResizeObserver on root). It gives up when the user scrolls (the wheel, a
+// touch, a press, a scrolling key, or a scroll it did not cause), after duration-restore, or on cancel() or destroy().
 const SCROLLERS = '.rk-panorama, .rk-sec, .rk-split-list, .rk-split-detail, [data-rk-wide]:not(.rk-pivot), [data-rk-wide]:not(.rk-pivot) > [role=tabpanel], [data-rk-scroll]';
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
 export function scrollState(root) {
   const boxes = () => [root, ...root.querySelectorAll(SCROLLERS)];
   const keyOf = (b, i) => (b === root ? 'root' : b.id ? `#${b.id}` : b.dataset.rkScroll ? `@${b.dataset.rkScroll}` : String(i));
+  const runs = new Set();
+  function restore(state) {
+    if (!state || !state.at) return { pending: false, cancel() {} };
+    const page = document.scrollingElement || docEl(), WINDOW = {};
+    const want = new Map(Object.entries(state.at)), set = new Map();
+    if (typeof state.y === 'number') want.set(WINDOW, [scrollX, state.y]);
+    const at = (b, [l, t]) => Math.abs(b.scrollLeft - l) <= 1 && Math.abs(b.scrollTop - t) <= 1;
+    // A box scrolls as far as it can towards its offset; it is done once there. What it reached is remembered, so its
+    // own scroll event is known for one.
+    const put = (key, b, o) => {
+      if (!at(b, o)) b.scrollTo({ left: o[0], top: o[1], behavior: 'instant' });
+      set.set(b, [b.scrollLeft, b.scrollTop]);
+      if (at(b, o)) want.delete(key);
+    };
+    boxes().forEach((b, i) => { if (!want.has(keyOf(b, i)) && (b.scrollLeft || b.scrollTop)) { b.scrollTo({ left: 0, top: 0, behavior: 'instant' }); set.set(b, [0, 0]); } });
+    const pass = () => {
+      frame = 0;
+      boxes().forEach((b, i) => { const k = keyOf(b, i), o = want.get(k); if (o) put(k, b, o); });
+      if (want.has(WINDOW)) put(WINDOW, page, want.get(WINDOW));
+      if (!want.size) stop(); else if (live) watch();
+    };
+    let live = true, frame = 0, timer = 0;
+    const later = () => { if (!frame) frame = requestAnimationFrame(pass); };
+    const mo = new MutationObserver(later), ro = new ResizeObserver(later);
+    const watch = () => { for (const b of [root, page, ...root.querySelectorAll(SCROLLERS)]) { ro.observe(b); for (const k of b.children) ro.observe(k); } };
+    // The user's own scroll ends it. A box that only lost content (scrolled back to its new end) is not the user's.
+    const scrolled = (e) => {
+      const b = e.target === document ? page : e.target, s = set.get(b);
+      if (!s || (Math.abs(b.scrollLeft - s[0]) <= 1 && Math.abs(b.scrollTop - s[1]) <= 1)) return;
+      const clamped = (b.scrollTop < s[1] && b.scrollTop >= b.scrollHeight - b.clientHeight - 1) || (b.scrollLeft < s[0] && b.scrollLeft >= b.scrollWidth - b.clientWidth - 1);
+      if (clamped) set.set(b, [b.scrollLeft, b.scrollTop]); else stop();
+    };
+    const keyed = (e) => { if (SCROLL_KEYS.has(e.key)) stop(); };
+    const INPUT = [['wheel', stop], ['touchstart', stop], ['pointerdown', stop], ['keydown', keyed], ['scroll', scrolled]];
+    function stop() {
+      if (!live) return;
+      live = false; runs.delete(run);
+      mo.disconnect(); ro.disconnect(); cancelAnimationFrame(frame); clearTimeout(timer);
+      for (const [type, fn] of INPUT) removeEventListener(type, fn, { capture: true });
+    }
+    const run = { get pending() { return live; }, cancel: stop };
+    pass();
+    if (!live) return run;
+    runs.add(run);
+    mo.observe(root, { childList: true, subtree: true, characterData: true });
+    for (const [type, fn] of INPUT) addEventListener(type, fn, { capture: true, passive: true });
+    timer = setTimeout(stop, ms('--rk-duration-restore'));
+    return run;
+  }
   return {
     capture() {
       const at = {};
       boxes().forEach((b, i) => { if (b.scrollLeft || b.scrollTop) at[keyOf(b, i)] = [Math.round(b.scrollLeft), Math.round(b.scrollTop)]; });
       return { y: Math.round(scrollY), at };
     },
-    restore(state) {
-      if (!state || !state.at) return;
-      boxes().forEach((b, i) => { const o = state.at[keyOf(b, i)]; if (o || b.scrollLeft || b.scrollTop) b.scrollTo({ left: o ? o[0] : 0, top: o ? o[1] : 0, behavior: 'instant' }); });
-      if (typeof state.y === 'number') scrollTo({ left: scrollX, top: state.y, behavior: 'instant' });
-    },
+    restore,
+    destroy() { for (const r of [...runs]) r.cancel(); },
   };
 }
 

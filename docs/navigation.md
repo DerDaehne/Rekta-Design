@@ -164,6 +164,19 @@ and call `restore(history.state.rk)` after the place has rendered on
 `popstate`. Give the boxes ids (or `data-rk-scroll`) when their number
 can change between visits.
 
+**Data that comes after mount.** A place that loads its data once it is
+mounted (a `fetch` on mount, `{#await}`, streamed data, a list that
+loads more) has no sections yet, or short ones, when the router
+restores. Call `restore()` as early as above anyway: it sets what it
+can and waits for the rest, setting each box as it appears and grows,
+for up to `timing.restore` (5s). If the user scrolls first, their
+position stays. Keep the handle when the place can go before then:
+
+```js
+const run = scrollState(place).restore(s);   // run.pending: still waiting
+onDestroy(() => run.cancel());
+```
+
 ### Crumb
 
 Every place below the top starts with a crumb: a small link up to its

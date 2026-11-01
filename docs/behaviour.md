@@ -518,10 +518,16 @@ Every scrolled box of a place as plain data, for a router that is not
 sections, a wide facet row and its facets, a split's panes, anything
 marked `data-rk-scroll`, and the window. Boxes are known by their `id`
 or `data-rk-scroll` value, else by their order. Returns
-`{ capture(), restore(state) }`; `capture()` gives
+`{ capture(), restore(state), destroy }`; `capture()` gives
 `{ y, at: { key: [left, top] } }`, which fits in `history.state` or a
-framework's snapshot. Restore once the place is rendered and laid out.
-`places()` uses it for its own back. A recipe is in
+framework's snapshot. `restore(state)` sets every offset it can at
+once; one it cannot set yet (its box is not there, or still too short
+or narrow, because the data renders after the navigation) waits and is
+set as the boxes appear and grow. It gives up as soon as the user
+scrolls (the wheel, a touch, a press, a scrolling key, or a scroll it
+did not cause), after `timing.restore` (5s), or on `cancel()` or
+`destroy()`. It returns `{ pending, cancel() }`: `pending` is true while
+it still waits. `places()` uses it for its own back. A recipe is in
 [navigation.md](navigation.md#back-with-a-router-of-your-own).
 
 ### `strip(el)`
