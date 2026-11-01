@@ -755,7 +755,7 @@
       "stagger": {
         "$type": "duration",
         "$value": "30ms",
-        "$description": "Delay per tile index when tiles build in, and between the rows of a place leaving in a place change (both capped at 10)."
+        "$description": "Delay per tile index when tiles build in (capped at 10). In a place change, the unit of when a part starts (heft-spread) and the step between parts that weigh the same."
       },
       "pulse": {
         "$type": "duration",
@@ -807,7 +807,7 @@
           0.5,
           1.0
         ],
-        "$description": "Navigation: place change (turnstile) and facet change (pivot slide)."
+        "$description": "Things leaving and the facet change (pivot slide): leaving rows and tiles, the old content of a tile's news. The place change has its own curves (turn-out, turn-in)."
       },
       "pivot-glide": {
         "$type": "cubicBezier",
@@ -818,13 +818,53 @@
           1.0
         ],
         "$description": "Pronounced ease-in-out of the pivot strip glide."
+      },
+      "turn-out": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.35,
+          0.0,
+          0.65,
+          0.6
+        ],
+        "$description": "Place change, leaving: a part swings away gathering speed and is still quick as it fades, so the turn reads as a push. With turnstile-out-angle."
+      },
+      "turn-in": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.22,
+          0.9,
+          0.6,
+          0.98
+        ],
+        "$description": "Place change, arriving: a part swings in quick at first and lands with a trace of speed left, so its motion ends when its animation does. With turnstile-in-angle."
       }
     },
     "transform": {
+      "turnstile-out-angle": {
+        "$type": "number",
+        "$value": 60,
+        "$description": "Place change, leaving: each part swings this far toward the viewer around the leading edge of the box that clips it (back: the other way). Degrees.",
+        "$extensions": {
+          "rekta": {
+            "unit": "deg"
+          }
+        }
+      },
+      "turnstile-in-angle": {
+        "$type": "number",
+        "$value": 70,
+        "$description": "Place change, arriving: each part swings in from this far on the other side (back: the other way). Degrees.",
+        "$extensions": {
+          "rekta": {
+            "unit": "deg"
+          }
+        }
+      },
       "turnstile-angle": {
         "$type": "number",
-        "$value": 40,
-        "$description": "Place change: a place turns this far around its leading edge while it fades. Forward, the old place swings toward the viewer and the new one swings in from the back; back, the other way round. Degrees.",
+        "$value": "{motion.transform.turnstile-out-angle}",
+        "$description": "Deprecated: an alias of turnstile-out-angle, kept so nothing that reads it breaks. Read turnstile-out-angle and turnstile-in-angle instead. Degrees.",
         "$extensions": {
           "rekta": {
             "unit": "deg"
@@ -837,7 +877,28 @@
           "value": 800,
           "unit": "px"
         },
-        "$description": "Perspective of a pressed tile, and the base perspective of the turnstile (the script adds distance from the axis)."
+        "$description": "Perspective of a pressed tile, and the base perspective of the turnstile: a row of parts adds turnstile-reach × its reach."
+      },
+      "turnstile-reach": {
+        "$type": "number",
+        "$value": 1.2,
+        "$description": "Place change: a row's perspective is turnstile-perspective + this × the row's reach (how far its farthest part reaches from the edge it turns about), so a wide row turns as flat as a narrow one."
+      },
+      "turnstile-row": {
+        "$type": "dimension",
+        "$value": {
+          "value": 8,
+          "unit": "px"
+        },
+        "$description": "Place change: parts whose top edges round to the same multiple of this form one row, which shares one perspective and is read left to right."
+      },
+      "turnstile-flush": {
+        "$type": "dimension",
+        "$value": {
+          "value": 2,
+          "unit": "px"
+        },
+        "$description": "Place change: a part whose top lies within this of the top of the box that clips it turns about its top instead of its middle, so the box's edge never cuts it."
       },
       "slide-distance": {
         "$type": "dimension",
@@ -876,6 +937,60 @@
         "$type": "number",
         "$value": 0.99,
         "$description": "How far a selectable row or entry sinks while pressed."
+      }
+    },
+    "proportion": {
+      "$description": "Shares of a movement's own time, 0 to 1.",
+      "turn-out-whole": {
+        "$type": "number",
+        "$value": 0.4,
+        "$description": "Place change, leaving: a part stays whole for this share of its time, so the swing reads, then fades out over the rest."
+      },
+      "turn-in-whole": {
+        "$type": "number",
+        "$value": 0.35,
+        "$description": "Place change, arriving: a part fades in over this share of its time and is whole after it."
+      },
+      "turn-overlap": {
+        "$type": "number",
+        "$value": 0.75,
+        "$description": "Place change: the next place starts when the last part of the leaving one is this far through its time, fading, so it swings in without a gap."
+      }
+    },
+    "heft": {
+      "$description": "Place change: a part's heft sets when it starts and how long it takes. heft = heft-tile × (area / heft-reference²)^heft-exponent, held between heft-min and heft-max; it starts (heft − heft-min) × heft-spread × duration-stagger after the turn begins and takes duration-short (leaving) or duration-moderate (arriving) × heft (docs/motion.md).",
+      "tile": {
+        "$type": "number",
+        "$value": 0.8,
+        "$description": "The heft of a part as big as a tile (heft-reference × heft-reference)."
+      },
+      "reference": {
+        "$type": "dimension",
+        "$value": {
+          "value": 150,
+          "unit": "px"
+        },
+        "$description": "The side of the square whose area has heft-tile: a tile."
+      },
+      "exponent": {
+        "$type": "number",
+        "$value": 0.35,
+        "$description": "How a part's heft grows with its area against a tile's: a line of text about 0.6, a tile 0.8, a wide tile 1.0."
+      },
+      "min": {
+        "$type": "number",
+        "$value": 0.5,
+        "$description": "The lightest heft. A part this light starts as the turn begins."
+      },
+      "max": {
+        "$type": "number",
+        "$value": 1.4,
+        "$description": "The heaviest heft: a table."
+      },
+      "spread": {
+        "$type": "number",
+        "$value": 6,
+        "$description": "A part starts (heft − heft-min) × this × duration-stagger after the turn begins: light parts first, heavy ones later."
       }
     }
   },

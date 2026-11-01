@@ -103,6 +103,14 @@ ok((await p.evaluate(() => { const seen = new Set(), twice = []; document.queryS
 // Tile → place: the turnstile, the address, the title, focus; the crumb back.
 await p.click('#tile-notes'); await p.waitForTimeout(120);
 ok(await p.evaluate(() => document.querySelectorAll('[data-rk-turn]').length > 3), 'leaving units turn');
+// The turn takes its angle and curve from the tokens (turnstile-out-angle, ease-turn-out), not from literals.
+{
+  const t = await p.evaluate(() => {
+    const u = document.querySelector('[data-rk-turn="out"]'), s = getComputedStyle(document.documentElement);
+    return { ease: u && getComputedStyle(u).animationTimingFunction, want: s.getPropertyValue('--rk-ease-turn-out').trim(), angle: s.getPropertyValue('--rk-turnstile-out-angle').trim() };
+  });
+  ok(t.ease === t.want && t.want === 'cubic-bezier(0.35, 0, 0.65, 0.6)' && t.angle === '60deg', 'a leaving part turns by the token angle on the token curve', JSON.stringify(t));
+}
 await p.screenshot({ path: join(shots, 'turn-mid.png') });
 await p.waitForTimeout(TURN);
 ok(await visible(p, 'notes') && !(await visible(p, 'home')), 'the release notes show, home hides');

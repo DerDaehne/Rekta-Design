@@ -40,7 +40,9 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 | `density.<mode>.<x>` | `<x>` | `control-height` |
 | `motion.duration.<x>` | `duration-<x>` | `duration-moderate` |
 | `motion.easing.<x>` | `ease-<x>` | `ease-pivot-glide` |
-| `motion.transform.<x>` | `<x>` | `turnstile-angle`, `tile-tilt` |
+| `motion.transform.<x>` | `<x>` | `turnstile-out-angle`, `tile-tilt` |
+| `motion.proportion.<x>` | `<x>` | `turn-out-whole` |
+| `motion.<group>.<x>` (any other group) | `<group>-<x>` | `heft-min` |
 | `timing.<x>` | `duration-<x>` | `duration-toast` |
 | `layer.<x>` | `layer-<x>` | `layer-toast` |
 | `breakpoint.<x>` | `bp-<x>` | `bp-sideways-scroll-min` |
@@ -55,6 +57,7 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 | Duration | Milliseconds. | The platform's duration type. |
 | Easing | `[x1, y1, x2, y2]`, a CSS cubic-bezier. | Every animation system takes a cubic Bézier: `KeySpline` (XAML), `QEasingCurve::BezierSpline` (Qt), `Animation.timingCurve` (SwiftUI), `CubicBezierEasing` (Compose), `Cubic` (Flutter). |
 | Angle | Degrees. | Degrees or radians as the platform wants. |
+| Share | A plain number, mostly 0 to 1: of the movement's own time (`turn-out-whole`), or of the length its description names. | The same number. |
 | Layer | An integer order. | Only the order matters: sticky strip < app bar < banner < toast; sheets and modals sit above all of them in the platform's own modal layer. |
 
 ## Switching
@@ -157,11 +160,16 @@ implementation needs the same:
   comes back over `duration-short`. A tap shows the whole press. On
   touch, the press waits `duration-tap-delay` and cancels on 8 px of
   movement. A drag or a text selection never activates.
-- **Place change (turnstile)**: units of the leaving place turn
-  `turnstile-angle` away around the leading edge of the box that clips
-  them, a row at a time, `duration-stagger` apart, the pressed tile last.
-  The new place turns in over `duration-moderate`. Back runs it the
-  other way. A navigation during a turn finishes that turn first; it is
+- **Place change (turnstile)**: the parts of the leaving place turn
+  `turnstile-out-angle` away around the leading edge of the box that
+  clips them (`ease-turn-out`), each by its weight: light parts first and
+  quickest, heavy ones later and slower, (heft − `heft-min`) ×
+  `heft-spread` × `duration-stagger` after the turn begins, over
+  `duration-short` × heft; the pressed tile last, once its press has
+  sunk in. The new place turns in from `turnstile-in-angle`
+  (`ease-turn-in`) over `duration-moderate` × heft, once the last
+  leaving part is `turn-overlap` through. [motion.md](motion.md#place-change-in-detail)
+  gives heft, rows and the pressed tile. Back runs it the other way. A navigation during a turn finishes that turn first; it is
   never refused.
 - **History**: one entry per place; facets and section jumps add none.
   Back, Escape, the crumb and the OS back command (Android back, the

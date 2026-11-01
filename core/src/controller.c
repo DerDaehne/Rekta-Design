@@ -245,8 +245,9 @@ rk_controller *rk_places(rk_controller *home) {
 
 int rk_places_depth(rk_controller *c) { return c->kind == K_PLACES ? ((places *)c->impl)->n : 0; }
 
-/* The turn: a place change (motion.md). Its units are the parts a place shows, top to bottom, a row at a time. Each turns around the leading edge of the box that clips it, in a time that follows its size: a
-   small unit turns quicker than a large one, as something light starts and stops sooner than something heavy. */
+/* The turn: a place change (motion.md). Its units are the parts a place shows, in reading order. Each turns around
+   the leading edge of the box that clips it, in a time that follows its size: a small unit turns quicker than a large
+   one, as something light starts and stops sooner than something heavy. */
 
 /* A view turns as one when it is a tile or shows something of its own (a class that draws, a fill, a rule); a plain
    layout box lets its children turn one by one, so each row, label and button keeps its heft, and so does one that
@@ -272,7 +273,7 @@ static void collect_units(rk_view *v, turn *t) {
 
 static int unit_order(const void *a, const void *b) {
   rk_rect p = rk__window_rect(*(rk_view *const *)a), q = rk__window_rect(*(rk_view *const *)b);
-  int rp = (int)lroundf(p.y / 8), rq = (int)lroundf(q.y / 8);
+  int rp = (int)lroundf(p.y / RK_TOK_TURNSTILE_ROW), rq = (int)lroundf(q.y / RK_TOK_TURNSTILE_ROW);
   if (rp != rq) return rp - rq;
   return p.x < q.x ? -1 : p.x > q.x;
 }
@@ -282,20 +283,23 @@ static rk_view *clip_box(rk_view *u, rk_view *place) {
   return place;
 }
 
-static float turn_perspective(float reach) { return roundf(RK_TOK_TURNSTILE_PERSPECTIVE + 1.2f * RK_MAX(0.0f, reach)); }
+/* a row's perspective grows with its reach from the edge it turns about, so a wide row turns as flat as a narrow one */
+static float turn_perspective(float reach) { return roundf(RK_TOK_TURNSTILE_PERSPECTIVE + RK_TOK_TURNSTILE_REACH * RK_MAX(0.0f, reach)); }
 
-/* A unit's time against the token's grows with its area, against a tile's (150 x 150): 0.8 x (area / tile)^0.35,
-   from 0.5 (a line of text, about 0.6) through 0.8 (a tile) and 1.0 (a wide tile) to 1.4 (a table). */
-static double heft(rk_rect r) { float k = 0.8f * powf(RK_MAX(1.0f, r.w * r.h) / 22500.0f, 0.35f); return RK_CLAMP(k, 0.5f, 1.4f); }
+/* A unit's time against the token's grows with its area, against a tile's (heft-reference squared, 150 x 150):
+   heft-tile x (area / tile)^heft-exponent, held between heft-min and heft-max: a line of text about 0.6, a tile 0.8,
+   a wide tile 1.0, a table 1.4. */
+static double heft(rk_rect r) {
+  float k = RK_TOK_HEFT_TILE * powf(RK_MAX(1.0f, r.w * r.h) / (RK_TOK_HEFT_REFERENCE * RK_TOK_HEFT_REFERENCE), RK_TOK_HEFT_EXPONENT);
+  return RK_CLAMP(k, RK_TOK_HEFT_MIN, RK_TOK_HEFT_MAX);
+}
 
-/* The turn as rekta.css has it: leaving parts swing 60 degrees, gathering speed, whole for 40% of their time;
-   arriving parts swing in from 70 degrees, quick at first, and land with a trace of speed left, so the motion ends
-   when the animation does. Heft also sets when a part starts: (heft - 0.5) x 6 x duration-stagger after the turn
-   begins, light parts first, heavy ones later. Parts of one size (heft within 0.05) follow one another in reading
-   order, half a duration-stagger apart, six steps at most: the size leads, the order only sorts what weighs the
-   same. */
-#define TURN_OUT_ANGLE 60.0f
-#define TURN_IN_ANGLE 70.0f
+/* The turn as rekta.css has it: leaving parts swing turnstile-out-angle, gathering speed (ease-turn-out), whole for
+   turn-out-whole of their time; arriving parts swing in from turnstile-in-angle, quick at first, and land with a
+   trace of speed left (ease-turn-in), so the motion ends when the animation does. Heft also sets when a part starts:
+   (heft - heft-min) x heft-spread x duration-stagger after the turn begins, light parts first, heavy ones later.
+   Parts of one size (heft within 0.05) follow one another in reading order, half a duration-stagger apart, six steps
+   at most: the size leads, the order only sorts what weighs the same. */
 #define TURN_CLASSES 32                                    /* heft x 20, up to 1.4 x 20 = 28 */
 static void turn_starts(turn *t, int n, rk_view *pressed, double *hs, double *at) {
   int seen[TURN_CLASSES] = { 0 };
@@ -304,10 +308,10 @@ static void turn_starts(turn *t, int n, rk_view *pressed, double *hs, double *at
     hs[i] = heft(rk__window_rect(t->units[i]));
     if (t->units[i] == pressed) { at[i] = 0; continue; }
     int key = RK_CLAMP((int)lround(hs[i] * 20), 0, TURN_CLASSES - 1), k = seen[key]++;
-    at[i] = (hs[i] - 0.5) * 6 * step + RK_MIN(k, 6) * step / 2;
+    at[i] = (hs[i] - RK_TOK_HEFT_MIN) * RK_TOK_HEFT_SPREAD * step + RK_MIN(k, 6) * step / 2;
   }
 }
-static const float turn_ease_out[4] = { 0.35f, 0.0f, 0.65f, 0.6f }, turn_ease_in[4] = { 0.22f, 0.9f, 0.6f, 0.98f };
+static const float turn_ease_out[4] = RK_TOK_EASE_TURN_OUT, turn_ease_in[4] = RK_TOK_EASE_TURN_IN;
 
 /* The units of a place in turning order, the pressed one last, and for each its row slot, how far that row reaches
    from its clip box's leading edge (the farther, the flatter the perspective), its heft and when it starts. */
@@ -329,7 +333,7 @@ static plan turn_gather(turn *t, rk_view *place, rk_view *pressed) {
   for (int i = 0; i < n; i++) {
     rk_view *u = t->units[i];
     rk_rect r = rk__window_rect(u), cr = rk__window_rect(clip_box(u, place));
-    int k = u == pressed ? INT32_MAX : (int)lroundf(r.y / 8);
+    int k = u == pressed ? INT32_MAX : (int)lroundf(r.y / RK_TOK_TURNSTILE_ROW);
     if (k != key) { slot++; key = k; p.reach[slot] = 0; }
     p.slots[i] = slot;
     p.reach[slot] = RK_MAX(p.reach[slot], r.x + r.w - cr.x);
@@ -342,19 +346,20 @@ static plan turn_gather(turn *t, rk_view *place, rk_view *pressed) {
 static void turn_pivot(rk_transform *t, rk_view *u, rk_view *place, float reach) {
   rk_rect r = rk__window_rect(u), cr = rk__window_rect(clip_box(u, place));
   t->origin_x = r.w > 0 ? (cr.x - r.x) / r.w : 0;
-  t->origin_y = fabsf(r.y - cr.y) < 2 ? 0 : 0.5f;
+  t->origin_y = fabsf(r.y - cr.y) < RK_TOK_TURNSTILE_FLUSH ? 0 : 0.5f;
   t->perspective = turn_perspective(reach);
 }
 
 /* Leaving: each unit swings toward the viewer, then fades, light ones first, over
-   duration-short by its heft; the pressed tile keeps its press and goes last. Returns when the place can go: its last
-   unit 75% through, fading, so the next swings in without a gap. */
+   duration-short by its heft; the pressed tile keeps its press and goes last, once its press has sunk in
+   (duration-press), and the press gives way along its turn. Returns when the place can go: its last unit turn-overlap
+   through, fading, so the next swings in without a gap. */
 static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
   plan pl = turn_gather(t, place, pressed);
   int n = pl.n;
   double *hs = pl.hs, *starts = pl.starts;
   double out = rk_duration_of(RK_DURATION_SHORT), end = 0;
-  float angle = back ? TURN_OUT_ANGLE : -TURN_OUT_ANGLE;
+  float angle = back ? RK_TOK_TURNSTILE_OUT_ANGLE : -RK_TOK_TURNSTILE_OUT_ANGLE;
   double last = 0;                                         /* the pressed tile goes when the last other does */
   for (int i = 0; i < n; i++) if (t->units[i] != pressed) last = RK_MAX(last, starts[i]);
   for (int i = 0; i < n; i++) {
@@ -367,9 +372,9 @@ static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
     if (u != pressed) { from = u->transform; from.origin_x = to.origin_x; from.origin_y = to.origin_y; from.perspective = to.perspective; }
     float o0 = u->popacity, o1 = 0;
     rk__animate_transform(u, &from, &to, d, at, turn_ease_out);
-    rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, 0.6 * d, at + 0.4 * d, rk__ease_base);
+    rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, (1 - RK_TOK_TURN_OUT_WHOLE) * d, at + RK_TOK_TURN_OUT_WHOLE * d, rk__ease_base);
     u->pressed = 0;
-    end = RK_MAX(end, at + 0.75 * d);
+    end = RK_MAX(end, at + RK_TOK_TURN_OVERLAP * d);
   }
   plan_free(&pl);
   return end;
@@ -385,7 +390,7 @@ static void turn_reset(turn *t) {
   turn_release(t);
 }
 
-/* Arriving: each unit swings in from the other side, fading in over the first third, light ones first, over
+/* Arriving: each unit swings in from the other side, fading in over turn-in-whole, light ones first, over
    duration-moderate by its heft. The place assembles itself; nothing builds in after it. Back runs it the other
    way round. */
 static void turn_in(rk_view *place, bool back) {
@@ -401,10 +406,10 @@ static void turn_in(rk_view *place, bool back) {
     rk_transform from = u->transform, to = u->transform;
     turn_pivot(&from, u, place, pl.reach[pl.slots[i]]);
     to.origin_x = from.origin_x; to.origin_y = from.origin_y; to.perspective = from.perspective;
-    from.rotate_y = back ? -TURN_IN_ANGLE : TURN_IN_ANGLE;
+    from.rotate_y = back ? -RK_TOK_TURNSTILE_IN_ANGLE : RK_TOK_TURNSTILE_IN_ANGLE;
     float o0 = 0, o1 = u->opacity;
     rk__animate_transform(u, &from, &to, d, at, turn_ease_in);
-    rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, 0.35 * d, at, rk__ease_base);
+    rk__animate(u, RK_PROP_OPACITY, &o0, &o1, 1, RK_TOK_TURN_IN_WHOLE * d, at, rk__ease_base);
   }
   plan_free(&pl);
   turn_release(&t);

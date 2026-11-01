@@ -8,7 +8,7 @@ one; it should never be "add some animation because it feels nice."
 | Transition | Duration · easing | Meaning |
 |---|---|---|
 | **Press** | `motion.duration.press` (100ms) in, `motion.duration.short` (250ms) out · tilt up to `motion.transform.tile-tilt` (8°) towards the pressed point, scale `tile-press-scale` | "This tile heard you." Only on tiles that open something; a quick tap still shows the whole sink. |
-| **Place change** | A page turned in a book. Leaving: each part of the place swings 60° toward the viewer around the leading edge of the box that clips it, gathering speed (cubic-bezier(0.35, 0, 0.65, 0.6)), whole for the first 40% of its time, then fading; the pressed tile last. The next place starts when the last part is 75% through. Arriving: each part swings in from 70° on the other side, quick at first, and lands with a trace of speed left (cubic-bezier(0.22, 0.9, 0.6, 0.98)), whole after its first third. The turn is the arrival: tiles do not build in again after it (sparklines still draw in). Each part's heft is 0.8 × (its area / a 150 × 150 tile)^0.35, held between 0.5 and 1.4 (a line of text about 0.6, a tile 0.8, a wide tile 1.0, a table 1.4). Heft sets both when a part starts, (heft − 0.5) × 6 × `duration-stagger` after the turn begins, and how long it takes, `motion.duration.short` (leaving) or `motion.duration.moderate` (arriving) × heft. Parts that weigh the same (heft within 0.05) follow one another in reading order, half a `duration-stagger` apart, six steps at most. A part is a tile, a control, a line of text, a row, or anything that shows something of its own; a plain layout box or a scroller lets its children turn one by one | "You are now at a different place." Light parts go first and quickest, heavy ones later and slower: the inertia everyone knows. A whole change takes about 0.8s. A part is let go in the frame it lands, already on the pixels it will rest on, so nothing shifts, sharpens or settles afterwards. Reserved for real navigation between places (a history entry, or the pivot that picks the place), never for a facet or section change. Back, or a title earlier in the order, runs it the other way round. |
+| **Place change** | A page turned in a book. Leaving: each part of the place swings `motion.transform.turnstile-out-angle` (60°) toward the viewer around the leading edge of the box that clips it, gathering speed (`motion.easing.turn-out`), whole for the first `turn-out-whole` (40%) of its time, then fading; the pressed tile last. The next place starts when the last part is `turn-overlap` (75%) through. Arriving: each part swings in from `turnstile-in-angle` (70°) on the other side, quick at first, and lands with a trace of speed left (`motion.easing.turn-in`), whole after `turn-in-whole` (35%) of its time. The turn is the arrival: tiles do not build in again after it (sparklines still draw in). Each part's heft sets both when it starts and how long it takes, `motion.duration.short` (leaving) or `motion.duration.moderate` (arriving) × heft; [below](#place-change-in-detail) gives the rule, the rows and the pressed tile. A part is a tile, a control, a line of text, a row, or anything that shows something of its own; a plain layout box or a scroller lets its children turn one by one | "You are now at a different place." Light parts go first and quickest, heavy ones later and slower: the inertia everyone knows. A whole change takes about 0.8s. A part is let go in the frame it lands, already on the pixels it will rest on, so nothing shifts, sharpens or settles afterwards. Reserved for real navigation between places (a history entry, or the pivot that picks the place), never for a facet or section change. Back, or a title earlier in the order, runs it the other way round. |
 | **Facet change (pivot)** | 0.75 × `motion.duration.moderate` (300ms) · `motion.easing.out`, travels `motion.slide-distance` (24px) from the trailing edge, with a fade | "Same place, different facet." The direction of travel matches the facet's position in the pivot's fixed order. A pivot that picks the place (the top-level strip or list) turns it instead. |
 | **Next item, same place** (a queue, a wizard's step, a split's detail) | as a facet change: 0.75 × `motion.duration.moderate` (300ms) · `motion.easing.out`, `motion.slide-distance` (24px) with a fade, from the trailing edge going forward, from the leading edge going back; compact, a split's panes turn like places instead | "The next one, where the last one was." Only after a real advance (next, previous, done, picking another item); never on the first display, and never when the same item only gets new data. |
 | **Title picked down the side** | `motion.duration.pivot-size` · ease-in-out: the title in sight steps in by `space-m` and darkens; the one before steps back | "This one." The step says which was picked; the size stays, so the list never reflows. |
@@ -33,6 +33,46 @@ one; it should never be "add some animation because it feels nice."
 | **Loading, pending** | a 2px line passes over `motion.duration.busy` (1200ms), linear, after `timing.busy-delay`; stands still at full width under reduced motion | "Working on it." Never a shimmer or a pulse on placeholders: they stand still. |
 | **Floating surface** | `motion.duration.float` (150ms) · `motion.easing.in`, fade + 4px away from its control; leaves at once | "Options for this control, right here." |
 | **State changes** (hover, border, colour, underline) | `motion.duration.short` (250ms) · `motion.easing.base` | The calm default for anything reacting to pointer/focus: nothing snaps, everything glides briefly. A column put back to its width, a value going stale, a progress bar's value glide the same way (progress over `motion.duration.moderate`). |
+
+## Place change in detail
+
+The numbers are tokens (`motion.transform.turnstile-*`, `motion.proportion.turn-*`,
+`motion.heft.*`, `motion.easing.turn-*`); a native implementation reads
+them, never copies them.
+
+- **Heft.** A part's heft is `heft-tile` (0.8) × (its area /
+  `heft-reference`², a 150 × 150 tile)^`heft-exponent` (0.35), held
+  between `heft-min` (0.5) and `heft-max` (1.4): a line of text about
+  0.6, a tile 0.8, a wide tile 1.0, a table 1.4.
+- **When a part starts.** (heft − `heft-min`) × `heft-spread` (6) ×
+  `duration-stagger` after the turn begins: the lightest parts at once,
+  the heaviest about 0.16s later. Parts that weigh the same (heft
+  rounded to 0.05) follow one another in reading order, half a
+  `duration-stagger` apart, six steps at most: the weight leads, the
+  order only sorts what weighs the same.
+- **How long it takes.** `duration-short` (leaving) or
+  `duration-moderate` (arriving) × heft.
+- **Rows.** Parts whose top edges round to the same multiple of
+  `turnstile-row` (8px) form a row, read left to right. A row shares one
+  perspective: `turnstile-perspective` + `turnstile-reach` (1.2) × the
+  row's reach, how far its farthest part reaches from the edge it turns
+  about. A wide row so turns as flat as a narrow one. Rows only order
+  and share a perspective; they do not start together.
+- **Where a part turns from.** The leading edge of the box that clips
+  it, at the part's own middle; a part flush with the top of that box
+  (within `turnstile-flush`, 2px) turns from its top, so the box's edge
+  never cuts it.
+- **The pressed tile.** It turns last: when the last of the other parts
+  starts, and not before its press has sunk in fully (`duration-press`
+  after the press began). A tile opened without a press (by a key, by
+  the router) first sinks in its middle, without tilting. It turns from
+  its pressed pose: over its own turn, on its own curve, its tilt goes
+  to none, its scale back to 1 and its pivot from its middle to the
+  leading edge, so the press gives way as it swings, with no step
+  between the two.
+- **Fading.** A leaving part stays whole for `turn-out-whole` of its
+  time, then fades out over the rest; an arriving part fades in over
+  `turn-in-whole` and is whole after it.
 
 ## Reduced motion
 

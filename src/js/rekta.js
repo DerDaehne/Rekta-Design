@@ -344,9 +344,9 @@ export function press(scope = document) {
 }
 
 // Turn ---------------------------------------------------------------------------------------------------------------
-// The place change as two primitives. leave(place) turns the visible units of a place away, a row at a time, the
-// pressed tile last from its pressed pose, then hides the place. enter(place) shows it and turns its units in, a row
-// at a time. A router (this one, or any other) calls leave, swaps what it renders, then calls enter. finish() ends a
+// The place change as two primitives. leave(place) turns the visible units of a place away, light ones first, the
+// pressed tile last from its pressed pose, then hides the place. enter(place) shows it and turns its units in, light
+// ones first. A router (this one, or any other) calls leave, swaps what it renders, then calls enter. finish() ends a
 // running turn in its end state: a navigation is never refused.
 // The units are the parts a place shows: a plain layout box lets its children turn one by one. Each turns in a time
 // that follows its size (heft): a small part turns quicker than a large one, as something light starts and stops
@@ -370,20 +370,25 @@ function turnsWhole(el) {
   for (const n of el.childNodes) if (n.nodeType === 3 && n.textContent.trim()) return true;
   return false;
 }
-// A part's time against the token's grows with its area, against a tile's (150 × 150): 0.8 × (area / tile)^0.35,
-// from 0.5 (a line of text, about 0.6) through 0.8 (a tile) and 1.0 (a wide tile) to 1.4 (a table).
-function heft(r) { return Math.min(1.4, Math.max(0.5, 0.8 * Math.pow(Math.max(1, r.width * r.height) / 22500, 0.35))); }
-// Heft sets when a part starts as well as how long it takes: light parts first, heavy ones later, (heft - 0.5) × 6 ×
-// duration-stagger after the turn begins. Parts of one size (heft within 0.05) follow one another in reading order,
-// half a duration-stagger apart, six steps at most: the size leads, the order only sorts what weighs the same.
+// A part's time against the token's grows with its area, against a tile's (heft-reference², 150 × 150):
+// heft-tile × (area / tile)^heft-exponent, held between heft-min and heft-max: a line of text about 0.6, a tile 0.8,
+// a wide tile 1.0, a table 1.4.
+function heftOf() {
+  const tile = num('--rk-heft-tile'), side = num('--rk-heft-reference'), exp = num('--rk-heft-exponent'), lo = num('--rk-heft-min'), hi = num('--rk-heft-max');
+  return (r) => Math.min(hi, Math.max(lo, tile * Math.pow(Math.max(1, r.width * r.height) / (side * side), exp)));
+}
+// Heft sets when a part starts as well as how long it takes: light parts first, heavy ones later, (heft - heft-min) ×
+// heft-spread × duration-stagger after the turn begins. Parts of one size (heft within 0.05) follow one another in
+// reading order, half a duration-stagger apart, six steps at most: the size leads, the order only sorts what weighs
+// the same.
 function turnStarts(list, at, held) {
-  const step = ms('--rk-duration-stagger'), seen = new Map();
+  const step = ms('--rk-duration-stagger'), seen = new Map(), heft = heftOf(), lo = num('--rk-heft-min'), spread = num('--rk-heft-spread');
   return list.map((el) => {
     const h = heft(at.get(el));
     if (el === held) return { h, at: 0 };
     const key = Math.round(h * 20), n = seen.get(key) || 0;
     seen.set(key, n + 1);
-    return { h, at: (h - 0.5) * 6 * step + Math.min(n, 6) * step / 2 };
+    return { h, at: (h - lo) * spread * step + Math.min(n, 6) * step / 2 };
   });
 }
 function turnUnits(place, last) {
@@ -395,13 +400,14 @@ function turnUnits(place, last) {
       if (turnsWhole(c)) list.push(c); else walk(c);
     }
   })(place);
-  const at = new Map(list.map((u) => [u, u.getBoundingClientRect()]));
-  list.sort((a, b) => { const p = at.get(a), q = at.get(b); return (Math.round(p.top / 8) - Math.round(q.top / 8)) || (p.left - q.left); });
+  const at = new Map(list.map((u) => [u, u.getBoundingClientRect()])), row = num('--rk-turnstile-row') || 8;
+  list.sort((a, b) => { const p = at.get(a), q = at.get(b); return (Math.round(p.top / row) - Math.round(q.top / row)) || (p.left - q.left); });
   if (last && at.has(last)) { list.splice(list.indexOf(last), 1); list.push(last); }
   return { list, at };
 }
 // Each unit turns around the leading edge of the box that clips it, so that edge never cuts it; a unit flush with that
-// box's top turns from its top. A row shares a delay and a perspective; the pressed tile has the last slot to itself.
+// box's top (within turnstile-flush) turns from its top. A row (top edges rounded to turnstile-row) shares a
+// perspective; the pressed tile has the last slot to itself.
 // A turning part is a layer, and the compositor rasterises a turned layer from its own top left, rounding within it;
 // the page at rest rounds where things lie on the screen. The two agree only when the layer starts on a whole pixel.
 // A part with a fill or a line of its own is moved onto the pixels its edges will rest on (--_rk-turn-snap). A part
@@ -424,23 +430,24 @@ function unalignLayer(el) {
 }
 function turnRows(u, place, held) {
   let slot = -1, key;
-  const slots = [], far = [];
+  const slots = [], far = [], row = num('--rk-turnstile-row') || 8, flush = num('--rk-turnstile-flush');
   u.list.forEach((el, n) => {
     const r = u.at.get(el);
     let c = el.parentElement;
     while (c && c !== place && getComputedStyle(c).overflowX === 'visible') c = c.parentElement;
-    const cr = (c || place).getBoundingClientRect(), k = el === held ? 'P' : Math.round(r.top / 8);
+    const cr = (c || place).getBoundingClientRect(), k = el === held ? 'P' : Math.round(r.top / row);
     if (k !== key) { slot += 1; key = k; far[slot] = 0; }
     slots.push(slot);
     far[slot] = Math.max(far[slot], r.right - cr.left);
     const [gx, gy] = alignLayer(el, r), left = r.left - gx, top = r.top - gy;
     el.style.setProperty('--_rk-turn-origin', `${cr.left - left}px`);
-    if (Math.abs(top - cr.top) < 2) el.style.setProperty('--_rk-turn-oy', '0px');
+    if (Math.abs(top - cr.top) < flush) el.style.setProperty('--_rk-turn-oy', '0px');
   });
   u.list.forEach((el, i) => el.style.setProperty('--_rk-turn-perspective', perspective(far[slots[i]])));
   return { slots };
 }
-function perspective(far) { return Math.round((num('--rk-turnstile-perspective') || 800) + 1.2 * Math.max(0, far)) + 'px'; }
+// A row's perspective grows with its reach from the edge it turns about, so a wide row turns as flat as a narrow one.
+function perspective(far) { return Math.round((num('--rk-turnstile-perspective') || 800) + num('--rk-turnstile-reach') * Math.max(0, far)) + 'px'; }
 // arrive(el): a place (or the root) builds in: tiles rise and sparklines draw while data-rk-arriving is on, for the arrival
 // window. A framework router calls it for a place it opened by client navigation.
 export function arrive(el) {
@@ -469,7 +476,7 @@ export const turn = {
       }
       releasePress(true);
       if (held) held.setAttribute('data-rk-pressed', '');
-      const out = ms('--rk-duration-short');
+      const out = ms('--rk-duration-short'), overlap = num('--rk-turn-overlap');
       const u = turnUnits(place, held), kind = back ? 'back-out' : 'out';
       turnRows(u, place, held);
       // the pressed tile goes when the last of the others does, or later
@@ -486,7 +493,7 @@ export const turn = {
           el.style.setProperty('--_rk-turn-delay', `${at}ms`);
           el.setAttribute('data-rk-turn', kind);
         }
-        end = Math.max(end, at + 0.75 * d);
+        end = Math.max(end, at + overlap * d);
       });
       const done = () => {
         timers.forEach(clearTimeout);
@@ -497,7 +504,7 @@ export const turn = {
         resolve();
       };
       turning = { finish: done };
-      // The place goes when its last unit is 75% through, fading, so the next one swings in without a gap.
+      // The place goes when its last unit is turn-overlap (75%) through, fading, so the next one swings in without a gap.
       timers.push(later(done, u.list.length ? end : 0));
     });
   },
@@ -508,7 +515,7 @@ export const turn = {
       // A place you return to comes back as you left it: no second build-in, no redraw.
       if (arriving) arrive(place);
       else place.getAnimations({ subtree: true }).forEach((a) => { if (a.animationName === 'rk-build-in' || a.animationName === 'rk-draw') a.finish(); });
-      // Its units turn in from the other side, a row at a time, each in its own time.
+      // Its units turn in from the other side, light ones first, each in its own time.
       const d0 = ms('--rk-duration-moderate');
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
       turnRows(u, place, null);

@@ -56,8 +56,9 @@ export function tokenName(path) {
     case 'size': return rest.join('-');
     case 'density': return rest.slice(1).join('-');                  // density.compact.control-height -> control-height
     case 'motion': {
+      // A group of its own (heft, busy, dots, ...) prefixes its name: motion.heft.min -> heft-min.
       const [kind, key] = rest;
-      return { duration: `duration-${key}`, easing: `ease-${key}`, transform: key }[kind];
+      return { duration: `duration-${key}`, easing: `ease-${key}`, transform: key, proportion: key }[kind] ?? `${kind}-${key}`;
     }
     case 'timing': return `duration-${rest.join('-')}`;
     case 'layer': return `layer-${rest.join('-')}`;
@@ -284,6 +285,17 @@ function check(tokens) {
   }
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
+  }
+  // A keyframe's offset cannot read a property: where one stands for a token, it must say the token's value.
+  {
+    const frames = (name) => (new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`).exec(css) || [])[1] || '';
+    const at = (name, prop) => [...frames(name).matchAll(/(\d+(?:\.\d+)?)% \{([^}]*)\}/g)].filter((m) => m[2].includes(prop)).map((m) => +m[1] / 100);
+    const want = (name, prop, token, value) => {
+      if (!at(name, prop).some((x) => Math.abs(x - value) < 1e-9)) problems.push(`rekta.css @keyframes ${name} has no ${prop} stop at ${+(value * 100).toFixed(4)}% (${token})`);
+    };
+    const m = t.motion;
+    for (const k of ['rk-turn-out', 'rk-turn-back-out', 'rk-turn-pressed']) want(k, 'opacity: 1', 'turn-out-whole', m['turn-out-whole']);
+    for (const k of ['rk-turn-in', 'rk-turn-back-in']) want(k, 'opacity: 1', 'turn-in-whole', m['turn-in-whole']);
   }
   // The script reads tokens by name too (and builds the pivot's font-size names from a stem).
   const js = readFileSync(join(root, 'src', 'js', 'rekta.js'), 'utf8');
