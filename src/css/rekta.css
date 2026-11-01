@@ -937,6 +937,11 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-toast[data-rk-phase='leaving'] { pointer-events: none; animation: rk-toast-out var(--rk-duration-short) var(--rk-ease-in) reverse both; }
 /* A toast with a status takes its fill, as a banner does: a failure whose control has gone (docs/states.md). */
 .rk-toast[data-status] { background-color: var(--_rk-fill); color: var(--rk-text-primary); }
+/* A tag in the plain (ink) toast: its word takes the toast's text colour, as on the ground it takes the ground's, and
+   its square an edge in that colour, since a status colour may sink into the ink; the neutral square's own colour
+   keeps 3:1 on the ink (--check). A soft tag keeps its tint and its ink words. */
+.rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft) { color: inherit; }
+.rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft)::before { box-shadow: 0 0 0 1px currentColor; }
 .rk-toast-msg { flex: 1 1 auto; align-self: center; min-width: 0; padding: calc(var(--rk-space-s) + var(--rk-space-xs)) var(--rk-space-m); text-wrap: pretty; }
 .rk-toast-act {
   position: relative; flex: none; display: inline-flex; align-items: center; gap: var(--rk-space-s);

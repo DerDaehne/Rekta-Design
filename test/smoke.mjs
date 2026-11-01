@@ -83,6 +83,23 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
       return low;
     });
     ok(worst.r >= 4.5, `${scheme}: secondary text on every status fill clears AA`, `${worst.what} ${worst.r.toFixed(2)}:1`);
+    // A tag in the plain (ink) toast: its word reads on the ink, its neutral square holds 3:1, every square has an edge (#139).
+    const inToast = await p.evaluate(() => {
+      const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+      const t = document.createElement('div'); t.className = 'rk-toast';
+      t.innerHTML = '<p class="rk-toast-msg">Build 4182 <span class="rk-tag">idle</span> <span class="rk-tag" data-status="warning">waiting</span> <span class="rk-tag" data-status="success">done</span></p>';
+      document.querySelector('.rk').append(t);
+      const ink = getComputedStyle(t).backgroundColor, tags = [...t.querySelectorAll('.rk-tag')];
+      const out = {
+        word: Math.min(...tags.map((x) => ratio(getComputedStyle(x).color, ink))),
+        square: ratio(getComputedStyle(tags[0], '::before').backgroundColor, ink),
+        edges: tags.every((x) => getComputedStyle(x, '::before').boxShadow.startsWith(getComputedStyle(t).color)),
+      };
+      t.remove();
+      return out;
+    });
+    ok(inToast.word >= 4.5 && inToast.square >= 3 && inToast.edges, `${scheme}: a tag in an ink toast: its word reads, its square shows`, JSON.stringify(inToast));
   }
   await p.screenshot({ path: join(shots, `rest-${w}x${h}-${scheme}.png`) });
   await p.close();

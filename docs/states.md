@@ -45,6 +45,13 @@ to try again (`act`). A failure that lasts, such as the server being
 unreachable, is a banner state, not a toast. Toasts that report a
 success carry no status: the plain toast is the success.
 
+A tag (`.rk-tag`) in a toast says a status in its words, as anywhere.
+In the plain, ink toast its word takes the toast's text colour and its
+square an edge in that colour, so a status colour that would sink into
+the ink still shows; the neutral square keeps 3:1 on the ink (`--check`
+holds it). In a toast with a status, the tag reads on the fill as on a
+tile.
+
 ## Floating surfaces
 
 Menus, the command palette, the places list and a combobox's list float

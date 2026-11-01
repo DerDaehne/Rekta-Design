@@ -248,6 +248,9 @@ function check(tokens) {
       need('status-error-full', bg, 4.5, 'a destructive button\'s words (.rk-btn[data-status=error])');
     }
     need('on-accent', 'accent', 4.5, 'text');
+    // The plain toast is ink with ground-coloured words; a tag in it keeps its neutral square (rekta.css).
+    need('bg', 'text-primary', 4.5, 'a tag\'s word in an ink toast');
+    need('text-contrast-medium', 'text-primary', 3, 'a neutral tag\'s square in an ink toast');
     for (const s of STATUS) {
       need('text-primary', `status-${s}-tile`, 4.5, 'tile text');
       need('text-primary', `status-${s}-soft`, 4.5, 'soft label');
