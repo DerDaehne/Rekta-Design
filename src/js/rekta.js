@@ -3635,7 +3635,7 @@ export function stepper(el) {
     for (const b of btns) { const up = +b.dataset.rkStep > 0, at = Number.isFinite(v) && (up ? v >= max : v <= min); b.setAttribute('aria-disabled', String(at)); }
   };
   function step(b) {
-    if (b.getAttribute('aria-disabled') === 'true' || input.disabled) return false;
+    if (b.getAttribute('aria-disabled') === 'true' || input.disabled || input.getAttribute('aria-disabled') === 'true') return false;
     const n = +b.dataset.rkStep;
     try { if (n > 0) input.stepUp(n); else input.stepDown(-n); } catch { input.value = String((+input.value || 0) + n); }
     input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -3699,17 +3699,18 @@ const onRange = (e) => { if (e.target.matches && e.target.matches('input.rk-rang
 
 // drop(el, { onFiles, accept }): a .rk-drop zone around a file input takes files dropped on it or chosen with the
 // input. While files are dragged over it, it gets data-rk-over. Dropping files elsewhere on the page never opens
-// them in the browser while a zone is mounted.
+// them in the browser while a zone is mounted. While its input is disabled (or aria-disabled) it takes none.
 export function drop(el, { onFiles = null, accept = null } = {}) {
   const input = el.querySelector('input[type=file]');
   let depth = 0;
   const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  const off = () => !!input && (input.disabled || input.getAttribute('aria-disabled') === 'true');
   const ok = (f) => !accept || accept.split(',').some((a) => { a = a.trim(); return a.startsWith('.') ? f.name.toLowerCase().endsWith(a.toLowerCase()) : a.endsWith('/*') ? f.type.startsWith(a.slice(0, -1)) : f.type === a; });
   const give = (files) => { const list = [...files].filter(ok); if (list.length && onFiles) onFiles(list, [...files].filter((f) => !ok(f))); };
-  const enter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth += 1; el.setAttribute('data-rk-over', ''); };
-  const over = (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
+  const enter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); if (off()) return; depth += 1; el.setAttribute('data-rk-over', ''); };
+  const over = (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = off() ? 'none' : 'copy'; };
   const leave = () => { depth = Math.max(0, depth - 1); if (!depth) el.removeAttribute('data-rk-over'); };
-  const dropped = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; el.removeAttribute('data-rk-over'); give(e.dataTransfer.files); };
+  const dropped = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; el.removeAttribute('data-rk-over'); if (!off()) give(e.dataTransfer.files); };
   const page = (e) => { if (hasFiles(e) && !el.contains(e.target)) { e.preventDefault(); if (e.type === 'dragover') e.dataTransfer.dropEffect = 'none'; } };
   const chose = () => { give(input.files); input.value = ''; };
   el.addEventListener('dragenter', enter); el.addEventListener('dragover', over); el.addEventListener('dragleave', leave); el.addEventListener('drop', dropped);

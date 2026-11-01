@@ -707,6 +707,56 @@ const btns = await p.evaluate(async () => {
 ok(btns.pendingKeeps, 'a running button keeps its colours (it is not disabled)', JSON.stringify(btns));
 ok(btns.danger, 'a destructive button: frame and words in the error colour, not filled', JSON.stringify(btns));
 ok(btns.quiet, 'a quiet button keeps its look while it runs (no frame appears)', JSON.stringify(btns));
+// Every input disabled with a reason (aria-disabled) looks disabled, as a natively disabled one does (#108).
+const dis = await p.evaluate(async () => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const grey = rgb('var(--rk-disabled)'), cs = (el, pe) => getComputedStyle(el, pe);
+  const box = document.createElement('div'); box.className = 'rk-actions'; box.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;background:var(--rk-bg);padding:8px';
+  box.innerHTML = '<label class="rk-switch"><input type="checkbox" checked aria-disabled="true"> sent</label>'
+    + '<label class="rk-toggle"><span class="rk-toggle-label">feed</span><input type="checkbox" role="switch" checked aria-disabled="true"><span class="rk-toggle-track"></span><span class="rk-toggle-word" data-on="on" data-off="off"></span></label>'
+    + '<input class="rk-input" aria-disabled="true" value="text" style="width:8em">'
+    + '<select class="rk-input" aria-disabled="true" style="width:8em"><option>one</option></select>'
+    + '<div class="rk-combo" style="width:10em"><input class="rk-input" aria-disabled="true"><button class="rk-combo-btn" type="button" tabindex="-1" aria-label="open"></button></div>'
+    + '<div class="rk-stepper"><button type="button" data-rk-step="-1">−</button><input class="rk-input" type="number" value="3" aria-disabled="true"><button type="button" data-rk-step="1">+</button></div>'
+    + '<div class="rk-slider" style="width:12em"><input class="rk-range" type="range" aria-disabled="true" value="50"><output>50</output></div>'
+    + '<fieldset class="rk-segments"><label><input type="radio" name="dz" checked aria-disabled="true">one</label><label><input type="radio" name="dz" aria-disabled="true">two</label></fieldset>'
+    + '<label class="rk-drop" style="width:10em"><input type="file" aria-disabled="true"><b>drop</b> files</label>';
+  document.querySelector('.rk').append(box);
+  const q = (s) => box.querySelector(s), st = q('.rk-stepper');
+  // The slider's thumb has no computed style to read: its rule is looked up instead.
+  const rules = [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules]; } catch { return []; } });
+  const stepped = Rekta.stepper(st); st.querySelector('[data-rk-step="1"]').click();
+  const files = []; const zone = Rekta.drop(q('.rk-drop'), { onFiles: (f) => files.push(...f) });
+  const dt = new DataTransfer(); dt.items.add(new File(['x'], 'a.txt', { type: 'text/plain' }));
+  q('.rk-drop').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  const out = {
+    switch: cs(q('.rk-switch')).color === grey && cs(q('.rk-switch input')).borderTopColor === grey && cs(q('.rk-switch input')).backgroundColor === grey,
+    toggle: cs(q('.rk-toggle-track')).borderTopColor === grey && cs(q('.rk-toggle-track'), '::after').backgroundColor === grey && cs(q('.rk-toggle-label')).color === grey && cs(q('.rk-toggle-word')).color === grey && cs(q('.rk-toggle-track')).backgroundImage.includes(grey),
+    field: cs(q('input.rk-input')).color === grey && cs(q('input.rk-input')).borderTopColor === grey,
+    select: cs(q('select.rk-input')).color === grey && cs(q('select.rk-input')).borderTopColor === grey,
+    combo: cs(q('.rk-combo-btn')).color === grey,
+    stepper: [...st.querySelectorAll('[data-rk-step]')].every((b) => cs(b).color === grey && cs(b).borderTopColor === grey) && st.querySelector('input').value === '3',
+    slider: cs(q('.rk-slider output')).color === grey && cs(q('.rk-range')).cursor === 'not-allowed'
+      && rules.some((r) => /aria-disabled/.test(r.selectorText) && /slider-thumb/.test(r.selectorText) && /--rk-disabled/.test(r.style.background)),
+    segments: [...box.querySelectorAll('.rk-segments > label')].every((l) => cs(l).borderTopColor === grey) && cs(q('.rk-segments > label')).backgroundColor === grey && cs(q('.rk-segments > label + label')).color === grey,
+    drop: cs(q('.rk-drop')).borderTopColor === grey && cs(q('.rk-drop b')).color === grey && files.length === 0,
+  };
+  stepped.destroy(); zone.destroy(); box.remove();
+  return out;
+});
+for (const [k, v] of Object.entries(dis)) ok(v, `${k} with aria-disabled looks disabled${k === 'stepper' || k === 'drop' ? ' and does not act' : ''}`, JSON.stringify(dis));
+// The chosen segment lies above its neighbours: its accent frame shows at both joints (#109).
+const joints = await p.evaluate(() => {
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;background:var(--rk-bg);padding:16px';
+  box.innerHTML = '<fieldset class="rk-segments"><label><input type="radio" name="jz">one</label><label><input type="radio" name="jz" checked>two</label><label><input type="radio" name="jz">three</label></fieldset>';
+  document.querySelector('.rk').append(box);
+  const [a, b] = box.querySelectorAll('label'), r = b.getBoundingClientRect(), y = r.top + r.height / 2;
+  const at = (x) => { const e = document.elementFromPoint(x, y); return e && e.closest('label'); };
+  const out = { left: at(r.left + 1) === b, right: at(r.right - 1) === b, overlap: Math.round(a.getBoundingClientRect().right - r.left) };
+  box.remove();
+  return out;
+});
+ok(joints.left && joints.right && joints.overlap === 2, 'the chosen segment\'s frame lies on top at both joints', JSON.stringify(joints));
 // A form in a sheet: a close request asks while there is input; Escape while asking keeps editing; an untouched one closes.
 await p.click('#view-open'); await p.waitForTimeout(400);
 const closeBtn = await p.evaluate(() => { const r = document.querySelector('#view-sheet .rk-sheet-close').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), label: document.querySelector('#view-sheet .rk-sheet-close').getAttribute('aria-label') }; });

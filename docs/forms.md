@@ -222,3 +222,24 @@ hear the reason. No tooltips: they do not exist on touch.
 place the hint itself), and `disable(control, false)` takes it away. In
 a `.rk-actions` row the hint takes the rest of the row beside the
 buttons (`.rk-actions > .rk-why`).
+
+**The disabled look** is the same whether a control is disabled
+natively or with a reason (`aria-disabled="true"`): the parts below turn
+`disabled`, nothing else changes, and hover and press tints stop.
+
+| Control | What turns grey |
+|---|---|
+| button (`.rk-btn`) | its frame and words; a fill goes |
+| checkbox, radio (`.rk-switch`) | the frame, the mark and the label |
+| toggle switch (`.rk-toggle`) | the frame, the fill, the thumb, the label and the state word |
+| field, select, date, time (`.rk-input`) | the frame and the text, a select's chevron with it |
+| combobox (`.rk-combo`) | the field as above, and its chevron |
+| stepper (`.rk-stepper`) | the field as above, both buttons' frames and signs |
+| slider (`.rk-range`) | the thumb, the fill up to the value and the `<output>` beside it; the empty track stays a hairline |
+| segments (`.rk-segments`) | every frame and word; the chosen one keeps a `disabled` fill, its word in the ground colour. One option, or the whole group with `aria-disabled` on the fieldset |
+| drop zone (`.rk-drop`) | the frame and every word; it takes no files |
+
+`aria-disabled` alone changes the look and what assistive technology
+hears, not what the control does: `disable()` also refuses its clicks
+(the stepper's buttons and the drop zone refuse by themselves); a
+product that sets the attribute itself keeps the control from acting.

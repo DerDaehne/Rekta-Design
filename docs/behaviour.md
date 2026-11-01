@@ -850,7 +850,8 @@ input gets `data-value`. Returns `{ open, close, value, set(value), destroy }`.
 `el` is a `.rk-stepper`: a button with `data-rk-step="-1"`, an
 `input[type=number]`, a button with `data-rk-step="1"`. A press steps
 once (firing `input` and `change`); held, it repeats after 400ms every
-80ms. A button at the limit gets `aria-disabled`. The buttons are out of
+80ms. A button at the limit gets `aria-disabled`; while the field is
+disabled (or `aria-disabled`) neither steps. The buttons are out of
 the tab order: ↑ ↓ in the field do the same. `start()` attaches it.
 
 ### `drop(el, { onFiles, accept })`
@@ -858,8 +859,9 @@ the tab order: ↑ ↓ in the field do the same. `start()` attaches it.
 `el` is a `.rk-drop` label around an `input[type=file]`. Files dropped on
 it or chosen with the input go to `onFiles(accepted, refused)` (`accept`
 as in the input's attribute). While files are dragged over it, it gets
-`data-rk-over`. While it is mounted, files dropped elsewhere on the page
-are not opened by the browser. Returns `{ destroy }`.
+`data-rk-over`. While its input is disabled (or `aria-disabled`) it takes
+no files. While it is mounted, files dropped elsewhere on the page are
+not opened by the browser. Returns `{ destroy }`.
 
 ### `tips()`
 
