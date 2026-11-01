@@ -10,6 +10,12 @@ static const rk_color rk_tok_colors[2][RK__ROLE_COUNT] = {
   { 0x00000000u, 0x0e0e12ffu, 0x212225ffu, 0x2a2b2fffu, 0xfbfcffffu, 0x404044ffu, 0x88898cffu, 0xafb0b3ffu, 0xfbfcffffu, 0x0e0e12ffu, 0x178bffffu, 0x04294effu, 0x244592ffu, 0x00ce9dffu, 0x003324ffu, 0x337a62ffu, 0xf7cb47ffu, 0x362b0affu, 0x6e5900ffu, 0xfc4040ffu, 0x3a0f0fffu, 0x76171fffu, 0x178bffffu, 0x9495982eu, 0x7e7f82ffu, 0x262629abu, 0x0e0e12d1u }
 };
 
+/* The same for more contrast (rk_app_set_contrast): every text pair at 7:1, opaque glass */
+static const rk_color rk_tok_colors_contrast[2][RK__ROLE_COUNT] = {
+  { 0x00000000u, 0xffffffffu, 0xeeeff2ffu, 0xe4e5e9ffu, 0x010205ffu, 0xd8d8dbffu, 0x4d4e51ffu, 0x424346ffu, 0x010205ffu, 0xffffffffu, 0x2762ecffu, 0xd3e1ffffu, 0x7da1f4ffu, 0x007b5dffu, 0xe1fff2ffu, 0x74d8b0ffu, 0xa37e00ffu, 0xfff4d2ffu, 0xf8d866ffu, 0xaa0013ffu, 0xffe2e4ffu, 0xdd7b7bffu, 0x1a44eaffu, 0x9495982eu, 0x949598ffu, 0x010205abu, 0xffffffffu },
+  { 0x00000000u, 0x0e0e12ffu, 0x212225ffu, 0x2a2b2fffu, 0xfbfcffffu, 0x404044ffu, 0xaeafb1ffu, 0xc2c3c5ffu, 0xfbfcffffu, 0x0e0e12ffu, 0x178bffffu, 0x04294effu, 0x244592ffu, 0x00ce9dffu, 0x003324ffu, 0x245f5bffu, 0xf7cb47ffu, 0x362b0affu, 0x6c5310ffu, 0xfc4040ffu, 0x3a0f0fffu, 0x690615ffu, 0x178bffffu, 0x9495982eu, 0x7e7f82ffu, 0x262629abu, 0x0e0e12ffu }
+};
+
 /* [density: comfortable, compact][rk_metric], logical px */
 static const float rk_tok_metrics[2][RK__METRIC_COUNT] = {
   { 4.0f, 8.0f, 16.0f, 32.0f, 48.0f, 4.0f, 8.0f, 12.0f, 2.0f, 150.0f, 56.0f, 44.0f, 240.0f, 44.0f, 44.0f, 16.0f, 1300.0f },
@@ -18,7 +24,7 @@ static const float rk_tok_metrics[2][RK__METRIC_COUNT] = {
 
 /* [rk_duration], ms; the first RK_TOK_MOTION_COUNT are motion (0 under reduced motion), the rest wall-clock timings */
 #define RK_TOK_MOTION_COUNT 8
-static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.0f, 600.0f, 30.0f, 150.0f, 500.0f, 220.0f, 5000.0f, 100.0f, 500.0f, 500.0f, 30000.0f };
+static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.0f, 600.0f, 30.0f, 150.0f, 500.0f, 220.0f, 5000.0f, 100.0f, 500.0f, 500.0f, 30000.0f, 1000.0f };
 
 /* Type sizes as min, max and the share of the hosting width that moves between them (_VW); fixed sizes have _VW 0. */
 #define RK_TOK_WEIGHT_LIGHT 300
@@ -70,17 +76,58 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_LINE_TIGHT 1.15f
 #define RK_TOK_LINE_TITLE 1.1f
 #define RK_TOK_LINE_NAV 1.3f
+#define RK_TOK_DURATION_GREET 75.0f
+#define RK_TOK_DURATION_PULSE 1400.0f
+#define RK_TOK_DURATION_BUSY 1200.0f
+#define RK_TOK_DURATION_DOTS 2400.0f
+#define RK_TOK_DURATION_BEADS 3000.0f
 #define RK_TOK_EASE_BASE { 0.25f, 0.1f, 0.25f, 1.0f }
 #define RK_TOK_EASE_IN { 0.0f, 0.0f, 0.2f, 1.0f }
 #define RK_TOK_EASE_OUT { 0.4f, 0.0f, 0.5f, 1.0f }
+#define RK_TOK_EASE_IN_OUT { 0.42f, 0.0f, 0.58f, 1.0f }
 #define RK_TOK_EASE_PIVOT_GLIDE { 0.65f, 0.0f, 0.35f, 1.0f }
-#define RK_TOK_TURNSTILE_ANGLE 40.0f
+#define RK_TOK_EASE_TURN_OUT { 0.35f, 0.0f, 0.65f, 0.6f }
+#define RK_TOK_EASE_TURN_IN { 0.22f, 0.9f, 0.6f, 0.98f }
+#define RK_TOK_TURNSTILE_OUT_ANGLE 60.0f
+#define RK_TOK_TURNSTILE_IN_ANGLE 70.0f
+#define RK_TOK_TURNSTILE_ANGLE 60.0f
 #define RK_TOK_TURNSTILE_PERSPECTIVE 800.0f
+#define RK_TOK_TURNSTILE_REACH 1.2f
+#define RK_TOK_TURNSTILE_ROW 8.0f
+#define RK_TOK_TURNSTILE_FLUSH 2.0f
 #define RK_TOK_SLIDE_DISTANCE 24.0f
 #define RK_TOK_TILE_TILT 8.0f
 #define RK_TOK_TILE_PRESS_SCALE 0.97f
 #define RK_TOK_ROW_TILT 2.0f
 #define RK_TOK_ROW_PRESS_SCALE 0.99f
+#define RK_TOK_PEEK_TRAVEL 0.4f
+#define RK_TOK_FLIP_ANGLE 90.0f
+#define RK_TOK_TURN_OUT_WHOLE 0.4f
+#define RK_TOK_TURN_IN_WHOLE 0.35f
+#define RK_TOK_TURN_OVERLAP 0.75f
+#define RK_TOK_HEFT_TILE 0.8f
+#define RK_TOK_HEFT_REFERENCE 150.0f
+#define RK_TOK_HEFT_EXPONENT 0.35f
+#define RK_TOK_HEFT_MIN 0.5f
+#define RK_TOK_HEFT_MAX 1.4f
+#define RK_TOK_HEFT_SPREAD 6.0f
+#define RK_TOK_BUSY_SEGMENT 0.3f
+#define RK_TOK_BUSY_FROM -0.35f
+#define RK_TOK_BUSY_TO 1.05f
+#define RK_TOK_DOTS_STAGGER 0.07f
+#define RK_TOK_DOTS_FROM -0.02f
+#define RK_TOK_DOTS_MIDDLE_START 0.44f
+#define RK_TOK_DOTS_MIDDLE_START_AT 0.35f
+#define RK_TOK_DOTS_MIDDLE_END 0.56f
+#define RK_TOK_DOTS_MIDDLE_END_AT 0.62f
+#define RK_TOK_DOTS_TO 1.02f
+#define RK_TOK_DOTS_WHOLE_AT 0.06f
+#define RK_TOK_DOTS_FADE_AT 0.9f
+#define RK_TOK_DOTS_EASE_ARRIVE { 0.1f, 0.7f, 0.4f, 1.0f }
+#define RK_TOK_DOTS_EASE_LEAVE { 0.6f, 0.0f, 0.9f, 0.3f }
+#define RK_TOK_BEADS_TRACK 0.8f
+#define RK_TOK_BEADS_SPACING 0.16f
+#define RK_TOK_BEADS_FADE 0.12f
 #define RK_TOK_TIMING_TOAST 5000.0f
 #define RK_TOK_TIMING_WHEEL_LATCH 200.0f
 #define RK_TOK_TIMING_TAP_DELAY 100.0f
@@ -89,6 +136,8 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_TIMING_TIP_DELAY 500.0f
 #define RK_TOK_TIMING_LONG_PRESS 500.0f
 #define RK_TOK_TIMING_STALE 30000.0f
+#define RK_TOK_TIMING_RESTORE 5000.0f
+#define RK_TOK_TIMING_TYPE_AHEAD 1000.0f
 #define RK_TOK_BP_MOBILE 375.0f
 #define RK_TOK_BP_SIDEWAYS_SCROLL_MIN 760.0f
 #define RK_TOK_BP_SHORT_HEIGHT 480.0f
@@ -96,5 +145,6 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_BP_WIDE 1920.0f
 #define RK_TOK_BP_ULTRAWIDE 2560.0f
 #define RK_TOK_TILE_UNIT_ULTRAWIDE 170.0f
+#define RK_TOK_TIP_GAP 6.0f
 
 #endif

@@ -13,7 +13,7 @@ line of CSS. This page is the guide for doing that.
 | File | What it is | Who reads it |
 |---|---|---|
 | `tokens/rekta.tokens.json` | The source, in [DTCG](https://tr.designtokens.org/format/) format, with aliases and a `$description` on every token. | Token tools (Style Dictionary, Tokens Studio, Figma plugins), and anyone generating code. |
-| `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme and density. | Native implementations. Start here. |
+| `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme (`light`, `dark`, and `light-contrast`, `dark-contrast` for more contrast, each complete) and density. | Native implementations. Start here. |
 | `dist/rekta.tokens.css` | The resolved values as `--rk-` custom properties, with theme, density and reduced-motion switching. | Web projects. |
 | `docs/*.md` | Rules: what each part means, how it behaves, what it must never do. | Everyone. |
 
@@ -29,18 +29,21 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 
 | Source path | Name | Example |
 |---|---|---|
-| `color.<theme>.<a>.<b>` | `a-b` | `color.light.status.error.tile` → `status-error-tile` |
+| `color.<theme>.<a>.<b>` | `a-b` | `color.light.status.error.tile` → `status-error-tile`; `color.light-contrast.*` holds the same names, for more contrast |
 | `typography.font-family.<x>` | `font-<x>` | `font-sans` |
 | `typography.weight.<x>` | `font-weight-<x>` | `font-weight-semibold` |
 | `typography.size.<x>` | `font-size-<x>` | `font-size-title` |
 | `typography.line-height.<x>` | `line-height-<x>` | `line-height-compact` |
+| `typography.metrics.<x>` | `font-<x>` | `font-descent` |
 | `spacing.<x>` | `space-<x>` | `space-m` |
 | `radius.<x>` | `radius-<x>` | `radius-tile` |
 | `size.<x>` | `<x>` | `tile-unit`, `appbar-height`, `touch-target` |
 | `density.<mode>.<x>` | `<x>` | `control-height` |
 | `motion.duration.<x>` | `duration-<x>` | `duration-moderate` |
 | `motion.easing.<x>` | `ease-<x>` | `ease-pivot-glide` |
-| `motion.transform.<x>` | `<x>` | `turnstile-angle`, `tile-tilt` |
+| `motion.transform.<x>` | `<x>` | `turnstile-out-angle`, `tile-tilt` |
+| `motion.proportion.<x>` | `<x>` | `turn-out-whole` |
+| `motion.<group>.<x>` (any other group) | `<group>-<x>` | `heft-min` |
 | `timing.<x>` | `duration-<x>` | `duration-toast` |
 | `layer.<x>` | `layer-<x>` | `layer-toast` |
 | `breakpoint.<x>` | `bp-<x>` | `bp-sideways-scroll-min` |
@@ -55,11 +58,12 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 | Duration | Milliseconds. | The platform's duration type. |
 | Easing | `[x1, y1, x2, y2]`, a CSS cubic-bezier. | Every animation system takes a cubic Bézier: `KeySpline` (XAML), `QEasingCurve::BezierSpline` (Qt), `Animation.timingCurve` (SwiftUI), `CubicBezierEasing` (Compose), `Cubic` (Flutter). |
 | Angle | Degrees. | Degrees or radians as the platform wants. |
+| Share | A plain number, mostly 0 to 1: of the movement's own time (`turn-out-whole`), or of the length its description names (`peek-travel`, of the content's height). | The same number. |
 | Layer | An integer order. | Only the order matters: sticky strip < app bar < banner < toast; sheets and modals sit above all of them in the platform's own modal layer. |
 
 ## Switching
 
-Four inputs pick values. Each has a system source and an in-app
+Six inputs pick values. Each has a system source and an in-app
 override; the override wins.
 
 | Input | System source | Override | Effect |
@@ -67,10 +71,18 @@ override; the override wins.
 | Theme | The OS light/dark appearance. | `system`, `light`, `dark` | Picks `themes.light` or `themes.dark`. Dark is designed separately, never derived. |
 | Density | The pointer: a fine pointer with no touch screen is compact; anything with touch is comfortable. | `auto`, `comfortable`, `compact` | Picks `densities.*`: 32 or 44 px controls and rows. The app bar stays 56 px high with 48 px controls in both. |
 | Motion | The OS reduced-motion setting. | `system`, `on`, `off` | Reduced: every `motion.duration.*` becomes 0. `timing.*` stays: the undo window is wall time, not motion. |
+| Contrast | The OS "increase contrast" setting (`NSWorkspace.accessibilityDisplayShouldIncreaseContrast` on macOS, `UIAccessibility.isDarkerSystemColorsEnabled` on iOS, GNOME's `high-contrast`). Not Windows' contrast themes: those are forced colours, the system's own. | `system`, `more`, `normal` | More: picks `themes.light-contrast` or `themes.dark-contrast` (the theme with its contrast set over it): every text pair at 7:1, opaque glass. Each status tile gets a 2px frame in its `status-*-full` colour. |
+| Transparency | The OS "reduce transparency" setting (`accessibilityDisplayShouldReduceTransparency` on macOS, `isReduceTransparencyEnabled` on iOS). | `system`, `reduce`, `normal` | Reduce: `glass` takes the value of `bg`, and nothing blurs behind it or behind a sheet's `shading`. |
 | Window-size class | The size of the place (pane) and of the window. | none | See below. |
 
 Every transition must still reach its end state with zero duration:
 instant, never skipped.
+
+A native implementation honours the system's contrast and transparency
+settings where the platform has them, and follows a change while it
+runs. rekta-core takes the contrast setting from the app,
+`rk_app_set_contrast(bool)`: no platform layer of it reads the system's
+yet, and it draws no glass.
 
 ## Product overrides
 
@@ -157,11 +169,16 @@ implementation needs the same:
   comes back over `duration-short`. A tap shows the whole press. On
   touch, the press waits `duration-tap-delay` and cancels on 8 px of
   movement. A drag or a text selection never activates.
-- **Place change (turnstile)**: units of the leaving place turn
-  `turnstile-angle` away around the leading edge of the box that clips
-  them, a row at a time, `duration-stagger` apart, the pressed tile last.
-  The new place turns in over `duration-moderate`. Back runs it the
-  other way. A navigation during a turn finishes that turn first; it is
+- **Place change (turnstile)**: the parts of the leaving place turn
+  `turnstile-out-angle` away around the leading edge of the box that
+  clips them (`ease-turn-out`), each by its weight: light parts first and
+  quickest, heavy ones later and slower, (heft − `heft-min`) ×
+  `heft-spread` × `duration-stagger` after the turn begins, over
+  `duration-short` × heft; the pressed tile last, once its press has
+  sunk in. The new place turns in from `turnstile-in-angle`
+  (`ease-turn-in`) over `duration-moderate` × heft, once the last
+  leaving part is `turn-overlap` through. [motion.md](motion.md#place-change-in-detail)
+  gives heft, rows and the pressed tile. Back runs it the other way. A navigation during a turn finishes that turn first; it is
   never refused.
 - **History**: one entry per place; facets and section jumps add none.
   Back, Escape, the crumb and the OS back command (Android back, the
@@ -172,7 +189,12 @@ implementation needs the same:
   tell a wheel from a trackpad pan; leave the pan alone.
 - **Keys**: Escape closes the innermost thing first (a menu, a toast
   with focus, a selection, then the place); Ctrl/Cmd+Z undoes the open
-  toast's action except in a text field.
+  toast's action except in a text field. A grid of tiles that open is
+  one tab stop with arrows by position, and in every collection whose
+  entries take focus letters jump, one prefix while typed within
+  `timing.type-ahead` ([navigation.md](navigation.md#keyboard)).
+  rekta-core has the letters in its list, table and tree; its tiles are
+  still one Tab stop each.
 - **Toast and banner**: one toast at a time, the undo window held while
   hovered or focused; one banner at a time, the most severe state first,
   its end reported as a toast.

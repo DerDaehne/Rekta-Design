@@ -6,7 +6,8 @@
 export interface Destroyable { destroy(): void; }
 
 type StatusName = 'info' | 'success' | 'warning' | 'error';
-type Word = string | ((...args: any[]) => string);
+// never[]: every word function, whatever it takes, is assignable to it, and no `any` reaches a product's linter.
+type Word = string | ((...args: never[]) => string);
 /** The forms of an entry that counts, one per category of Intl.PluralRules for the locale; `other` is the fallback. */
 export interface PluralForms { zero?: Word; one: Word; two?: Word; few?: Word; many?: Word; other: Word; }
 
@@ -35,7 +36,7 @@ export declare const tokens: {
   px(name: string, el?: Element): number;
 };
 
-type PrefName = 'theme' | 'density' | 'motion';
+type PrefName = 'theme' | 'density' | 'motion' | 'contrast' | 'transparency';
 export declare const prefs: {
   key: string;
   read(): Partial<Record<PrefName, string>>;
@@ -43,9 +44,15 @@ export declare const prefs: {
   get(name: 'theme'): 'system' | 'light' | 'dark';
   get(name: 'density'): 'auto' | 'comfortable' | 'compact';
   get(name: 'motion'): 'system' | 'on' | 'off';
+  get(name: 'contrast'): 'system' | 'more' | 'normal';
+  get(name: 'transparency'): 'system' | 'reduce' | 'normal';
   set(name: 'theme', value: 'system' | 'light' | 'dark', options?: { remember?: boolean }): void;
   set(name: 'density', value: 'auto' | 'comfortable' | 'compact', options?: { remember?: boolean }): void;
   set(name: 'motion', value: 'system' | 'on' | 'off', options?: { remember?: boolean }): void;
+  /** more: every text pair at 7:1 and a frame on status tiles; normal: as designed, whatever the system asks. */
+  set(name: 'contrast', value: 'system' | 'more' | 'normal', options?: { remember?: boolean }): void;
+  /** reduce: glass is the ground and nothing blurs; normal: glass, whatever the system asks. */
+  set(name: 'transparency', value: 'system' | 'reduce' | 'normal', options?: { remember?: boolean }): void;
   restore(): void;
 };
 
@@ -119,7 +126,9 @@ export declare function pivot(el: HTMLElement, options?: {
 
 /** Every scrolled box of a place, and the window, as plain data for a router's history entry. */
 export interface ScrollState { y: number; at: Record<string, [number, number]>; }
-export declare function scrollState(root: Element): { capture(): ScrollState; restore(state: ScrollState | null | undefined): void };
+/** A restore that waits for content rendered after the navigation; `pending` until every offset is set or it gives up. */
+export interface ScrollRestore { readonly pending: boolean; cancel(): void; }
+export declare function scrollState(root: Element): Destroyable & { capture(): ScrollState; restore(state: ScrollState | null | undefined): ScrollRestore };
 
 export declare function strip(el: HTMLElement): Destroyable & { layout(): void };
 
@@ -201,11 +210,15 @@ export declare function pending<T>(button: HTMLElement, work: Promise<T> | (() =
 
 // Floating surfaces, collections --------------------------------------------------------------------------------------
 
-export declare function place(el: HTMLElement, anchor: Element): void;
+/** Below the control when it fits, else above, else on the side with more room, inside the window; `align: 'center'`
+ * (the default under a control marked `data-rk-align="center"`) centres it on the control. */
+export declare function place(el: HTMLElement, anchor: Element, options?: { align?: 'start' | 'center' }): void;
 
 export declare function menu(trigger: HTMLElement, el: HTMLElement, options?: {
   onSelect?: (item: HTMLElement) => void;
   summary?: string | null;
+  /** Default: the trigger's `data-rk-align`, else 'start'. */
+  align?: 'start' | 'center';
 }): Destroyable & {
   open(index?: number): void;
   close(focusTrigger?: boolean): void;
@@ -277,6 +290,8 @@ export declare function confirm(options: {
   kicker?: string;
   ok?: string;
   cancel?: string;
+  /** The primary answer, with focus. `'cancel'` for an action that cannot be undone: `ok` is then the destructive
+   * button (`data-status="error"`). */
   safe?: 'ok' | 'cancel';
   root?: Element;
 }): Promise<boolean>;
@@ -316,6 +331,9 @@ export declare function contextMenu(scope: Element, el: HTMLElement, options?: {
   onSelect?: ((item: HTMLElement, target: HTMLElement) => void) | null;
 }): Destroyable & { open(target: HTMLElement): void; close(): void; readonly target: HTMLElement | null };
 
+/** A grid of tiles that open: one tab stop, ← → ↑ ↓ to the nearest tile that way (across a panorama's grids), Home
+ * End, letters jump. start() attaches it to every .rk-tiles holding a tile that opens. */
+export declare function grid(el: HTMLElement): Destroyable & { refresh(): void };
 export declare function tree(el: HTMLElement, options?: {
   onShow?: ((li: HTMLElement) => void) | null;
   onToggle?: ((li: HTMLElement, open: boolean) => void) | null;
@@ -336,6 +354,8 @@ export declare function sortable(list: HTMLElement, options?: {
 export declare function virtual(el: HTMLElement, options: {
   count?: number;
   render: (i: number, row: HTMLElement) => void;
+  /** An item's words, for the letter jump; without it, the text render() writes. */
+  text?: ((i: number) => string) | null;
   onShow?: ((i: number) => void) | null;
   onChange?: ((indices: number[], info: { mode: boolean }) => void) | null;
   appbar?: HTMLElement | null;

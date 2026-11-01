@@ -61,6 +61,18 @@ way stays at AA. A product that draws its own secondary text on a fill
 has to do the same: `--check` measures token pairs, not the selectors
 that combine them.
 
+## Text on glass
+
+`glass` is the app bar's frosted ground: the ground colour at 82%, with
+a blur of what scrolls under it. The blur averages that content, so the
+limits are all white and all black behind it (a light document under
+dark glass). Only `text-primary` and `text-contrast-high` stand on
+glass; `text-contrast-medium` there falls to about 3.3:1. `--check`
+measures both over white and over black (4.5:1, 7:1 under more
+contrast) and fails when `rekta.css` colours a part of the app bar in
+anything lower. Disabled controls stay in `disabled`: they are not text
+to read.
+
 ## Dark theme is not an inverted light theme
 
 `color.dark.*` is an independently chosen token set, not a formula
@@ -70,6 +82,36 @@ text on the tile fills measures, at the time of writing: dark success
 6.62:1 against light warning 14.83:1. That is why the self-check measures
 every pair rather than assuming symmetry, and why the numbers here are an
 illustration: `node scripts/build.mjs --check` is the authority.
+Under more contrast every one of them holds 7:1 (below).
+
+## More contrast, less transparency
+
+Two settings people choose for themselves, and Rekta answers both. In
+the normal case no value changes.
+
+- **More contrast** (`prefers-contrast: more`, or `contrast: more` in
+  the prefs): each theme takes its contrast set, `color.light-contrast`
+  or `color.dark-contrast`, which holds only the values that change.
+  Every text pair holds **7:1** (WCAG AAA): `text-contrast-high` and
+  `text-contrast-medium` are raised, ink on every tile and soft tint
+  holds 7:1, and the tiles where it did not (light error, dark success
+  and warning) are shifted until it does, with their neighbours moved
+  just enough to stay 0.09 apart under red-green colour blindness. Each
+  status tile gains a **2px frame in its full colour**, and its word
+  stays: the frame and the word now carry the status, not the calm fill
+  alone. A destructive button's words take ink inside its error frame.
+  Glass is opaque (the ground). The accent is the product's: the
+  default (ink with `bg` on it) holds 7:1; a product's own accent should
+  too, set in the same contrast selectors where it does not.
+- **Less transparency** (`prefers-reduced-transparency: reduce`, or
+  `transparency: reduce` in the prefs): glass becomes the ground colour,
+  and nothing blurs, neither the app bar nor the shading behind a sheet.
+
+`node scripts/build.mjs --check` measures both contrast sets like the
+themes, at 7:1 for text and 3:1 for marks, with the same colour-blind
+distances. Forced colours (Windows contrast themes) stay as they are:
+the system's colours replace Rekta's there, and the frame goes with
+every other shadow.
 
 ## Focus, hover, disabled
 
@@ -100,6 +142,12 @@ A product may add words for its own states (offline, halted, read-only
 in a banner) but maps each onto one of these colours and never reuses a
 word for two states. A status is never decoration: no status colour for
 emphasis, selection, branding or a chart series.
+
+That holds for Rekta's own mark too: a line with a square, both in ink
+(`text-primary` of the theme the mark stands in; the showcase's icon
+draws its own ink ground and the mark in the ground's colour, one colour
+for line and square). The square turns `success` only where it reports
+"done", such as a splash that shows it once the app is ready.
 
 ## Product slots
 

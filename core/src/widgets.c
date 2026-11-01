@@ -91,11 +91,12 @@ static void button_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_color ink = rk_color_of(RK_ROLE_TEXT), bg = 0;
   if (b->kind == RK_BUTTON_PRIMARY && !off) { bg = rk_color_of(RK_ROLE_ACCENT); ink = rk_color_of(RK_ROLE_ON_ACCENT); }
   if (b->kind == RK_BUTTON_QUIET) ink = rk_color_of(RK_ROLE_TEXT_HIGH);
+  if (b->kind == RK_BUTTON_DESTRUCTIVE) ink = rk_color_of(RK_ROLE_ERROR_FULL);   /* frame and words; never filled */
   if (b->kind == BUTTON_TOAST) ink = rk_color_of(RK_ROLE_BG);
   if (off) ink = rk_color_of(RK_ROLE_DISABLED);
   if (bg) rk_canvas_fill_round_rect(c, r, rk_metric_of(RK_RADIUS_S), bg);
   if (v->pressed && !off) rk_canvas_fill_round_rect(c, r, b->kind == BUTTON_TOAST ? 0 : rk_metric_of(RK_RADIUS_S), rk_color_of(RK_ROLE_HOVER));
-  if (b->kind == RK_BUTTON_DEFAULT || b->kind == RK_BUTTON_PRIMARY) {
+  if (b->kind == RK_BUTTON_DEFAULT || b->kind == RK_BUTTON_PRIMARY || b->kind == RK_BUTTON_DESTRUCTIVE) {
     rk_color border = b->kind == RK_BUTTON_PRIMARY && !off ? bg : ink;
     rk__canvas_ring(c, r, rk_metric_of(RK_RADIUS_S), 2, border);
   }
@@ -179,6 +180,8 @@ static void tile_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_color ink = rk_color_of(RK_ROLE_TEXT);
   rk_textfmt word = rk__textfmt(RK_TEXT_LABEL, 0);
   word.color = RK_ROLE_TEXT;
+  /* more contrast: the status no longer rests on the fill alone, a frame in its full colour says it too */
+  if (rk__prefs.contrast && t->status != RK_STATUS_NONE) rk__canvas_ring(c, (rk_rect){ 0, 0, W, H }, v->radius, 2, rk_color_of(rk__status_full(t->status)));
   const char *wd = t->word ? t->word : rk__status_word(t->status);
   rk__text_draw(c, wd, -1, W - 12 - rk__text_width(wd, -1, &word), 10 - (word.size * word.line - word.size) / 2, &word, ink);
   /* from the bottom up: progress, sparkline, message, stat (a column justified to the end) */
@@ -189,15 +192,18 @@ static void tile_draw(rk_view *v, rk_canvas *c, void *st) {
     rk_canvas_fill_rect(c, (rk_rect){ pad, y, inner * RK_CLAMP(v->pvalue, 0.0f, 1.0f), 4 }, ink);
     y -= gap;
   }
-  if (t->nseries > 1 && t->status != RK_STATUS_SUCCESS) {          /* stillness means done: no line when finished */
-    float sh = inner * 28 / 200;
+  if (t->nseries > 0 && t->status != RK_STATUS_SUCCESS) {          /* stillness means done: no line when finished */
+    /* docs/data.md: the 200 x 28 box, a 2px stroke, points inset by half the stroke on every side; a constant series
+       (one value too) lies flat along the bottom. */
+    float sh = inner * 28 / 200, in = 1;
     y -= sh;
     float lo = t->series[0], hi = t->series[0];
     for (int i = 1; i < t->nseries; i++) { lo = RK_MIN(lo, t->series[i]); hi = RK_MAX(hi, t->series[i]); }
     float span = hi - lo > 0 ? hi - lo : 1;
     rk_point pts[256];
     int n = RK_MIN(t->nseries, 256);
-    for (int i = 0; i < n; i++) pts[i] = (rk_point){ pad + inner * i / (n - 1), y + sh * (26 - (t->series[i] - lo) / span * 24) / 28 };
+    for (int i = 0; i < n; i++) pts[i] = (rk_point){ pad + in + (inner - 2 * in) * (n > 1 ? (float)i / (n - 1) : 0), y + in + (sh - 2 * in) * (1 - (t->series[i] - lo) / span) };
+    if (n == 1) { pts[1] = pts[0]; pts[1].x = pad + inner - in; n = 2; }
     rk_canvas_polyline(c, pts, n, 2, t->code ? rk__series(t->code) : ink);   /* a mark may take a code; the text never */
     y -= gap;
   }
@@ -218,9 +224,9 @@ static void tile_draw(rk_view *v, rk_canvas *c, void *st) {
     float a = c->alpha;
     rk_canvas_push_clip(c, (rk_rect){ 0, 0, W, H });
     c->alpha = a * (1 - e0);
-    draw_stat(c, t->old_value, t->old_label, pad, y - 0.4f * sh * e0, &num, &lab, ink);
+    draw_stat(c, t->old_value, t->old_label, pad, y - RK_TOK_PEEK_TRAVEL * sh * e0, &num, &lab, ink);
     c->alpha = a * e1;
-    draw_stat(c, t->value, t->label, pad, y + 0.4f * sh * (1 - e1), &num, &lab, ink);
+    draw_stat(c, t->value, t->label, pad, y + RK_TOK_PEEK_TRAVEL * sh * (1 - e1), &num, &lab, ink);
     c->alpha = a;
     rk_canvas_pop_clip(c);
   } else draw_stat(c, t->value, t->label, pad, y, &num, &lab, ink);
@@ -443,11 +449,13 @@ static void progress_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_color ink = rk_color_of(RK_ROLE_TEXT);
   rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, 4 }, with_alpha(ink, 0.2f));
   if (v->value < 0) {
-    /* working on it: a 30% piece passes every duration-busy; under reduced motion it stands at full width */
-    double busy = rk_duration_of(RK_DURATION_LONG) > 0 ? 1200.0 : 0;
+    /* working on it: a busy-segment piece passes from busy-from to busy-to of the width every duration-busy, as on the
+       web; under reduced motion it stands at full width */
+    double busy = rk__reduced() ? 0 : RK_TOK_DURATION_BUSY;
     if (busy <= 0) { rk_canvas_fill_rect(c, (rk_rect){ 0, 0, W, 4 }, ink); return; }
-    float t = (float)fmod(rk_app_now(), busy) / (float)busy, x = (-0.3f + 1.3f * t) * W;
-    rk_canvas_fill_rect(c, (rk_rect){ RK_MAX(0.0f, x), 0, RK_MIN(W, x + 0.3f * W) - RK_MAX(0.0f, x), 4 }, ink);
+    float t = (float)fmod(rk_app_now(), busy) / (float)busy, x = (RK_TOK_BUSY_FROM + (RK_TOK_BUSY_TO - RK_TOK_BUSY_FROM) * t) * W;
+    float x0 = RK_CLAMP(x, 0.0f, W), x1 = RK_CLAMP(x + RK_TOK_BUSY_SEGMENT * W, 0.0f, W);
+    if (x1 > x0) rk_canvas_fill_rect(c, (rk_rect){ x0, 0, x1 - x0, 4 }, ink);
     rk__view_dirty(v);
     rk__app_request_frame();
     return;

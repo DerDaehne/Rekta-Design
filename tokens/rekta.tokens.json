@@ -1,7 +1,7 @@
 {
   "$description": "Rekta Design tokens: the single source. W3C Design Tokens (DTCG) format. Dimensions are logical pixels (CSS px, Android dp, Apple pt); the web build converts type, control and tile sizes to rem. Colour comes in two independent sets (light, dark) and control sizes in two densities (comfortable, compact). Fluid sizes use $type \"fluidDimension\" (a documented extension): min and max in logical px plus the share of the hosting box's width between them. Every token's usage text is its $description. Generated outputs: dist/rekta.tokens.css (web, --rk- prefix), dist/rekta.tokens.json (resolved, platform-neutral). See docs/platforms.md.",
   "color": {
-    "$description": "Light and dark are two independent sets, not variants of one token. Status colours are corrected from the prototype for contrast and colour blindness (see CHANGELOG).",
+    "$description": "Light and dark are two independent sets, not variants of one token. Status colours are corrected from the prototype for contrast and colour blindness (see CHANGELOG). light-contrast and dark-contrast hold only what changes for more contrast (docs/colour.md).",
     "light": {
       "bg": {
         "$type": "color",
@@ -287,7 +287,86 @@
       "glass": {
         "$type": "color",
         "$value": "rgba(14, 14, 18, 0.82)",
-        "$description": "Frosted surfaces (nav bar, app bar); use with a backdrop blur."
+        "$description": "Frosted surfaces (nav bar, app bar); use with a backdrop blur. Only text-primary and text-contrast-high stand on it: checked over white and over black. Under reduced transparency it is the ground (bg), with no blur."
+      }
+    },
+    "light-contrast": {
+      "$description": "More contrast, light: the values that change from color.light when the person asks for more contrast (prefers-contrast: more, or the contrast pref). Every other light value stays. Every text pair holds 7:1, status tiles are shifted until ink holds 7:1 on them (each also gets a 2px frame in its full colour), and glass is opaque.",
+      "text": {
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#4d4e51",
+          "$description": "Raised to 7:1 on bg and surface."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#424346",
+          "$description": "Raised to 7:1 on bg and surface, still a step from text-primary."
+        }
+      },
+      "status": {
+        "success": {
+          "tile": {
+            "$type": "color",
+            "$value": "#74d8b0",
+            "$description": "Lightened so the error tile can lighten and still part from it under red-green colour blindness."
+          }
+        },
+        "error": {
+          "tile": {
+            "$type": "color",
+            "$value": "#dd7b7b",
+            "$description": "Lightened until text-primary holds 7:1 on it, its hue kept; still the darkest status fill."
+          }
+        }
+      },
+      "glass": {
+        "$type": "color",
+        "$value": "{color.light.bg}",
+        "$description": "Opaque: the ground, as macOS takes away transparency with increased contrast."
+      }
+    },
+    "dark-contrast": {
+      "$description": "More contrast, dark: the values that change from color.dark when the person asks for more contrast. Every other dark value stays. Every text pair holds 7:1, status tiles are shifted until ink holds 7:1 on them (each also gets a 2px frame in its full colour), and glass is opaque.",
+      "text": {
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#aeafb1",
+          "$description": "Raised to 7:1 on bg and surface."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#c2c3c5",
+          "$description": "Raised to 9:1 on surface, still a step from text-primary."
+        }
+      },
+      "status": {
+        "success": {
+          "tile": {
+            "$type": "color",
+            "$value": "#245f5b",
+            "$description": "Darkened until text-primary holds 7:1 on it, toward blue to stay apart from warning and error; still lighter than status-error-tile."
+          }
+        },
+        "warning": {
+          "tile": {
+            "$type": "color",
+            "$value": "#6c5310",
+            "$description": "Darkened until text-primary holds 7:1 on it."
+          }
+        },
+        "error": {
+          "tile": {
+            "$type": "color",
+            "$value": "#690615",
+            "$description": "Darkened so the darker success tile still parts from it by lightness."
+          }
+        }
+      },
+      "glass": {
+        "$type": "color",
+        "$value": "{color.dark.bg}",
+        "$description": "Opaque: the ground, as macOS takes away transparency with increased contrast."
       }
     }
   },
@@ -510,6 +589,18 @@
         "$description": "The one bold main title of a screen, such as a record's own (level 2 of the title hierarchy in typography.md)."
       }
     },
+    "metrics": {
+      "ascent": {
+        "$type": "number",
+        "$value": 1.0,
+        "$description": "The sans face's ascent above the baseline, in em (Barlow's hhea ascender, 1000 of 1000 units). With line-height and descent it places the baseline in a line box: the line box's bottom lies (line-height + descent - ascent) / 2 em below the baseline. The stylesheet's fallback for pivot titles uses it until rekta.js has measured the face itself. A product with another face sets its own."
+      },
+      "descent": {
+        "$type": "number",
+        "$value": 0.2,
+        "$description": "The sans face's descent below the baseline, in em (Barlow's hhea descender, 200 of 1000 units). See ascent."
+      }
+    },
     "line-height": {
       "body": {
         "$type": "number",
@@ -655,6 +746,14 @@
       },
       "$description": "The narrowest a pane of a split view may be dragged; below twice this plus the handle the split shows one pane at a time."
     },
+    "tip-gap": {
+      "$type": "dimension",
+      "$value": {
+        "value": 6,
+        "unit": "px"
+      },
+      "$description": "Between a tooltip and its control: a little more than a floating surface's space-xs, so the ink strip does not touch the control's focus ring."
+    },
     "pivot-wide": {
       "$type": "dimension",
       "$value": {
@@ -755,7 +854,12 @@
       "stagger": {
         "$type": "duration",
         "$value": "30ms",
-        "$description": "Delay per tile index when tiles build in, and between the rows of a place leaving in a place change (both capped at 10)."
+        "$description": "Delay per tile index when tiles build in (capped at 10). In a place change, the unit of when a part starts (heft-spread) and the step between parts that weigh the same."
+      },
+      "greet": {
+        "$type": "duration",
+        "$value": "75ms",
+        "$description": "Live tile news: when several tiles get news within duration-moderate, each shows it this long after the one before it in reading order, four steps at most (the rest with the fourth). About 2.5 × duration-stagger."
       },
       "pulse": {
         "$type": "duration",
@@ -765,7 +869,7 @@
       "busy": {
         "$type": "duration",
         "$value": "1200ms",
-        "$description": "One pass of the indeterminate 2px line that says a region is loading or an action is pending. Under reduced motion the line stands still at full width."
+        "$description": "One pass of the indeterminate 2px line that says a region is loading or an action is pending (motion.busy). Under reduced motion the line stands still at full width."
       },
       "float": {
         "$type": "duration",
@@ -775,7 +879,12 @@
       "dots": {
         "$type": "duration",
         "$value": "2400ms",
-        "$description": "One flight of the five progress dots across their track: fast in from the leading edge, slow through the middle, fast out. The dots leave one after another."
+        "$description": "One flight of the five progress dots across their track: fast in from the leading edge, slow through the middle, fast out. The dots leave one after another (motion.dots)."
+      },
+      "beads": {
+        "$type": "duration",
+        "$value": "3000ms",
+        "$description": "One run of the beads, the calm form of the dots for a long full-screen wait: three dots cross the middle of the track on ease-in-out, one after another (motion.beads). Under reduced motion they stand still."
       }
     },
     "easing": {
@@ -807,7 +916,17 @@
           0.5,
           1.0
         ],
-        "$description": "Navigation: place change (turnstile) and facet change (pivot slide)."
+        "$description": "Things leaving and the facet change (pivot slide): leaving rows and tiles, the old content of a tile's news. The place change has its own curves (turn-out, turn-in)."
+      },
+      "in-out": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.42,
+          0.0,
+          0.58,
+          1.0
+        ],
+        "$description": "Even ease-in-out for a change that starts and ends at rest in place: the pivot title's size change, a title stepping in down the side, the live pulse. The curve CSS calls ease-in-out."
       },
       "pivot-glide": {
         "$type": "cubicBezier",
@@ -818,13 +937,53 @@
           1.0
         ],
         "$description": "Pronounced ease-in-out of the pivot strip glide."
+      },
+      "turn-out": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.35,
+          0.0,
+          0.65,
+          0.6
+        ],
+        "$description": "Place change, leaving: a part swings away gathering speed and is still quick as it fades, so the turn reads as a push. With turnstile-out-angle."
+      },
+      "turn-in": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.22,
+          0.9,
+          0.6,
+          0.98
+        ],
+        "$description": "Place change, arriving: a part swings in quick at first and lands with a trace of speed left, so its motion ends when its animation does. With turnstile-in-angle."
       }
     },
     "transform": {
+      "turnstile-out-angle": {
+        "$type": "number",
+        "$value": 60,
+        "$description": "Place change, leaving: each part swings this far toward the viewer around the leading edge of the box that clips it (back: the other way). Degrees.",
+        "$extensions": {
+          "rekta": {
+            "unit": "deg"
+          }
+        }
+      },
+      "turnstile-in-angle": {
+        "$type": "number",
+        "$value": 70,
+        "$description": "Place change, arriving: each part swings in from this far on the other side (back: the other way). Degrees.",
+        "$extensions": {
+          "rekta": {
+            "unit": "deg"
+          }
+        }
+      },
       "turnstile-angle": {
         "$type": "number",
-        "$value": 40,
-        "$description": "Place change: a place turns this far around its leading edge while it fades. Forward, the old place swings toward the viewer and the new one swings in from the back; back, the other way round. Degrees.",
+        "$value": "{motion.transform.turnstile-out-angle}",
+        "$description": "Deprecated: an alias of turnstile-out-angle, kept so nothing that reads it breaks. Read turnstile-out-angle and turnstile-in-angle instead. Degrees.",
         "$extensions": {
           "rekta": {
             "unit": "deg"
@@ -837,7 +996,28 @@
           "value": 800,
           "unit": "px"
         },
-        "$description": "Perspective of a pressed tile, and the base perspective of the turnstile (the script adds distance from the axis)."
+        "$description": "Perspective of a pressed tile, and the base perspective of the turnstile: a row of parts adds turnstile-reach × its reach."
+      },
+      "turnstile-reach": {
+        "$type": "number",
+        "$value": 1.2,
+        "$description": "Place change: a row's perspective is turnstile-perspective + this × the row's reach (how far its farthest part reaches from the edge it turns about), so a wide row turns as flat as a narrow one."
+      },
+      "turnstile-row": {
+        "$type": "dimension",
+        "$value": {
+          "value": 8,
+          "unit": "px"
+        },
+        "$description": "Place change: parts whose top edges round to the same multiple of this form one row, which shares one perspective and is read left to right."
+      },
+      "turnstile-flush": {
+        "$type": "dimension",
+        "$value": {
+          "value": 2,
+          "unit": "px"
+        },
+        "$description": "Place change: a part whose top lies within this of the top of the box that clips it turns about its top instead of its middle, so the box's edge never cuts it."
       },
       "slide-distance": {
         "$type": "dimension",
@@ -876,6 +1056,179 @@
         "$type": "number",
         "$value": 0.99,
         "$description": "How far a selectable row or entry sinks while pressed."
+      },
+      "peek-travel": {
+        "$type": "number",
+        "$value": 0.4,
+        "$description": "Live tile news, peek: the old content leaves upwards by this share of its own height (ease-out) while the new one rises from this far below (ease-in)."
+      },
+      "flip-angle": {
+        "$type": "number",
+        "$value": 90,
+        "$description": "Live tile news, flip: the tile turns this far away around its horizontal axis (ease-out), changes, and turns back from this far on the other side (ease-in). Degrees.",
+        "$extensions": {
+          "rekta": {
+            "unit": "deg"
+          }
+        }
+      }
+    },
+    "proportion": {
+      "$description": "Shares of a movement's own time, 0 to 1.",
+      "turn-out-whole": {
+        "$type": "number",
+        "$value": 0.4,
+        "$description": "Place change, leaving: a part stays whole for this share of its time, so the swing reads, then fades out over the rest."
+      },
+      "turn-in-whole": {
+        "$type": "number",
+        "$value": 0.35,
+        "$description": "Place change, arriving: a part fades in over this share of its time and is whole after it."
+      },
+      "turn-overlap": {
+        "$type": "number",
+        "$value": 0.75,
+        "$description": "Place change: the next place starts when the last part of the leaving one is this far through its time, fading, so it swings in without a gap."
+      }
+    },
+    "heft": {
+      "$description": "Place change: a part's heft sets when it starts and how long it takes. heft = heft-tile × (area / heft-reference²)^heft-exponent, held between heft-min and heft-max; it starts (heft − heft-min) × heft-spread × duration-stagger after the turn begins and takes duration-short (leaving) or duration-moderate (arriving) × heft (docs/motion.md).",
+      "tile": {
+        "$type": "number",
+        "$value": 0.8,
+        "$description": "The heft of a part as big as a tile (heft-reference × heft-reference)."
+      },
+      "reference": {
+        "$type": "dimension",
+        "$value": {
+          "value": 150,
+          "unit": "px"
+        },
+        "$description": "The side of the square whose area has heft-tile: a tile."
+      },
+      "exponent": {
+        "$type": "number",
+        "$value": 0.35,
+        "$description": "How a part's heft grows with its area against a tile's: a line of text about 0.6, a tile 0.8, a wide tile 1.0."
+      },
+      "min": {
+        "$type": "number",
+        "$value": 0.5,
+        "$description": "The lightest heft. A part this light starts as the turn begins."
+      },
+      "max": {
+        "$type": "number",
+        "$value": 1.4,
+        "$description": "The heaviest heft: a table."
+      },
+      "spread": {
+        "$type": "number",
+        "$value": 6,
+        "$description": "A part starts (heft − heft-min) × this × duration-stagger after the turn begins: light parts first, heavy ones later."
+      }
+    },
+    "busy": {
+      "$description": "The busy line: a segment passing along a track, linear, once every duration-busy. Shares of the track's width.",
+      "segment": {
+        "$type": "number",
+        "$value": 0.3,
+        "$description": "How much of the track the passing segment covers."
+      },
+      "from": {
+        "$type": "number",
+        "$value": -0.35,
+        "$description": "Where the segment's leading edge starts, outside the track's start."
+      },
+      "to": {
+        "$type": "number",
+        "$value": 1.05,
+        "$description": "Where the segment's leading edge ends, past the track's end."
+      }
+    },
+    "dots": {
+      "$description": "The progress dots: five small squares, each flying across the track over duration-dots. Places are a dot's leading edge as a share of the track's width; times (-at) are shares of the flight. A keyframe cannot read a property, so rekta.css writes the times and curves out and build.mjs --check holds them to these.",
+      "stagger": {
+        "$type": "number",
+        "$value": 0.07,
+        "$description": "Each dot leaves this share of duration-dots after the one before."
+      },
+      "from": {
+        "$type": "number",
+        "$value": -0.02,
+        "$description": "Where a dot starts, just outside the track."
+      },
+      "middle-start": {
+        "$type": "number",
+        "$value": 0.44,
+        "$description": "Where a dot, braking, reaches the slow middle."
+      },
+      "middle-start-at": {
+        "$type": "number",
+        "$value": 0.35,
+        "$description": "When it gets there."
+      },
+      "middle-end": {
+        "$type": "number",
+        "$value": 0.56,
+        "$description": "Where it leaves the slow middle, which it crosses at an even pace."
+      },
+      "middle-end-at": {
+        "$type": "number",
+        "$value": 0.62,
+        "$description": "When it leaves it."
+      },
+      "to": {
+        "$type": "number",
+        "$value": 1.02,
+        "$description": "Where a dot ends, just past the track."
+      },
+      "whole-at": {
+        "$type": "number",
+        "$value": 0.06,
+        "$description": "A dot fades in until this share of its flight (ease-base)."
+      },
+      "fade-at": {
+        "$type": "number",
+        "$value": 0.9,
+        "$description": "A dot fades out from this share of its flight (ease-base)."
+      },
+      "ease-arrive": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.1,
+          0.7,
+          0.4,
+          1.0
+        ],
+        "$description": "A dot flying in from the leading edge and braking into the middle."
+      },
+      "ease-leave": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.6,
+          0.0,
+          0.9,
+          0.3
+        ],
+        "$description": "A dot speeding off out of the middle."
+      }
+    },
+    "beads": {
+      "$description": "The beads: three 6px dots that cross the middle of the track one after another, on ease-in-out over duration-beads. Shares of the track's width or of the run.",
+      "track": {
+        "$type": "number",
+        "$value": 0.8,
+        "$description": "The share of the width the beads cross, centred."
+      },
+      "spacing": {
+        "$type": "number",
+        "$value": 0.16,
+        "$description": "Each bead starts this share of duration-beads after the one before."
+      },
+      "fade": {
+        "$type": "number",
+        "$value": 0.12,
+        "$description": "A bead fades in over this first share of its run and out over the same last share."
       }
     }
   },
@@ -920,6 +1273,16 @@
       "$type": "duration",
       "$value": "30000ms",
       "$description": "A live region with no update or heartbeat for this long is stale: it says so, and its values stop looking current."
+    },
+    "restore": {
+      "$type": "duration",
+      "$value": "5000ms",
+      "$description": "How long scrollState().restore() waits for content that renders after a navigation (a fetch on mount, streamed data) to put a saved scroll offset back; it gives up sooner when the user scrolls."
+    },
+    "type-ahead": {
+      "$type": "duration",
+      "$value": "1000ms",
+      "$description": "In a collection whose entries take focus, letters typed less than this apart form one prefix to jump to; after a pause a letter starts again. Wall time: reduced motion leaves it alone."
     }
   },
   "layer": {

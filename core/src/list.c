@@ -2,8 +2,9 @@
    drawn, so a list of a million items costs what a screenful does. It scrolls on the same glide as the panorama.
    Selection is the Metro way, as the web's virtual(): a click selects one item and shows it; Ctrl (Cmd) and a click
    toggles and starts the selection mode, in which every click toggles; Shift and a click takes a range. Keys: Up and
-   Down, Home and End, Page Up and Page Down move the active row; Space or Enter is a click; Ctrl+A selects all;
-   Escape ends the mode. Included after widgets.c, whose status helpers it shares.
+   Down, Home and End, Page Up and Page Down move the active row; letters jump to the next row whose title (a table's
+   first cell) starts with them, typed within timing.type-ahead as one prefix; Space or Enter is a click; Ctrl+A
+   selects all; Escape ends the mode. Included after widgets.c, whose status helpers it shares.
 
    A table is a list with columns, as the web's .rk-table: a head that stays put (size-xs, semibold, text-high, a
    hairline below; a sorted column's head in the text colour with its triangle), cells from a callback in tabular
@@ -39,6 +40,7 @@ typedef struct list {
   rk_view *editor; int edit_row, edit_col; char *edit_old;   /* a cell being edited */
   const char *(*commit)(rk_view *table, int row, int column, const char *value, void *user); void *commit_user;
   int down_row; double down_at;                            /* the last press on a row: a second soon after edits */
+  rk__typed typed;                                         /* letters typed to jump to a row */
   const char *(*cell)(int row, int column, void *user);
   int sort_col, sort_dir;
   void (*sort)(rk_view *table, int column, rk_sort sort, void *user); void *sort_user;
@@ -269,6 +271,14 @@ static void list_click(rk_view *v, list *l, int i, uint32_t mods) {
     return;
   }
   list_changed(v, l);
+}
+
+/* A row's words for the letter jump: a list item's title, a table row's first cell. */
+static const char *list_row_title(list *l, int i) {
+  if (l->ncols) return l->cell ? l->cell(i, 0, l->user) : NULL;
+  rk_list_item it = { sizeof it, NULL, NULL, RK_STATUS_NONE };
+  l->item(i, &it, l->user);
+  return it.title;
 }
 
 static void draw_row(rk_view *v, rk_canvas *c, list *l, int i, float y, bool ring) {
@@ -503,6 +513,17 @@ static bool list_input(rk_view *v, const rk_event *e, void *st) {
           return true;
         default: return false;
       }
+    }
+    case RK_EVENT_TEXT: {                                       /* letters jump to the next row whose title starts so */
+      if (l->editor || l->head >= 0 || !l->count) return false;
+      bool again;
+      const char *want = rk__type_ahead(&l->typed, e->text, rk_app_now(), &again);
+      if (!want) return false;
+      for (int k = 0, from = again ? l->active + 1 : RK_MAX(0, l->active); k < l->count; k++) {
+        int i = (from + k) % l->count;
+        if (rk__starts_with(list_row_title(l, i), want)) { set_active(v, l, i); break; }
+      }
+      return true;
     }
     case RK_EVENT_FOCUS: rk__view_dirty(v); return false;
     case RK_EVENT_BLUR: {

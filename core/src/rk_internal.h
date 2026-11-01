@@ -44,7 +44,7 @@
 /* how many there are of each token kind: ours, not the ABI's, so a new one breaks no app */
 #define RK__ROLE_COUNT (RK_ROLE_GLASS + 1)
 #define RK__METRIC_COUNT (RK_PIVOT_WIDE + 1)
-#define RK__DURATION_COUNT (RK_TIMING_STALE + 1)
+#define RK__DURATION_COUNT (RK_TIMING_TYPE_AHEAD + 1)
 #define RK__TEXT_STYLE_COUNT (RK_TEXT_NAV + 1)
 
 /* Objects --------------------------------------------------------------------------------------------------------- */
@@ -85,11 +85,20 @@ typedef struct rk_prefs {
   rk_theme theme; rk_motion_pref motion; rk_density density;
   bool system_dark, system_reduced, system_compact;
   rk_color accent[2];
+  bool contrast;                                           /* more contrast (rk_app_set_contrast) */
   rk_color series[8][2];                                   /* a domain's colour code, light and dark; 0: ink */
   bool metric_set[RK__METRIC_COUNT]; float metric[RK__METRIC_COUNT];         /* a product's own (rk_app_set_metric) */
   bool timing_set[RK__DURATION_COUNT]; double timing[RK__DURATION_COUNT];    /* (rk_app_set_timing) */
 } rk_prefs;
 extern rk_prefs rk__prefs;
+
+/* Type-ahead (docs/navigation.md), as the web's: letters typed less than timing.type-ahead apart form a prefix to jump
+   to; the same letter again moves on. A view keeps its own rk__typed. rk__type_ahead takes one RK_EVENT_TEXT and gives
+   the prefix to look for (ASCII folded to lowercase), or NULL when the text is not a letter or digit; *again says the
+   search starts past the current entry (a first letter, or the same one again). */
+typedef struct rk__typed { char s[32]; int n; double at; } rk__typed;
+const char *rk__type_ahead(rk__typed *t, const char *text, double now, bool *again);
+bool rk__starts_with(const char *s, const char *prefix);   /* leading spaces skipped, ASCII case folded */
 
 bool rk__dark(void);
 bool rk__reduced(void);
@@ -312,6 +321,7 @@ bool rk__glide_moving(const rk_glide *g, double now);
 bool rk__anim_tick(double now);                            /* true while any animation runs */
 bool rk__anim_running(void);
 void rk__anim_view_gone(rk_view *v);
+bool rk__in_bar(rk_view *v);                              /* a control in a one-line row: it fades, with no path */
 double rk__motion_duration(rk_motion m, bool tile);
 const float *rk__motion_ease(rk_motion m);
 
@@ -339,6 +349,7 @@ struct rk_window {
   rk_view *tip, *tip_for; uint32_t tip_timer; double tip_hid;   /* the tooltip shown, whose, its wait, when one went */
   struct rk_history_entry *history; int nhistory, ndone, hcap;   /* its undo history: [0, ndone) done, the rest redoable */
   bool (*should_close)(rk_window *w, void *user); void *close_user;
+  double news_t0; int news_n;                              /* live tile news shown one after another: since, how many */
   rk_window *next;                                         /* the app's list of open windows */
 };
 

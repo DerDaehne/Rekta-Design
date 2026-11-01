@@ -139,8 +139,8 @@ indented `space-m` per level, a chevron that turns as an item opens.
   Metro selection.
 - Keys: ↑ ↓ move, → opens a closed item or goes into an open one, ←
   closes an open item or goes up to its parent, Home End, Enter or Space
-  shows, `*` opens all siblings, a letter jumps to the next item that
-  starts with it.
+  shows, `*` opens all siblings, letters jump to the next item that
+  starts with them ([navigation.md](navigation.md#typing-filter-or-jump)).
 - Opening slides the children in by 4px over `duration-short`; closing
   is instant.
 
@@ -151,7 +151,9 @@ in view and a few around them exist, at the density's row height, so ten
 thousand lines scroll like ten. It is one tab stop (a listbox; the active
 row by `aria-activedescendant`, each row its position and the list's
 size) and chosen the Metro way like any list. ↑ ↓ PageUp PageDown Home
-End move; Shift extends the selection.
+End move; Shift extends the selection; letters jump to the next line that
+starts with them, as in every list whose entries take focus
+([navigation.md](navigation.md#typing-filter-or-jump)).
 
 ## Ordering by hand
 

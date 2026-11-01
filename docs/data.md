@@ -58,6 +58,21 @@ still shows, `space-s` high, at most three tile units wide.
   go beside or under it as tags (`.rk-tag[data-rk-code]`, the square in
   the code, the words in ink), in the bar's order, `aria-hidden` when
   they repeat the name. Never a number inside a share.
+- **In a row of a collection.** Where every row of a list or table has
+  its own bar (each ride's time in zones), five tags and a full name per
+  row make the list restless and a screen reader reads every figure for
+  every row. There the bar may become a mark: `aria-hidden="true"`, no
+  `role`, no name, no tags. Only when both hold:
+  - a sentence in the same row sums the shares up in words ("mostly
+    base · 41% hard") and is part of what the row says (its text or its
+    accessible name), and
+  - the row leads to its detail (a place, a pane, a sheet), and there
+    the shares stand one by one with words: this bar with its name and
+    tags, or a meter with its label per share.
+
+  Colour is still never the only thing that says something: the sentence
+  says it in the row, the detail says each share. A bar outside such a
+  row (a tile, a detail, a single summary) keeps its name and its tags.
 - **One bar per whole.** Two wholes to compare are two bars, one under
   the other, at the same width.
 
@@ -107,13 +122,20 @@ A sparkline is a trend at a glance: one series, no axis, no labels.
   beside; a row that carries a `data-status` draws it in the status
   mark. `rekta.css` sets both and gives it a tile unit's width; drawn in
   the tile sparkline's 200 × 28 box, that is about the row's text height.
+- **The line** is 2px at any width, with round joins: it does not grow
+  with the box (`vector-effect: non-scaling-stroke` on the web; rekta-core
+  draws 2px).
 - **Empty or all zero.** No values yet: draw nothing and keep the room,
   so the rows stay aligned and the meta says why ("no data yet"). All
-  zero, or one constant value: that is a value, so draw it, flat along
-  the bottom of the box.
+  zero, one constant value, or a single value: that is a value, so draw
+  it, flat along the bottom of the box, across its whole width.
 - **Clear of the hairline.** Points are laid out inside the box inset by
-  half the stroke (1px), so a flat line is never cut off; the row's
-  padding (`space-s`) keeps that line clear of the row's hairline.
+  half the stroke (1px on the screen) on every side, so a flat line is
+  never cut off: the first point 1px from the leading edge, the last 1px
+  from the trailing edge, the lowest value 1px above the bottom, the
+  highest 1px below the top. In the 200 × 28 box that is `200 / width`
+  units, the box's width in pixels. The row's padding (`space-s`) keeps
+  that line clear of the row's hairline.
 - **Stale or offline**, it fades to 35% with the rest of the live region;
   a finished item's row drops it rather than show a still line.
 
@@ -136,11 +158,27 @@ in `duration-moderate`.
 | a button's action | the line under the button, its label saying what it does |
 | a known amount | `progress.rk-progress` with a value, the label and the percentage above |
 | an unknown amount, in place | `progress.rk-progress` without a value: a segment runs along it |
-| a wait that blocks everything (signing in, installing, the first load) | the dots (`rk-dots`) |
+| a short wait that blocks the screen (the first load, applying a change) | the dots (`rk-dots`) |
+| a long wait that holds the whole screen (starting up, signing in, installing) | the beads (`rk-dots rk-dots--beads`) |
 
 **The dots, the Metro way:** five small squares fly in from the leading
 edge, bunch up slowly through the middle and speed off to the far edge,
 one after another (`motion.duration.dots` per flight). They are for a
-wait that holds the whole screen; everywhere else, the calm line. Under
-reduced motion they stand still in the middle, with the words beside
-them saying what is happening.
+short wait that blocks the screen; everywhere else, the calm line.
+
+**The beads** are the calm form of the dots, for a long wait: three
+squares cross the middle of the track one after another, each on one
+even curve, without bunching up or speeding off. Markup:
+`<div class="rk-dots rk-dots--beads" role="progressbar" aria-label="…"><i></i><i></i><i></i></div>`.
+
+Under reduced motion the dots and the beads stand still in the middle,
+with the words beside them saying what is happening.
+
+The movements, for a native implementation (places are shares of the
+track's width; a dot's or bead's place is its leading edge):
+
+| Form | Movement |
+|---|---|
+| busy line | A segment `busy-segment` (0.3) of the track's width; its leading edge passes from `busy-from` (−0.35) to `busy-to` (1.05) of the width, linear, every `duration-busy`. Under reduced motion it stands at full width. |
+| dots | Five 4px squares, each `dots-stagger` (0.07) × `duration-dots` after the one before. Over its flight (`duration-dots`) a dot goes from `dots-from` (−0.02) to `dots-middle-start` (0.44) by `dots-middle-start-at` (35%) of its time, on `dots-ease-arrive`; on to `dots-middle-end` (0.56) by `dots-middle-end-at` (62%), linear; and on to `dots-to` (1.02) on `dots-ease-leave`. It fades in until `dots-whole-at` (6%) and out from `dots-fade-at` (90%), on `ease-base`. Under reduced motion they stand in the middle, 10px apart. |
+| beads | Three 6px squares on the middle `beads-track` (0.8) of the width, each `beads-spacing` (0.16) × `duration-beads` after the one before. A bead crosses the track over `duration-beads` (3s) on `ease-in-out`, fading in over the first `beads-fade` (12%) and out over the last. Under reduced motion they stand in the middle, 12px apart. |

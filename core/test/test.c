@@ -157,6 +157,34 @@ static void test_layout(void) {
   done(w);
 }
 
+/* A control in a one-line row has no path: it fades in once the others have made room, and fades out. */
+static void test_bar_motion(void) {
+  rk_window *w = window(600, 200);
+  rk_view *root = col(16, 32), *bar = rk_add(root, rk_hstack());
+  rk_view *one = rk_add(bar, rk_button("one", NULL, NULL)), *three = rk_add(bar, rk_button("three", NULL, NULL));
+  (void)one;
+  show(w, root, "bar");
+  float x0 = three->frame.x;
+  rk_animate_begin(RK_MOTION_ENTER);
+  rk_view *two = rk_insert(bar, rk_button("two", NULL, NULL), 1);
+  rk_animate_commit();
+  rk_app_run_for(200);
+  CHECK(three->frame.x > x0 && three->pframe.x > x0 && three->pframe.x < three->frame.x, "its neighbour glides to make room (%g)", three->pframe.x);
+  CHECK(two->popacity == 0 && two->ptransform.translate_y == 0, "the new control waits unseen while it does, with no path (%g)", two->popacity);
+  rk_app_run_for(300);
+  CHECK(two->popacity > 0 && two->popacity < 1 && two->ptransform.translate_y == 0, "then fades in where it stands (%g)", two->popacity);
+  rk_app_run_for(400);
+  CHECK(two->popacity == 1 && !two->entering, "and is there");
+  rk_animate_begin(RK_MOTION_LEAVE);
+  rk_view_remove(two);
+  rk_animate_commit();
+  rk_app_run_for(80);
+  CHECK(two->leaving && two->popacity < 1 && two->ptransform.translate_x == 0, "leaving, it only fades (%g)", two->ptransform.translate_x);
+  rk_app_run_for(600);
+  CHECK(rk_view_count(bar) == 2, "and is gone");
+  done(w);
+}
+
 /* Input ----------------------------------------------------------------------------------------------------------- */
 
 static int activations;
@@ -750,6 +778,38 @@ static void test_menu(void) {
   cr = rk__window_rect(ctx);
   CHECK(cr.y + cr.h <= 420 - 15, "never outside the window (%g)", cr.y + cr.h);
   rk_menu_close(ctx);
+  /* states.md's one rule: it fits on neither side, so it takes the side with more room, moved back inside the window */
+  rk_menu_open_at(m, tile, (rk_point){ 10, 200 - t.y });
+  mr = rk__window_rect(m);
+  float edge = rk_metric_of(RK_SPACE_M);
+  CHECK(mr.h > 200 && mr.y >= edge - 0.5f && mr.y + mr.h <= 420 - edge + 0.5f, "a menu that fits on neither side stays inside the window (%g to %g)", mr.y, mr.y + mr.h);
+  rk_menu_close(m);
+  /* centred on a centred control, still inside the window */
+  rk_menu_set_align(m, RK_ALIGN_CENTER);
+  rk_menu_open_at(m, tile, (rk_point){ 280 - t.x, 40 - t.y });
+  mr = rk__window_rect(m);
+  CHECK(fabsf(mr.x + mr.w / 2 - 280) <= 0.5f, "RK_ALIGN_CENTER centres it on its opener (%g)", mr.x + mr.w / 2);
+  rk_menu_close(m);
+  rk_menu_open_at(m, tile, (rk_point){ 540 - t.x, 40 - t.y });
+  mr = rk__window_rect(m);
+  CHECK(mr.x + mr.w <= 560 - edge + 0.5f, "centred near the window's edge, it stays inside (%g)", mr.x + mr.w);
+  rk_menu_close(m);
+  rk_menu_set_align(m, RK_ALIGN_START);
+  /* taller than the window: it keeps to it and its rows scroll to the active one */
+  rk_view *tall = rk_menu();
+  for (int i = 0; i < 20; i++) rk_menu_add(tall, i == 19 ? "zebra" : "item", NULL, on_menu, NULL);
+  rk_retain(m);                                                /* the button lets go of its menu for the tall one */
+  rk_view_set_menu(more, tall);
+  rk_view_tap(more);
+  rk_app_run_for(200);
+  rk_rect tr = rk__window_rect(tall);
+  CHECK(tr.y >= edge - 0.5f && tr.y + tr.h <= 420 - edge + 0.5f, "a menu taller than the window keeps to it (%g to %g)", tr.y, tr.y + tr.h);
+  key(w, RK_KEY_END, 0);
+  menu *tm = tall->state;
+  float last = row_top(tm, 19) - tm->scroll;
+  CHECK(tm->active == 19 && tm->scroll > 0 && last >= 0 && last + rk_metric_of(RK_ROW_HEIGHT) <= tr.h + 0.5f, "End scrolls its rows to the last one (%g)", tm->scroll);
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_view_set_menu(more, m);                                   /* takes m back, lets go of the tall one */
   done(w);
 }
 
@@ -1591,6 +1651,8 @@ static void test_confirm_secret(void) {
   rk_app_run_for(500);
   rk_view *focused = rk_window_focused(w);
   CHECK(focused && focused->cls == &button_class && !strcmp(((button *)focused->state)->label, "cancel"), "the safe answer has focus");
+  rk_view *del = rk_view_find(w->sheets, "delete");
+  CHECK(del && ((button *)del->state)->kind == RK_BUTTON_DESTRUCTIVE, "what cannot be undone is the destructive button");
   shot(w, "confirm");
   rk_window_key(w, RK_KEY_ENTER);
   rk_app_run_for(600);
@@ -1605,6 +1667,23 @@ static void test_confirm_secret(void) {
   rk_window_key(w, RK_KEY_ESCAPE);
   rk_app_run_for(600);
   CHECK(answers == 3 && !answer_ok, "Escape answers cancel");
+  /* an answer is given as the sheet starts to leave; a close request while it leaves changes none and asks nothing, it
+     only ends the leaving at once; focus comes back once the sheet has gone */
+  rk_window_focus(w, pw);
+  rk_confirm(home, &d, answered, NULL);
+  rk_app_run_for(500);
+  rk_view_tap(rk_view_find(w->sheets, "delete"));
+  rk_app_run_for(30);
+  bool leaving = w->sheets->nkids > 0, held = !rk_window_focused(w);
+  click(w, (rk_point){ 350, 420 }, 10);
+  CHECK(leaving && held && answers == 4 && answer_ok && !w->sheets->nkids, "delete, then a tap on the shading while it leaves: still yes, gone at once (%d %d)", answers, answer_ok);
+  CHECK(rk_window_focused(w) == pw, "focus is back once the sheet has gone");
+  rk_confirm(home, &d, answered, NULL);
+  rk_app_run_for(500);
+  rk_view_tap(rk_view_find(w->sheets, "delete"));
+  rk_app_run_for(30);
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(answers == 5 && answer_ok && !w->sheets->nkids, "Escape while it leaves: still yes, gone at once");
   done(w);
 }
 
@@ -2203,6 +2282,28 @@ static void scene_controls(const char *name) {
   show(w, root, "controls");
   shot(w, name);
   done(w);
+}
+
+/* News on several tiles at once comes one after another in reading order, duration-greet apart, four steps at most;
+   another window keeps its own order. */
+static void test_news_order(void) {
+  rk_window *w = window(720, 400), *w2 = window(400, 240);
+  rk_view *root = col(16, 32), *grid = rk_add(root, rk_tile_grid()), *t[6];
+  for (int i = 0; i < 6; i++) t[i] = add_tile(grid, RK_STATUS_INFO, "1", "news", 1, 1);
+  rk_view *root2 = col(16, 32), *other = add_tile(rk_add(root2, rk_tile_grid()), RK_STATUS_INFO, "1", "news", 1, 1);
+  show(w, root, "news"); show(w2, root2, "news elsewhere");
+  for (int i = 5; i >= 0; i--) { rk_view_transition(t[i], RK_TRANSITION_PEEK); rk_tile_set_stat(t[i], "2", "news"); }
+  rk_view_transition(other, RK_TRANSITION_PEEK); rk_tile_set_stat(other, "2", "news");
+  rk_app_run_for(300);
+  float s[6];
+  for (int i = 0; i < 6; i++) s[i] = t[i]->transition_t;
+  float g = (float)(RK_TOK_DURATION_GREET / rk_duration_of(RK_DURATION_MODERATE));
+  CHECK(s[0] > 0 && fabsf(s[0] - s[1] - g) < 0.01f && fabsf(s[1] - s[2] - g) < 0.01f && fabsf(s[2] - s[3] - g) < 0.01f && s[3] == s[4] && s[4] == s[5] && s[5] > 0,
+        "tile news goes in reading order, duration-greet apart, four steps: %.3f %.3f %.3f %.3f %.3f %.3f", s[0], s[1], s[2], s[3], s[4], s[5]);
+  CHECK(fabsf(other->transition_t - s[0]) < 0.01f, "another window's news keeps its own order (%.3f)", other->transition_t);
+  rk_app_run_for(700);
+  CHECK(t[5]->transition == 0 && t[0]->transition == 0, "and all of it lands");
+  done(w); done(w2);
 }
 
 static void scene_flip(void) {
@@ -3242,6 +3343,66 @@ static void test_product_codes(void) {
   done(w);
 }
 
+/* Letters jump in a list and a tree (docs/navigation.md): typed within timing.type-ahead they form a prefix, the same
+   letter again moves on. */
+static const char *const fruit[] = { "apple", "apricot", "banana", "blueberry", "Cherry" };
+static void fruit_item(int i, rk_list_item *out, void *u) { (void)u; out->title = fruit[i]; }
+static void test_type_ahead(void) {
+  rk_window *w = window(400, 400);
+  rk_view *page = col(16, 16);
+  rk_view *l = rk_add(page, rk_list(5, fruit_item, NULL));
+  rk_view_set_size(l, 300, 200);
+  rk_view *tr = rk_add(page, rk_tree());
+  rk_tree_add(tr, -1, "alpha"); rk_tree_add(tr, -1, "beta"); rk_tree_add(tr, -1, "bravo"); rk_tree_add(tr, -1, "charlie");
+  show(w, page, "type-ahead");
+  rk_window_focus(w, l);
+  type_text(w, "b");
+  CHECK(rk_list_active(l) == 2, "a letter goes to the first row that starts with it (%d)", rk_list_active(l));
+  type_text(w, "b");
+  CHECK(rk_list_active(l) == 3, "the same letter again: the next one (%d)", rk_list_active(l));
+  type_text(w, "c");
+  CHECK(rk_list_active(l) == 3, "typed at once, \"bbc\" is a prefix nothing starts with: it stays (%d)", rk_list_active(l));
+  rk_app_run_for(1100);
+  type_text(w, "a"); type_text(w, "p"); type_text(w, "r");
+  CHECK(rk_list_active(l) == 1, "after a pause a new prefix: \"apr\" finds apricot (%d)", rk_list_active(l));
+  rk_app_run_for(1100);
+  type_text(w, "C");
+  CHECK(rk_list_active(l) == 4, "case does not matter (%d)", rk_list_active(l));
+  rk_window_focus(w, tr);
+  rk_app_run_for(1100);
+  type_text(w, "b"); type_text(w, "r");
+  CHECK(((tree *)tr->state)->active == 2, "in a tree too: \"br\" finds bravo (%d)", ((tree *)tr->state)->active);
+  done(w);
+}
+
+/* More contrast: the contrast colours (the tokens' light-contrast and dark-contrast) and a frame on status tiles. */
+static void test_contrast(void) {
+  rk_color high = rk_color_of(RK_ROLE_TEXT_HIGH), tile = rk_color_of(RK_ROLE_ERROR_TILE), bg = rk_color_of(RK_ROLE_BG);
+  rk_window *w = window(400, 240);
+  rk_view *page = col(16, 16);
+  rk_view *grid = rk_add(page, rk_tile_grid());
+  rk_view *t = rk_add(grid, rk_tile("3", "failed"));
+  rk_tile_set_status(t, RK_STATUS_ERROR, NULL);
+  show(w, page, "contrast");
+  rk_app_run_for(100);
+  rk_color full = rk_color_of(RK_ROLE_ERROR_FULL);
+  CHECK(pixels_of(w, rk__window_rect(t), full) == 0, "no frame on a status tile in the normal case");
+  rk_app_set_contrast(true);
+  rk_app_run_for(400);
+  CHECK(rk_color_of(RK_ROLE_TEXT_HIGH) != high && rk__contrast(rk_color_of(RK_ROLE_TEXT_HIGH), rk_color_of(RK_ROLE_SURFACE)) >= 7, "more contrast: secondary text at 7:1 on surface (%.2f)", rk__contrast(rk_color_of(RK_ROLE_TEXT_HIGH), rk_color_of(RK_ROLE_SURFACE)));
+  CHECK(rk_color_of(RK_ROLE_ERROR_TILE) != tile && rk__contrast(rk_color_of(RK_ROLE_TEXT), rk_color_of(RK_ROLE_ERROR_TILE)) >= 7, "the error tile shifted until ink holds 7:1");
+  CHECK(rk_color_of(RK_ROLE_GLASS) == bg && rk_color_of(RK_ROLE_BG) == bg, "glass is the ground");
+  CHECK(pixels_of(w, rk__window_rect(t), rk_color_of(RK_ROLE_ERROR_FULL)) > 100, "a status tile is framed in its full colour (%d pixels)", pixels_of(w, rk__window_rect(t), rk_color_of(RK_ROLE_ERROR_FULL)));
+  rk_app_set_theme(RK_THEME_DARK);
+  rk_app_run_for(400);
+  CHECK(rk__contrast(rk_color_of(RK_ROLE_TEXT), rk_color_of(RK_ROLE_SUCCESS_TILE)) >= 7 && rk__contrast(rk_color_of(RK_ROLE_TEXT), rk_color_of(RK_ROLE_WARNING_TILE)) >= 7, "and in the dark");
+  rk_app_set_theme(RK_THEME_SYSTEM);
+  rk_app_set_contrast(false);
+  rk_app_run_for(400);
+  CHECK(rk_color_of(RK_ROLE_TEXT_HIGH) == high && rk_color_of(RK_ROLE_ERROR_TILE) == tile, "and back");
+  done(w);
+}
+
 /* Facets side by side: from the pivot's wide width up, every facet shows; the strip is a jump list that follows. */
 static void test_wide_pivot(void) {
   rk_window *w = window(1500, 700);
@@ -3468,6 +3629,8 @@ static void launch(void *user) {
   test_setters();
   test_api_rules();
   test_spring();
+  test_news_order();
+  test_bar_motion();
   { int lv = rk__live_views; test_declare(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declare_same_pixels(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare_same_pixels: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }
@@ -3482,6 +3645,8 @@ static void launch(void *user) {
   test_product_counts();
   test_product_overrides();
   test_product_codes();
+  test_contrast();
+  test_type_ahead();
   test_wide_pivot();
   { int lv = rk__live_views; test_declared_product(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_product: %d views more\n", rk__live_views - lv); }
   scene_tiles("tiles", 1);

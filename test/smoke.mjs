@@ -83,9 +83,77 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
       return low;
     });
     ok(worst.r >= 4.5, `${scheme}: secondary text on every status fill clears AA`, `${worst.what} ${worst.r.toFixed(2)}:1`);
+    // A tag in the plain (ink) toast: its word reads on the ink, its neutral square holds 3:1, every square has an edge (#139).
+    const inToast = await p.evaluate(() => {
+      const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+      const t = document.createElement('div'); t.className = 'rk-toast';
+      t.innerHTML = '<p class="rk-toast-msg">Build 4182 <span class="rk-tag">idle</span> <span class="rk-tag" data-status="warning">waiting</span> <span class="rk-tag" data-status="success">done</span></p>';
+      document.querySelector('.rk').append(t);
+      const ink = getComputedStyle(t).backgroundColor, tags = [...t.querySelectorAll('.rk-tag')];
+      const out = {
+        word: Math.min(...tags.map((x) => ratio(getComputedStyle(x).color, ink))),
+        square: ratio(getComputedStyle(tags[0], '::before').backgroundColor, ink),
+        edges: tags.every((x) => getComputedStyle(x, '::before').boxShadow.startsWith(getComputedStyle(t).color)),
+      };
+      t.remove();
+      return out;
+    });
+    ok(inToast.word >= 4.5 && inToast.square >= 3 && inToast.edges, `${scheme}: a tag in an ink toast: its word reads, its square shows`, JSON.stringify(inToast));
   }
   await p.screenshot({ path: join(shots, `rest-${w}x${h}-${scheme}.png`) });
   await p.close();
+}
+
+// More contrast and less transparency (#156): from the system (emulated) and from the prefs. Every text pair measured
+// at 7:1, each status tile framed in its full colour, glass opaque and nothing blurred; text on glass (#130) over
+// white and black.
+{
+  const measure = (p) => p.evaluate(() => {
+    const rgba = (c) => c.match(/[\d.]+/g).map(Number);
+    const lum = (c) => { const [r, g, b] = rgba(c).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+    const over = (top, under) => { const t = rgba(top), u = rgba(under), a = t[3] ?? 1; return `rgb(${[0, 1, 2].map((i) => t[i] * a + u[i] * (1 - a)).join(',')})`; };
+    const host = document.createElement('div');
+    host.className = 'rk';
+    host.innerHTML = ['bg', 'surface'].map((g) => `<div style="background:var(--rk-${g})"><span class="rk-meta">m</span><span class="rk-facts">f</span><span class="rk-hint">h</span><span style="color:var(--rk-text-contrast-medium)">p</span><span class="rk-tag">t</span></div>`).join('')
+      + ['info', 'success', 'warning', 'error'].map((st) => `<div class="rk-tile" data-status="${st}"><span class="rk-tile-word">w</span><span class="rk-meta">m</span></div>`).join('')
+      + '<div class="rk-tag rk-tag--soft" data-status="error">soft</div><button class="rk-btn rk-btn--primary">ok</button><button class="rk-btn" data-status="error">delete</button>';
+    document.body.append(host);
+    let low = { r: 99, what: '' };
+    for (const el of host.querySelectorAll('span, .rk-tag--soft, .rk-btn')) {
+      let fill = el; while (fill && rgba(getComputedStyle(fill).backgroundColor)[3] === 0) fill = fill.parentElement;
+      const bgc = fill ? getComputedStyle(fill).backgroundColor : 'rgb(255,255,255)', r = ratio(getComputedStyle(el).color, bgc);
+      if (r < low.r) low = { r, what: `${el.className || el.textContent} on ${fill ? fill.className || fill.getAttribute('style') : 'body'}` };
+    }
+    const tiles = [...host.querySelectorAll('.rk-tile')].map((t) => getComputedStyle(t).boxShadow);
+    host.remove();
+    const bar = document.querySelector('#bar'), cs = getComputedStyle(bar), glass = cs.backgroundColor;
+    const onGlass = [...bar.querySelectorAll('.rk-ab-status, .rk-ab')].filter((e) => e.getClientRects().length).flatMap((e) => ['rgb(255,255,255)', 'rgb(0,0,0)'].map((b) => ratio(getComputedStyle(e).color, over(glass, b))));
+    return { low, framed: tiles.every((s) => /2px/.test(s) && s.includes('inset')), tiles, opaque: (rgba(glass)[3] ?? 1) === 1, blur: cs.backdropFilter, glassLow: Math.min(...onGlass) };
+  });
+  for (const scheme of ['light', 'dark']) {
+    const c = await open({ colorScheme: scheme, contrast: 'more' });
+    const m = await measure(c);
+    ok(m.low.r >= 7, `${scheme}, the system asks for more contrast: every text pair holds 7:1`, `${m.low.what} ${m.low.r.toFixed(2)}:1`);
+    ok(m.framed, `${scheme}, more contrast: every status tile has a 2px frame`, m.tiles.join(' | '));
+    ok(m.opaque && m.glassLow >= 7, `${scheme}, more contrast: glass is opaque, its text at 7:1`, `${m.opaque} ${m.glassLow.toFixed(2)}`);
+    await c.evaluate(() => Rekta.prefs.set('contrast', 'normal', { remember: false })); await c.waitForTimeout(100);
+    const n = await measure(c);
+    ok(n.low.r < 7 && !n.framed && !n.opaque && n.glassLow >= 4.5, `${scheme}: contrast "normal" keeps the design's colours against the system's setting; text on glass over white and black holds 4.5:1`, `${n.low.r.toFixed(2)} ${n.framed} ${n.opaque} ${n.glassLow.toFixed(2)}`);
+    await c.close();
+  }
+  const c = await open();
+  const plain = await measure(c);
+  ok(!plain.framed && !plain.opaque && /blur/.test(plain.blur), 'in the normal case nothing changes: no frame, glass with its blur', JSON.stringify(plain));
+  await c.evaluate(() => { Rekta.prefs.set('contrast', 'more', { remember: false }); Rekta.prefs.set('transparency', 'reduce', { remember: false }); });
+  await c.waitForTimeout(400);
+  const more = await measure(c);
+  ok(more.low.r >= 7 && more.framed, 'contrast "more" from the prefs: 7:1 and the frames', `${more.low.what} ${more.low.r.toFixed(2)}`);
+  ok(more.opaque && /^(none)?$/.test(more.blur) && await c.evaluate(() => { const s = document.createElement('div'); s.className = 'rk-scrim'; document.body.append(s); const b = getComputedStyle(s).backdropFilter; s.remove(); return b === 'none'; }),
+    'transparency "reduce": glass is opaque, the bar and the scrim do not blur', more.blur);
+  await c.evaluate(() => { Rekta.prefs.set('contrast', 'system', { remember: false }); Rekta.prefs.set('transparency', 'system', { remember: false }); });
+  await c.close();
 }
 
 const p = await open();
@@ -96,13 +164,26 @@ ok(await p.evaluate(() => { const n = document.querySelector('#nav'); return n.s
 // Generated from the tokens, measured live.
 const count = await p.evaluate(() => JSON.parse(document.querySelector('#tokens-data').textContent).length);
 ok((await text(p, '#token-count')) === String(count), 'the tokens tile counts the tokens');
-ok(await p.evaluate(() => [...document.querySelectorAll('[data-contrast]')].every((b) => /^\d+\.\d : 1$/.test(b.textContent))), 'contrast is measured live');
+ok(await p.evaluate(() => [...document.querySelectorAll('[data-ratio]')].every((b) => /^\d+\.\d : 1$/.test(b.textContent))), 'contrast is measured live');
 ok(!(await p.evaluate(() => /\{\{|<!--@/.test(document.body.innerHTML))), 'every placeholder was filled at build time');
+// The pivot's size change and the live pulse take the in-out curve from its token, not from the CSS keyword.
+{
+  const c = await p.evaluate(() => ({ pivot: getComputedStyle(document.querySelector('.rk-pivot > a')).transitionTimingFunction.split(', cubic')[0], pulse: getComputedStyle(document.querySelector('.rk-pulse')).animationTimingFunction }));
+  ok(c.pivot === 'cubic-bezier(0.42, 0, 0.58, 1)' && c.pulse === 'cubic-bezier(0.42, 0, 0.58, 1)', 'the pivot size change and the pulse use ease-in-out from its token', JSON.stringify(c));
+}
 ok((await p.evaluate(() => { const seen = new Set(), twice = []; document.querySelectorAll('[id]').forEach((e) => { if (seen.has(e.id)) twice.push(e.id); seen.add(e.id); }); return twice.join(); })) === '', 'every id is unique');
 
 // Tile → place: the turnstile, the address, the title, focus; the crumb back.
 await p.click('#tile-notes'); await p.waitForTimeout(120);
 ok(await p.evaluate(() => document.querySelectorAll('[data-rk-turn]').length > 3), 'leaving units turn');
+// The turn takes its angle and curve from the tokens (turnstile-out-angle, ease-turn-out), not from literals.
+{
+  const t = await p.evaluate(() => {
+    const u = document.querySelector('[data-rk-turn="out"]'), s = getComputedStyle(document.documentElement);
+    return { ease: u && getComputedStyle(u).animationTimingFunction, want: s.getPropertyValue('--rk-ease-turn-out').trim(), angle: s.getPropertyValue('--rk-turnstile-out-angle').trim() };
+  });
+  ok(t.ease === t.want && t.want === 'cubic-bezier(0.35, 0, 0.65, 0.6)' && t.angle === '60deg', 'a leaving part turns by the token angle on the token curve', JSON.stringify(t));
+}
 await p.screenshot({ path: join(shots, 'turn-mid.png') });
 await p.waitForTimeout(TURN);
 ok(await visible(p, 'notes') && !(await visible(p, 'home')), 'the release notes show, home hides');
@@ -143,6 +224,46 @@ const x0 = await p.evaluate(() => document.querySelector('#pan').scrollLeft);
 await p.mouse.move(700, 500); await p.mouse.wheel(0, 300); await p.waitForTimeout(300);
 ok((await p.evaluate(() => document.querySelector('#pan').scrollLeft)) > x0, 'a vertical wheel moves the panorama sideways');
 ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures frames', await text(p, '[data-live=fps] [data-v]'));
+
+// Tile grids (#129): one tab stop; the arrows by position, the shared row or column first, a tie to the better-aligned
+// one, on into the next grid of the panorama, no wrap; Home End; letters jump (#134). A fixture with a known layout.
+{
+  const at = () => p.evaluate(() => document.activeElement.textContent);
+  ok(await p.evaluate(() => { const g = document.querySelector('#tile-tokens').closest('.rk-tiles'); return g.hasAttribute('data-rk-grid') && [...g.querySelectorAll('a.rk-tile')].filter((t) => t.tabIndex === 0).length === 1; }),
+    'start(): the overview\'s grid of tiles that open is one tab stop');
+  await p.evaluate(() => {
+    const pan = document.createElement('div'); pan.className = 'rk-panorama'; pan.id = 't-pan';
+    pan.style.cssText = 'display:block;position:fixed;inset:0 auto auto 0;width:800px;height:400px;padding:0;overflow:visible;z-index:999;background:var(--rk-bg)';
+    const grid = (left, top, names) => `<div class="rk-tiles" style="position:absolute;left:${left}px;top:${top}px;display:grid;grid-template-columns:repeat(3,100px);grid-auto-rows:100px;gap:8px">${names.map((n, i) => `<a class="rk-tile${n === 'alpha' ? ' rk-w2' : ''}" href="#" id="t-${n}">${n}</a>`).join('')}</div>`;
+    pan.innerHTML = grid(0, 0, ['alpha', 'beta', 'bravo', 'charlie', 'delta']) + grid(400, 50, ['echo', 'foxtrot']);
+    pan.addEventListener('click', (e) => e.preventDefault());
+    document.querySelector('.rk').append(pan);
+    window.tGrids = [...pan.querySelectorAll('.rk-tiles')].map((g) => Rekta.grid(g));
+  });
+  ok(await p.evaluate(() => [...document.querySelectorAll('#t-pan .rk-tiles')].every((g) => [...g.children].filter((t) => t.tabIndex === 0).length === 1)), 'grid(): each grid one tab stop');
+  await p.focus('#t-alpha');
+  const keys = async (...k) => { for (const x of k) await p.keyboard.press(x); };
+  await keys('ArrowRight'); const r1 = await at();
+  await keys('ArrowDown'); const d1 = await at();
+  await keys('ArrowLeft', 'ArrowLeft'); const l2 = await at();
+  await keys('ArrowLeft'); const edge = await at();
+  await keys('ArrowUp'); const up = await at();
+  ok(r1 === 'beta' && d1 === 'delta' && l2 === 'bravo' && edge === 'bravo' && up === 'alpha', 'the arrows: → beta, ↓ delta, ← ← bravo, ← at the edge stays, ↑ alpha (a wide tile above)', [r1, d1, l2, edge, up].join(' '));
+  await keys('ArrowRight', 'ArrowRight'); const across = await at();
+  const stops = await p.evaluate(() => [...document.querySelectorAll('#t-pan a')].filter((t) => t.tabIndex === 0).map((t) => t.textContent).join());
+  ok(across === 'echo' && stops === 'beta,echo', '→ at a grid\'s end goes on into the next grid of the panorama; each keeps its tab stop', `${across} / ${stops}`);
+  await keys('ArrowDown'); const below = await at();
+  await keys('ArrowLeft'); const tie = await at();
+  ok(below === 'echo' && tie === 'beta', '↓ with nothing below stays; ← on a tie takes the better-aligned tile', `${below} ${tie}`);
+  await keys('End'); const end = await at(); await keys('Home'); const home = await at();
+  ok(end === 'delta' && home === 'alpha', 'Home and End: the grid\'s first and last tile', `${end} ${home}`);
+  await keys('b'); const b1 = await at(); await keys('r'); const br = await at();
+  await p.waitForTimeout(1100); await keys('e'); const e1 = await at();
+  ok(b1 === 'beta' && br === 'bravo' && e1 === 'echo', 'letters jump: b to beta, b r to bravo, after a pause e to echo in the next grid', `${b1} ${br} ${e1}`);
+  await p.focus('#t-alpha'); await keys('Tab');
+  ok(await p.evaluate(() => !document.activeElement.closest('#t-pan .rk-tiles:first-child')), 'Tab leaves the grid', await p.evaluate(() => document.activeElement.id || document.activeElement.tagName));
+  await p.evaluate(() => { window.tGrids.forEach((g) => g.destroy()); document.querySelector('#t-pan').remove(); });
+}
 
 // Tiles: a button tile opens a sheet.
 await go(p, 'tiles');
@@ -235,6 +356,70 @@ ok(facets.byName, 'a facet chosen by name', JSON.stringify(facets));
 ok(facets.gone.selected === 'drafts' && facets.gone.stops === 1 && facets.gone.told === 'drafts' && facets.gone.shown, 'the chosen facet goes: its neighbour is chosen, one tab stop stays', JSON.stringify(facets.gone));
 ok(facets.added, 'a facet that comes takes no tab stop, its panel hidden', JSON.stringify(facets));
 ok(facets.scroll, 'scrollState captures every scrolled box and puts it back', JSON.stringify(facets));
+// The first paint of facets that may go wide: .rk-facets is a container, so before the script the row is laid out from
+// the same width pivot() measures. In a 900px pane of a 1440px window (a media query would say wide) both say narrow.
+const fp = await p.evaluate(async () => {
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const out = {};
+  for (const w of [900, 1400]) {
+    const host = document.createElement('div'); host.style.cssText = `position:absolute;left:0;top:0;width:${w}px;z-index:-1`;
+    host.innerHTML = '<div class="rk-pivot" role="tablist" aria-label="fp">' + [0, 1, 2].map((i) => `<button role="tab" id="fpt${w}-${i}" aria-controls="fpp${w}-${i}" aria-selected="${i === 0}">facet ${i}</button>`).join('') + '</div>'
+      + '<div class="rk-facets"><div>' + [0, 1, 2].map((i) => `<section role="tabpanel" id="fpp${w}-${i}"${i ? ' hidden data-rk-reveal' : ''}><p>${'text '.repeat(60)}</p></section>`).join('') + '</div></div>';
+    document.querySelector('.rk').append(host); await frames();
+    const shown = () => [...host.querySelectorAll('[role=tabpanel]')].filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().left)).join();
+    const before = shown(), pv = Rekta.pivot(host.querySelector('.rk-pivot')); await frames();
+    out[w] = { before, after: shown(), wide: pv.wide };
+    pv.destroy(); host.remove();
+  }
+  return out;
+});
+ok(fp[900].before.split(',').length === 1 && !fp[900].wide && fp[900].after === fp[900].before, 'in a narrow container the first paint and pivot() both show one facet', JSON.stringify(fp[900]));
+ok(fp[1400].before.split(',').length === 3 && fp[1400].wide && fp[1400].after === fp[1400].before, 'in a wide container the first paint lays the facets out where pivot() does', JSON.stringify(fp[1400]));
+// Geometry the docs fix: inactive pivot titles stand on the active one's baseline; a sparkline's line is 2px at any
+// tile width; a status region spaces its kicker, figures and actions.
+const geo = await p.evaluate(async () => {
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const host = document.createElement('div'); host.style.cssText = 'position:absolute;left:0;top:0;width:900px;z-index:-1';
+  host.innerHTML = '<div class="rk-pivot" role="tablist" aria-label="g">' + ['all', 'questions', 'drafts'].map((n, i) => `<button role="tab" id="gt-${n}" aria-controls="gp-${n}" aria-selected="${i === 1}">${n}</button>`).join('') + '</div>'
+    + '<div>' + ['all', 'questions', 'drafts'].map((n) => `<div role="tabpanel" id="gp-${n}">${n}</div>`).join('') + '</div>'
+    + '<div class="rk-tiles" style="width:600px">' + ['', 'rk-w2'].map((w) => `<div class="rk-tile ${w}"><span class="rk-stat"><b>1</b><span>x</span></span><svg class="rk-spark rk-spark--static" viewBox="0 0 200 28"><polyline points="1,14 199,14"/></svg></div>`).join('') + '</div>'
+    + '<section class="rk-region rk-status-region" aria-label="job"><p class="rk-kicker">nightly build</p><div class="rk-figures"><span class="rk-stat"><b>412</b><span>tests run</span></span></div><p class="rk-actions"><button class="rk-btn">pause</button></p></section>';
+  document.querySelector('.rk').append(host);
+  const pv = Rekta.pivot(host.querySelector('.rk-pivot')); await frames(); await frames();
+  const feet = [...host.querySelectorAll('[role=tab]')].map((t) => { const m = document.createElement('span'); m.style.cssText = 'display:inline-block;width:0;height:0'; t.append(m); const b = m.getBoundingClientRect().bottom; m.remove(); return b; });
+  const strokes = [...host.querySelectorAll('.rk-spark')].map((svg) => {
+    const l = svg.querySelector('polyline'), k = svg.getScreenCTM().a, pt = svg.createSVGPoint(); pt.x = 100; let half = 0;
+    for (let d = 0; d < 4; d += 0.05) { pt.y = 14 + d / k; if (l.isPointInStroke(pt)) half = d; }
+    return { width: Math.round(svg.getBoundingClientRect().width), stroke: +(2 * half).toFixed(2) };
+  });
+  const region = host.querySelector('.rk-status-region'), mt = (s) => parseFloat(getComputedStyle(region.querySelector(s)).marginTop);
+  const out = { feet, scaled: host.querySelector('#gt-all').getBoundingClientRect().height < host.querySelector('#gt-questions').getBoundingClientRect().height, strokes,
+    region: { figures: mt('.rk-figures'), actions: mt('.rk-actions'), s: Rekta.tokens.px('--rk-space-s'), m: Rekta.tokens.px('--rk-space-m') } };
+  pv.destroy(); host.remove();
+  return out;
+});
+ok(geo.scaled && Math.max(...geo.feet) - Math.min(...geo.feet) <= 0.5, 'inactive pivot titles scale about the baseline: one baseline for all', JSON.stringify(geo.feet));
+ok(geo.strokes[1].width > geo.strokes[0].width * 1.8 && geo.strokes.every((s) => Math.abs(s.stroke - 2) <= 0.2), 'a sparkline\'s line is 2px on a 1 × 1 and a 2 × 1 tile', JSON.stringify(geo.strokes));
+ok(geo.region.figures === geo.region.s && geo.region.actions === geo.region.m, 'a status region: space-s from kicker to figures, space-m to the actions', JSON.stringify(geo.region));
+// Data that renders after the navigation: restore() waits for the boxes to appear and grow; a user scroll first wins.
+const late = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const content = '<div data-rk-scroll="late" style="height:100px;overflow:auto"><div style="height:800px"></div></div><div style="height:900px"></div>';
+  const mk = () => { const el = document.createElement('div'); el.style.cssText = 'position:fixed;left:0;top:0;width:300px;height:200px;overflow:auto;z-index:-1'; document.body.append(el); return el; };
+  const st = { y: scrollY, at: { root: [0, 300], '@late': [0, 400] } };
+  const a = mk(), run = Rekta.scrollState(a).restore(st), waited = run.pending;
+  setTimeout(() => { a.innerHTML = content; }, 300); await wait(800);
+  const out = { waited, root: a.scrollTop, late: a.querySelector('[data-rk-scroll]').scrollTop, done: !run.pending };
+  a.remove();
+  const b = mk(), run2 = Rekta.scrollState(b).restore(st);
+  b.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 40 }));
+  setTimeout(() => { b.innerHTML = content; }, 300); await wait(800);
+  out.user = { pending: run2.pending, root: b.scrollTop, late: b.querySelector('[data-rk-scroll]').scrollTop };
+  b.remove();
+  return out;
+});
+ok(late.waited && late.root === 300 && late.late === 400 && late.done, 'restore() waits for sections that render 300ms later and puts them at their offsets', JSON.stringify(late));
+ok(!late.user.pending && late.user.root === 0 && late.user.late === 0, 'a user scroll before they render keeps the user\'s position', JSON.stringify(late.user));
 const stage = await p.evaluate(async () => {
   const wait = (t) => new Promise((r) => setTimeout(r, t));
   const rec = document.createElement('section'); rec.id = 'rec';
@@ -275,6 +460,59 @@ const stripped = await p.evaluate(async () => {
   return out;
 });
 ok(stripped.measured && new Set(stripped.before.split(',')).size === 1 && new Set(stripped.after.split(',')).size === 1 && stripped.scaled, 'strip() measures a link strip and follows the mark', JSON.stringify(stripped));
+
+// Live tile news: the peek travels peek-travel of the content's height, the flip turns flip-angle.
+const news = await p.evaluate(async () => {
+  const grid = document.createElement('div'); grid.className = 'rk-tiles'; grid.style.cssText = 'position:fixed;left:0;top:0;width:640px;z-index:-1';
+  grid.innerHTML = '<div class="rk-tile"><span class="rk-stat">12</span></div><div class="rk-tile"><span class="rk-stat">ok</span></div>';
+  document.body.append(grid);
+  const [a, b] = grid.children, out = {};
+  const peek = Rekta.tileUpdate(a, () => { a.firstChild.textContent = '13'; });
+  const ghost = a.querySelector('.rk-stat[aria-hidden]');
+  out.leaves = ghost && ghost.getAnimations()[0].effect.getKeyframes().at(-1).transform;
+  out.rises = a.querySelector('.rk-stat:not([aria-hidden])').getAnimations()[0].effect.getKeyframes()[0].transform;
+  const flip = Rekta.tileUpdate(b, () => { b.firstChild.textContent = 'down'; }, { kind: 'flip' });
+  out.flips = b.getAnimations()[0].effect.getKeyframes().at(-1).transform;
+  await Promise.all([peek, flip]); grid.remove();
+  return out;
+});
+ok(news.leaves === 'translateY(-40%)' && news.rises === 'translateY(40%)' && /rotateX\(-90deg\)/.test(news.flips), 'tile news peeks by peek-travel and flips by flip-angle', JSON.stringify(news));
+// News on several tiles at once comes one after another in reading order, duration-greet apart, four steps at most.
+// The showcase's live feed has news every 1.5s too, which would join the batch: it is off while this is measured, and
+// the check waits until any news it had is past duration-moderate.
+const greeted = await p.evaluate(async () => {
+  const feed = document.querySelector('#lv-feed'), was = feed && feed.checked;
+  if (feed) feed.checked = false;
+  await new Promise((r) => setTimeout(r, 2 * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rk-duration-moderate'))));
+  const grid = document.createElement('div'); grid.className = 'rk-tiles'; grid.style.cssText = 'position:fixed;left:0;top:0;width:900px;z-index:-1';
+  grid.innerHTML = '<div class="rk-tile"><span class="rk-stat">1</span></div>'.repeat(6);
+  document.body.append(grid);
+  const tiles = [...grid.children], runs = [...tiles].reverse().map((t) => Rekta.tileUpdate(t, () => { t.firstChild.textContent = '2'; }));
+  await null;
+  const d = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rk-duration-moderate'));
+  const waits = tiles.map((t) => Math.round(t.querySelector('.rk-stat:not([aria-hidden])').getAnimations()[0].effect.getTiming().delay - 0.2 * d));
+  await Promise.all(runs); grid.remove();
+  if (feed) feed.checked = was;
+  return waits.join();
+});
+ok(greeted === '0,75,150,225,225,225', 'news on several tiles goes in reading order, duration-greet apart, four steps', greeted);
+// A control in a one-line bar has no path: it fades in once its neighbours have made room, and fades out.
+const inline = await p.evaluate(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const bar = document.createElement('div'); bar.className = 'rk-actions'; bar.style.cssText = 'position:fixed;left:0;top:0;width:600px;z-index:-1';
+  bar.innerHTML = '<button class="rk-btn">one</button><button class="rk-btn" hidden>two</button><button class="rk-btn">three</button>';
+  document.querySelector('.rk').append(bar);
+  const [, b, c] = bar.children, path = (el) => el.getAnimations().some((x) => x.effect.getKeyframes().some((k) => k.transform && k.transform !== 'none'));
+  const run = Rekta.presence(bar, { show: () => true });
+  await frame();
+  const out = { waits: getComputedStyle(b).opacity, glides: c.getAnimations().length > 0, path: path(b) };
+  await run;
+  out.after = getComputedStyle(b).opacity;
+  const l = await Rekta.leave(c); out.leavePath = l.effect.getKeyframes().some((k) => k.transform); l.cancel();
+  bar.remove();
+  return out;
+});
+ok(inline.waits === '0' && inline.glides && !inline.path && inline.after === '1' && !inline.leavePath, 'a bar control fades in after its neighbours make room, and leaves by a fade, without a path', JSON.stringify(inline));
 ok(stripped.arrive, 'arrive() is exported for framework routers', JSON.stringify(stripped));
 
 // A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.
@@ -302,6 +540,16 @@ const shares = await p.evaluate(() => {
 });
 ok(shares.colours && shares.ratio && shares.gap === 2, 'a share bar: each share in its code, as wide as its share, 2px apart', JSON.stringify(shares));
 ok(shares.meter && shares.status, 'a meter fills in its code; a status wins', JSON.stringify(shares));
+// A pivot's titles, buttons or links, are written as the strip says: case and spacing set by CSS reach them (#100).
+const cased = await p.evaluate(() => {
+  const n = document.createElement('div'); n.className = 'rk-pivot'; n.style.cssText = 'text-transform:uppercase;letter-spacing:3px';
+  n.innerHTML = '<button type="button" aria-selected="true">jobs</button><button type="button">runs</button><a href="#">logs</a>';
+  document.querySelector('.rk').append(n);
+  const out = [...n.children].map((x) => `${getComputedStyle(x).textTransform} ${getComputedStyle(x).letterSpacing}`);
+  n.remove();
+  return out;
+});
+ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s text-transform and letter-spacing', JSON.stringify(cased));
 
 // rekta.js in German (?lang=de): its words from the catalogue, its numbers in the locale; none of its English shows.
 {
@@ -364,6 +612,16 @@ await p.keyboard.press('Escape');
 await p.focus(row(1)); await p.keyboard.press('ArrowDown'); await p.keyboard.press(' '); await p.waitForTimeout(150);
 ok(JSON.stringify(await sel()) === '["Sparkline"]', '↓ moves, Space selects', await sel());
 await p.keyboard.press('Escape');
+// Letters jump (#134): the next row whose name starts with them; the same letter again moves on; typed together they
+// are a prefix. Focus moves, the selection stays.
+{
+  await p.focus(row(1)); await p.waitForTimeout(1100);
+  const at = () => p.evaluate(() => document.activeElement.dataset.name);
+  await p.keyboard.press('s'); const s1 = await at(); await p.keyboard.press('s'); const s2 = await at();
+  await p.waitForTimeout(1100); await p.keyboard.press('p'); await p.keyboard.press('a'); await p.keyboard.press('n'); const pan = await at();
+  const stop = await p.evaluate(() => [...document.querySelectorAll('#comp-body tr')].filter((r) => r.tabIndex === 0).map((r) => r.dataset.name).join());
+  ok(s1 === 'Sparkline' && s2 === 'Sheet' && pan === 'Panorama' && stop === 'Panorama' && JSON.stringify(await sel()) === '["Sparkline"]', 'letters jump in a table: s, s again, then "pan"; the tab stop follows, the selection stays', `${s1} ${s2} ${pan} / ${stop} / ${await sel()}`);
+}
 await p.click('#comp-table thead th:nth-child(2) .rk-sort'); await p.waitForTimeout(500);
 ok((await p.evaluate(() => document.querySelector('#comp-body tr').dataset.name)) === 'App bar', 'sort by component');
 await p.click('#comp-status'); await p.waitForTimeout(200); await p.click('#comp-status-menu [data-v=warning]'); await p.waitForTimeout(200);
@@ -452,6 +710,60 @@ await p.hover('#tree-close'); await p.waitForTimeout(60);
 ok((await p.evaluate(() => document.querySelector('.rk-tip').textContent)) === 'close every folder', 'the next tooltip comes at once');
 await p.keyboard.press('Escape'); await p.waitForTimeout(100);
 ok(!(await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open'))) && await visible(p, 'home'), 'Escape hides the tooltip, nothing more');
+// A key combination is written one way: Ctrl, Alt, Shift, Meta, then the key, joined by "+"; Meta outside Apple is the
+// catalogue's keyMeta, "Super" here on Linux (#141).
+await p.evaluate(() => {
+  const box = document.createElement('p'); box.id = 'keys-fixture'; box.style.cssText = 'position:fixed;left:200px;top:200px;z-index:9999;display:flex;gap:40px';
+  box.innerHTML = '<button class="rk-btn" type="button" data-rk-tip="redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">a</button>'
+    + '<button class="rk-btn" type="button" data-rk-tip="launcher" aria-keyshortcuts="Meta+Shift+Z">b</button>'
+    + '<button class="rk-btn" type="button" data-rk-tip="find" aria-keyshortcuts="Shift+Alt+Control+f">c</button>';
+  document.querySelector('.rk').append(box);
+});
+const keyOf = async (n) => { await p.hover(`#keys-fixture > :nth-child(${n})`); await p.waitForTimeout(900); const k = await text(p, '.rk-tip .rk-key'); await p.mouse.move(5, 5); await p.waitForTimeout(200); return k; };
+const written = { both: await keyOf(1), meta: await keyOf(2), order: await keyOf(3) };
+await p.evaluate(() => Rekta.setStrings({ keyMeta: (os) => (os === 'windows' ? 'Win' : 'Meta') }));
+written.word = await keyOf(2);
+await p.evaluate(() => { Rekta.setStrings(null); document.querySelector('#keys-fixture').remove(); });
+ok(written.both === 'Ctrl+Shift+Z' && written.order === 'Ctrl+Alt+Shift+F', 'a key combination: modifiers in order, joined by +', JSON.stringify(written));
+ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Meta key outside Apple is the catalogue\'s keyMeta', JSON.stringify(written));
+// A disabled app-bar control (#126): glyph and word in disabled, no tint, still focusable; its reason is its tooltip,
+// linked with aria-describedby, after a rest and at once on keyboard focus; in "more" the item names it.
+{
+  const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';
+  const d = await p.evaluate((icon) => {
+    const el = document.createElement('div'); el.className = 'rk-appbar'; el.id = 't-bar'; el.style.cssText = 'width:700px;left:0;right:auto;bottom:120px';
+    el.innerHTML = `<span class="rk-ab-status"><i class="rk-pulse"></i><span class="rk-ab-k">live</span></span><button class="rk-ab" id="t-first" type="button">${icon}<span>first</span></button>`
+      + `<button class="rk-ab" id="t-print" type="button" data-rk-tip="print it">${icon}<span>print</span></button><button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+    document.querySelector('.rk').append(el);
+    window.tBar = Rekta.appbar(el);
+    const b = el.querySelector('#t-print');
+    window.tPrinted = 0; b.addEventListener('click', () => { window.tPrinted += 1; });
+    Rekta.disable(b, 'needs a printer');
+    const probe = document.createElement('i'); probe.style.color = 'var(--rk-disabled)'; el.append(probe);
+    const grey = getComputedStyle(probe).color; probe.remove();
+    const why = document.getElementById(b.getAttribute('aria-describedby'));
+    return { grey: getComputedStyle(b).color === grey && getComputedStyle(b.querySelector('svg')).stroke === grey, tip: b.dataset.rkTip, why: why && why.hidden ? why.textContent : '(none)', focusable: b.tabIndex === 0 && !b.disabled, hint: !!el.querySelector('.rk-hint') };
+  }, icon);
+  ok(d.grey && d.focusable && d.tip === 'needs a printer' && d.why === 'needs a printer' && !d.hint, 'disable() in the app bar: disabled colour, focusable, the reason in its tooltip and a hidden description, no hint beside it', JSON.stringify(d));
+  await p.hover('#t-print'); await p.waitForTimeout(700);
+  const rest = await p.evaluate(() => ({ tip: document.querySelector('.rk-tip').matches(':popover-open') && document.querySelector('.rk-tip').textContent, tint: getComputedStyle(document.querySelector('#t-print')).backgroundColor, said: document.querySelector('#t-print').getAttribute('aria-describedby') }));
+  ok(rest.tip === 'needs a printer' && /rgba\(0, 0, 0, 0\)|transparent/.test(rest.tint) && !/rk-tip/.test(rest.said), 'under a resting pointer the reason shows, no hover tint, described once', JSON.stringify(rest));
+  await p.click('#t-print', { force: true }); await p.waitForTimeout(100);
+  ok((await p.evaluate(() => window.tPrinted)) === 0, 'a click does nothing');
+  await p.mouse.move(5, 5); await p.waitForTimeout(100);
+  await p.focus('#t-first'); await p.keyboard.press('Tab'); await p.waitForTimeout(100);
+  ok((await focused(p)) === 't-print' && (await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open') && document.querySelector('.rk-tip').textContent)) === 'needs a printer', 'Tab reaches it and its reason shows at once', await focused(p));
+  await p.keyboard.press('Escape');
+  const more = await p.evaluate(async () => {
+    const el = document.querySelector('#t-bar'); el.style.width = '150px'; window.tBar.layout();
+    const item = [...el.querySelectorAll('.rk-ab-menu .rk-menu-item')].find((x) => x._rkFor && x._rkFor.id === 't-print');
+    return { moved: el.querySelector('#t-print').hasAttribute('data-rk-overflow'), label: item ? item.textContent : '(none)', off: item ? item.getAttribute('aria-disabled') : '' };
+  });
+  ok(more.moved && more.label === 'print (needs a printer)' && more.off === 'true', 'moved into "more", the reason goes with it: a disabled item that names it', JSON.stringify(more));
+  const back = await p.evaluate(() => { const b = document.querySelector('#t-print'); Rekta.disable(b, null); return { tip: b.dataset.rkTip, off: b.getAttribute('aria-disabled'), desc: b.getAttribute('aria-describedby'), why: !!document.querySelector('#t-bar .rk-why') }; });
+  ok(back.tip === 'print it' && back.off === null && back.desc === null && !back.why, 'enabled again: its own tooltip comes back', JSON.stringify(back));
+  await p.evaluate(() => { window.tBar.destroy(); document.querySelector('#t-bar').remove(); });
+}
 await p.mouse.move(5, 5);
 await p.click('#tree > li:nth-child(1) > .rk-tree-row'); await p.waitForTimeout(100);
 await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.waitForTimeout(100);
@@ -462,6 +774,8 @@ await p.keyboard.press('ArrowRight'); await p.keyboard.press('Enter'); await p.w
 ok((await text(p, '#file-name')) === 'rekta.css' && (await text(p, '#file-path')) === 'src / css', '→ goes in, Enter shows the file', `${await text(p, '#file-path')} ${await text(p, '#file-name')}`);
 await p.keyboard.press('ArrowLeft'); await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(150);
 ok((await p.evaluate(() => document.activeElement.getAttribute('aria-expanded'))) === 'false', '← goes up, then closes');
+await p.waitForTimeout(1100); await p.keyboard.press('s'); await p.keyboard.press('i'); await p.waitForTimeout(100);
+ok((await p.evaluate(() => document.activeElement.querySelector(':scope > .rk-tree-row').textContent.trim())) === 'site', 'letters typed together jump in the tree: "si" finds site');
 await p.click('#tree > li:nth-child(1) li > .rk-tree-row', { button: 'right' }); await p.waitForTimeout(200);
 ok(await isOpen(p, '#tree-menu') && (await text(p, '#file-name')) === 'rekta.tokens.json', 'a right click on a file selects it and opens its menu');
 await p.keyboard.press('Escape'); await p.waitForTimeout(150);
@@ -481,6 +795,10 @@ await p.click('#log .rk-virtual-row:nth-child(3)'); await p.waitForTimeout(150);
 ok((await text(p, '#log-shown')).startsWith('Line 3 · 00:00:14'), 'a click on a line selects and shows it', await text(p, '#log-shown'));
 await p.keyboard.press('End'); await p.waitForTimeout(300);
 ok((await p.evaluate(() => document.querySelector('#log [data-rk-active]') && document.querySelector('#log [data-rk-active]').getAttribute('aria-posinset'))) === '10000', 'End reaches line 10 000; it exists once it is in view');
+const logAt = () => p.evaluate(() => { const r = document.querySelector('#log [data-rk-active]'); return r ? `${r.getAttribute('aria-posinset')} ${r.querySelector('.rk-tag').dataset.status}` : '(none)'; });
+await p.waitForTimeout(1100); await p.keyboard.press('f'); await p.waitForTimeout(150); const f1 = await logAt();
+await p.keyboard.press('f'); await p.waitForTimeout(150); const f2 = await logAt();
+ok(/ error$/.test(f1) && / error$/.test(f2) && +f2.split(' ')[0] > +f1.split(' ')[0], 'letters jump in the long list: f to the first failed line, f again to the next', `${f1} / ${f2}`);
 await p.click('.rk-filters input[value=error]', { force: true }); await p.waitForTimeout(200);
 ok(/^\d+ of 10,000/.test(await text(p, '#log-facts')) && (await p.evaluate(() => [...document.querySelectorAll('#log .rk-tag')].every((t) => t.dataset.status === 'error'))), 'segments filter the long list', await text(p, '#log-facts'));
 await p.click('#log .rk-virtual-row:nth-child(1)'); await p.click('#log .rk-virtual-row:nth-child(4)', { modifiers: ['Control'] }); await p.waitForTimeout(150);
@@ -582,6 +900,11 @@ const tst2 = await p.evaluate(async () => {
   t.show('1 archived', { key: 'arch', undo: () => {}, onEnd: (w) => ends.push(`a1:${w}`) });
   t.show('2 archived', { key: 'arch', undo: () => {}, onEnd: (w) => ends.push(`a2:${w}`) });
   t.dismiss(); out.merged = ends.join(); await wait(400);
+  // The same key without an onEnd of its own: the first onEnd stands for both and hears the end, once.
+  const kept = [];
+  t.show('1 moved', { key: 'mv', undo: () => {}, onEnd: (w) => kept.push(`m1:${w}`) });
+  t.show('2 moved', { key: 'mv', undo: () => {} });
+  await wait(100); t.dismiss(); await wait(400); out.kept = kept.join();
   // release(): held, then counting although the pointer stays; setText leaves the window alone.
   const r = t.show('3 sent', { undo: () => {}, windowMs: 5000 }); await wait(400);
   r.el.dispatchEvent(new PointerEvent('pointerenter')); await wait(300);
@@ -594,6 +917,7 @@ const tst2 = await p.evaluate(async () => {
 });
 ok(tst2.deadline > 2700 && tst2.deadline < 3500, 'a busy page does not stretch a toast\'s window', tst2.deadline);
 ok(tst2.merged === 'a1:merged,a2:dismissed', 'a same-key toast tells the first onEnd it merged', tst2.merged);
+ok(tst2.kept === 'm1:dismissed', 'a same-key toast without its own onEnd keeps the first one, called once with the end', tst2.kept);
 ok(tst2.release.heldBefore && tst2.release.stood && tst2.release.runs && !tst2.release.held && !tst2.release.attr, 'release() lets a held toast run out', JSON.stringify(tst2.release));
 ok(tst2.release.live === 'off' && tst2.release.kept && tst2.release.text === '3 sent. Holding no longer extends.', 'setText changes the words quietly and leaves the window alone', JSON.stringify(tst2.release));
 const ban = await p.evaluate(async () => {
@@ -644,6 +968,47 @@ await go(p, 'navigation');
 await p.click('#n-sort'); await p.waitForTimeout(200); await p.click('#n-sort-menu [data-sort="2"]'); await p.waitForTimeout(500);
 ok((await p.evaluate(() => document.querySelector('#tok-body tr td:nth-child(3)').textContent)) === 'breakpoint', 'a radio menu sorts the tokens by group');
 await p.click('#n-sort'); await p.waitForTimeout(200); await p.click('#n-sort-menu [data-sort="1"]'); await p.waitForTimeout(300);
+// Floating surfaces by one rule (states.md): space-xs from the control, space-m from the window; one that fits on
+// neither side takes the side with more room and stays inside the window; a centred control centres its surface.
+const flo = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const px = (n) => Rekta.tokens.px(n), edge = px('--rk-space-m'), gap = px('--rk-space-xs'), vh = innerHeight, vw = document.documentElement.clientWidth;
+  const rows = (n) => '<p style="height:44px;margin:0">row</p>'.repeat(n);
+  const host = document.createElement('div'); host.innerHTML = '<style>#fx-float { max-height: 500px } #fx-tall { max-height: none }</style>'
+    + '<button id="fx-ctl" class="rk-btn" style="position:fixed;left:40%;top:400px;height:40px">ctl</button>'
+    + `<div id="fx-float" class="rk-float" popover="manual">${rows(20)}</div><div id="fx-small" class="rk-float" popover="manual">${rows(2)}</div>`
+    + `<div id="fx-tall" class="rk-float" popover="manual">${rows(30)}</div>`;
+  document.querySelector('.rk').append(host);
+  const ctl = host.querySelector('#fx-ctl'), f = host.querySelector('#fx-float'), small = host.querySelector('#fx-small'), tall = host.querySelector('#fx-tall'), out = {};
+  // Where place() put a surface, without the 4px shift of its entry.
+  const box = (el) => { const l = parseFloat(el.style.left), t = parseFloat(el.style.top); return { left: l, top: t, width: el.offsetWidth, right: l + el.offsetWidth, bottom: t + el.offsetHeight }; }, c = ctl.getBoundingClientRect();
+  // 500px under a control at 400-440 in a 900px window: 440 below, 380 above, so neither; below has more room.
+  f.showPopover(); Rekta.place(f, ctl);
+  out.nowhere = { side: f.dataset.rkSide, top: box(f).top, bottom: box(f).bottom, inside: box(f).top >= edge - 0.5 && box(f).bottom <= vh - edge + 0.5 };
+  f.hidePopover();
+  small.showPopover(); Rekta.place(small, ctl);
+  out.below = { side: small.dataset.rkSide, gap: box(small).top - c.bottom, left: box(small).left - c.left };
+  small.hidePopover();
+  tall.showPopover(); Rekta.place(tall, ctl);
+  out.tall = { top: box(tall).top, bottom: box(tall).bottom, inside: box(tall).top >= edge - 0.5 && box(tall).bottom <= vh - edge + 0.5, scrolls: tall.scrollHeight > tall.clientHeight };
+  tall.hidePopover();
+  // A control in the middle of its bar: menu() places by the trigger's data-rk-align.
+  ctl.setAttribute('data-rk-align', 'center');
+  const m = document.createElement('div'); m.innerHTML = '<button class="rk-menu-item" role="menuitem">one</button><button class="rk-menu-item" role="menuitem">two</button>';
+  host.append(m);
+  const mm = Rekta.menu(ctl, m); mm.open(); await wait(250);
+  const mc = box(m);
+  out.centre = { menu: mc.left + mc.width / 2, ctl: c.left + c.width / 2, side: m.dataset.rkSide };
+  mm.close(); ctl.style.left = `${vw - 30}px`; mm.open(); await wait(250);
+  out.atEdge = { right: box(m).right, limit: vw - edge };
+  mm.close(); mm.destroy(); host.remove();
+  return { ...out, gap, vh };
+});
+ok(flo.nowhere.side === 'below' && flo.nowhere.inside, 'a surface that fits on neither side takes the side with more room and stays in the window', JSON.stringify(flo.nowhere));
+ok(flo.below.side === 'below' && Math.abs(flo.below.gap - flo.gap) < 1 && Math.abs(flo.below.left) < 1, 'below its control by space-xs, at its leading edge', JSON.stringify(flo.below));
+ok(flo.tall.inside && flo.tall.scrolls, 'a surface taller than the window keeps to it and scrolls', JSON.stringify(flo.tall));
+ok(Math.abs(flo.centre.menu - flo.centre.ctl) <= 1, 'a menu under a control marked data-rk-align="center" is centred on it', JSON.stringify(flo.centre));
+ok(flo.atEdge.right <= flo.atEdge.limit + 0.5, 'centred near the window\'s edge, it stays inside', JSON.stringify(flo.atEdge));
 
 // Forms: make an accent. Late checks, the summary, real contrast, server refusals, the guard, confirm, disable.
 await go(p, 'forms');
@@ -667,6 +1032,12 @@ ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(
 ok(!(await p.getAttribute('#a-remove', 'aria-disabled')), 'remove can act now');
 await p.click('#a-remove'); await p.waitForTimeout(400);
 ok((await sheetTitle(p)) === 'Remove “sea”?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep it', 'confirm: the safe answer first');
+const okLook = await p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const b = document.querySelector('dialog[open] button[value=ok]'), s = getComputedStyle(b), red = rgb('var(--rk-status-error-full)');
+  return { status: b.dataset.status, words: s.color === red, frame: s.borderTopColor === red, filled: s.backgroundColor !== 'rgba(0, 0, 0, 0)', primary: b.classList.contains('rk-btn--primary') };
+});
+ok(okLook.status === 'error' && okLook.words && okLook.frame && !okLook.filled && !okLook.primary, 'confirm({ safe: \'cancel\' }): ok is the destructive button, framed in the error colour (#101)', JSON.stringify(okLook));
 await p.click('dialog[open] button[value=ok]');
 await until(p, () => p.evaluate(() => !document.querySelector('dialog[open]')), 3000);   /* the sheet leaves first; its answer counts once it has gone */
 ok((await p.evaluate(() => document.documentElement.dataset.accent)) === undefined && (await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'removed, ink again', await p.evaluate(() => `accent ${document.documentElement.dataset.accent} remove ${document.querySelector('#a-remove').getAttribute('aria-disabled')} open ${!!document.querySelector('dialog[open]')} phase ${document.querySelector('dialog[open]')?.getAttribute('data-rk-phase')}`));
@@ -691,6 +1062,94 @@ const btns = await p.evaluate(async () => {
 ok(btns.pendingKeeps, 'a running button keeps its colours (it is not disabled)', JSON.stringify(btns));
 ok(btns.danger, 'a destructive button: frame and words in the error colour, not filled', JSON.stringify(btns));
 ok(btns.quiet, 'a quiet button keeps its look while it runs (no frame appears)', JSON.stringify(btns));
+// A running button's line comes after busy-delay and goes with the label, in the same step: no busy-min (#110).
+const lineGoes = await p.evaluate(async () => {
+  const b = document.createElement('button'); b.className = 'rk-btn'; b.type = 'button'; b.textContent = 'save';
+  document.querySelector('#forms').append(b);
+  const line = () => { const a = getComputedStyle(b, '::after'); return a.content !== 'none' && a.visibility === 'visible'; };
+  let release; const run = Rekta.pending(b, new Promise((r) => { release = r; }));
+  const early = line();
+  await new Promise((r) => setTimeout(r, Rekta.tokens.ms('--rk-duration-busy-delay') + 200));
+  const shown = line(), during = b.textContent;
+  release(); await run;
+  const out = { early, shown, during, after: line(), label: b.textContent };
+  b.remove();
+  return out;
+});
+ok(!lineGoes.early && lineGoes.shown && lineGoes.during === 'save…', 'a running button: the line only after busy-delay', JSON.stringify(lineGoes));
+ok(!lineGoes.after && lineGoes.label === 'save', 'and it goes with the label, in the same step', JSON.stringify(lineGoes));
+// Every input disabled with a reason (aria-disabled) looks disabled, as a natively disabled one does (#108).
+const dis = await p.evaluate(async () => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const grey = rgb('var(--rk-disabled)'), cs = (el, pe) => getComputedStyle(el, pe);
+  const box = document.createElement('div'); box.className = 'rk-actions'; box.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;background:var(--rk-bg);padding:8px';
+  box.innerHTML = '<label class="rk-switch"><input type="checkbox" checked aria-disabled="true"> sent</label>'
+    + '<label class="rk-toggle"><span class="rk-toggle-label">feed</span><input type="checkbox" role="switch" checked aria-disabled="true"><span class="rk-toggle-track"></span><span class="rk-toggle-word" data-on="on" data-off="off"></span></label>'
+    + '<input class="rk-input" aria-disabled="true" value="text" style="width:8em">'
+    + '<select class="rk-input" aria-disabled="true" style="width:8em"><option>one</option></select>'
+    + '<div class="rk-combo" style="width:10em"><input class="rk-input" aria-disabled="true"><button class="rk-combo-btn" type="button" tabindex="-1" aria-label="open"></button></div>'
+    + '<div class="rk-stepper"><button type="button" data-rk-step="-1">−</button><input class="rk-input" type="number" value="3" aria-disabled="true"><button type="button" data-rk-step="1">+</button></div>'
+    + '<div class="rk-slider" style="width:12em"><input class="rk-range" type="range" aria-disabled="true" value="50"><output>50</output></div>'
+    + '<fieldset class="rk-segments"><label><input type="radio" name="dz" checked aria-disabled="true">one</label><label><input type="radio" name="dz" aria-disabled="true">two</label></fieldset>'
+    + '<label class="rk-drop" style="width:10em"><input type="file" aria-disabled="true"><b>drop</b> files</label>';
+  document.querySelector('.rk').append(box);
+  const q = (s) => box.querySelector(s), st = q('.rk-stepper');
+  // The slider's thumb has no computed style to read: its rule is looked up instead.
+  const rules = [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules]; } catch { return []; } });
+  const stepped = Rekta.stepper(st); st.querySelector('[data-rk-step="1"]').click();
+  const files = []; const zone = Rekta.drop(q('.rk-drop'), { onFiles: (f) => files.push(...f) });
+  const dt = new DataTransfer(); dt.items.add(new File(['x'], 'a.txt', { type: 'text/plain' }));
+  q('.rk-drop').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  const out = {
+    switch: cs(q('.rk-switch')).color === grey && cs(q('.rk-switch input')).borderTopColor === grey && cs(q('.rk-switch input')).backgroundColor === grey,
+    toggle: cs(q('.rk-toggle-track')).borderTopColor === grey && cs(q('.rk-toggle-track'), '::after').backgroundColor === grey && cs(q('.rk-toggle-label')).color === grey && cs(q('.rk-toggle-word')).color === grey && cs(q('.rk-toggle-track')).backgroundImage.includes(grey),
+    field: cs(q('input.rk-input')).color === grey && cs(q('input.rk-input')).borderTopColor === grey,
+    select: cs(q('select.rk-input')).color === grey && cs(q('select.rk-input')).borderTopColor === grey,
+    combo: cs(q('.rk-combo-btn')).color === grey,
+    stepper: [...st.querySelectorAll('[data-rk-step]')].every((b) => cs(b).color === grey && cs(b).borderTopColor === grey) && st.querySelector('input').value === '3',
+    slider: cs(q('.rk-slider output')).color === grey && cs(q('.rk-range')).cursor === 'not-allowed'
+      && rules.some((r) => /aria-disabled/.test(r.selectorText) && /slider-thumb/.test(r.selectorText) && /--rk-disabled/.test(r.style.background)),
+    segments: [...box.querySelectorAll('.rk-segments > label')].every((l) => cs(l).borderTopColor === grey) && cs(q('.rk-segments > label')).backgroundColor === grey && cs(q('.rk-segments > label + label')).color === grey,
+    drop: cs(q('.rk-drop')).borderTopColor === grey && cs(q('.rk-drop b')).color === grey && files.length === 0,
+  };
+  stepped.destroy(); zone.destroy(); box.remove();
+  return out;
+});
+for (const [k, v] of Object.entries(dis)) ok(v, `${k} with aria-disabled looks disabled${k === 'stepper' || k === 'drop' ? ' and does not act' : ''}`, JSON.stringify(dis));
+// The chosen segment lies above its neighbours: its accent frame shows at both joints (#109).
+const joints = await p.evaluate(() => {
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;background:var(--rk-bg);padding:16px';
+  box.innerHTML = '<fieldset class="rk-segments"><label><input type="radio" name="jz">one</label><label><input type="radio" name="jz" checked>two</label><label><input type="radio" name="jz">three</label></fieldset>';
+  document.querySelector('.rk').append(box);
+  const [a, b] = box.querySelectorAll('label'), r = b.getBoundingClientRect(), y = r.top + r.height / 2;
+  const at = (x) => { const e = document.elementFromPoint(x, y); return e && e.closest('label'); };
+  const out = { left: at(r.left + 1) === b, right: at(r.right - 1) === b, overlap: Math.round(a.getBoundingClientRect().right - r.left) };
+  box.remove();
+  return out;
+});
+ok(joints.left && joints.right && joints.overlap === 2, 'the chosen segment\'s frame lies on top at both joints', JSON.stringify(joints));
+// A select's chevron is the combobox's, stroked in the text colour (#135); the caret and selected text (#136).
+const writing = await p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const box = document.createElement('div');
+  box.innerHTML = '<p>words</p><select class="rk-input"><option>daily</option></select><div class="rk-combo"><input class="rk-input" value="Berlin"><button class="rk-combo-btn" type="button" aria-label="open"></button></div>'
+    + '<ul class="rk-rows" data-rk-select><li aria-selected="true"><span>picked</span></li></ul>';
+  document.querySelector('.rk').append(box);
+  const sel = box.querySelector('select'), input = box.querySelector('input'), ink = rgb('var(--rk-text-primary)');
+  const chevron = getComputedStyle(sel).backgroundImage, text = getComputedStyle(box.querySelector('p'), '::selection'), row = getComputedStyle(box.querySelector('li span'), '::selection');
+  const out = {
+    stroked: (chevron.match(/linear-gradient/g) || []).length === 2 && chevron.split(ink).length === 5 && getComputedStyle(sel).backgroundSize === '4px 6px, 4px 6px',
+    same: chevron === getComputedStyle(box.querySelector('.rk-combo-btn'), '::before').backgroundImage,
+    selection: text.backgroundColor === rgb('var(--rk-accent)') && text.color === rgb('var(--rk-on-accent)'),
+    onAccent: row.backgroundColor === rgb('var(--rk-on-accent)') && row.color === rgb('var(--rk-accent)'),
+    caret: getComputedStyle(input).caretColor === getComputedStyle(input).color,
+  };
+  box.remove();
+  return out;
+});
+ok(writing.stroked && writing.same, 'a select\'s chevron is the combobox\'s: two strokes in the text colour', JSON.stringify(writing));
+ok(writing.selection && writing.onAccent, 'selected text takes the accent with on-accent text, turned over on an accent fill', JSON.stringify(writing));
+ok(writing.caret, 'the caret is the text colour', JSON.stringify(writing));
 // A form in a sheet: a close request asks while there is input; Escape while asking keeps editing; an untouched one closes.
 await p.click('#view-open'); await p.waitForTimeout(400);
 const closeBtn = await p.evaluate(() => { const r = document.querySelector('#view-sheet .rk-sheet-close').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), label: document.querySelector('#view-sheet .rk-sheet-close').getAttribute('aria-label') }; });
@@ -708,6 +1167,7 @@ const third = await p.evaluate(() => { const d = document.querySelector('#view-s
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 ok(third.open && third.asking && third.value === 'release review' && await p.evaluate(() => document.querySelector('#view-sheet').open), 'a third and fourth Escape ask and keep editing; the sheet never closes without asking', JSON.stringify(third));
 await p.click('#view-sheet .rk-sheet-close'); await p.waitForTimeout(200);
+ok((await p.getAttribute('#view-sheet .rk-sheet-ask .rk-btn:not(.rk-btn--primary)', 'data-status')) === 'error', '"discard changes" is the destructive button');
 await p.click('#view-sheet .rk-sheet-ask .rk-btn:not(.rk-btn--primary)');
 ok(await until(p, () => p.evaluate(() => !document.querySelector('#view-sheet').open), 3000), 'the close button asks too, and discarding closes');
 await p.fill('#a-name', 'sea-2');
@@ -736,6 +1196,26 @@ await p.fill('#b-value', '999'); await p.dispatchEvent('#b-value', 'input');
 ok((await p.getAttribute('.rk-stepper [data-rk-step="1"]', 'aria-disabled')) === 'true', 'the stepper says when its limit is reached');
 await p.click('#builder .rk-segments label:nth-child(3)'); await p.waitForTimeout(100);
 ok(await p.evaluate(() => document.querySelector('#built').matches('.rk-w2.rk-h2')), 'segments choose the size');
+// Toggle buttons: pressed in the accent like a chosen segment, not pressed a quiet button; icon beside the word, the
+// state word below; a press switches at once (#140).
+const quick = () => p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const [on, off] = document.querySelectorAll('#quick .rk-btn'), word = on.querySelector('span'), state = on.querySelector('.rk-btn-state');
+  const icon = on.querySelector('svg').getBoundingClientRect(), w = word.getBoundingClientRect(), st = state.getBoundingClientRect();
+  return {
+    pressed: on.getAttribute('aria-pressed'), state: getComputedStyle(state, '::before').content,
+    on: getComputedStyle(on).backgroundColor === rgb('var(--rk-accent)') && getComputedStyle(on).color === rgb('var(--rk-on-accent)') && getComputedStyle(on).borderTopColor === rgb('var(--rk-accent)'),
+    off: getComputedStyle(off).borderTopColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(off).color === rgb('var(--rk-text-contrast-high)') && getComputedStyle(off).backgroundColor === 'rgba(0, 0, 0, 0)',
+    beside: icon.right <= w.left, below: st.top >= w.top + 8 && st.left === w.left,
+  };
+});
+const q0 = await quick();
+ok(q0.on && q0.off, 'a toggle button: pressed takes the accent, not pressed is quiet', JSON.stringify(q0));
+ok(q0.beside && q0.below && q0.state === '"on"', 'its icon beside the word, the state word below', JSON.stringify(q0));
+await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
+const q1 = await quick();
+ok(q1.pressed === 'false' && q1.state === '"off"', 'a press switches it at once; the state word follows', JSON.stringify(q1));
+await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
 await p.click('#builder .rk-toggle'); await p.waitForTimeout(100);
 ok((await p.getAttribute('#b-spark', 'role')) === 'switch' && !!(await p.$('#built .rk-spark')), 'a toggle is a switch; it adds a sparkline at once');
 await p.selectOption('#b-status', 'success'); await p.waitForTimeout(100);
@@ -784,6 +1264,17 @@ await p.click('#signin'); await p.waitForTimeout(200);
 ok(!(await p.evaluate(() => document.querySelector('#dots').hidden)) && (await p.evaluate(() => getComputedStyle(document.querySelector('#dots i')).animationName)) === 'rk-dots', 'the dots fly while a sign-in blocks');
 await p.waitForTimeout(2700);
 ok((await p.evaluate(() => document.querySelector('#dots').hidden)) && (await toast(p)) === 'Signed in.', 'and stop when it is done');
+// The busy line, the dots and the beads move by their tokens (motion.busy, motion.dots, motion.beads).
+const waits = await p.evaluate(() => {
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:0;top:0;width:500px;z-index:-1';
+  box.innerHTML = '<progress class="rk-progress"></progress><div class="rk-dots"><i></i><i></i><i></i><i></i><i></i></div><div class="rk-dots rk-dots--beads"><i></i><i></i><i></i></div>';
+  document.body.append(box);
+  const [bar, dots, beads] = box.children, s = getComputedStyle(bar), d = getComputedStyle(dots.children[1]), b = getComputedStyle(beads.children[2]);
+  const out = { size: s.backgroundSize.split(',')[0], from: bar.getAnimations()[0] && bar.getAnimations()[0].effect.getKeyframes()[0].backgroundPosition, dots: `${d.animationDelay} ${d.animationTimingFunction}`, beads: `${b.animationName} ${b.animationDelay} ${b.animationTimingFunction} ${b.width}`, count: beads.children.length };
+  box.remove();
+  return out;
+});
+ok(/^calc\(30%\)$|^30%/.test(waits.size) && waits.dots === '0.168s cubic-bezier(0.25, 0.1, 0.25, 1)' && waits.beads === 'rk-beads 0.96s cubic-bezier(0.42, 0, 0.58, 1) 6px', 'the busy segment, the dots and the beads take their tokens', JSON.stringify(waits));
 
 // Look: prefs, density, motion, the accent slot.
 await go(p, 'look');
@@ -810,6 +1301,40 @@ await p.mouse.click(700, 850);
 ok(await until(p, () => p.evaluate(() => !document.querySelector('#sheet').open), 3000), 'a tap on the shading cancels');
 await p.click('#reset'); await p.waitForTimeout(300); await p.click('#sheet button[value=reset]'); await p.waitForTimeout(600);
 ok((await toast(p)).startsWith('Demo reset') && (await text(p, '#presses')) === '0', 'reset restores the demo');
+// The answer is given as a sheet starts to leave: a tap on the shading while it leaves changes no answer, asks nothing,
+// and only ends the leaving at once; focus comes back once it has gone. A long duration-short keeps it leaving while
+// the pointer gets there, on a busy runner too.
+await p.evaluate(() => {
+  document.documentElement.style.setProperty('--rk-duration-short', '1500ms');
+  const b = document.createElement('button'); b.id = 'fx-opener'; b.textContent = 'opener'; document.querySelector('.rk').append(b); b.focus();
+  window.fxAnswer = 'none'; Rekta.confirm({ title: 'Archive 3 builds?' }).then((v) => { window.fxAnswer = v; });
+  window.fxShadeIn = document.getAnimations().some((a) => a.effect && a.effect.pseudoElement === '::backdrop' && a.animationName === 'rk-shade-in');
+});
+await p.waitForTimeout(1700);
+await p.click('dialog[open] button[value="ok"]');
+const leavingNow = await p.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return { leaving: !!d && d.getAttribute('data-rk-phase') === 'leaving', focusIn: !!d && d.contains(document.activeElement) }; });
+await p.mouse.click(700, 850); await p.waitForTimeout(100);
+const shut = await p.evaluate(() => ({ answer: window.fxAnswer, open: [...document.querySelectorAll('dialog')].some((x) => x.open), focus: document.activeElement.id, shadeIn: window.fxShadeIn }));
+ok(shut.shadeIn, 'the shading fades in with the sheet');
+ok(leavingNow.leaving && leavingNow.focusIn && shut.answer === true && !shut.open, 'ok, then a tap on the shading while it leaves: still ok, gone at once', JSON.stringify({ ...leavingNow, ...shut }));
+ok(shut.focus === 'fx-opener', 'focus comes back once the sheet has gone', shut.focus);
+// With input to lose: a close request while it leaves asks nothing and keeps the first answer.
+const dirtyLeave = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const d = document.createElement('dialog'); d.className = 'rk-sheet';
+  d.innerHTML = '<form method="dialog"><h2 class="rk-group">Edit</h2><input value="changed"><p class="rk-actions"><button class="rk-btn" value="cancel">cancel</button><button class="rk-btn" value="save">save</button></p></form>';
+  document.querySelector('.rk').append(d);
+  const s = Rekta.sheet(d, { dirty: () => true });
+  d.showModal(); await wait(1700);
+  d.querySelector('button[value="save"]').click(); await wait(50);
+  const leaving = d.getAttribute('data-rk-phase') === 'leaving';
+  d.querySelector('button[value="cancel"]').click(); await wait(50);
+  const out = { leaving, asked: !!d.querySelector('.rk-sheet-ask'), open: d.open, value: d.returnValue };
+  s.destroy(); d.remove(); document.getElementById('fx-opener').remove();
+  document.documentElement.style.removeProperty('--rk-duration-short');
+  return out;
+});
+ok(dirtyLeave.leaving && !dirtyLeave.asked && !dirtyLeave.open && dirtyLeave.value === 'save', 'a close request while a dirty sheet leaves asks nothing and keeps its answer', JSON.stringify(dirtyLeave));
 
 // Tokens: a table in a split; the current token in the address; selection; filters in the address; the divider.
 // (Places in the app bar, as a phone app has them: the router marks the place you are at.)
@@ -900,10 +1425,12 @@ const bar = await m.evaluate(async () => {
   const el = document.createElement('div'); el.className = 'rk-appbar'; el.style.cssText = 'width:320px;left:0;right:auto';
   el.innerHTML = `<button class="rk-ab rk-ab-back" type="button">${icon}<span>back</span></button><span class="rk-ab-status"><i class="rk-pulse"></i><span class="rk-ab-k">live</span></span>`
     + `<button class="rk-ab" id="t-search" type="button" data-rk-priority="pinned">${icon}<span>search</span></button>`
-    + `<button class="rk-ab" id="t-goto" type="button" aria-keyshortcuts="Control+K Meta+K">${icon}<span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl K</span></button>`
+    + `<button class="rk-ab" id="t-goto" type="button" aria-keyshortcuts="Control+K Meta+K">${icon}<span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl+K</span></button>`
     + `<button class="rk-ab" type="button" data-rk-priority="5">${icon}<span>other</span></button><button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+  // The place name as navigation.md gives it: a direct child of the place, right after the strip.
   const name = document.createElement('h1'); name.className = 'rk-place-name'; name.textContent = 'overview';
-  document.querySelector('[data-rk-place="home"]').prepend(name);
+  const strip = document.querySelector('#nav'); strip.after(name);
+  const titleLeft = strip.getBoundingClientRect().left + parseFloat(getComputedStyle(strip).paddingLeft);
   document.querySelector('.rk').append(el);
   const a = Rekta.appbar(el); await wait(100);
   const item = [...el.querySelectorAll('.rk-ab-menu .rk-menu-item')].find((b) => b._rkFor && b._rkFor.id === 't-goto');
@@ -918,15 +1445,19 @@ const bar = await m.evaluate(async () => {
   r.places = el.hasAttribute('data-rk-places') && document.documentElement.hasAttribute('data-rk-places') && getComputedStyle(document.querySelector('#nav')).display === 'none'
     && el.querySelector('#t-search').hasAttribute('data-rk-overflow');
   r.nameShown = name.getBoundingClientRect().height > 20;
+  { const t = document.createRange(); t.selectNodeContents(name); r.flush = Math.abs(t.getBoundingClientRect().left - titleLeft); }
   a.destroy(); el.remove(); await wait(50);
   r.after = !document.documentElement.hasAttribute('data-rk-places') && getComputedStyle(document.querySelector('#nav')).display !== 'none';
   name.remove();
   return r;
 });
 ok(bar.pinned, 'a pinned control stays in the bar; one without a priority moves first');
-ok(bar.words === 'go to' && bar.key && bar.ks === 'Control+K Meta+K', 'a moved control\'s menu item keeps its key hint apart', JSON.stringify(bar));
+ok(bar.words === 'go to' && bar.key === 'Ctrl+K' && bar.ks === 'Control+K Meta+K', 'a moved control\'s menu item keeps its key hint apart', JSON.stringify(bar));
 ok(bar.places && bar.after, 'places in the bar: data-rk-places on the bar and the root, the strip steps aside, back when it goes');
 ok(bar.nameHidden && bar.nameShown, '.rk-place-name shows only while the places are in the bar');
+ok(bar.flush < 1, 'right after the strip, the place name stands where the strip\'s title stood', bar.flush);
+ok(await m.evaluate(() => { const n = document.querySelectorAll('.rk-place-name'), s = n[0] && getComputedStyle(n[0]);
+  return n.length === 1 && n[0].closest('.phone') && n[0].getBoundingClientRect().height > 20 && Math.abs(parseFloat(s.fontSize) - Rekta.tokens.px('--rk-font-size-pivot-active')) < 0.5; }), 'the showcase\'s phone shows a place without a title of its own, named by .rk-place-name');
 const grow = await m.evaluate(async () => {
   const wait = (t) => new Promise((r) => setTimeout(r, t));
   const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';
@@ -947,6 +1478,18 @@ const grow = await m.evaluate(async () => {
 ok(grow.fitsFirst && /flex/.test(grow.row), 'the middle lays its parts out in a row', JSON.stringify(grow));
 ok(grow.grown && grow.midGone, 'a live word that grows moves a control into more, by itself', JSON.stringify(grow));
 ok(grow.midPinned, 'a pinned middle (a key waiting for its second) stays while more shows', JSON.stringify(grow));
+// On touch a tap on a disabled app-bar control shows its reason (#126); a tap on one that can act shows nothing.
+await m.evaluate(() => {
+  const el = document.createElement('div'); el.className = 'rk-appbar'; el.id = 't-bar'; el.style.cssText = 'width:390px;left:0;right:auto;bottom:120px';
+  el.innerHTML = '<button class="rk-ab" id="t-print" type="button"><span>print</span></button><button class="rk-ab" id="t-ok" type="button" data-rk-tip="share it"><span>share</span></button>';
+  document.querySelector('.rk').append(el);
+  Rekta.disable(el.querySelector('#t-print'), 'needs a printer');
+});
+const tipNow = () => m.evaluate(() => { const t = document.querySelector('.rk-tip'); return t && t.matches(':popover-open') ? t.textContent : ''; });
+await m.tap('#t-ok'); await m.waitForTimeout(150); const okTip = await tipNow();
+await m.tap('#t-print', { force: true }); await m.waitForTimeout(150); const why = await tipNow();
+ok(okTip === '' && why === 'needs a printer', 'touch: a tap shows a disabled control\'s reason, and no other tip', `${okTip} / ${why}`);
+await m.evaluate(() => document.querySelector('#t-bar').remove());
 await m.evaluate(() => scrollTo(0, 0)); await m.waitForTimeout(200);
 await m.tap('#tile-notes'); await m.waitForTimeout(TURN);
 ok(await visible(m, 'notes') && !(await m.evaluate(() => document.querySelector('#back').hidden)), 'phone: a tile opens the place, back shows');
@@ -1032,6 +1575,13 @@ await r.click('#tile-notes'); await r.waitForTimeout(150);
 ok(await visible(r, 'notes') && !(await visible(r, 'home')), 'reduced motion: the place changes at once');
 await setSize(r, 'w2'); await filterComp(r, 'spark'); await r.waitForTimeout(20);
 ok(await r.evaluate(() => document.querySelector('#built').getAnimations().length === 0 && document.querySelector('#built').classList.contains('rk-w2') && document.querySelectorAll('#comp-body tr:not([hidden])').length === 1), 'reduced motion: a resize and a filter apply at once');
+ok(await r.evaluate(() => {
+  const box = document.createElement('div'); box.className = 'rk-dots rk-dots--beads'; box.style.cssText = 'position:fixed;left:0;top:0;width:500px';
+  box.innerHTML = '<i></i><i></i><i></i>'; document.body.append(box);
+  const lefts = [...box.children].map((i) => Math.round(i.getBoundingClientRect().left)), still = [...box.children].every((i) => !i.getAnimations().length && getComputedStyle(i).opacity === '1');
+  box.remove();
+  return still && lefts.join() === '235,247,259';
+}), 'reduced motion: the beads stand still in the middle');
 await r.close();
 
 await browser.close();

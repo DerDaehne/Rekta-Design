@@ -5,7 +5,10 @@
 //     rekta.tokens.css    every token as a --rk- custom property: light on :root, dark for a dark system setting
 //                         (unless the page chose light) and for [data-theme="dark"], compact density for a fine
 //                         pointer (unless [data-density="comfortable"]) and for [data-density="compact"], every
-//                         motion duration 0s under reduced motion (unless [data-motion="on"]) and [data-motion="off"]
+//                         motion duration 0s under reduced motion (unless [data-motion="on"]) and [data-motion="off"],
+//                         the contrast colours for more contrast (unless [data-contrast="normal"]) and for
+//                         [data-contrast="more"], opaque glass for reduced transparency (unless
+//                         [data-transparency="normal"]) and for [data-transparency="reduce"]
 //     rekta.tokens.json   resolved, platform-neutral values for other frameworks (see docs/platforms.md)
 //     rekta.css           the components (src/css/rekta.css)
 //     rekta.fonts.css     @font-face rules for the bundled Barlow files, copied to dist/fonts/
@@ -22,7 +25,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFi
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { contrast, distance, parse, toHex8 } from './lib/color.mjs';
+import { contrast, distance, over, parse, toHex8 } from './lib/color.mjs';
 import { coreFonts, coreIcons, coreTokens } from './lib/core.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,15 +52,16 @@ export function tokenName(path) {
     case 'color': return rest.slice(1).join('-');                    // color.light.text.primary -> text-primary
     case 'typography': {
       const [kind, key] = rest;
-      return { 'font-family': `font-${key}`, weight: `font-weight-${key}`, size: `font-size-${key}`, 'line-height': `line-height-${key}` }[kind];
+      return { 'font-family': `font-${key}`, weight: `font-weight-${key}`, size: `font-size-${key}`, metrics: `font-${key}`, 'line-height': `line-height-${key}` }[kind];
     }
     case 'spacing': return `space-${rest.join('-')}`;
     case 'radius': return `radius-${rest.join('-')}`;
     case 'size': return rest.join('-');
     case 'density': return rest.slice(1).join('-');                  // density.compact.control-height -> control-height
     case 'motion': {
+      // A group of its own (heft, busy, dots, ...) prefixes its name: motion.heft.min -> heft-min.
       const [kind, key] = rest;
-      return { duration: `duration-${key}`, easing: `ease-${key}`, transform: key }[kind];
+      return { duration: `duration-${key}`, easing: `ease-${key}`, transform: key, proportion: key }[kind] ?? `${kind}-${key}`;
     }
     case 'timing': return `duration-${rest.join('-')}`;
     case 'layer': return `layer-${rest.join('-')}`;
@@ -117,6 +121,7 @@ export function buildTokensCss(tokens) {
     .flatMap((g) => collect(tokens, tokens[g], [g]));
   const durations = collect(tokens, tokens.motion.duration, ['motion', 'duration']);
   const zero = durations.map(({ name }) => `  --${PREFIX}-${name}: 0s;`).join('\n');
+  const { contrastLight, contrastDark } = contrastLists(tokens);
   return `/* Rekta Design tokens. Generated from tokens/rekta.tokens.json by scripts/build.mjs; do not edit. */
 
 /* Light, comfortable, full motion. */
@@ -161,7 +166,62 @@ ${zero.replace(/^/gm, '  ')}
 :root[data-motion="off"] {
 ${zero}
 }
+
+/* More contrast: the system setting, unless the page chose normal; and an explicit choice. Light first, dark over it.
+   Both blocks set the same names (every colour either contrast set changes), so no light value reaches dark. */
+@media (prefers-contrast: more) {
+  :root:not([data-contrast="normal"]) {
+${decl(tokens, contrastLight).replace(/^/gm, '  ')}
+  }
+}
+:root[data-contrast="more"] {
+${decl(tokens, contrastLight)}
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root:not([data-contrast="normal"]):not([data-theme="light"]) {
+${decl(tokens, contrastDark).replace(/^/gm, '  ')}
+  }
+}
+@media (prefers-contrast: more) {
+  :root:not([data-contrast="normal"])[data-theme="dark"] {
+${decl(tokens, contrastDark).replace(/^/gm, '  ')}
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="more"]:not([data-theme="light"]) {
+${decl(tokens, contrastDark).replace(/^/gm, '  ')}
+  }
+}
+:root[data-contrast="more"][data-theme="dark"] {
+${decl(tokens, contrastDark)}
+}
+
+/* Reduced transparency: glass is the ground (rekta.css takes the blur away). */
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-transparency="normal"]) {
+    --${PREFIX}-glass: var(--${PREFIX}-bg);
+  }
+}
+:root[data-transparency="reduce"] {
+  --${PREFIX}-glass: var(--${PREFIX}-bg);
+}
 `;
+}
+
+// The contrast colours as declarations for each theme: every name either contrast set changes, from the theme's
+// contrast set where it has one and from the theme itself where not. The accent is never in them, so a product's
+// accent stays.
+export const CONTRAST = { light: 'light-contrast', dark: 'dark-contrast' };
+function contrastLists(tokens) {
+  const names = new Set();
+  for (const set of Object.values(CONTRAST)) walk(tokens.color[set], ['color', set], (p) => names.add(tokenName(p)));
+  const list = (theme) => {
+    const by = new Map();
+    for (const e of collect(tokens, tokens.color[theme], ['color', theme])) by.set(e.name, e);
+    for (const e of collect(tokens, tokens.color[CONTRAST[theme]], ['color', CONTRAST[theme]])) by.set(e.name, e);
+    return collect(tokens, tokens.color[theme], ['color', theme]).filter((e) => names.has(e.name)).map((e) => by.get(e.name));
+  };
+  return { contrastLight: list('light'), contrastDark: list('dark') };
 }
 
 // Resolved, platform-neutral values: colours as #rrggbb or #rrggbbaa, lengths in logical px, durations in ms,
@@ -189,13 +249,19 @@ export function buildTokensJson(tokens, version) {
     walk(node, base, (path, token) => { if (token.$description) out[tokenName(path)] = token.$description; });
     return out;
   };
-  const all = {};
-  for (const g of ['color', 'typography', 'spacing', 'radius', 'size', 'density', 'motion', 'timing', 'layer', 'breakpoint']) Object.assign(all, describe(tokens[g], [g]));
+  // A colour's description is its light and dark one; the contrast sets describe only why their value differs.
+  const all = describe({ light: tokens.color.light, dark: tokens.color.dark }, ['color']);
+  for (const g of ['typography', 'spacing', 'radius', 'size', 'density', 'motion', 'timing', 'layer', 'breakpoint']) Object.assign(all, describe(tokens[g], [g]));
   return {
     name: 'Rekta Design',
     version,
     units: { length: 'logical px (CSS px, Android dp, Apple pt)', duration: 'ms', angle: 'deg', easing: 'cubic-bezier [x1, y1, x2, y2]', fluid: '{min, max, viewport}: interpolate between min and max at viewport × hosting box width' },
-    themes: { light: group(tokens.color.light, ['color', 'light']), dark: group(tokens.color.dark, ['color', 'dark']) },
+    // light-contrast and dark-contrast: the whole theme for more contrast, its contrast set over it (docs/colour.md).
+    themes: {
+      light: group(tokens.color.light, ['color', 'light']), dark: group(tokens.color.dark, ['color', 'dark']),
+      'light-contrast': { ...group(tokens.color.light, ['color', 'light']), ...group(tokens.color[CONTRAST.light], ['color', CONTRAST.light]) },
+      'dark-contrast': { ...group(tokens.color.dark, ['color', 'dark']), ...group(tokens.color[CONTRAST.dark], ['color', CONTRAST.dark]) },
+    },
     densities: { comfortable: group(tokens.density.comfortable, ['density', 'comfortable']), compact: group(tokens.density.compact, ['density', 'compact']) },
     typography: group(tokens.typography, ['typography']),
     spacing: group(tokens.spacing, ['spacing']),
@@ -230,28 +296,55 @@ export function toGlobal(esm) {
 
 // Said by --check without failing it: trade-offs the docs name (accessibility.md), measured on every build.
 const notes = [];
+// The text colours allowed on glass, and the parts of rekta.css that stand on it: the app bar and everything in it
+// (.rk-appbar, .rk-ab, .rk-ab-*), but not its "more" menu, which floats on bg.
+const GLASS_TEXT = ['text-primary', 'text-contrast-high'];
+const GLASS_PARTS = { '.rk-appbar': /\.rk-(?:appbar|ab(?:-(?!menu\b)[\w-]+)?)(?![\w-])/ };
 
 function check(tokens) {
   const problems = [];
   const t = buildTokensJson(tokens, 'check');
   const STATUS = ['info', 'success', 'warning', 'error'];
-  for (const theme of ['light', 'dark']) {
+  // A contrast set changes only colours its theme has, and never the accent: that slot is the product's.
+  for (const [theme, set] of Object.entries(CONTRAST)) {
+    const own = new Set();
+    walk(tokens.color[theme], ['color', theme], (p) => own.add(tokenName(p)));
+    walk(tokens.color[set], ['color', set], (p) => {
+      const n = tokenName(p);
+      if (!own.has(n)) problems.push(`color.${set} sets ${n}, which color.${theme} does not have`);
+      if (n === 'accent' || n === 'on-accent') problems.push(`color.${set} sets ${n}: the accent is the product's (docs/platforms.md)`);
+    });
+  }
+  for (const theme of ['light', 'dark', CONTRAST.light, CONTRAST.dark]) {
     const c = t.themes[theme];
+    // More contrast holds every text pair at 7:1 (WCAG AAA); marks keep 3:1.
+    const text = theme.endsWith('-contrast') ? 7 : 4.5;
     const need = (fg, bg, min, what) => { const r = contrast(c[fg], c[bg]); if (r < min) problems.push(`${theme}: ${what} ${fg} on ${bg} is ${r.toFixed(2)}:1, needs ${min}:1`); };
     for (const bg of ['bg', 'surface']) {
-      need('text-primary', bg, 4.5, 'text');
-      need('text-contrast-high', bg, 4.5, 'secondary text');
-      need('text-contrast-medium', bg, 4.5, 'placeholder');
+      need('text-primary', bg, text, 'text');
+      need('text-contrast-high', bg, text, 'secondary text');
+      need('text-contrast-medium', bg, text, 'placeholder');
       need('focus', bg, 3, 'focus ring');
       need('accent', bg, 3, 'accent');
       for (const s of STATUS) need(`status-${s}-full`, bg, 3, 'status mark');
+      // Under more contrast rekta.css draws these words in ink and keeps the error frame.
       need('status-error-full', bg, 4.5, 'a destructive button\'s words (.rk-btn[data-status=error])');
     }
-    need('on-accent', 'accent', 4.5, 'text');
+    need('on-accent', 'accent', text, 'text');
+    // The plain toast is ink with ground-coloured words; a tag in it keeps its neutral square (rekta.css).
+    need('bg', 'text-primary', text, 'a tag\'s word in an ink toast');
+    // Under more contrast that square takes the toast's words' colour (rekta.css), checked by the line above.
+    if (!theme.endsWith('-contrast')) need('text-contrast-medium', 'text-primary', 3, 'a neutral tag\'s square in an ink toast');
     for (const s of STATUS) {
-      need('text-primary', `status-${s}-tile`, 4.5, 'tile text');
-      need('text-primary', `status-${s}-soft`, 4.5, 'soft label');
+      need('text-primary', `status-${s}-tile`, text, 'tile text');
+      need('text-primary', `status-${s}-soft`, text, 'soft label');
       need(`status-${s}-full`, `status-${s}-soft`, 3, 'mark on its soft tint');
+    }
+    // Text on glass: the blur averages what is behind, so all white and all black are the limits. Only text-primary
+    // and text-contrast-high may stand on it (docs/colour.md); rekta.css is held to that below.
+    for (const behind of ['#ffffff', '#000000']) for (const fg of GLASS_TEXT) {
+      const r = contrast(c[fg], over(c.glass, behind));
+      if (r < text) problems.push(`${theme}: ${fg} on glass over ${behind} is ${r.toFixed(2)}:1, needs ${text}:1`);
     }
     // Statuses must stay apart under red-green colour blindness (OKLab distance of the simulated colours).
     for (const form of ['full', 'tile']) for (const kind of ['protan', 'deutan']) {
@@ -269,6 +362,19 @@ function check(tokens) {
   }
   // Every --rk- property the stylesheet reads is a token or a documented hook.
   const css = readFileSync(join(root, 'src', 'css', 'rekta.css'), 'utf8');
+  // On glass only the text colours measured above: a rule that colours a part of a glass surface in a lower one
+  // fails (disabled stays allowed: it is not text to read, WCAG 1.4.3). A new glass surface names its parts here.
+  for (const [, sel, body] of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectors = sel.trim().split(/,(?![^(]*\))/).map((x) => x.trim());
+    if (/background(?:-color)?\s*:[^;]*var\(--rk-glass\)/.test(body)) {
+      for (const x of selectors) if (!(x in GLASS_PARTS)) problems.push(`rekta.css puts ${x} on glass: add its parts to GLASS_PARTS in scripts/build.mjs, so the text on it is checked`);
+    }
+    const color = /(?:^|;)\s*color\s*:\s*var\(--rk-([\w-]+)\)/.exec(body);
+    if (!color || GLASS_TEXT.includes(color[1]) || !/^text-/.test(color[1])) continue;
+    for (const x of selectors) for (const [host, parts] of Object.entries(GLASS_PARTS)) {
+      if (parts.test(x)) problems.push(`rekta.css colours ${x} in ${color[1]} on glass (${host}): only ${GLASS_TEXT.join(' and ')} stand on glass`);
+    }
+  }
   const defined = new Set();
   for (const g of ['color']) walk(tokens.color.light, ['color', 'light'], (p) => defined.add(tokenName(p)));
   for (const g of ['typography', 'spacing', 'radius', 'size', 'motion', 'timing', 'layer', 'breakpoint']) walk(tokens[g], [g], (p) => defined.add(tokenName(p)));
@@ -284,6 +390,33 @@ function check(tokens) {
   }
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
+  }
+  // Every curve is a token: a CSS keyword curve (ease, ease-in, ease-out, ease-in-out) has no value a native
+  // implementation could read.
+  for (const m of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/[\s:,](ease(?:-in-out|-in|-out)?)(?=[\s;,)])/g)) problems.push(`rekta.css uses the keyword curve ${m[1]}: read a --rk-ease-* token`);
+  // A keyframe's offset cannot read a property: where one stands for a token, it must say the token's value.
+  {
+    const frames = (name) => (new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`).exec(css) || [])[1] || '';
+    const at = (name, prop) => [...frames(name).matchAll(/(\d+(?:\.\d+)?)% \{([^}]*)\}/g)].filter((m) => m[2].includes(prop)).map((m) => +m[1] / 100);
+    const want = (name, prop, token, value) => {
+      if (!at(name, prop).some((x) => Math.abs(x - value) < 1e-9)) problems.push(`rekta.css @keyframes ${name} has no ${prop} stop at ${+(value * 100).toFixed(4)}% (${token})`);
+    };
+    const curve = (name, stop, token) => {
+      const body = (new RegExp(`\\b${stop}% \\{([^}]*)\\}`).exec(frames(name)) || [])[1] || '';
+      const v = `cubic-bezier(${t.motion[token].join(', ')})`;
+      if (!body.includes(`animation-timing-function: ${v}`)) problems.push(`rekta.css @keyframes ${name} ${stop}% does not run on ${token}, ${v}`);
+    };
+    const m = t.motion;
+    for (const k of ['rk-turn-out', 'rk-turn-back-out', 'rk-turn-pressed']) want(k, 'opacity: 1', 'turn-out-whole', m['turn-out-whole']);
+    for (const k of ['rk-turn-in', 'rk-turn-back-in']) want(k, 'opacity: 1', 'turn-in-whole', m['turn-in-whole']);
+    want('rk-dots', 'opacity: 1', 'dots-whole-at', m['dots-whole-at']);
+    want('rk-dots', 'opacity: 1', 'dots-fade-at', m['dots-fade-at']);
+    want('rk-dots', 'var(--rk-dots-middle-start)', 'dots-middle-start-at', m['dots-middle-start-at']);
+    want('rk-dots', 'var(--rk-dots-middle-end)', 'dots-middle-end-at', m['dots-middle-end-at']);
+    curve('rk-dots', '0', 'dots-ease-arrive');
+    curve('rk-dots', String(+(m['dots-middle-end-at'] * 100).toFixed(4)), 'dots-ease-leave');
+    want('rk-beads', 'opacity: 1', 'beads-fade', m['beads-fade']);
+    want('rk-beads', 'opacity: 1', '1 - beads-fade', 1 - m['beads-fade']);
   }
   // The script reads tokens by name too (and builds the pivot's font-size names from a stem).
   const js = readFileSync(join(root, 'src', 'js', 'rekta.js'), 'utf8');
@@ -353,6 +486,12 @@ function check(tokens) {
     for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
       if (!existsSync(join(root, 'src', 'js', f.replace(/\.js$/, '.d.ts')))) problems.push(`src/js/${f} has no declaration (${f.replace(/\.js$/, '.d.ts')})`);
     }
+    // No `any` in a declaration: a product that keeps dist/ in its own tree lints these files with its code, and
+    // typescript-eslint's recommended rules refuse it. Comments are prose and may say "any".
+    for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => x.endsWith('.d.ts'))) {
+      const code = readFileSync(join(root, 'src', 'js', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+      code.split('\n').forEach((l, i) => { if (/(?<![\w$])any(?![\w$])/.test(l.replace(/'[^']*'|"[^"]*"/g, ''))) problems.push(`src/js/${f} uses the type any (${l.trim().slice(0, 60)})`); });
+    }
   }
   // Importing the module touches no DOM, so a page that renders on the server can import it (call it in the browser).
   try { execFileSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(pathToFileURL(join(root, 'src', 'js', 'rekta.js')).href)})`], { stdio: 'pipe' }); }
@@ -364,15 +503,21 @@ function check(tokens) {
 
 // A product's own values, checked against the same rules as Rekta's (docs/data.md): the domain colour codes it sets
 // (--rk-series-N, per theme) must hold 3:1 against the ground and surface, stay 0.09 apart under red-green colour
-// blindness (tritan reported), be set in both themes, and never colour text.
+// blindness (tritan reported), be set in both themes, and never colour text. A product that changes --rk-pivot-wide
+// is warned when no container query repeats the value: the wide facets' first paint would use another.
 //   node scripts/build.mjs --check-product product.css
 export function checkProduct(css, file = 'product CSS') {
-  const problems = [], notes = [], t = buildTokensJson(loadTokens(), 'check'), codes = { light: {}, dark: {} };
+  const problems = [], notes = [], warnings = [], t = buildTokensJson(loadTokens(), 'check'), codes = { light: {}, dark: {} };
+  const wides = new Set(), queries = new Set();
   // Walk the rules: a declaration is dark when a selector or @media around it says dark.
   const stack = [];
   let buf = '';
   for (const ch of css.replace(/\/\*[\s\S]*?\*\//g, '')) {
-    if (ch === '{') { stack.push(buf.trim()); buf = ''; }
+    if (ch === '{') {
+      const at = /^@container\s+[\w-]+\s*\(\s*min-width\s*:\s*([^)]+?)\s*\)/.exec(buf.trim());
+      if (at) queries.add(at[1]);
+      stack.push(buf.trim()); buf = '';
+    }
     else if (ch === '}') { scan(buf); buf = ''; stack.pop(); }
     else if (ch === ';') { scan(buf); buf = ''; }
     else buf += ch;
@@ -384,6 +529,8 @@ export function checkProduct(css, file = 'product CSS') {
       codes[theme][+m[1]] = m[2];
     }
     if (/^\s*(color|-webkit-text-fill-color)\s*:.*var\(--rk-series-/.test(decl)) problems.push(`${file}: text drawn in a series colour (${decl.trim()}); codes are for small marks only`);
+    const w = /^\s*--rk-pivot-wide\s*:\s*(.+?)\s*$/.exec(decl);
+    if (w) wides.add(w[1]);
   }
   for (const theme of ['light', 'dark']) {
     const c = t.themes[theme], set = codes[theme], ns = Object.keys(set).map(Number).sort((x, y) => x - y);
@@ -401,7 +548,17 @@ export function checkProduct(css, file = 'product CSS') {
       const d = distance(a, b, 'tritan'); if (d < 0.09) notes.push(`${file}: ${theme} --rk-series-${ns[i]} and -${ns[j]} are ${d.toFixed(3)} apart under tritan`);
     }
   }
-  return { problems, notes, count: Object.keys(codes.light).length + Object.keys(codes.dark).length };
+  for (const w of wides) if (!/^0(px)?$/.test(w) && !queries.has(w)) warnings.push(`${file}: --rk-pivot-wide is ${w}, but no @container (min-width: ${w}) repeats it, so the wide facets' first paint keeps size.pivot-wide (docs/behaviour.md, pivot(): the first paint)`);
+  return { problems, notes, warnings, count: Object.keys(codes.light).length + Object.keys(codes.dark).length };
+}
+
+// rekta.css as it ships. A container query cannot read a custom property, so the wide facets' first paint
+// (@container rk-facets) takes size.pivot-wide's value here, from the token, never a copy by hand; 0 is never.
+const FACETS_QUERY = '@container rk-facets (min-width: var(--rk-pivot-wide))';
+export function componentsCss(tokens) {
+  const css = readFileSync(join(root, 'src', 'css', 'rekta.css'), 'utf8'), v = tokens.size['pivot-wide'].$value;
+  if (!css.includes(FACETS_QUERY)) throw new Error(`src/css/rekta.css lacks "${FACETS_QUERY}" for the wide facets' first paint`);
+  return css.replace(FACETS_QUERY, `@container rk-facets ${v.value > 0 ? `(min-width: ${v.value}${v.unit})` : '(width < 0px)'}`);
 }
 
 // Icons: src/icons/*.svg (20 × 20, stroke 1.6, square ends) become one sprite of <symbol id="rk-i-NAME"> for the web
@@ -426,7 +583,7 @@ export function buildDist() {
   mkdirSync(join(dist, 'fonts'), { recursive: true });
   writeFileSync(join(dist, 'rekta.tokens.css'), buildTokensCss(tokens));
   writeFileSync(join(dist, 'rekta.tokens.json'), JSON.stringify(buildTokensJson(tokens, pkg.version), null, 2) + '\n');
-  writeFileSync(join(dist, 'rekta.css'), `/* Rekta Design ${pkg.version} components. Load after rekta.tokens.css. */\n` + readFileSync(join(root, 'src', 'css', 'rekta.css'), 'utf8'));
+  writeFileSync(join(dist, 'rekta.css'), `/* Rekta Design ${pkg.version} components. Load after rekta.tokens.css. */\n` + componentsCss(tokens));
   writeFileSync(join(dist, 'rekta.fonts.css'), fontsCss());
   for (const f of readdirSync(join(root, 'site', 'fonts', 'barlow'))) copyFileSync(join(root, 'site', 'fonts', 'barlow', f), join(dist, 'fonts', f));
   const esm = readFileSync(join(root, 'src', 'js', 'rekta.js'), 'utf8').replace(/^export const version = '[^']*';/m, `export const version = '${pkg.version}';`);
@@ -494,12 +651,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (!file) { console.error('usage: node scripts/build.mjs --check-product product.css'); process.exit(2); }
     const r = checkProduct(readFileSync(file, 'utf8'), file);
     for (const n of r.notes) console.log(`  i ${n}`);
+    for (const n of r.warnings) console.log(`  ! ${n}`);
     if (r.problems.length) { console.error(r.problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
     console.log(r.count ? `✓ ${file}: ${r.count} domain colour values pass: 3:1 on the ground, apart under colour blindness, both themes, no text` : `✓ ${file}: no domain colour values (--rk-series-N) to check`);
   } else if (process.argv.includes('--check')) {
     const problems = checkAll();
     if (problems.length) { console.error(problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
-    console.log('✓ tokens and stylesheet pass: contrast, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
+    console.log('✓ tokens and stylesheet pass: contrast (7:1 for more contrast), text on glass over white and black, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
     for (const n of notes) console.log(`  i ${n}`);
   } else {
     console.log(`✓ dist/ written (Rekta Design ${buildDist()})`);

@@ -258,6 +258,12 @@ tells you when any of them changed and returns an id for
 and
 .Fn rk_app_is_reduced_motion
 say how things stand.
+.It Fn rk_app_set_contrast "bool more"
+More contrast: the contrast colours, every text pair at 7:1, and a 2px frame
+in its full colour on each status tile.
+Off until set; an app that reads the system's high-contrast setting passes it
+on.
+A change cross-fades the windows.
 .It Fn rk_app_set_series "int code" "rk_color light" "rk_color dark"
 A domain's colour code, as the web's
 .Li --rk-series-1
@@ -519,7 +525,10 @@ Text that wraps at its width, in one of the type roles
 .It Fn rk_button "const char *label" "void (*on_press)(rk_view *, void *)" "void *user"
 A button.
 .Fn rk_button_set_kind
-makes it primary, quiet or a bar button;
+makes it primary, quiet, a bar button or destructive
+.Pf ( Dv RK_BUTTON_DESTRUCTIVE :
+the button that takes an action that cannot be undone, its frame and words in
+the error colour, never filled);
 .Fn rk_button_set_icon
 gives it an icon
 .Pq Sx ICONS ;
@@ -542,7 +551,8 @@ fills it with a status;
 .Fn rk_tile_set_series
 and
 .Fn rk_tile_set_progress
-change what it shows;
+change what it shows
+(a sparkline of one value, or of equal values, lies flat along the bottom; no values removes it);
 .Fn rk_tile_set_code
 draws its sparkline in a domain colour.
 A tile with an activate handler presses and opens something.
@@ -574,7 +584,10 @@ moves a row from the app.
 A menu.
 .Fn rk_menu_add
 adds an item \(em a lowercase verb or option, a key hint, a handler \(em
-and returns its index;
+and returns its index.
+A key hint is written with a plus between the keys, the modifiers in the
+order Ctrl, Alt, Shift, Super, then the key, as in
+.Dq Ctrl+Shift+Z .
 .Fn rk_menu_add_separator
 and
 .Fn rk_menu_add_label
@@ -596,8 +609,16 @@ and
 .Fn rk_menu_open_at
 open it by hand,
 .Fn rk_menu_close
-closes it; it floats below what opened it, above where there is no
-room, never outside the window.
+closes it; it floats space-xs below what opened it when it fits there,
+else above when it fits there, else on the side with more room, never
+outside the window (space-m from its edges; a menu taller than the
+window scrolls its rows).
+It starts at the opener's leading edge;
+.Fn rk_menu_set_align
+with
+.Dv RK_ALIGN_CENTER
+centres it on the opener, for a control that stands in the middle of
+its bar.
 Keys: Up and Down, Home and End, a letter, Enter or Space, Escape; Tab or
 a press outside closes it.
 .Fn rk_menu_opener
@@ -727,7 +748,11 @@ places.
 A click selects one and calls the
 .Fn rk_list_on_show
 handler; Ctrl and a click toggles and starts selecting several, Shift and
-a click takes a range, Escape ends it;
+a click takes a range, Escape ends it.
+Letters go to the next row whose title (a table's first cell) starts with
+them; typed less than
+.Li timing.type-ahead
+apart they are one prefix, and the same letter again moves on.
 .Fn rk_list_on_change
 hears what the user changes.
 .Fn rk_list_is_selected ,
@@ -779,7 +804,10 @@ and
 .Fn rk_tree_set_all_open
 do it.
 Up and Down move, Right opens or goes in, Left closes or goes up, * opens
-every sibling, a letter goes to the next item starting with it.
+every sibling, letters go to the next item starting with them (one prefix
+while typed less than
+.Li timing.type-ahead
+apart).
 .Fn rk_tree_select ,
 .Fn rk_tree_selected ,
 .Fn rk_tree_is_open ,
@@ -1007,7 +1035,11 @@ hears the user close it.
 A question in a sheet with two answers: the safe one is the primary button
 and has focus
 .Pf ( Fa desc->cancel_is_safe
-for what cannot be undone); Escape and the shading answer cancel.
+for what cannot be undone, and
+.Fa ok
+is then
+.Dv RK_BUTTON_DESTRUCTIVE ) ;
+Escape and the shading answer cancel.
 .Fa answered
 hears it once.
 Returns the sheet, so the app may dismiss it before the answer.
@@ -1023,6 +1055,10 @@ Changes between the two travel with the motion:
 .Dv RK_MOTION_ENTER ,
 .Dv RK_MOTION_LEAVE ,
 .Dv RK_MOTION_MORPH .
+A control in an
+.Fn rk_hstack
+enters and leaves by a fade alone, entering once the rest of its row has
+made room.
 .Fn rk_animate_on_done
 runs when they have arrived.
 .It Fn rk_view_transition "rk_view *view" "rk_transition transition"
@@ -1032,6 +1068,8 @@ Called before a change:
 .Dv RK_TRANSITION_FLIP
 (a new status turns the tile over),
 .Dv RK_TRANSITION_CROSSFADE .
+Tiles of one window that peek or flip within duration-moderate go one after
+another in reading order, duration-greet apart, four steps at most.
 .El
 .Pp
 Under reduced motion every change is instant, never skipped.

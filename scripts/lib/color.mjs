@@ -20,6 +20,12 @@ export function toHex8({ r, g, b, a }) {
   return '#' + h(r) + h(g) + h(b) + (a < 1 ? h(a) : '');
 }
 
+// A translucent colour laid over an opaque one (alpha compositing in sRGB, as a browser paints it), as #rrggbb.
+export function over(top, under) {
+  const t = parse(top), u = parse(under);
+  return toHex8({ r: t.r * t.a + u.r * (1 - t.a), g: t.g * t.a + u.g * (1 - t.a), b: t.b * t.a + u.b * (1 - t.a), a: 1 });
+}
+
 const lin = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 const gam = (v) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
 

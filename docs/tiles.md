@@ -79,7 +79,9 @@ data.
 
 - **A tile that opens** is a link (to a place) or a button (that opens a
   sheet). It nudges back where it is pressed, and a link turns the place
-  (see [motion.md](motion.md)). There is no arrow glyph on it: the press
+  (see [motion.md](motion.md)). A grid of them is one tab stop, the
+  arrows moving to the nearest tile that way
+  ([navigation.md](navigation.md#a-grid-of-tiles)). There is no arrow glyph on it: the press
   and the turn say that it goes somewhere.
 - **A tile that only informs** is not a control. It does not press and
   takes no focus.
@@ -106,7 +108,7 @@ a plain region on the ground with the figures as a tile shows them and
 its controls below.
 
 ```html
-<section class="rk-region" aria-labelledby="job">
+<section class="rk-region rk-status-region" aria-labelledby="job">
   <p class="rk-kicker" id="job">nightly build · <span class="rk-tag" data-status="info">running</span></p>
   <div class="rk-figures">
     <span class="rk-stat"><b>412</b><span>tests run</span></span>
@@ -117,6 +119,11 @@ its controls below.
 </section>
 ```
 
+- **Spacing:** `.rk-status-region` gives it a section's rhythm:
+  `space-m` between the parts (figures and actions, as in a sheet or a
+  section) and `space-s` between the kicker and the figures (as in a
+  tile, where the kicker stands over its figures). `.rk-region` alone
+  adds no space: lists and tables are regions too.
 - **Not a tile:** no fill (its status is a tag in the kicker, never the
   ground), no press, no focus on the region, no link around it.
 - **Figures** in `.rk-figures` (`.rk-stat` each: the number over its

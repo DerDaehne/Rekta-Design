@@ -111,6 +111,7 @@ typedef enum rk_duration {
   RK_DURATION_FLOAT, RK_DURATION_PIVOT_GLIDE, RK_DURATION_PIVOT_SIZE,
   RK_TIMING_TOAST, RK_TIMING_TAP_DELAY, RK_TIMING_LONG_PRESS, RK_TIMING_TIP_DELAY,
   RK_TIMING_STALE,                                 /* live data without an update this long is stale (the app's to show) */
+  RK_TIMING_TYPE_AHEAD,                            /* letters typed less than this apart form one prefix to jump to */
   RK_DURATION_FORCE32 = 0x7fffffff
 } rk_duration;
 
@@ -149,6 +150,9 @@ RK_API void rk_app_set_motion(rk_motion_pref motion);
 RK_API bool rk_app_is_reduced_motion(void);
 RK_API void rk_app_set_density(rk_density density);
 RK_API void rk_app_set_accent(rk_color light, rk_color dark);    /* 0, 0: the ink of the theme */
+/* More contrast (docs/colour.md): the contrast colours, every text pair at 7:1, and a 2px frame in its full colour on
+   each status tile. Off until set: an app that reads the system's high-contrast setting passes it on. */
+RK_API void rk_app_set_contrast(bool more);
 /* A domain's colour code, as the web's --rk-series-1 to -8 (docs/data.md): colours its users already read, such as
    heart-rate zones, for small marks only - a tile's sparkline, a row's tag square (rk_tile_set_code, rk_row_set_code),
    a custom view's marks - never text, never a fill. Per theme, as the accent; dark 0 takes light; 0, 0: ink again.
@@ -440,7 +444,9 @@ RK_API void rk_label_set_text(rk_view *label, const char *text);
 RK_API void rk_label_set_style(rk_view *label, rk_text_style style);
 RK_API void rk_label_set_color(rk_view *label, rk_role role);
 
-typedef enum rk_button_kind { RK_BUTTON_DEFAULT, RK_BUTTON_PRIMARY, RK_BUTTON_QUIET, RK_BUTTON_BAR, RK_BUTTON_FORCE32 = 0x7fffffff } rk_button_kind;
+/* RK_BUTTON_DESTRUCTIVE: the button that takes an action that cannot be undone (forms.md, "the destructive button"),
+   its frame and words in status-error-full, never filled; the safe answer beside it is the primary one. */
+typedef enum rk_button_kind { RK_BUTTON_DEFAULT, RK_BUTTON_PRIMARY, RK_BUTTON_QUIET, RK_BUTTON_BAR, RK_BUTTON_DESTRUCTIVE, RK_BUTTON_FORCE32 = 0x7fffffff } rk_button_kind;
 /* A button keeps its own width, also in a column. */
 RK_API rk_view *rk_button(const char *label, void (*on_press)(rk_view *button, void *user), void *user);   /* on_press may be NULL */
 RK_API void rk_button_set_label(rk_view *button, const char *label);
@@ -453,7 +459,7 @@ RK_API rk_view *rk_tile(const char *value, const char *label);   /* no status un
 RK_API void rk_tile_set_status(rk_view *tile, rk_status status, const char *word);
 RK_API void rk_tile_set_stat(rk_view *tile, const char *value, const char *label);
 RK_API void rk_tile_set_message(rk_view *tile, const char *message);     /* NULL removes it */
-RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);   /* a sparkline; 0 removes it */
+RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);   /* a sparkline (one value: flat); 0 removes it */
 RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1; < 0 removes it */
 RK_API void rk_tile_set_code(rk_view *tile, int code);   /* its sparkline in a domain colour (rk_app_set_series); 0: ink */
 
@@ -471,7 +477,9 @@ RK_API void rk_row_set_code(rk_view *row, int code);
 RK_API void rk_rows_set_sortable(rk_view *rows, void (*moved)(rk_view *rows, int from, int to, void *user), void *user);
 RK_API bool rk_rows_move(rk_view *rows, int from, int to);   /* false when out of range, the same place or not sortable */
 
-/* A menu floats by what opened it: below it, above where there is no room. One item a row - a lowercase verb or
+/* A menu floats by what opened it: below it when it fits, else above when it fits, else on the side with more room,
+   inside the window (its rows scroll when it is taller); at the opener's leading edge, or centred (rk_menu_set_align).
+   One item a row - a lowercase verb or
    option, a key hint at the end; an item with a check (rk_menu_set_check) toggles and stays open, any other closes
    the menu and then runs its handler. Up, Down, Home, End, a letter, Enter or Space, Escape. */
 RK_API rk_view *rk_menu(void);
@@ -487,6 +495,7 @@ RK_API void rk_menu_open(rk_view *menu, rk_view *from);            /* below from
 RK_API void rk_menu_open_at(rk_view *menu, rk_view *from, rk_point point);   /* at a point in from: a context menu */
 RK_API void rk_menu_close(rk_view *menu);
 RK_API rk_view *rk_menu_opener(rk_view *menu);                    /* what opened it, while open and in a handler */
+RK_API void rk_menu_set_align(rk_view *menu, rk_align align);      /* RK_ALIGN_CENTER: centred on a centred opener */
 
 /* A view that scrolls its content up and down: the wheel, the keys a focused view inside leaves, and focus landing
    inside move it, on the panorama's spring; a thin bar shows while it moves. Takes content. */
@@ -541,7 +550,8 @@ RK_API void rk_field_set_options(rk_view *field, const char *const *options, int
 /* A long list: only the rows in sight are drawn and nothing is kept for each item - item() fills a row while it is
    drawn, so the strings it gives need to last only for the call (out->size says how much of the struct this library
    knows). Hairline rows, selected the Metro way: a click selects one and shows it (on_show); Ctrl+click toggles and
-   starts selecting several; Shift+click takes a range. In a stack it fills what the others leave, and scrolls. */
+   starts selecting several; Shift+click takes a range. Letters go to the next row whose title starts with them, as
+   in a tree. In a stack it fills what the others leave, and scrolls. */
 typedef struct rk_list_item { uint32_t size; const char *title, *meta; rk_status status; } rk_list_item;
 RK_API rk_view *rk_list(int count, void (*item)(int index, rk_list_item *out, void *user), void *user);
 RK_API void rk_list_set_count(rk_view *list, int count);   /* the items changed: drawn again */
@@ -567,7 +577,8 @@ RK_API rk_view *rk_drop(const char *title, const char *hint, const char *accept,
 /* A tree: items that hold items, opened and closed in place. The app adds the items and keeps their numbers; parent
    -1 is the top. A click, Enter or Space selects an item and shows it (on_show); selection never follows focus. A
    click on the chevron or a double click opens or closes; Right and Left open and close or go in and up; * opens every
-   sibling; a letter goes to the next item that starts with it. Long trees go in an rk_scroll. */
+   sibling; letters go to the next item that starts with them (one prefix while typed within timing.type-ahead). Long
+   trees go in an rk_scroll. */
 RK_API rk_view *rk_tree(void);
 RK_API int rk_tree_add(rk_view *tree, int parent, const char *title);   /* the new item's number, or -1 */
 RK_API void rk_tree_set_meta(rk_view *tree, int item, const char *meta, rk_status status);   /* on the right, as a row's */
@@ -695,7 +706,8 @@ RK_API void rk_controller_present(rk_controller *presenter, rk_controller *sheet
 RK_API void rk_controller_dismiss(rk_controller *sheet);
 RK_API void rk_controller_on_dismiss(rk_controller *sheet, void (*fn)(rk_controller *sheet, void *user), void *user);   /* the user dismissed it: Escape, the shading */
 /* A short question in a sheet, as the web's confirm(): the safe answer is the primary button and has focus (cancel,
-   for what cannot be undone); Escape and the shading answer cancel. answered() hears it once. */
+   for what cannot be undone, and ok is then RK_BUTTON_DESTRUCTIVE); Escape and the shading answer cancel. answered()
+   hears it once. */
 typedef struct rk_confirm_desc {
   uint32_t size;                                   /* sizeof(rk_confirm_desc) */
   const char *title, *text, *kicker;               /* the question; a line under it; a word above it */
@@ -801,7 +813,8 @@ typedef struct rk_ui {
   const char *hint, *error;                        /* a field's (an error takes the hint's place); a drop's hint */
   const char *placeholder;                         /* a field's */
   const char *icon;                                /* a button's; an icon's name */
-  const char *shortcut;                            /* a menu item's key hint: "Ctrl+E" */
+  const char *shortcut;                            /* a menu item's key hint, as navigation.md writes one: "Ctrl+E",
+                                                      "Ctrl+Shift+Z" (Ctrl, Alt, Shift, Super, then the key) */
   const char *tooltip;
   const char *access;                              /* what a screen reader says, where the view says too little (an icon) */
   const char *accept;                              /* a drop's filter: ".png,.jpg", "image/" with a star */

@@ -172,8 +172,8 @@ void rk_view_remove(rk_view *child) {
     double d = rk__motion_duration(RK_MOTION_LEAVE, rk__is_tile(child));
     float from = child->popacity, to = 0;
     rk__animate(child, RK_PROP_OPACITY, &from, &to, 1, d, 0, rk__ease_out);
-    rk_transform t0 = child->ptransform, t1 = t0;
-    if (rk__is_tile(child)) { t1.scale_x = t1.scale_y = 0.9f; } else t1.translate_x += 12;
+    rk_transform t0 = child->ptransform, t1 = t0;                 /* a control in a one-line row only fades */
+    if (rk__is_tile(child)) { t1.scale_x = t1.scale_y = 0.9f; } else if (!rk__in_bar(child)) t1.translate_x += 12;
     rk__animate_transform_cb(child, &t0, &t1, d, 0, rk__ease_out, left_done, NULL);
     rk__view_relayout_up(child->parent);
     return;

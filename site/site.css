@@ -149,7 +149,13 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
 
 /* A phone, to show the places in the bar at its width (the bar decides by its own width). */
 .phone { position: relative; width: min(100%, 360px); height: 260px; margin: 0; overflow: hidden; border: 1px solid var(--rk-text-contrast-low); border-radius: var(--rk-radius-l); background: var(--rk-bg); }
-.phone-screen { padding: var(--rk-space-l) var(--rk-space-m); }
+.phone-screen { padding: var(--rk-space-s) var(--rk-space-m); }
 .phone-screen > * { margin: 0; }
+/* The place has no title of its own: with the places in the bar its name stands where the strip stood, as rekta.css
+   shows .rk-place-name under :root[data-rk-places] (the picture is that phone, whatever this window is). */
+.phone-screen > .rk-place-name {
+  position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: normal; margin-bottom: var(--rk-space-m);
+  font-size: var(--rk-font-size-pivot-active); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-nav);
+}
 .phone-screen > .rk-title { margin-block: var(--rk-space-xs); font-size: var(--rk-font-size-l); }
 .phone .phone-bar { position: absolute; z-index: auto; padding-inline: var(--rk-space-m); }   /* a phone's, at any window width */

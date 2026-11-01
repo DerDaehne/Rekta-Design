@@ -31,6 +31,11 @@ schedule…". It refuses more clicks (`aria-disabled`), and after
 it. When the action ends, the label comes back and a toast reports the
 result; a failure is said at the control that caused it.
 
+The line goes with the label: once shown, it stays until the label comes
+back and leaves in the same moment, never before. No `timing.busy-min`
+holds it, as one holds a region's line: the label coming back says the
+action has ended, so the line ending with it is that answer, not a flash.
+
 A failure whose control has gone (a background save, an action from a
 sheet that has closed, a place the user has left) has nowhere else to
 be said: it goes in a toast with `status: 'error'` (`toaster.show(text,
@@ -40,6 +45,13 @@ to try again (`act`). A failure that lasts, such as the server being
 unreachable, is a banner state, not a toast. Toasts that report a
 success carry no status: the plain toast is the success.
 
+A tag (`.rk-tag`) in a toast says a status in its words, as anywhere.
+In the plain, ink toast its word takes the toast's text colour and its
+square an edge in that colour, so a status colour that would sink into
+the ink still shows; the neutral square keeps 3:1 on the ink (`--check`
+holds it), and under more contrast it takes the toast's words' colour. In a toast with a status, the tag reads on the fill as on a
+tile.
+
 ## Floating surfaces
 
 Menus, the command palette, the places list and a combobox's list float
@@ -48,18 +60,33 @@ next to the control that opened them.
 - **Look:** `rk-bg`, a 1px `rk-text-contrast-medium` edge, `rk-radius-s`,
   no shadow. The edge parts them from what is below in both themes and in
   forced colours; a shadow would be the only one in the system.
-- **Place:** below the control, aligned to its leading edge; above it
-  when there is no room below; never outside the window.
+- **Place:** `space-xs` from the control, at least `space-m` from the
+  window's edges (the same margin limits its width). Below the control
+  when it fits there; else above it when it fits there; else on the side
+  with more room, moved back inside the window: it may then cover the
+  control, and its content scrolls. Never outside the window.
+- **Alignment:** to the control's leading edge (to its trailing edge
+  when the window's edge is too near for that). A control that stands
+  in the middle of its container (a clock in the middle of an app bar)
+  says so with `data-rk-align="center"` (in rekta-core
+  `rk_menu_set_align(menu, RK_ALIGN_CENTER)`): its surface is centred on
+  it instead, still inside the window. `place()` and `menu()` on the web
+  and rekta-core's menus follow this one rule.
 - **Motion:** a fade and a 4px shift away from the control over
   `motion.duration.float` (150ms); it leaves at once.
 - **Rows:** one item per row at the density's row height, a lowercase
-  verb or option. A chosen option shows a filled square. A key hint
-  sits at the end in `rk-meta`. A hairline separates groups.
-- **Keys:** ↑ ↓ (wrapping), Home End, a letter jumps to the next item
+  verb or option. In a menu, a chosen option (a checkbox or radio item,
+  a setting the menu toggles) shows a filled square. In a list that
+  picks a field's value (a select's, a combobox's), the chosen option
+  carries a tick without a box instead: it is the field's value, not a
+  setting. A key hint sits at the end in `rk-meta`. A hairline
+  separates groups.
+- **Keys:** ↑ ↓ (wrapping), Home End, letters jump to the next item
   starting with it, Enter or Space chooses, Escape closes and returns
   focus to the control, Tab closes and moves on. A click outside closes.
 - A disabled item stays in the list, greyed, and says why in its label
-  when it is not obvious ("print (needs a printer)").
+  when it is not obvious ("print (needs a printer)"). The app bar's
+  "more" does this for a disabled control it holds.
 
 ## Layers
 
@@ -79,8 +106,13 @@ From bottom to top:
   it sits above it.
 - Escape closes the topmost thing first (see the key layers in
   [navigation.md](navigation.md#who-gets-a-key)).
-- A sheet holds focus. Report the result of an action taken in a sheet
-  after the sheet has closed, not as a toast beneath its shading.
+- A sheet holds focus. Focus goes back to what had it once the sheet
+  has gone, not as it starts to leave. Report the result of an action
+  taken in a sheet after the sheet has closed, not as a toast beneath
+  its shading.
+- A sheet's answer is given as it starts to leave. A close request
+  while it leaves (the shading, Escape, another button) changes no
+  answer and asks nothing: it only ends the leaving at once.
 - **Every sheet has a visible way out**: its safe answer, or a close
   button (`.rk-btn--icon.rk-btn--quiet.rk-sheet-close`, `value="cancel"`,
   `aria-label="close"`) at its top corner. Escape and the shading are not

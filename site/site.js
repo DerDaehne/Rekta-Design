@@ -37,8 +37,8 @@
   const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
   const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   function measure() {
-    for (const b of $$('[data-contrast]')) {
-      const [fg, bg] = b.dataset.contrast.split(' '), r = ratio(rgb(fg), rgb(bg));
+    for (const b of $$('[data-ratio]')) {
+      const [fg, bg] = b.dataset.ratio.split(' '), r = ratio(rgb(fg), rgb(bg));
       b.textContent = `${r.toFixed(1)} : 1`;
       if (b.dataset.min) b.closest('tr').querySelector('th').title = r >= +b.dataset.min ? 'passes' : 'fails';
     }
@@ -57,9 +57,10 @@
   }
   addEventListener('resize', env);
 
-  /* ---------- look: theme, density, motion (Rekta prefs) and the accent slot ---------- */
+  /* ---------- look: theme, density, motion, contrast, transparency (Rekta prefs) and the accent slot ---------- */
+  const PREFS = ['theme', 'density', 'motion', 'contrast', 'transparency'];
   function paintPrefs() {
-    for (const name of ['theme', 'density', 'motion']) { const r = $(`input[name=${name}][value="${prefs.get(name)}"]`); if (r) r.checked = true; }
+    for (const name of PREFS) { const r = $(`input[name=${name}][value="${prefs.get(name)}"]`); if (r) r.checked = true; }
     $('#theme-word').textContent = prefs.get('theme');
     const m = prefs.get('motion');
     $('#motion-word').textContent = m === 'system' ? (reduced.matches ? 'reduced' : 'on') : m;
@@ -71,7 +72,8 @@
   document.addEventListener('rk:prefs', paintPrefs);
   reduced.addEventListener('change', paintPrefs);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintPrefs);
-  for (const name of ['theme', 'density', 'motion']) $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => prefs.set(name, r.value)));
+  matchMedia('(prefers-contrast: more)').addEventListener('change', paintPrefs);
+  for (const name of PREFS) $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => prefs.set(name, r.value)));
   $$('input[name=accent]').forEach((r) => r.addEventListener('change', () => Rekta.crossfade(() => {
     if (r.value === 'plum') { root.dataset.accent = 'plum'; store.set('rekta-site-accent', 'plum'); }
     else if (r.value === 'custom' && customAccent) { window.siteAccent(customAccent); store.set('rekta-site-accent', 'custom'); }
@@ -118,16 +120,19 @@
   addEventListener('pointermove', () => { moves += 1; }, { passive: true });
   document.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('a.rk-tile, button.rk-tile')) { presses += 1; $('#presses').textContent = presses; } });
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches && e.target.matches('a.rk-tile, button.rk-tile')) { presses += 1; $('#presses').textContent = presses; } });
-  function points(h) {
-    if (h.length < 2) return '0,14 200,14';
-    const lo = Math.min(...h), span = Math.max(...h) - lo || 1;
-    return h.map((v, i) => `${(i * 200 / (h.length - 1)).toFixed(1)},${(26 - (v - lo) / span * 24).toFixed(1)}`).join(' ');
+  // A sparkline's points in its 200 x 28 box (docs/data.md): inset by half the 2px stroke, a pixel on the screen, on
+  // every side; no values draw nothing, one value or a constant series lies flat along the bottom.
+  function points(h, svg) {
+    if (!h.length) return '';
+    const k = 200 / (svg.getBoundingClientRect().width || 200), lo = Math.min(...h), span = Math.max(...h) - lo || 1;
+    const at = (v, x) => `${x.toFixed(1)},${(28 - k - (v - lo) / span * (28 - 2 * k)).toFixed(1)}`;
+    return h.length === 1 ? `${at(h[0], k)} ${at(h[0], 200 - k)}` : h.map((v, i) => at(v, k + i * (200 - 2 * k) / (h.length - 1))).join(' ');
   }
   function drawLive(key, value, label) {
     for (const tile of $$(`[data-live=${key}]`)) {
       $('[data-v]', tile).textContent = value;
       const svg = $('.rk-spark', tile), h = series[key];
-      Rekta.sparkTo($('polyline', svg), points(h));
+      Rekta.sparkTo($('polyline', svg), points(h, svg));
       const trend = h.length > 1 ? (h[h.length - 1] > h[0] ? 'rising' : h[h.length - 1] < h[0] ? 'falling' : 'flat') : 'flat';
       svg.setAttribute('aria-label', `${label}: ${value}, ${trend} over the last ${h.length} seconds`);
     }
@@ -520,6 +525,7 @@
   let logMap = Array.from({ length: LOG_N }, (_, i) => i);
   const logList = Rekta.virtual($('#log'), {
     count: LOG_N, label: 'log lines', appbar: $('#bar'),
+    text(k) { const l = logLine(logMap[k]); return `${WORD[l.level]} ${l.msg}`; },   // a letter jumps by the line's word
     render(k, row) {
       const l = logLine(logMap[k]);
       row.innerHTML = `<span class="rk-meta">#${String(l.n).padStart(5, '0')}</span><span class="rk-tag" data-status="${l.level}">${WORD[l.level]}</span><span></span><span class="rk-meta">${l.time}</span>`;
@@ -556,7 +562,7 @@
     queue = Math.max(0, Math.min(40, queue + Math.round((rnd(tickN + 7) - 0.55) * 4)));
     doneToday += Math.round(rnd(tickN + 3) * 3);
     rpsSeries.push(rps); if (rpsSeries.length > 24) rpsSeries.shift();
-    feed.update(() => { $('#lv-rps').textContent = rps; Rekta.sparkTo($('#live-region .rk-spark polyline'), points(rpsSeries)); }, 'rps');
+    feed.update(() => { $('#lv-rps').textContent = rps; Rekta.sparkTo($('#live-region .rk-spark polyline'), points(rpsSeries, $('#live-region .rk-spark'))); }, 'rps');
     // A new count is news: it peeks in. Requests a second is a continuous reading: it changes in place.
     feed.update(() => Rekta.tileUpdate($('#lv-queue').closest('.rk-tile'), () => { $('#lv-queue').textContent = queue; }), 'queue');
     feed.update(() => Rekta.tileUpdate($('#lv-done').closest('.rk-tile'), () => { $('#lv-done').textContent = doneToday; }), 'done');
@@ -674,7 +680,7 @@
     $('.rk-stat span', built).textContent = $('#b-label').value.trim() || 'no label';
     let spark = $('.rk-spark', built);
     if ($('#b-spark').checked && !spark && st !== 'success') {
-      built.insertAdjacentHTML('beforeend', '<svg class="rk-spark" viewBox="0 0 200 28" role="img" aria-label="rising over the last 8 hours"><polyline pathLength="1" points="0,24 30,20 60,22 90,14 120,16 150,9 180,11 200,4"/></svg>');
+      built.insertAdjacentHTML('beforeend', '<svg class="rk-spark" viewBox="0 0 200 28" role="img" aria-label="rising over the last 8 hours"><polyline pathLength="1" points="1,24 30,20 60,22 90,14 120,16 150,9 180,11 199,4"/></svg>');
     } else if ((!$('#b-spark').checked || st === 'success') && spark) spark.remove();
   }
   $('#builder').addEventListener('input', build);
@@ -687,6 +693,14 @@
       const t = o && TOKENS.find((x) => x.name === o.value);
       $('#find-hint').textContent = t ? `${t.value}${t.alt && t.alt !== t.value ? ` · ${t.altLabel} ${t.alt}` : ''}: ${t.description || 'a token of Rekta Design.'}` : 'A combobox: it filters as you type and keeps only a choice from its list.';
     },
+  });
+  // Toggle buttons: a press switches the state at once; the state word follows from data-on and data-off, or is set here.
+  $('#quick').addEventListener('click', (e) => {
+    const b = e.target.closest('[aria-pressed]');
+    if (!b) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(on));
+    if (b.id === 'quick-pin') b.querySelector('.rk-btn-state').textContent = on ? '3 tiles' : 'none';
   });
   $('#text-size').addEventListener('input', (e) => { root.style.fontSize = +e.target.value === 100 ? '' : `${e.target.value}%`; env(); });
   const later = new Date(); later.setDate(later.getDate() + 3);

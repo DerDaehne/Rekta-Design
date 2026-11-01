@@ -21,12 +21,17 @@ Selecting a title (including a nested pivot's) moves the content it
 names flush left, never centred or right-aligned.
 
 Two motions play at once, not one after the other: the strip's glide
-uses a pronounced ease-in-out with clear acceleration and deceleration;
-the active title's size change uses a lighter, quicker ease-in-out.
+uses a pronounced ease-in-out with clear acceleration and deceleration
+(`ease-pivot-glide`); the active title's size change uses a lighter,
+quicker one (`ease-in-out`, over `duration-pivot-size`).
 Only the previously active and newly active titles ever change size —
 every other title stays exactly as it was. The strip's height never
 depends on which title is active: a title is sized from a fixed line
-box (scaled from its own baseline), never by changing its `font-size`.
+box, scaled about its baseline, never by changing its `font-size`, so
+every title stands on one baseline, the active one's. (The baseline lies
+the face's descent and half the leading above the line box's foot:
+`rekta.js` measures it in the page; without the script the
+`typography.metrics` tokens give it.)
 
 This is deliberately *not* a tab bar with an underline, and deliberately
 *not* "MRU" reordering (most-recently-used first) — a fixed order means
@@ -135,7 +140,11 @@ places its tiles and links open, each with one parent.
   server (or the framework's render) marks its tab `aria-selected="true"`
   and leaves the other panels `hidden`; `pivot()` starts on the tab
   marked selected and keeps it, so nothing jumps when the script arrives.
-  An unknown facet falls back to the first, without an error.
+  An unknown facet falls back to the first, without an error. Where the
+  facets may show side by side, `.rk-facets` around the panels' parent
+  and `data-rk-reveal` on the hidden panels let the first paint lay them
+  out wide from the same width `pivot()` measures
+  ([behaviour.md](behaviour.md), `pivot()`).
 
 ### Back with a router of your own
 
@@ -159,6 +168,19 @@ entry before leaving (`history.replaceState({ ...history.state, rk: s }, '')`)
 and call `restore(history.state.rk)` after the place has rendered on
 `popstate`. Give the boxes ids (or `data-rk-scroll`) when their number
 can change between visits.
+
+**Data that comes after mount.** A place that loads its data once it is
+mounted (a `fetch` on mount, `{#await}`, streamed data, a list that
+loads more) has no sections yet, or short ones, when the router
+restores. Call `restore()` as early as above anyway: it sets what it
+can and waits for the rest, setting each box as it appears and grows,
+for up to `timing.restore` (5s). If the user scrolls first, their
+position stays. Keep the handle when the place can go before then:
+
+```js
+const run = scrollState(place).restore(s);   // run.pending: still waiting
+onDestroy(() => run.cancel());
+```
 
 ### Crumb
 
@@ -201,7 +223,8 @@ with an icon over a lowercase word.
   `.rk-ab-places` is not shown and the pivot holds the places as always.
   A landscape phone (wide but short) keeps the pivot.
 - **Where you are:** the place you are in is in `text-primary`, the
-  others in `text-contrast-medium`; `aria-current="page"` marks it, and
+  others in `text-contrast-high` (on glass nothing lower, [colour.md](colour.md#text-on-glass));
+  `aria-current="page"` marks it, and
   `places()` keeps the mark on the bar's links. On a place below it (a
   detail), the place you came from stays marked, and choosing it goes
   back to its top.
@@ -225,7 +248,23 @@ with an icon over a lowercase word.
   `<h1 class="rk-place-name">`, which `rekta.css` keeps for screen
   readers only while the strip shows and shows, at the strip's active
   size, while the places are in the bar. Never a kicker repeating the
-  bar's word.
+  bar's word. It is a direct child of `.rk-place`, right after the
+  strip, so it takes the strip's side padding and stands where the
+  strip stood:
+
+  ```html
+  <main class="rk-place" data-rk-place="history">
+    <nav class="rk-pivot rk-pivot--nav" aria-label="places">…</nav>
+    <h1 class="rk-place-name">history</h1>
+    <div class="rk-panorama">…</div>
+  </main>
+  ```
+
+  With a framework router the `h1` goes where the strip goes (in the
+  layout that holds the place and its strip), not into the page
+  component inside the content area: there its own padding would add
+  to the place name's. When the place changes, it turns with the place
+  ([motion.md](motion.md)).
 
 ### Go to
 
@@ -264,6 +303,18 @@ controls.
 <span class="rk-ab-mid" data-rk-priority="pinned"><span>go to</span><kbd class="rk-key">g</kbd><span>then a place</span></span>
 ```
 
+### A control that cannot act now
+
+A command that cannot run now ("print" with no printer) stays in the
+bar, in place: glyph and word in `disabled`, no hover or press tint,
+still focusable, so its reason can be heard. The reason is its tooltip,
+not a hint beside it, which the bar has no room for: after
+`timing.tip-delay` under a resting pointer, at once on keyboard focus,
+on touch when it is tapped. `disable(control, reason)` does it on a
+`.rk-ab`. When the control moves into "more", the reason moves with it:
+its item is disabled and says it in the label, "print (needs a
+printer)".
+
 ### When the bar is full
 
 Controls that do not fit move into "more", the least important first
@@ -276,11 +327,13 @@ those of every floating surface ([states.md](states.md#floating-surfaces)).
 
 ## Tooltips
 
-A tooltip is a small ink strip, like a toast, above its control (below
-when there is no room). It shows after the pointer has rested for
+A tooltip is a small ink strip, like a toast, centred above its control
+(below when there is no room), `size.tip-gap` (6px) from it and at least
+`space-m` from the window's edges. It shows after the pointer has rested for
 `timing.tip-delay`, at once when focus arrives by keyboard, and at once
-when moving on from another tip; never on touch. Escape, a press,
-scrolling or leaving hide it. It names an icon-only control, completes a
+when moving on from another tip. On touch it shows only when a disabled
+control is tapped (its reason, [forms.md](forms.md#disabled-controls-say-why));
+otherwise never. Escape, a press, scrolling or leaving hide it. It names an icon-only control, completes a
 label with its shortcut, or shows the whole of a text its box cuts off
 (`data-rk-tip="overflow"`). It never holds the only way to learn what a
 control does: an icon-only control still has its accessible name.
@@ -296,6 +349,10 @@ Every pointer action has a keyboard path.
 | A section strip | Enter on a title | Aligns the section and moves focus to its heading |
 | A facet pivot (tabs) | ← → Home End | The previous, next, first or last facet; focus follows |
 | A tile | Enter (Space on a button tile) | Presses it; release activates |
+| A grid of tiles that open | ← → ↑ ↓ | The nearest tile that way: one in the same row (column) first, on a tie the better-aligned one; on into the grids of the panorama's other sections; at the edge focus stays |
+| | Home End | The grid's first or last tile |
+| | Tab | Leaves the grid: it is one tab stop, the tile last focused |
+| A list, a table, a long list, a tile grid, a tree, a menu | a letter or digit | The next entry that starts with it; letters typed within `timing.type-ahead` form a prefix (below) |
 | Anywhere | Escape | Closes the innermost thing that is open (see below) |
 | Anywhere but a text field | Ctrl/Cmd+Z | Undoes the last action (the open toast's first) |
 | Anywhere but a text field | Ctrl/Cmd+Shift+Z, Ctrl+Y | Does the undone action again |
@@ -309,6 +366,55 @@ Every pointer action has a keyboard path.
 
 The keyboard shortcuts are listed in the app itself (a sheet behind `?`
 and an entry in the palette), never only in a manual.
+
+### Writing a key
+
+A key hint (a tooltip's, a menu item's, the shortcut sheet's) writes a
+combination one way on every platform: the modifiers in the order Ctrl,
+Alt, Shift, Meta, then the key, with "+" between them and no spaces:
+"Ctrl+K", "Ctrl+Shift+Z", "Shift+F10". A letter is a capital. On Apple
+the modifiers are their symbols, in the same order and with no
+separator: ⌘K, ⇧⌘Z. The Meta key outside Apple is "Win" on Windows and
+"Super" elsewhere (Linux, ChromeOS, a platform not known); rekta.js takes
+the word from its catalogue (`keyMeta`). Keys that are alternatives or a
+sequence stand apart, with a space ("← →", "Space ↑ ↓"). These pages
+write "Ctrl/Cmd+K" for a key that is Ctrl on one platform and ⌘ on the
+other; an app shows the one for where it runs, as `tips()` and the app
+bar's menu do from `aria-keyshortcuts` ("Control+K Meta+K").
+
+### Typing: filter or jump
+
+Where there is a field, typing filters; where there is none, typing
+jumps.
+
+- **Filter:** the palette, a combobox and a search field narrow their
+  list as you type. Focus stays in the field.
+- **Jump:** in a collection whose entries take focus (a list or table
+  with `select()`, a long list, a grid of tiles that open, a tree, a
+  menu), a letter or digit moves focus to the next entry whose text
+  starts with it, and the view scrolls along. Letters typed less than
+  `timing.type-ahead` (1s) apart form one prefix ("ma" finds "march"
+  after "may"); the same letter again moves on to the next entry with
+  it, round to the first. Nothing that matches: focus stays. A jump
+  never selects or acts: it only moves focus.
+- A place offers one or the other for one collection, never both: a
+  long alphabetical list ("all apps") jumps; the start surface, with
+  its search field, filters.
+
+### A grid of tiles
+
+A grid of tiles that open (a start screen, a dashboard) is one tab stop,
+like a list: Tab reaches the tile last focused (the first, to begin
+with) and the next Tab leaves the grid. The arrows move the way the eye
+does, by position, not by order in the page: the nearest tile that way,
+one that shares the row (or column) before one that does not, and of
+two as near the one better aligned; a tile in no shared row counts
+only while it lies more that way than across. In a panorama they go on
+into the next section's grid (sideways → reaches the section beside,
+compact ↓ the one below); at the edge focus stays where it is (no
+wrap). Home and End go to the grid's first and last tile, letters
+jump. A grid of tiles that only inform takes no focus at all
+([tiles.md](tiles.md#what-a-tile-does)).
 
 ### Who gets a key
 

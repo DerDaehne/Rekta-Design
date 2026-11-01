@@ -7,7 +7,9 @@ it; each entry says how.
 
 ## Unreleased
 
-rekta-core: what was left after #35 (#84).
+The first 38 of the reports #87–#157 on 0.5.0 (motion, controls, layout
+and parity, accessibility), and rekta-core: what was left after #35
+(#84).
 
 ### Changed (may need a change in an app)
 
@@ -16,6 +18,42 @@ rekta-core: what was left after #35 (#84).
   showed before; the first display and the same item shown again stay
   still. A next item slides with `rk_split_reveal(split, dir)` (or a new
   `.pulse` on a declared `RK_SPLIT`), from the side of travel.
+- **Contrast is the user's preference.** `data-contrast` on the root is
+  now the more-contrast switch (`more`, `normal`; unset follows
+  `prefers-contrast`), with the colour sets `color.light-contrast` and
+  `color.dark-contrast` (every text pair at 7:1, opaque glass, a 2px
+  frame on status tiles, a destructive button's words in ink). A page
+  that used `data-contrast` for its own purpose renames it (#156).
+- **A grid of tiles that open is one tab stop** with `Rekta.grid(el)`
+  (`start()` calls it): the arrows move by position (#129).
+- **Letters jump** in a select, a long list, a tile grid, a tree and a
+  menu; letters typed within `timing.type-ahead` form one prefix (#134).
+- **`disable()` on an app-bar control** keeps it focusable, greys glyph
+  and word, puts the reason in its tooltip and a hidden description; in
+  "more" it is a disabled item naming the reason (`cannotAct`) (#126).
+- **`confirm({ safe: 'cancel' })`** marks its `ok` button destructive
+  (`data-status="error"`); `sheet()` and `guard()` mark their discard
+  button the same; core has `RK_BUTTON_DESTRUCTIVE` (#101).
+- **Key hints** are written one way: Ctrl, Alt, Shift, Meta, then the
+  key, joined by "+"; Apple's symbols ⌃⌥⇧⌘ without a separator; Meta
+  outside Apple is "Win" or "Super" (`keyMeta`) (#141).
+- **Inputs with `aria-disabled="true"`** look disabled; a stepper and a
+  drop zone refuse (#108). Selected text takes the accent and the caret
+  the text colour (#136).
+- **Floating surfaces follow one rule:** `size.tip-gap` from their
+  control, `space-m` from the window edge, the side with room, clamped,
+  and they scroll when longer than the window; `data-rk-align`, a
+  place's `align` and `rk_menu_set_align` centre them (#115 #131).
+- **`scrollState().restore()`** returns `{ pending, cancel }` and waits
+  up to `timing.restore` (5s) for the content (#102).
+- **A sheet answers when it starts to leave**; a close request while it
+  leaves only finishes it; focus returns after it has gone (#124).
+- **Sparklines** draw a fixed 2px line, inset 1px; a single value lies
+  flat at the bottom (#116).
+- **Motion:** `motion.transform.turnstile-angle` is a deprecated alias of
+  `turnstile-out-angle`; app-bar controls only fade; reflow moves
+  without scaling; a live tile's news is staggered by `duration-greet`
+  (#88 #111 #113 #117 #118 #107 #122 #148 #143).
 
 ### Added
 
@@ -31,6 +69,57 @@ rekta-core: what was left after #35 (#84).
   compact forms from `rk_strings`; sliders, steppers and counts use it.
 - `test/words.sh` also catches counts and figures written with printf;
   46 words come from the table.
+- Motion tokens: easings `turn-out`, `turn-in`, `in-out`; turnstile out
+  and in angles, reach, row and flush; peek travel, flip angle;
+  `motion.proportion.*`, `motion.heft.*`; durations `greet` and
+  `beads`; `busy.*`, `dots.*`, `beads.*`. `.rk-dots--beads`,
+  `data-rk-motion="inline"`. `--check` holds every keyframe stop and
+  curve to its token (#88 #107 #117 #118 #122 #143 #148).
+- `.rk-btn[aria-pressed]`, a toggle button, with `.rk-btn-state` (#140).
+- `.rk-facets`, a filter bar the build gives a container query
+  (`data-rk-narrow`); `pivot()` measures it (#99).
+- `.rk-status-region`, a polite live region for status lines (#114).
+- Tokens `size.tip-gap`, `timing.restore`, `timing.type-ahead`,
+  `typography.metrics.ascent` and `descent` (#112 #115 #102 #134).
+- Preferences `contrast` and `transparency` (`data-transparency="reduce"`
+  or `prefers-reduced-transparency`: glass becomes the ground) (#156).
+- `rk_app_set_contrast`, `rk_menu_set_align`, `RK_TIMING_TYPE_AHEAD`;
+  core lists and tables jump by letter, trees by prefix (#156 #131 #134).
+- `virtual({ text })` names a row's text for letter jumps (#134).
+- Strings `keyMeta` and `cannotAct` (#141 #126).
+- `--check` measures text on glass against all white and all black, a
+  tag in an ink toast, and rejects `any` in the declarations (#130 #139
+  #104).
+
+### Fixed
+
+- Pivot tabs inherit the font (#100); `Word` is `never[]` where it must
+  be (#104); segment joints (#109); the select's chevron is stroked like
+  the combobox's (#135); a tag in an ink toast shows its square (#139).
+- Pivot titles sit on the baseline (#112); floating surfaces never leave
+  the window (#115); a sheet's shading fades in and out with its curve;
+  `confirm`'s ok is no longer turned into cancel (#124); the mark is
+  ink (#106).
+- Inactive places in the phone app bar reach the contrast of text on
+  glass (#130); a tooltip shown by a tap hides on lift (#126).
+- The arriving item of a turnstile is whole at 35% as documented; core's
+  busy line follows the web's path and stays still under reduced motion
+  (#88 #113).
+
+### Documented
+
+- motion.md: a place change in detail, a live tile's news, the app-bar
+  controls; data.md: busy, dots and beads.
+- The minimum pending time at a button (#110); a select's list (#135);
+  caret and selection (#136); disabled per control (#108); writing a key
+  (#141); tags in toasts (#139).
+- "until" and "since" (#125); share bars in rows (#105); a place name's
+  markup and that it turns with its place (#103); toasts with the same
+  key (#87).
+- Text on glass and more contrast (colour.md, accessibility.md,
+  platforms.md); a grid of tiles and typing to filter or jump
+  (navigation.md); the tooltip exception for disabled controls
+  (forms.md).
 
 Still English in core: the date box's empty "yyyy-mm-dd" and its field
 order.

@@ -303,16 +303,16 @@ void rk__render_view(rk_canvas *c, rk_view *v, float pox, float poy) {
   int lw = (int)ceilf(v->pframe.w * k + fx), lh = (int)ceilf(v->pframe.h * k + fy);
   if (lw <= 0 || lh <= 0) return;
   if (flip) {
-    /* the old look turns away around the horizontal axis; at the half the new one turns in */
+    /* the old look turns flip-angle away around the horizontal axis; at the half the new one turns in */
     float tt = v->transition_t;
     rk_transform ft = t;
     ft.translate_x = ft.translate_y = 0;
     if (tt < 0.5f) {
-      ft.rotate_x += -90 * rk__ease(rk__ease_out, tt / 0.5f);
+      ft.rotate_x += -RK_TOK_FLIP_ANGLE * rk__ease(rk__ease_out, tt / 0.5f);
       composite_layer(c, v->snapshot, v, &ft, x, y, 0, 0, opacity);
       return;
     }
-    ft.rotate_x += 90 * (1 - rk__ease(rk__ease_in, (tt - 0.5f) / 0.5f));
+    ft.rotate_x += RK_TOK_FLIP_ANGLE * (1 - rk__ease(rk__ease_in, (tt - 0.5f) / 0.5f));
     t = ft;
   }
   /* the layer is drawn again only when what is in it changed: a page that turns is drawn once */
@@ -348,11 +348,11 @@ static void draw_content(rk_canvas *c, rk_view *v, float x, float y, bool fill) 
   c->alpha *= v->content_alpha;
   float dy = 0;
   if (peek) {
-    /* the old content leaves upwards as the new one rises from below */
+    /* the old content leaves upwards by peek-travel of its height as the new one rises from as far below */
     float tt = v->transition_t, e0 = rk__ease(rk__ease_out, RK_MIN(1.0f, tt / 0.6f)), e1 = rk__ease(rk__ease_in, RK_CLAMP((tt - 0.2f) / 0.8f, 0.0f, 1.0f));
-    float lift = -0.4f * b.h * e0;
+    float lift = -RK_TOK_PEEK_TRAVEL * b.h * e0;
     rk__composite_at(c->target, rk__canvas_clip(c), v->snapshot, (int)floorf(x), (int)floorf(y + lift * k), (1 - e0) * c->alpha);
-    dy = 0.4f * b.h * (1 - e1);
+    dy = RK_TOK_PEEK_TRAVEL * b.h * (1 - e1);
     c->alpha *= e1;
   }
   c->oy = y + dy * k;
@@ -707,6 +707,9 @@ static void event(rk_window *w, const rk_event *e) {
       rk_view *h = w->capture ? w->capture : hit_window(w, e->position.x, e->position.y);
       w->capture = NULL;
       rk_view *p = w->pressed;
+      /* the activation may take h away (a tap on a leaving sheet's shading ends it at once): hold it until the up is
+         dispatched, and dispatch only while it is still in the window */
+      rk_retain(h);
       if (p) {
         /* the hit area reaches space-m past the resting box while pressed: the sink pulls the edge off the pointer */
         rk_rect r = rk__window_rect(p);
@@ -715,7 +718,8 @@ static void event(rk_window *w, const rk_event *e) {
         press_end(w, p);
         if (inside) activate(p);
       }
-      dispatch(w, h, e);
+      if (rk__view_window(h) == w) dispatch(w, h, e);
+      rk_release(h);
       break;
     }
     case RK_EVENT_KEY_DOWN: {
