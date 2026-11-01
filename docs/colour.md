@@ -101,6 +101,12 @@ in a banner) but maps each onto one of these colours and never reuses a
 word for two states. A status is never decoration: no status colour for
 emphasis, selection, branding or a chart series.
 
+That holds for Rekta's own mark too: a line with a square, both in ink
+(`text-primary` of the theme the mark stands in; the showcase's icon
+draws its own ink ground and the mark in the ground's colour, one colour
+for line and square). The square turns `success` only where it reports
+"done", such as a splash that shows it once the app is ready.
+
 ## Product slots
 
 A product has two colour slots of its own, both set per theme:
