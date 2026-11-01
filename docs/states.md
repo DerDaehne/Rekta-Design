@@ -89,8 +89,13 @@ From bottom to top:
   it sits above it.
 - Escape closes the topmost thing first (see the key layers in
   [navigation.md](navigation.md#who-gets-a-key)).
-- A sheet holds focus. Report the result of an action taken in a sheet
-  after the sheet has closed, not as a toast beneath its shading.
+- A sheet holds focus. Focus goes back to what had it once the sheet
+  has gone, not as it starts to leave. Report the result of an action
+  taken in a sheet after the sheet has closed, not as a toast beneath
+  its shading.
+- A sheet's answer is given as it starts to leave. A close request
+  while it leaves (the shading, Escape, another button) changes no
+  answer and asks nothing: it only ends the leaving at once.
 - **Every sheet has a visible way out**: its safe answer, or a close
   button (`.rk-btn--icon.rk-btn--quiet.rk-sheet-close`, `value="cancel"`,
   `aria-label="close"`) at its top corner. Escape and the shading are not

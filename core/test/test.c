@@ -1637,6 +1637,23 @@ static void test_confirm_secret(void) {
   rk_window_key(w, RK_KEY_ESCAPE);
   rk_app_run_for(600);
   CHECK(answers == 3 && !answer_ok, "Escape answers cancel");
+  /* an answer is given as the sheet starts to leave; a close request while it leaves changes none and asks nothing, it
+     only ends the leaving at once; focus comes back once the sheet has gone */
+  rk_window_focus(w, pw);
+  rk_confirm(home, &d, answered, NULL);
+  rk_app_run_for(500);
+  rk_view_tap(rk_view_find(w->sheets, "delete"));
+  rk_app_run_for(30);
+  bool leaving = w->sheets->nkids > 0, held = !rk_window_focused(w);
+  click(w, (rk_point){ 350, 420 }, 10);
+  CHECK(leaving && held && answers == 4 && answer_ok && !w->sheets->nkids, "delete, then a tap on the shading while it leaves: still yes, gone at once (%d %d)", answers, answer_ok);
+  CHECK(rk_window_focused(w) == pw, "focus is back once the sheet has gone");
+  rk_confirm(home, &d, answered, NULL);
+  rk_app_run_for(500);
+  rk_view_tap(rk_view_find(w->sheets, "delete"));
+  rk_app_run_for(30);
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(answers == 5 && answer_ok && !w->sheets->nkids, "Escape while it leaves: still yes, gone at once");
   done(w);
 }
 

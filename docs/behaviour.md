@@ -660,9 +660,13 @@ Returns `{ set(name, on, { from, since, text }), update(name, text), toggle(name
 For `<dialog class="rk-sheet">` opened with `showModal()`. A tap on the
 shading cancels where `closedby` is not supported. Use
 `closedby="closerequest"` on a sheet with unsaved input. The sheet leaves
-the way it came before it closes (`data-rk-phase="leaving"`): `close()`,
-Escape and a `method=dialog` form all wait for it, and `close` fires
-after.
+the way it came before it closes (`data-rk-phase="leaving"`), its
+shading fading with it: `close()`, Escape and a `method=dialog` form all
+wait for it, and `close` fires after. The answer (`returnValue`) is given
+as it starts to leave: a further close request while it leaves (a tap on
+the shading, Escape, another button, `close()`) changes no answer and
+asks nothing, it only ends the leaving at once. Focus goes back once it
+has gone.
 
 With `dirty` (a function), a close request while it returns true
 (Escape, the shading, a `method=dialog` submit with `value="cancel"`)

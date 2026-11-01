@@ -857,6 +857,40 @@ await p.mouse.click(700, 850);
 ok(await until(p, () => p.evaluate(() => !document.querySelector('#sheet').open), 3000), 'a tap on the shading cancels');
 await p.click('#reset'); await p.waitForTimeout(300); await p.click('#sheet button[value=reset]'); await p.waitForTimeout(600);
 ok((await toast(p)).startsWith('Demo reset') && (await text(p, '#presses')) === '0', 'reset restores the demo');
+// The answer is given as a sheet starts to leave: a tap on the shading while it leaves changes no answer, asks nothing,
+// and only ends the leaving at once; focus comes back once it has gone. A long duration-short keeps it leaving while
+// the pointer gets there, on a busy runner too.
+await p.evaluate(() => {
+  document.documentElement.style.setProperty('--rk-duration-short', '1500ms');
+  const b = document.createElement('button'); b.id = 'fx-opener'; b.textContent = 'opener'; document.querySelector('.rk').append(b); b.focus();
+  window.fxAnswer = 'none'; Rekta.confirm({ title: 'Archive 3 builds?' }).then((v) => { window.fxAnswer = v; });
+  window.fxShadeIn = document.getAnimations().some((a) => a.effect && a.effect.pseudoElement === '::backdrop' && a.animationName === 'rk-shade-in');
+});
+await p.waitForTimeout(1700);
+await p.click('dialog[open] button[value="ok"]');
+const leavingNow = await p.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return { leaving: !!d && d.getAttribute('data-rk-phase') === 'leaving', focusIn: !!d && d.contains(document.activeElement) }; });
+await p.mouse.click(700, 850); await p.waitForTimeout(100);
+const shut = await p.evaluate(() => ({ answer: window.fxAnswer, open: [...document.querySelectorAll('dialog')].some((x) => x.open), focus: document.activeElement.id, shadeIn: window.fxShadeIn }));
+ok(shut.shadeIn, 'the shading fades in with the sheet');
+ok(leavingNow.leaving && leavingNow.focusIn && shut.answer === true && !shut.open, 'ok, then a tap on the shading while it leaves: still ok, gone at once', JSON.stringify({ ...leavingNow, ...shut }));
+ok(shut.focus === 'fx-opener', 'focus comes back once the sheet has gone', shut.focus);
+// With input to lose: a close request while it leaves asks nothing and keeps the first answer.
+const dirtyLeave = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const d = document.createElement('dialog'); d.className = 'rk-sheet';
+  d.innerHTML = '<form method="dialog"><h2 class="rk-group">Edit</h2><input value="changed"><p class="rk-actions"><button class="rk-btn" value="cancel">cancel</button><button class="rk-btn" value="save">save</button></p></form>';
+  document.querySelector('.rk').append(d);
+  const s = Rekta.sheet(d, { dirty: () => true });
+  d.showModal(); await wait(1700);
+  d.querySelector('button[value="save"]').click(); await wait(50);
+  const leaving = d.getAttribute('data-rk-phase') === 'leaving';
+  d.querySelector('button[value="cancel"]').click(); await wait(50);
+  const out = { leaving, asked: !!d.querySelector('.rk-sheet-ask'), open: d.open, value: d.returnValue };
+  s.destroy(); d.remove(); document.getElementById('fx-opener').remove();
+  document.documentElement.style.removeProperty('--rk-duration-short');
+  return out;
+});
+ok(dirtyLeave.leaving && !dirtyLeave.asked && !dirtyLeave.open && dirtyLeave.value === 'save', 'a close request while a dirty sheet leaves asks nothing and keeps its answer', JSON.stringify(dirtyLeave));
 
 // Tokens: a table in a split; the current token in the address; selection; filters in the address; the divider.
 // (Places in the app bar, as a phone app has them: the router marks the place you are at.)

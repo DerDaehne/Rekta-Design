@@ -1544,17 +1544,28 @@ export function sheet(dialog, opts = {}) {
   if (had) { Object.assign(had.opts, opts); return had.api; }
   const o = { dirty: null, ...opts };
   const close = HTMLDialogElement.prototype.close;
-  let leaving = false, ask = null, before = null;
+  let leaving = null, ask = null, before = null;
+  // The answer is given as the sheet starts to leave. A further close request while it leaves (a tap on the shading,
+  // Escape, another button) changes no answer and asks nothing: it only ends the leaving at once.
   function leaveThen(value) {
     const d = ms('--rk-duration-short') * 0.8;
     if (!dialog.open) return;
+    if (leaving) { leaving.end(); return; }
     if (ask) unask(false);
-    if (!d || leaving) { leaving = false; close.call(dialog, value); return; }
-    leaving = true;
+    if (!d) { close.call(dialog, value); return; }
     dialog.setAttribute('data-rk-phase', 'leaving');
-    const anims = [dialog.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: d, easing: css('--rk-ease-out'), fill: 'forwards' })];
-    try { anims.push(dialog.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, easing: 'linear', fill: 'forwards', pseudoElement: '::backdrop' })); } catch { /* no pseudo-element animation */ }
-    finished(anims).then(() => { leaving = false; dialog.removeAttribute('data-rk-phase'); close.call(dialog, value); anims.forEach((a) => a.cancel()); });
+    // The sheet and its shading leave together, as they came: 0.8 × duration-short, easing out.
+    const ease = css('--rk-ease-out');
+    const anims = [dialog.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: d, easing: ease, fill: 'forwards' })];
+    try { anims.push(dialog.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, easing: ease, fill: 'forwards', pseudoElement: '::backdrop' })); } catch { /* no pseudo-element animation */ }
+    const run = leaving = {
+      value,
+      end() {
+        if (leaving !== run) return;
+        leaving = null; dialog.removeAttribute('data-rk-phase'); close.call(dialog, value); anims.forEach((a) => a.cancel());
+      },
+    };
+    finished(anims).then(run.end);
   }
   const isDirty = () => { try { return !!(o.dirty && o.dirty()); } catch { return false; } };
   function askFirst(value) {
@@ -1581,6 +1592,7 @@ export function sheet(dialog, opts = {}) {
   }
   // A close request: ask when there is something to lose; while asking, it means "keep editing".
   function request(value) {
+    if (leaving) { leaving.end(); return; }
     if (ask) { unask(true); return; }
     if (isDirty()) askFirst(value); else leaveThen(value);
   }
@@ -1595,7 +1607,12 @@ export function sheet(dialog, opts = {}) {
     const value = e.submitter ? e.submitter.value : '';
     if (value === 'cancel') request(value); else leaveThen(value);
   };
-  const cancel = (e) => { if (!e.cancelable) { unask(false); return; } e.preventDefault(); request('cancel'); };
+  const cancel = (e) => {
+    // While it leaves, the browser's own close (one it does not let a page stop) keeps the answer too.
+    if (leaving && !e.cancelable) { if (leaving.value !== undefined) dialog.returnValue = leaving.value; return; }
+    if (!e.cancelable) { unask(false); return; }
+    e.preventDefault(); request('cancel');
+  };
   // Escape is taken on its keydown while there is something to lose: there it can always be stopped, where the
   // browser lets a page stop only one cancel event per user activation (a third Escape would close the sheet).
   const key = (e) => {

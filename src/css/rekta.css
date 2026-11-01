@@ -840,7 +840,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   background: var(--rk-bg); color: var(--rk-text-primary);
 }
 .rk-sheet[open] { animation: rk-from-top var(--rk-duration-short) var(--rk-ease-in) both; }
+/* The shading comes with the sheet (duration-short, easing-in) and leaves with it (sheet() fades it out). */
 .rk-sheet::backdrop { background: var(--rk-shading); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.rk-sheet[open]::backdrop { animation: rk-shade-in var(--rk-duration-short) var(--rk-ease-in) both; }
+@keyframes rk-shade-in { from { opacity: 0; } }
 .rk-sheet > * + *, .rk-sheet form > * + * { margin-top: var(--rk-space-m); }
 .rk-sheet .rk-kicker + * { margin-top: var(--rk-space-xs); }
 /* The page behind stops scrolling; the scrollbar's room is kept as padding (--rk-scrollbar, which sheet() measures as
