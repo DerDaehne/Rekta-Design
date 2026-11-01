@@ -67,6 +67,24 @@ rather than ad-hoc layout per tile type:
   neutral (`surface`) unless what it says is a status, then it takes that
   fill and status word like any other tile.
 
+- **Preview** — a running item seen live (a window, an open document,
+  a session), two units wide (`.rk-tile--preview`). The top part is the
+  preview: a picture or an element the app supplies (a capture, a
+  video, a canvas), cropped to fill (`.rk-tile-preview`). It never
+  carries text, status or a fill of its own: those are the tile's. The
+  foot, on the tile's surface, holds the program's icon and the item's
+  title in one line, cut with an ellipsis (`.rk-tile-foot`). Without a
+  preview the top part is the surface. A press brings the item to the
+  front. How the preview is captured, and how often it is refreshed, is
+  the app's; Rekta sets its frame.
+
+  ```html
+  <button class="rk-tile rk-tile--preview" type="button">
+    <span class="rk-tile-preview"><img src="capture.png" alt=""></span>
+    <span class="rk-tile-foot"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-file"/></svg><span>Quarterly report.odt</span></span>
+  </button>
+  ```
+
 A tile combines at most two or three of these — a tile that tries to
 show a stat pair, a sparkline, a progress meter and a long status
 description all at once has stopped being a tile and become a page that

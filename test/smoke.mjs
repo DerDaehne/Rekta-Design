@@ -896,6 +896,33 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
     t.remove();
     return r;
   });
+  // A preview tile (#123): two units wide, the app's picture fills the top, the title one line and cut at the foot.
+  const prev = await p.evaluate(() => {
+    const g = document.createElement('div'); g.className = 'rk-tiles'; g.style.cssText = 'width:800px';
+    const pic = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#36c"/></svg>');
+    g.innerHTML = `<button class="rk-tile rk-tile--preview" type="button"><span class="rk-tile-preview"><img src="${pic}" alt=""></span><span class="rk-tile-foot"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-file"/></svg><span>A very long title of an open document that does not fit on one line at all.odt</span></span></button>`;
+    document.querySelector('.rk-place:not([hidden])').append(g);
+    const t = g.firstChild, tr = t.getBoundingClientRect(), pr = t.querySelector('.rk-tile-preview').getBoundingClientRect(), title = t.querySelector('.rk-tile-foot > span');
+    const unit = Rekta.tokens.px('--rk-tile-unit'), gap = Rekta.tokens.px('--rk-space-s');
+    const r = { w: tr.width, want: 2 * unit + gap, top: pr.top - tr.top, fills: Math.abs(pr.width - tr.width) < 1 && pr.height > tr.height / 2, cut: title.scrollWidth > title.clientWidth && getComputedStyle(title).textOverflow === 'ellipsis' && title.getBoundingClientRect().height < 30 };
+    g.remove();
+    return r;
+  });
+  ok(Math.abs(prev.w - prev.want) < 1 && prev.top < 1 && prev.fills && prev.cut, 'a preview tile: two units wide, the preview fills its top, the title one line and cut', JSON.stringify(prev));
+  // The session's actions (#132): a sheet across the full width at the top, on surface, in the banner's geometry.
+  const sess = await p.evaluate(async () => {
+    const d = document.createElement('dialog'); d.className = 'rk-sheet rk-session'; d.setAttribute('aria-labelledby', 't-s-word');
+    d.innerHTML = '<form method="dialog"><span class="rk-banner-head"><span class="rk-banner-word" id="t-s-word">session</span></span><p class="rk-actions"><button class="rk-btn rk-btn--primary" value="lock">lock</button><button class="rk-btn rk-btn--quiet" value="off">power off</button></p>'
+      + '<button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close">×</button></form>';
+    document.querySelector('.rk').append(d);
+    const s = Rekta.sheet(d); d.showModal(); await new Promise((r) => setTimeout(r, 400));
+    const r = d.getBoundingClientRect(), word = d.querySelector('.rk-banner-word').getBoundingClientRect(), acts = d.querySelector('.rk-actions').getBoundingClientRect();
+    const probe = document.createElement('i'); probe.style.color = 'var(--rk-surface)'; document.body.append(probe); const surface = getComputedStyle(probe).color; probe.remove();
+    const out = { top: r.top, width: Math.abs(r.width - document.documentElement.clientWidth), bg: getComputedStyle(d).backgroundColor === surface, row: acts.left > word.right && Math.abs(acts.top - word.top) < 40, anim: d.getAnimations().map((a) => a.animationName) };
+    d.close(); await new Promise((res) => setTimeout(res, 400)); s.destroy(); d.remove();
+    return out;
+  });
+  ok(sess.top < 1 && sess.width < 2 && sess.bg && sess.row && sess.anim.includes('rk-banner-in'), 'the session bar: full width at the top, on surface, the word then the actions, in as the banner comes', JSON.stringify(sess));
   ok(month.unit === 36 && Math.abs(month.cell[0] - 36) < 0.5 && Math.abs(month.cell[1] - 36) < 0.5 && Math.abs(month.width - 7 * 36) < 0.5 && month.frame.join() === '1px,-3px,solid', '.rk-month: day-cell squares, seven wide, today framed inside its cell', JSON.stringify(month));
 }
 await p.mouse.move(5, 5);

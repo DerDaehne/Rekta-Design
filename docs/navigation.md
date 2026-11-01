@@ -384,6 +384,31 @@ at its trailing edge (`.rk-ab-menu`: `rekta.css` places it, anchored to
 `.rk-ab-more` where the browser has anchor positioning); its keys are
 those of every floating surface ([states.md](states.md#floating-surfaces)).
 
+## The recent stack
+
+A product with running items (windows, open documents, sessions) has
+one way to switch between them: the **recent stack**. A key (Alt+Tab,
+or the product's own) calls it up, and it shows the most recently used
+items, the last first, as preview tiles side by side
+([tiles.md](tiles.md#tile-content-patterns)), two units high, over the
+sheet's shading (`dialog.rk-recent` holding a `.rk-tiles` row, with
+`grid()`).
+
+- **Moving:** ← → (and the key that called it up, again), a swipe or the
+  wheel move the focus from tile to tile; the row scrolls to keep it in
+  view, as a panorama does for its keys. The item before the current
+  one has focus when it opens, so one key press and release switches
+  back.
+- **Choosing:** Enter, a press or letting go of the key that called it
+  brings the item to the front; the tile presses as every tile does,
+  and the stack goes at once. Escape closes it and nothing changes.
+- **Motion:** it and its shading fade in over `duration-short`, the
+  sheet's shading; it is called up many times an hour, so nothing in it
+  builds in or turns.
+
+An app decides how many items it shows and whether it groups them by
+program.
+
 ## Tooltips
 
 A tooltip is a small ink strip, like a toast, centred above its control

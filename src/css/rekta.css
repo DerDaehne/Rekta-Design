@@ -116,6 +116,23 @@ a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit
 .rk-w2 > .rk-tile-msg { -webkit-line-clamp: 6; line-clamp: 6; }   /* past it, an ellipsis; the whole sentence is still read */
 .rk-w2 { grid-column: span 2; }
 .rk-h2 { grid-row: span 2; }
+/* A preview tile (docs/tiles.md): a running item seen live, two units wide. The app's picture or element (a capture,
+   a video, a canvas) fills the top part and never carries text, status or a fill of Rekta's; the program's icon and
+   the item's title, one line and cut, stand at the foot on the tile's surface. Without a preview the top part is the
+   surface. A press brings the item to the front. */
+.rk-tile--preview { grid-column: span 2; padding: 0; gap: 0; justify-content: stretch; overflow: hidden; }
+.rk-tile-preview { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.rk-tile-preview > * { display: block; width: 100%; height: 100%; object-fit: cover; }
+.rk-tile-foot { flex: none; display: flex; align-items: center; gap: var(--rk-space-s); padding: var(--rk-space-s) 12px; font-size: var(--rk-font-size-s); }
+.rk-tile-foot > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The recent stack (docs/navigation.md): a switcher for running items, called up by a key, shows the most recently
+   used ones as preview tiles side by side, two units high, in a dialog over the sheet's shading. The row scrolls
+   sideways when it does not fit; grid() gives it the arrows. */
+.rk-recent { margin: auto; width: 100%; max-width: 100%; max-height: 100%; padding: var(--rk-space-xl) 0; border: 0; background: none; color: var(--rk-text-primary); overflow: visible; }
+.rk-recent::backdrop { background: var(--rk-shading); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.rk-recent[open] { animation: rk-shade-in var(--rk-duration-short) var(--rk-ease-in) both; }
+.rk-recent[open]::backdrop { animation: rk-shade-in var(--rk-duration-short) var(--rk-ease-in) both; }
+.rk-recent > .rk-tiles { grid-auto-flow: column; grid-auto-columns: calc(2 * var(--rk-tile-unit) + var(--rk-space-s)); grid-template-columns: none; grid-auto-rows: calc(2 * var(--rk-tile-unit)); justify-content: safe center; overflow-x: auto; padding: var(--rk-space-s) var(--rk-space-xl); scrollbar-width: none; }
 @keyframes rk-build-in { from { opacity: 0; transform: translateY(6px); } }
 /* Press: a tile nudges back where it is pressed, as a Metro tile does. rekta.js sets --_rk-px and --_rk-py (-1 to 1
    from the tile's centre; 0 0 for Space or Enter) and data-rk-pressed. Pressed in the middle it sinks straight back;
@@ -990,6 +1007,13 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
    it opens), not as a reserved gutter: a gutter narrows the box a modal is laid out in, and a phone-wide sheet stood
    15px short of the right edge with classic scrollbars. */
 :root:has(dialog.rk-sheet[open]) { overflow: hidden; padding-right: var(--rk-scrollbar, 0px); }
+/* The session's actions (docs/shell.md): a sheet across the full width at the top in the banner's geometry (the word
+   large in the first tile column, the actions behind it), on surface without a status, the sheet's shading behind
+   it. It comes in once as the banner does, a fade and 8px. */
+.rk-sheet.rk-session { width: 100%; border-radius: 0; background: var(--rk-surface); padding: var(--rk-space-m) var(--rk-space-xl); animation-name: rk-banner-in; }
+.rk-sheet.rk-session > form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rk-space-s) var(--rk-space-m); padding-right: var(--rk-touch-target); }
+.rk-sheet.rk-session form > * + * { margin-top: 0; }
+.rk-sheet.rk-session .rk-actions { flex: 1 1 calc(2 * var(--rk-tile-unit) + var(--rk-space-s)); margin: 0; }
 /* Every sheet has a visible way out (docs/states.md): its safe answer, or this close button at the top corner,
    <button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close"> in its form. */
 .rk-sheet-close { position: absolute; top: var(--rk-space-xs); right: var(--rk-space-xs); margin: 0 !important; }
