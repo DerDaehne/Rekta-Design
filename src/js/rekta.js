@@ -124,6 +124,7 @@ export const strings = {
   putBack: (item) => `${item} put back.`,
   position: (item, at, of) => (item ? `${item}: position ${at} of ${of}.` : `position ${at} of ${of}`),
   loadFailed: 'Could not load the choices. Type to try again.',
+  keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
 };
 // rk-strings-end
 const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
@@ -1558,7 +1559,7 @@ export function sheet(dialog, opts = {}) {
     const title = ask.appendChild(document.createElement('h2')); title.className = 'rk-group'; title.id = id; title.textContent = tx('discardTitle');
     const row = ask.appendChild(document.createElement('p')); row.className = 'rk-actions';
     const keep = row.appendChild(document.createElement('button')); keep.type = 'button'; keep.className = 'rk-btn rk-btn--primary'; keep.textContent = tx('guardKeep');
-    const drop = row.appendChild(document.createElement('button')); drop.type = 'button'; drop.className = 'rk-btn'; drop.textContent = tx('guardDiscard');
+    const drop = row.appendChild(document.createElement('button')); drop.type = 'button'; drop.className = 'rk-btn'; drop.dataset.status = 'error'; drop.textContent = tx('guardDiscard');
     keep.addEventListener('click', () => unask(true));
     drop.addEventListener('click', () => leaveThen(value));
     dialog.setAttribute('data-rk-asking', '');
@@ -1635,6 +1636,7 @@ export async function busy(region, work) {
 }
 // pending(button, work, { label }): the button says what it is doing ("saving…") at the same width, refuses further
 // clicks, and runs the line under it after busy-delay. Label: the option, data-rk-pending-label, or its text plus "…".
+// The line goes with the label, in one step, and no busy-min holds it: the label coming back says the end.
 export async function pending(button, work, { label } = {}) {
   if (button.hasAttribute('data-rk-pending')) return undefined;
   const nodes = [...button.childNodes], width = button.offsetWidth;
@@ -2405,8 +2407,8 @@ export function disable(control, reason) {
 }
 
 // confirm({ title, text, kicker, ok, cancel, safe }): a short question in a sheet; resolves true when ok is chosen.
-// The safe answer is the primary button and takes focus: for an action that cannot be undone, safe: 'cancel'.
-// Escape and a tap on the shading answer cancel.
+// The safe answer is the primary button and takes focus: for an action that cannot be undone, safe: 'cancel', and ok
+// is then the destructive button (data-status="error", forms.md). Escape and a tap on the shading answer cancel.
 export function confirm({ title, text = '', kicker = '', ok = tx('ok'), cancel = tx('cancel'), safe = 'ok', root = document.querySelector('.rk') || document.body } = {}) {
   const d = document.createElement('dialog');
   d.className = 'rk-sheet';
@@ -2420,7 +2422,9 @@ export function confirm({ title, text = '', kicker = '', ok = tx('ok'), cancel =
   const row = f.appendChild(document.createElement('p')); row.className = 'rk-actions';
   const b = (label, value) => { const x = row.appendChild(document.createElement('button')); x.className = `rk-btn${safe === value ? ' rk-btn--primary' : ''}`; x.value = value; x.textContent = label; if (safe === value) x.autofocus = true; return x; };
   const opener = document.activeElement;
-  b(cancel, 'cancel'); b(ok, 'ok');
+  b(cancel, 'cancel');
+  const yes = b(ok, 'ok');
+  if (safe === 'cancel') yes.dataset.status = 'error';
   root.appendChild(d);
   const sh = sheet(d);
   return new Promise((resolve) => {
@@ -2540,12 +2544,25 @@ export function guard(el, { router = null, what = tx('guardWhat') } = {}) {
 // Escape, a press, scrolling or leaving hide it. It repeats or completes what the control says: never the only way to
 // learn what it does. start() turns it on.
 const tip = { el: null, for: null, timer: 0, hid: 0, described: null, on: false };
-const KEY_NAMES = { Control: 'Ctrl', Meta: '⌘', Alt: 'Alt', Shift: 'Shift', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' };
+// A combination is written one way (navigation.md, "Writing a key"): the modifiers in the order Ctrl, Alt, Shift, Meta,
+// then the key, joined by "+" ("Ctrl+Shift+Z"); on Apple, the symbols with no separator ("⇧⌘Z"). Meta outside Apple
+// is the catalogue's keyMeta: "Win" on Windows, "Super" elsewhere.
+const KEY_NAMES = { Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' };
+const APPLE_KEYS = { Control: '⌃', Alt: '⌥', Shift: '⇧', Meta: '⌘' };
+const MODIFIERS = ['Control', 'Alt', 'Shift', 'Meta'];
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const isWindows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform || navigator.userAgent);
+function keyName(k) {
+  if (isMac && APPLE_KEYS[k]) return APPLE_KEYS[k];
+  if (k === 'Meta') return tx('keyMeta', isWindows ? 'windows' : 'other');
+  return KEY_NAMES[k] || (k.length === 1 ? k.toUpperCase() : k);
+}
 function shortcutText(el) {
   const all = (el.getAttribute('aria-keyshortcuts') || '').split(/\s+/).filter(Boolean);
   const pick = all.find((k) => (isMac ? /Meta/.test(k) : !/Meta/.test(k))) || all[0];
-  return pick ? pick.split('+').map((k) => KEY_NAMES[k] || k.toUpperCase()).join(isMac ? '' : ' ') : '';
+  if (!pick) return '';
+  const rank = (k) => { const i = MODIFIERS.indexOf(k); return i < 0 ? MODIFIERS.length : i; };
+  return pick.split('+').sort((a, b) => rank(a) - rank(b)).map(keyName).join(isMac ? '' : '+');
 }
 function tipText(el) {
   const t = el.getAttribute('data-rk-tip');
@@ -3686,7 +3703,7 @@ export function stepper(el) {
     for (const b of btns) { const up = +b.dataset.rkStep > 0, at = Number.isFinite(v) && (up ? v >= max : v <= min); b.setAttribute('aria-disabled', String(at)); }
   };
   function step(b) {
-    if (b.getAttribute('aria-disabled') === 'true' || input.disabled) return false;
+    if (b.getAttribute('aria-disabled') === 'true' || input.disabled || input.getAttribute('aria-disabled') === 'true') return false;
     const n = +b.dataset.rkStep;
     try { if (n > 0) input.stepUp(n); else input.stepDown(-n); } catch { input.value = String((+input.value || 0) + n); }
     input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -3750,17 +3767,18 @@ const onRange = (e) => { if (e.target.matches && e.target.matches('input.rk-rang
 
 // drop(el, { onFiles, accept }): a .rk-drop zone around a file input takes files dropped on it or chosen with the
 // input. While files are dragged over it, it gets data-rk-over. Dropping files elsewhere on the page never opens
-// them in the browser while a zone is mounted.
+// them in the browser while a zone is mounted. While its input is disabled (or aria-disabled) it takes none.
 export function drop(el, { onFiles = null, accept = null } = {}) {
   const input = el.querySelector('input[type=file]');
   let depth = 0;
   const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  const off = () => !!input && (input.disabled || input.getAttribute('aria-disabled') === 'true');
   const ok = (f) => !accept || accept.split(',').some((a) => { a = a.trim(); return a.startsWith('.') ? f.name.toLowerCase().endsWith(a.toLowerCase()) : a.endsWith('/*') ? f.type.startsWith(a.slice(0, -1)) : f.type === a; });
   const give = (files) => { const list = [...files].filter(ok); if (list.length && onFiles) onFiles(list, [...files].filter((f) => !ok(f))); };
-  const enter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth += 1; el.setAttribute('data-rk-over', ''); };
-  const over = (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
+  const enter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); if (off()) return; depth += 1; el.setAttribute('data-rk-over', ''); };
+  const over = (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = off() ? 'none' : 'copy'; };
   const leave = () => { depth = Math.max(0, depth - 1); if (!depth) el.removeAttribute('data-rk-over'); };
-  const dropped = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; el.removeAttribute('data-rk-over'); give(e.dataTransfer.files); };
+  const dropped = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; el.removeAttribute('data-rk-over'); if (!off()) give(e.dataTransfer.files); };
   const page = (e) => { if (hasFiles(e) && !el.contains(e.target)) { e.preventDefault(); if (e.type === 'dragover') e.dataTransfer.dropEffect = 'none'; } };
   const chose = () => { give(input.files); input.value = ''; };
   el.addEventListener('dragenter', enter); el.addEventListener('dragover', over); el.addEventListener('dragleave', leave); el.addEventListener('drop', dropped);

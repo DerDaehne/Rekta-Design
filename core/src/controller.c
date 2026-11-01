@@ -1565,7 +1565,8 @@ void rk_controller_dismiss(rk_controller *sheet) {
 }
 
 /* A short question, as the web's confirm(): a kicker, the question as a group heading, a line, cancel and ok. The
-   safe answer is the primary button and has focus; Escape and the shading answer cancel. answered() hears it once. */
+   safe answer is the primary button and has focus; where that is cancel, ok cannot be undone and is the destructive
+   button. Escape and the shading answer cancel. answered() hears it once. */
 typedef struct asking { void (*answered)(bool ok, void *user); void *user; bool told; rk_controller *sheet; } asking;
 static void ask_tell(asking *a, bool ok) { if (a->told) return; a->told = true; if (a->answered) a->answered(ok, a->user); }
 static void ask_ok(rk_view *b, void *user) { (void)b; asking *a = user; ask_tell(a, true); rk_controller_dismiss(a->sheet); }
@@ -1588,6 +1589,7 @@ rk_controller *rk_confirm(rk_controller *presenter, const rk_confirm_desc *desc,
   rk_view *ok = rk_add(row, rk_button(d.ok ? d.ok : rk__words()->ok, ask_ok, a));
   rk_view *safe = d.cancel_is_safe ? cancel : ok;
   rk_button_set_kind(safe, RK_BUTTON_PRIMARY);
+  if (d.cancel_is_safe) rk_button_set_kind(ok, RK_BUTTON_DESTRUCTIVE);
   rk_controller_class cls = { sizeof cls, "rk_confirm", NULL, NULL, ask_gone, NULL, ask_free };
   rk_controller *sheet = rk_controller_create(&cls, a);
   sheet->view = page; page->controller = sheet;

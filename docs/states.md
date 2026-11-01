@@ -31,6 +31,11 @@ schedule…". It refuses more clicks (`aria-disabled`), and after
 it. When the action ends, the label comes back and a toast reports the
 result; a failure is said at the control that caused it.
 
+The line goes with the label: once shown, it stays until the label comes
+back and leaves in the same moment, never before. No `timing.busy-min`
+holds it, as one holds a region's line: the label coming back says the
+action has ended, so the line ending with it is that answer, not a flash.
+
 A failure whose control has gone (a background save, an action from a
 sheet that has closed, a place the user has left) has nowhere else to
 be said: it goes in a toast with `status: 'error'` (`toaster.show(text,
@@ -39,6 +44,13 @@ be said: it goes in a toast with `status: 'error'` (`toaster.show(text,
 to try again (`act`). A failure that lasts, such as the server being
 unreachable, is a banner state, not a toast. Toasts that report a
 success carry no status: the plain toast is the success.
+
+A tag (`.rk-tag`) in a toast says a status in its words, as anywhere.
+In the plain, ink toast its word takes the toast's text colour and its
+square an edge in that colour, so a status colour that would sink into
+the ink still shows; the neutral square keeps 3:1 on the ink (`--check`
+holds it). In a toast with a status, the tag reads on the fill as on a
+tile.
 
 ## Floating surfaces
 
@@ -53,8 +65,12 @@ next to the control that opened them.
 - **Motion:** a fade and a 4px shift away from the control over
   `motion.duration.float` (150ms); it leaves at once.
 - **Rows:** one item per row at the density's row height, a lowercase
-  verb or option. A chosen option shows a filled square. A key hint
-  sits at the end in `rk-meta`. A hairline separates groups.
+  verb or option. In a menu, a chosen option (a checkbox or radio item,
+  a setting the menu toggles) shows a filled square. In a list that
+  picks a field's value (a select's, a combobox's), the chosen option
+  carries a tick without a box instead: it is the field's value, not a
+  setting. A key hint sits at the end in `rk-meta`. A hairline
+  separates groups.
 - **Keys:** ↑ ↓ (wrapping), Home End, a letter jumps to the next item
   starting with it, Enter or Space chooses, Escape closes and returns
   focus to the control, Tab closes and moves on. A click outside closes.

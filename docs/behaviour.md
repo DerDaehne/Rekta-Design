@@ -138,6 +138,7 @@ state's `word`) are the caller's, in its own language.
 | `putBack` | `sortable()` | ("Build") → “Build put back.” |
 | `position` | `sortable()` | ("Build", 3, 4) → “Build: position 3 of 4.” |
 | `loadFailed` | `combobox()` | “Could not load the choices. Type to try again.” |
+| `keyMeta` | `tips()`, `appbar()` | ("windows") → “Win”, ("other") → “Super”: the Meta key outside Apple |
 
 ## The contract
 
@@ -667,7 +668,8 @@ With `dirty` (a function), a close request while it returns true
 (Escape, the shading, a `method=dialog` submit with `value="cancel"`)
 asks first, inside the sheet (`.rk-sheet-ask`; the sheet gets
 `data-rk-asking` and shows only the question): `discardTitle` with
-"keep editing" (primary, focused) and "discard changes". Another close
+"keep editing" (primary, focused) and "discard changes" (the destructive
+button, `data-status="error"`). Another close
 request while it asks keeps editing. `start()` attaches every sheet, so
 call `sheet(dialog, { dirty })` afterwards: it updates the options of the
 sheet already attached and returns the same handle. While there is
@@ -687,8 +689,10 @@ work. See [states.md](states.md).
 
 The button says what it is doing (`label`, its `data-rk-pending-label`,
 or its text plus "…") at the same width, refuses more clicks and writes
-`data-rk-pending` (the line under it) until `work` settles. Resolves or
-rejects with the work.
+`data-rk-pending` (the line under it, after `timing.busy-delay`) until
+`work` settles; the label and the line go in the same step, with no
+`busy-min` (states.md, "Pending actions"). Resolves or rejects with the
+work.
 
 ### `menu(trigger, el, { onSelect, summary })`
 
@@ -788,7 +792,8 @@ Moves the app bar's controls that do not fit into the menu of `more` (a
 - **The menu** repeats each moved control's words: its `aria-label`, or
   its text without `aria-hidden` parts and `.rk-key` hints. A key hint
   shows apart, at the item's end, as in the palette (`.rk-menu-key`,
-  from the control's `aria-keyshortcuts` or its `.rk-key`), and the item
+  from the control's `aria-keyshortcuts`, written as for a tooltip, or
+  its `.rk-key`), and the item
   carries the same `aria-keyshortcuts`.
 - **Places.** While `.rk-ab-places` shows (compact), every command is
   in "more", and `data-rk-places` is on the bar and the
@@ -820,7 +825,10 @@ the form. Returns `{ dirty, changed(), clean(), restore(), destroy }`.
 
 A short question in a sheet; resolves `true` for `ok`. The safe answer
 (`safe: 'cancel'` for an action that cannot be undone) is the primary
-button and takes focus. Escape and the shading answer cancel.
+button and takes focus. With `safe: 'cancel'`, `ok` is the destructive
+button (`data-status="error"`: frame and words in `status-error-full`,
+[forms.md](forms.md#dialog-levels)), as the button that opened the sheet
+should be. Escape and the shading answer cancel.
 
 ### `disable(control, reason)`
 
@@ -846,7 +854,8 @@ input gets `data-value`. Returns `{ open, close, value, set(value), destroy }`.
 `el` is a `.rk-stepper`: a button with `data-rk-step="-1"`, an
 `input[type=number]`, a button with `data-rk-step="1"`. A press steps
 once (firing `input` and `change`); held, it repeats after 400ms every
-80ms. A button at the limit gets `aria-disabled`. The buttons are out of
+80ms. A button at the limit gets `aria-disabled`; while the field is
+disabled (or `aria-disabled`) neither steps. The buttons are out of
 the tab order: ↑ ↓ in the field do the same. `start()` attaches it.
 
 ### `drop(el, { onFiles, accept })`
@@ -854,15 +863,18 @@ the tab order: ↑ ↓ in the field do the same. `start()` attaches it.
 `el` is a `.rk-drop` label around an `input[type=file]`. Files dropped on
 it or chosen with the input go to `onFiles(accepted, refused)` (`accept`
 as in the input's attribute). While files are dragged over it, it gets
-`data-rk-over`. While it is mounted, files dropped elsewhere on the page
-are not opened by the browser. Returns `{ destroy }`.
+`data-rk-over`. While its input is disabled (or `aria-disabled`) it takes
+no files. While it is mounted, files dropped elsewhere on the page are
+not opened by the browser. Returns `{ destroy }`.
 
 ### `tips()`
 
 Started by `start()`. Any element with `data-rk-tip="text"` gets an ink
 tooltip (`.rk-tip`, `role=tooltip`) after a rest of `timing.tip-delay`
 under a mouse or pen, at once on keyboard focus or after another tip,
-never on touch; its `aria-keyshortcuts` adds the keys. `data-rk-tip="overflow"`
+never on touch; its `aria-keyshortcuts` adds the keys, written as
+[navigation.md](navigation.md#writing-a-key) says (the platform's form:
+"Ctrl+Shift+Z", ⇧⌘Z on Apple; Meta outside Apple is `keyMeta`). `data-rk-tip="overflow"`
 shows the element's own text, only while its box cuts it off. Escape
 (key layer 45), a press, scrolling or leaving hide it. While shown, it
 describes its control (`aria-describedby`) unless it repeats its name.

@@ -6,7 +6,8 @@
 export interface Destroyable { destroy(): void; }
 
 type StatusName = 'info' | 'success' | 'warning' | 'error';
-type Word = string | ((...args: any[]) => string);
+// never[]: every word function, whatever it takes, is assignable to it, and no `any` reaches a product's linter.
+type Word = string | ((...args: never[]) => string);
 /** The forms of an entry that counts, one per category of Intl.PluralRules for the locale; `other` is the fallback. */
 export interface PluralForms { zero?: Word; one: Word; two?: Word; few?: Word; many?: Word; other: Word; }
 
@@ -277,6 +278,8 @@ export declare function confirm(options: {
   kicker?: string;
   ok?: string;
   cancel?: string;
+  /** The primary answer, with focus. `'cancel'` for an action that cannot be undone: `ok` is then the destructive
+   * button (`data-status="error"`). */
   safe?: 'ok' | 'cancel';
   root?: Element;
 }): Promise<boolean>;

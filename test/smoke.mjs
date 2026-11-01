@@ -83,6 +83,23 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
       return low;
     });
     ok(worst.r >= 4.5, `${scheme}: secondary text on every status fill clears AA`, `${worst.what} ${worst.r.toFixed(2)}:1`);
+    // A tag in the plain (ink) toast: its word reads on the ink, its neutral square holds 3:1, every square has an edge (#139).
+    const inToast = await p.evaluate(() => {
+      const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+      const t = document.createElement('div'); t.className = 'rk-toast';
+      t.innerHTML = '<p class="rk-toast-msg">Build 4182 <span class="rk-tag">idle</span> <span class="rk-tag" data-status="warning">waiting</span> <span class="rk-tag" data-status="success">done</span></p>';
+      document.querySelector('.rk').append(t);
+      const ink = getComputedStyle(t).backgroundColor, tags = [...t.querySelectorAll('.rk-tag')];
+      const out = {
+        word: Math.min(...tags.map((x) => ratio(getComputedStyle(x).color, ink))),
+        square: ratio(getComputedStyle(tags[0], '::before').backgroundColor, ink),
+        edges: tags.every((x) => getComputedStyle(x, '::before').boxShadow.startsWith(getComputedStyle(t).color)),
+      };
+      t.remove();
+      return out;
+    });
+    ok(inToast.word >= 4.5 && inToast.square >= 3 && inToast.edges, `${scheme}: a tag in an ink toast: its word reads, its square shows`, JSON.stringify(inToast));
   }
   await p.screenshot({ path: join(shots, `rest-${w}x${h}-${scheme}.png`) });
   await p.close();
@@ -362,6 +379,16 @@ const shares = await p.evaluate(() => {
 });
 ok(shares.colours && shares.ratio && shares.gap === 2, 'a share bar: each share in its code, as wide as its share, 2px apart', JSON.stringify(shares));
 ok(shares.meter && shares.status, 'a meter fills in its code; a status wins', JSON.stringify(shares));
+// A pivot's titles, buttons or links, are written as the strip says: case and spacing set by CSS reach them (#100).
+const cased = await p.evaluate(() => {
+  const n = document.createElement('div'); n.className = 'rk-pivot'; n.style.cssText = 'text-transform:uppercase;letter-spacing:3px';
+  n.innerHTML = '<button type="button" aria-selected="true">jobs</button><button type="button">runs</button><a href="#">logs</a>';
+  document.querySelector('.rk').append(n);
+  const out = [...n.children].map((x) => `${getComputedStyle(x).textTransform} ${getComputedStyle(x).letterSpacing}`);
+  n.remove();
+  return out;
+});
+ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s text-transform and letter-spacing', JSON.stringify(cased));
 
 // rekta.js in German (?lang=de): its words from the catalogue, its numbers in the locale; none of its English shows.
 {
@@ -512,6 +539,22 @@ await p.hover('#tree-close'); await p.waitForTimeout(60);
 ok((await p.evaluate(() => document.querySelector('.rk-tip').textContent)) === 'close every folder', 'the next tooltip comes at once');
 await p.keyboard.press('Escape'); await p.waitForTimeout(100);
 ok(!(await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open'))) && await visible(p, 'home'), 'Escape hides the tooltip, nothing more');
+// A key combination is written one way: Ctrl, Alt, Shift, Meta, then the key, joined by "+"; Meta outside Apple is the
+// catalogue's keyMeta, "Super" here on Linux (#141).
+await p.evaluate(() => {
+  const box = document.createElement('p'); box.id = 'keys-fixture'; box.style.cssText = 'position:fixed;left:200px;top:200px;z-index:9999;display:flex;gap:40px';
+  box.innerHTML = '<button class="rk-btn" type="button" data-rk-tip="redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">a</button>'
+    + '<button class="rk-btn" type="button" data-rk-tip="launcher" aria-keyshortcuts="Meta+Shift+Z">b</button>'
+    + '<button class="rk-btn" type="button" data-rk-tip="find" aria-keyshortcuts="Shift+Alt+Control+f">c</button>';
+  document.querySelector('.rk').append(box);
+});
+const keyOf = async (n) => { await p.hover(`#keys-fixture > :nth-child(${n})`); await p.waitForTimeout(900); const k = await text(p, '.rk-tip .rk-key'); await p.mouse.move(5, 5); await p.waitForTimeout(200); return k; };
+const written = { both: await keyOf(1), meta: await keyOf(2), order: await keyOf(3) };
+await p.evaluate(() => Rekta.setStrings({ keyMeta: (os) => (os === 'windows' ? 'Win' : 'Meta') }));
+written.word = await keyOf(2);
+await p.evaluate(() => { Rekta.setStrings(null); document.querySelector('#keys-fixture').remove(); });
+ok(written.both === 'Ctrl+Shift+Z' && written.order === 'Ctrl+Alt+Shift+F', 'a key combination: modifiers in order, joined by +', JSON.stringify(written));
+ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Meta key outside Apple is the catalogue\'s keyMeta', JSON.stringify(written));
 await p.mouse.move(5, 5);
 await p.click('#tree > li:nth-child(1) > .rk-tree-row'); await p.waitForTimeout(100);
 await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.waitForTimeout(100);
@@ -727,6 +770,12 @@ ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(
 ok(!(await p.getAttribute('#a-remove', 'aria-disabled')), 'remove can act now');
 await p.click('#a-remove'); await p.waitForTimeout(400);
 ok((await sheetTitle(p)) === 'Remove “sea”?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep it', 'confirm: the safe answer first');
+const okLook = await p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const b = document.querySelector('dialog[open] button[value=ok]'), s = getComputedStyle(b), red = rgb('var(--rk-status-error-full)');
+  return { status: b.dataset.status, words: s.color === red, frame: s.borderTopColor === red, filled: s.backgroundColor !== 'rgba(0, 0, 0, 0)', primary: b.classList.contains('rk-btn--primary') };
+});
+ok(okLook.status === 'error' && okLook.words && okLook.frame && !okLook.filled && !okLook.primary, 'confirm({ safe: \'cancel\' }): ok is the destructive button, framed in the error colour (#101)', JSON.stringify(okLook));
 await p.click('dialog[open] button[value=ok]');
 await until(p, () => p.evaluate(() => !document.querySelector('dialog[open]')), 3000);   /* the sheet leaves first; its answer counts once it has gone */
 ok((await p.evaluate(() => document.documentElement.dataset.accent)) === undefined && (await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'removed, ink again', await p.evaluate(() => `accent ${document.documentElement.dataset.accent} remove ${document.querySelector('#a-remove').getAttribute('aria-disabled')} open ${!!document.querySelector('dialog[open]')} phase ${document.querySelector('dialog[open]')?.getAttribute('data-rk-phase')}`));
@@ -751,6 +800,94 @@ const btns = await p.evaluate(async () => {
 ok(btns.pendingKeeps, 'a running button keeps its colours (it is not disabled)', JSON.stringify(btns));
 ok(btns.danger, 'a destructive button: frame and words in the error colour, not filled', JSON.stringify(btns));
 ok(btns.quiet, 'a quiet button keeps its look while it runs (no frame appears)', JSON.stringify(btns));
+// A running button's line comes after busy-delay and goes with the label, in the same step: no busy-min (#110).
+const lineGoes = await p.evaluate(async () => {
+  const b = document.createElement('button'); b.className = 'rk-btn'; b.type = 'button'; b.textContent = 'save';
+  document.querySelector('#forms').append(b);
+  const line = () => { const a = getComputedStyle(b, '::after'); return a.content !== 'none' && a.visibility === 'visible'; };
+  let release; const run = Rekta.pending(b, new Promise((r) => { release = r; }));
+  const early = line();
+  await new Promise((r) => setTimeout(r, Rekta.tokens.ms('--rk-duration-busy-delay') + 200));
+  const shown = line(), during = b.textContent;
+  release(); await run;
+  const out = { early, shown, during, after: line(), label: b.textContent };
+  b.remove();
+  return out;
+});
+ok(!lineGoes.early && lineGoes.shown && lineGoes.during === 'save…', 'a running button: the line only after busy-delay', JSON.stringify(lineGoes));
+ok(!lineGoes.after && lineGoes.label === 'save', 'and it goes with the label, in the same step', JSON.stringify(lineGoes));
+// Every input disabled with a reason (aria-disabled) looks disabled, as a natively disabled one does (#108).
+const dis = await p.evaluate(async () => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const grey = rgb('var(--rk-disabled)'), cs = (el, pe) => getComputedStyle(el, pe);
+  const box = document.createElement('div'); box.className = 'rk-actions'; box.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;background:var(--rk-bg);padding:8px';
+  box.innerHTML = '<label class="rk-switch"><input type="checkbox" checked aria-disabled="true"> sent</label>'
+    + '<label class="rk-toggle"><span class="rk-toggle-label">feed</span><input type="checkbox" role="switch" checked aria-disabled="true"><span class="rk-toggle-track"></span><span class="rk-toggle-word" data-on="on" data-off="off"></span></label>'
+    + '<input class="rk-input" aria-disabled="true" value="text" style="width:8em">'
+    + '<select class="rk-input" aria-disabled="true" style="width:8em"><option>one</option></select>'
+    + '<div class="rk-combo" style="width:10em"><input class="rk-input" aria-disabled="true"><button class="rk-combo-btn" type="button" tabindex="-1" aria-label="open"></button></div>'
+    + '<div class="rk-stepper"><button type="button" data-rk-step="-1">−</button><input class="rk-input" type="number" value="3" aria-disabled="true"><button type="button" data-rk-step="1">+</button></div>'
+    + '<div class="rk-slider" style="width:12em"><input class="rk-range" type="range" aria-disabled="true" value="50"><output>50</output></div>'
+    + '<fieldset class="rk-segments"><label><input type="radio" name="dz" checked aria-disabled="true">one</label><label><input type="radio" name="dz" aria-disabled="true">two</label></fieldset>'
+    + '<label class="rk-drop" style="width:10em"><input type="file" aria-disabled="true"><b>drop</b> files</label>';
+  document.querySelector('.rk').append(box);
+  const q = (s) => box.querySelector(s), st = q('.rk-stepper');
+  // The slider's thumb has no computed style to read: its rule is looked up instead.
+  const rules = [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules]; } catch { return []; } });
+  const stepped = Rekta.stepper(st); st.querySelector('[data-rk-step="1"]').click();
+  const files = []; const zone = Rekta.drop(q('.rk-drop'), { onFiles: (f) => files.push(...f) });
+  const dt = new DataTransfer(); dt.items.add(new File(['x'], 'a.txt', { type: 'text/plain' }));
+  q('.rk-drop').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  const out = {
+    switch: cs(q('.rk-switch')).color === grey && cs(q('.rk-switch input')).borderTopColor === grey && cs(q('.rk-switch input')).backgroundColor === grey,
+    toggle: cs(q('.rk-toggle-track')).borderTopColor === grey && cs(q('.rk-toggle-track'), '::after').backgroundColor === grey && cs(q('.rk-toggle-label')).color === grey && cs(q('.rk-toggle-word')).color === grey && cs(q('.rk-toggle-track')).backgroundImage.includes(grey),
+    field: cs(q('input.rk-input')).color === grey && cs(q('input.rk-input')).borderTopColor === grey,
+    select: cs(q('select.rk-input')).color === grey && cs(q('select.rk-input')).borderTopColor === grey,
+    combo: cs(q('.rk-combo-btn')).color === grey,
+    stepper: [...st.querySelectorAll('[data-rk-step]')].every((b) => cs(b).color === grey && cs(b).borderTopColor === grey) && st.querySelector('input').value === '3',
+    slider: cs(q('.rk-slider output')).color === grey && cs(q('.rk-range')).cursor === 'not-allowed'
+      && rules.some((r) => /aria-disabled/.test(r.selectorText) && /slider-thumb/.test(r.selectorText) && /--rk-disabled/.test(r.style.background)),
+    segments: [...box.querySelectorAll('.rk-segments > label')].every((l) => cs(l).borderTopColor === grey) && cs(q('.rk-segments > label')).backgroundColor === grey && cs(q('.rk-segments > label + label')).color === grey,
+    drop: cs(q('.rk-drop')).borderTopColor === grey && cs(q('.rk-drop b')).color === grey && files.length === 0,
+  };
+  stepped.destroy(); zone.destroy(); box.remove();
+  return out;
+});
+for (const [k, v] of Object.entries(dis)) ok(v, `${k} with aria-disabled looks disabled${k === 'stepper' || k === 'drop' ? ' and does not act' : ''}`, JSON.stringify(dis));
+// The chosen segment lies above its neighbours: its accent frame shows at both joints (#109).
+const joints = await p.evaluate(() => {
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;background:var(--rk-bg);padding:16px';
+  box.innerHTML = '<fieldset class="rk-segments"><label><input type="radio" name="jz">one</label><label><input type="radio" name="jz" checked>two</label><label><input type="radio" name="jz">three</label></fieldset>';
+  document.querySelector('.rk').append(box);
+  const [a, b] = box.querySelectorAll('label'), r = b.getBoundingClientRect(), y = r.top + r.height / 2;
+  const at = (x) => { const e = document.elementFromPoint(x, y); return e && e.closest('label'); };
+  const out = { left: at(r.left + 1) === b, right: at(r.right - 1) === b, overlap: Math.round(a.getBoundingClientRect().right - r.left) };
+  box.remove();
+  return out;
+});
+ok(joints.left && joints.right && joints.overlap === 2, 'the chosen segment\'s frame lies on top at both joints', JSON.stringify(joints));
+// A select's chevron is the combobox's, stroked in the text colour (#135); the caret and selected text (#136).
+const writing = await p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const box = document.createElement('div');
+  box.innerHTML = '<p>words</p><select class="rk-input"><option>daily</option></select><div class="rk-combo"><input class="rk-input" value="Berlin"><button class="rk-combo-btn" type="button" aria-label="open"></button></div>'
+    + '<ul class="rk-rows" data-rk-select><li aria-selected="true"><span>picked</span></li></ul>';
+  document.querySelector('.rk').append(box);
+  const sel = box.querySelector('select'), input = box.querySelector('input'), ink = rgb('var(--rk-text-primary)');
+  const chevron = getComputedStyle(sel).backgroundImage, text = getComputedStyle(box.querySelector('p'), '::selection'), row = getComputedStyle(box.querySelector('li span'), '::selection');
+  const out = {
+    stroked: (chevron.match(/linear-gradient/g) || []).length === 2 && chevron.split(ink).length === 5 && getComputedStyle(sel).backgroundSize === '4px 6px, 4px 6px',
+    same: chevron === getComputedStyle(box.querySelector('.rk-combo-btn'), '::before').backgroundImage,
+    selection: text.backgroundColor === rgb('var(--rk-accent)') && text.color === rgb('var(--rk-on-accent)'),
+    onAccent: row.backgroundColor === rgb('var(--rk-on-accent)') && row.color === rgb('var(--rk-accent)'),
+    caret: getComputedStyle(input).caretColor === getComputedStyle(input).color,
+  };
+  box.remove();
+  return out;
+});
+ok(writing.stroked && writing.same, 'a select\'s chevron is the combobox\'s: two strokes in the text colour', JSON.stringify(writing));
+ok(writing.selection && writing.onAccent, 'selected text takes the accent with on-accent text, turned over on an accent fill', JSON.stringify(writing));
+ok(writing.caret, 'the caret is the text colour', JSON.stringify(writing));
 // A form in a sheet: a close request asks while there is input; Escape while asking keeps editing; an untouched one closes.
 await p.click('#view-open'); await p.waitForTimeout(400);
 const closeBtn = await p.evaluate(() => { const r = document.querySelector('#view-sheet .rk-sheet-close').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), label: document.querySelector('#view-sheet .rk-sheet-close').getAttribute('aria-label') }; });
@@ -768,6 +905,7 @@ const third = await p.evaluate(() => { const d = document.querySelector('#view-s
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 ok(third.open && third.asking && third.value === 'release review' && await p.evaluate(() => document.querySelector('#view-sheet').open), 'a third and fourth Escape ask and keep editing; the sheet never closes without asking', JSON.stringify(third));
 await p.click('#view-sheet .rk-sheet-close'); await p.waitForTimeout(200);
+ok((await p.getAttribute('#view-sheet .rk-sheet-ask .rk-btn:not(.rk-btn--primary)', 'data-status')) === 'error', '"discard changes" is the destructive button');
 await p.click('#view-sheet .rk-sheet-ask .rk-btn:not(.rk-btn--primary)');
 ok(await until(p, () => p.evaluate(() => !document.querySelector('#view-sheet').open), 3000), 'the close button asks too, and discarding closes');
 await p.fill('#a-name', 'sea-2');
@@ -796,6 +934,26 @@ await p.fill('#b-value', '999'); await p.dispatchEvent('#b-value', 'input');
 ok((await p.getAttribute('.rk-stepper [data-rk-step="1"]', 'aria-disabled')) === 'true', 'the stepper says when its limit is reached');
 await p.click('#builder .rk-segments label:nth-child(3)'); await p.waitForTimeout(100);
 ok(await p.evaluate(() => document.querySelector('#built').matches('.rk-w2.rk-h2')), 'segments choose the size');
+// Toggle buttons: pressed in the accent like a chosen segment, not pressed a quiet button; icon beside the word, the
+// state word below; a press switches at once (#140).
+const quick = () => p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const [on, off] = document.querySelectorAll('#quick .rk-btn'), word = on.querySelector('span'), state = on.querySelector('.rk-btn-state');
+  const icon = on.querySelector('svg').getBoundingClientRect(), w = word.getBoundingClientRect(), st = state.getBoundingClientRect();
+  return {
+    pressed: on.getAttribute('aria-pressed'), state: getComputedStyle(state, '::before').content,
+    on: getComputedStyle(on).backgroundColor === rgb('var(--rk-accent)') && getComputedStyle(on).color === rgb('var(--rk-on-accent)') && getComputedStyle(on).borderTopColor === rgb('var(--rk-accent)'),
+    off: getComputedStyle(off).borderTopColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(off).color === rgb('var(--rk-text-contrast-high)') && getComputedStyle(off).backgroundColor === 'rgba(0, 0, 0, 0)',
+    beside: icon.right <= w.left, below: st.top >= w.top + 8 && st.left === w.left,
+  };
+});
+const q0 = await quick();
+ok(q0.on && q0.off, 'a toggle button: pressed takes the accent, not pressed is quiet', JSON.stringify(q0));
+ok(q0.beside && q0.below && q0.state === '"on"', 'its icon beside the word, the state word below', JSON.stringify(q0));
+await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
+const q1 = await quick();
+ok(q1.pressed === 'false' && q1.state === '"off"', 'a press switches it at once; the state word follows', JSON.stringify(q1));
+await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
 await p.click('#builder .rk-toggle'); await p.waitForTimeout(100);
 ok((await p.getAttribute('#b-spark', 'role')) === 'switch' && !!(await p.$('#built .rk-spark')), 'a toggle is a switch; it adds a sparkline at once');
 await p.selectOption('#b-status', 'success'); await p.waitForTimeout(100);
@@ -971,7 +1129,7 @@ const bar = await m.evaluate(async () => {
   const el = document.createElement('div'); el.className = 'rk-appbar'; el.style.cssText = 'width:320px;left:0;right:auto';
   el.innerHTML = `<button class="rk-ab rk-ab-back" type="button">${icon}<span>back</span></button><span class="rk-ab-status"><i class="rk-pulse"></i><span class="rk-ab-k">live</span></span>`
     + `<button class="rk-ab" id="t-search" type="button" data-rk-priority="pinned">${icon}<span>search</span></button>`
-    + `<button class="rk-ab" id="t-goto" type="button" aria-keyshortcuts="Control+K Meta+K">${icon}<span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl K</span></button>`
+    + `<button class="rk-ab" id="t-goto" type="button" aria-keyshortcuts="Control+K Meta+K">${icon}<span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl+K</span></button>`
     + `<button class="rk-ab" type="button" data-rk-priority="5">${icon}<span>other</span></button><button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
   const name = document.createElement('h1'); name.className = 'rk-place-name'; name.textContent = 'overview';
   document.querySelector('[data-rk-place="home"]').prepend(name);
@@ -995,7 +1153,7 @@ const bar = await m.evaluate(async () => {
   return r;
 });
 ok(bar.pinned, 'a pinned control stays in the bar; one without a priority moves first');
-ok(bar.words === 'go to' && bar.key && bar.ks === 'Control+K Meta+K', 'a moved control\'s menu item keeps its key hint apart', JSON.stringify(bar));
+ok(bar.words === 'go to' && bar.key === 'Ctrl+K' && bar.ks === 'Control+K Meta+K', 'a moved control\'s menu item keeps its key hint apart', JSON.stringify(bar));
 ok(bar.places && bar.after, 'places in the bar: data-rk-places on the bar and the root, the strip steps aside, back when it goes');
 ok(bar.nameHidden && bar.nameShown, '.rk-place-name shows only while the places are in the bar');
 const grow = await m.evaluate(async () => {

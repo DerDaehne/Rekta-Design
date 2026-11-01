@@ -6,6 +6,15 @@ A label above, the control, a hint below that turns into the error when
 there is one (see the Field component). Required fields carry no mark;
 an optional one says "(optional)" in its label (`rk-optional`).
 
+The caret is the text colour, one pixel wide. Selected text takes the
+accent with on-accent text, as any selection does (on an accent fill,
+such as a selected row, it turns over: on-accent with accent text). The
+caret's height and its blinking are the platform's; rekta-core draws
+its own, as a platform does: as high as the text plus 4px, blinking for
+ten seconds after the last edit, then standing still.
+Typed text that stands as a title (a search that names the place it
+shows) follows the same rules at the title's size.
+
 ## Inputs
 
 Native where it can be: a select, a number, a date and a time are the
@@ -15,12 +24,13 @@ Rekta's own.
 
 | Need | Control | Notes |
 |---|---|---|
-| one of many, a list you know | `select.rk-input` | a chevron, the system's list |
+| one of many, a list you know | `select.rk-input` | a chevron, the platform's own list (see below) |
 | one of many, a long list or one to search | combobox (`rk-combo`, `Rekta.combobox()`) | filters as you type; floats below like a menu; without `free`, keeps only a choice from its list |
 | two to five options seen at a glance | segments (`rk-segments`) | joined buttons, the chosen one in the accent; radios underneath |
 | on or off, acting at once | toggle switch (`rk-toggle`) | `role="switch"`; outside forms that are sent |
 | on or off, sent with a form | checkbox (`rk-switch`) | waits for "save" |
 | a row's state (a task done, a setting on) | toggle switch (`rk-toggle`) | it acts at once, so it is a switch, never a checkbox |
+| a frequent state in a compact row of them (quick settings) | toggle button (`.rk-btn[aria-pressed]`) | acts at once; pressed in the accent; icon, word and state word |
 | a whole number | stepper (`rk-stepper`) | − field +, repeats while held, says when its limit is reached |
 | a value on a scale | slider (`rk-range`) | the accent fills up to the value; an `<output>` shows it |
 | a date or a time | `input[type=date | time].rk-input` | the browser's own pickers |
@@ -29,21 +39,58 @@ Rekta's own.
 **Acts at once, or waits for "save".** This is the one rule for on/off
 controls, wherever they stand. A state that takes effect the moment it
 changes (a row's done or enabled state, a setting, a filter that applies
-as it is ticked) is a **toggle switch** (`rk-toggle`, `role="switch"`).
-A choice that is only collected, and takes effect when the form is sent,
-is a **checkbox** (`rk-switch`). The names are close; the behaviour
-decides, not the look wanted. A checkbox in a selection (`.rk-check`) is
-neither: it chooses rows, it sets nothing.
+as it is ticked) is a **toggle switch** (`rk-toggle`, `role="switch"`),
+or, in a compact row of frequent states, a **toggle button**. A choice
+that is only collected, and takes effect when the form is sent, is a
+**checkbox** (`rk-switch`). The names are close; the behaviour decides,
+not the look wanted. A checkbox in a selection (`.rk-check`) is neither:
+it chooses rows, it sets nothing.
 
 - **Toggle switch, the Metro way:** a square-cornered frame (2px
   `text-primary`), the `accent` fill growing from the leading edge when
   on, a solid ink bar as the thumb, and the state word ("on", "off")
   beside it. It acts at once, so it never sits in a form that waits for
   "save": use a checkbox there.
+- **Toggle button:** where a row of frequent on/off states has no room
+  for form rows (wireless, do not disturb, dark appearance), each is a
+  button with `aria-pressed` (the platform's pressed state elsewhere):
+  its icon beside its word, a state word below in `font-size-xs`
+  (`.rk-btn-state`: "on", "off", or a short value such as the network's
+  name). Pressed, it takes the accent fill with on-accent words, as a
+  chosen segment does; not pressed, it is a quiet button. A press
+  switches it at once and, like the toggle switch, needs no undo. Focus,
+  and disabled with a reason, are every button's; disabled, it keeps
+  its state (pressed, a `disabled` fill). A state word that only says
+  on or off is `aria-hidden`, since `aria-pressed` says it; with
+  `data-on` and `data-off` it writes the one that holds.
+
+  ```html
+  <button class="rk-btn" type="button" aria-pressed="true"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-bell"/></svg><span>alerts<span class="rk-btn-state" data-on="on" data-off="off" aria-hidden="true"></span></span></button>
+  ```
+
 - **Combobox:** ↓ or Alt+↓ opens, ↑ ↓ move, Enter chooses, Escape
   closes, then clears (it never goes back while it has something to
-  close or clear). The current choice carries a check. A remote list
-  shows the loading line while it waits, and says so when it fails.
+  close or clear). The current choice carries a tick without a box. A
+  remote list shows the loading line while it waits, and says so when it
+  fails.
+- **Select:** the field's frame with the chosen option and, at its end,
+  the combobox's chevron: 8 × 4px, a 1.6px stroke in the text colour,
+  pointing down. Where the platform has a list of its own (a browser, a
+  phone), the select opens that, and the chevron stays as it is. Where
+  Rekta is the platform and draws the list (rekta-core, a desktop shell),
+  the chevron turns up while the list is open, and the list is the
+  combobox's: it floats under the field, at least as wide as it, with
+  the chosen option marked by a tick without a box (a value, not a
+  setting, so not a menu's square). Enter, Space or Alt+↓ open it; in it
+  the keys of every floating surface ([states.md](states.md#floating-surfaces)):
+  ↑ ↓ wrapping, Home End, a letter, Enter or Space chooses, Escape
+  closes and focus stays on the field. Closed, ↑ ↓ Home End and a letter
+  change the choice without opening it, as a platform's select does. A
+  list too long to fit under the field is a combobox's, not a select's.
+  Expanding in place (the options as rows in the field's box, pushing
+  what is below down) is declined: it moves the content below, which
+  none of Rekta's floating surfaces do; a list that floats leaves the
+  page where it was.
 - **Segments** are for options that fit on one line; more than five, or
   long labels, go in a select.
 - **Files:** each file becomes a row with its size, a progress bar while
@@ -113,10 +160,10 @@ thrown away by a refusal.
 While a form differs from how it was loaded or last saved, leaving its
 place (a link, back, Escape, the browser's back or forward) asks first,
 in a sheet: "Leave without saving?", with "keep editing" as the safe,
-primary answer and "discard changes" beside it. Escape and a tap on the
-shading keep editing. Discarding puts the form back as it was. Closing
-the window asks the browser's own question. An unchanged form never
-asks.
+primary answer and "discard changes" beside it, as the destructive
+button. Escape and a tap on the shading keep editing. Discarding puts
+the form back as it was. Closing the window asks the browser's own
+question. An unchanged form never asks.
 
 ## Dialog levels
 
@@ -135,7 +182,9 @@ asks "Are you sure?": it names the action and its consequence.
 be undone (in that sheet, and the one that opens it) is
 `.rk-btn[data-status="error"]`: its frame and words in
 `status-error-full`, never filled and never primary, since the safe
-answer is primary. `--check` holds its words to 4.5:1 on the ground and
+answer is primary. `confirm({ safe: 'cancel' })` and `rk_confirm()` with
+`cancel_is_safe` make their `ok` this button, and the questions about
+unsaved input make "discard changes" one. `--check` holds its words to 4.5:1 on the ground and
 the surface in both themes. It is a frame colour, not a warning sign:
 an undoable action (archive) never wears it.
 
@@ -220,3 +269,24 @@ hear the reason. No tooltips: they do not exist on touch.
 place the hint itself), and `disable(control, false)` takes it away. In
 a `.rk-actions` row the hint takes the rest of the row beside the
 buttons (`.rk-actions > .rk-why`).
+
+**The disabled look** is the same whether a control is disabled
+natively or with a reason (`aria-disabled="true"`): the parts below turn
+`disabled`, nothing else changes, and hover and press tints stop.
+
+| Control | What turns grey |
+|---|---|
+| button (`.rk-btn`) | its frame and words; a fill goes |
+| checkbox, radio (`.rk-switch`) | the frame, the mark and the label |
+| toggle switch (`.rk-toggle`) | the frame, the fill, the thumb, the label and the state word |
+| field, select, date, time (`.rk-input`) | the frame and the text, a select's chevron with it |
+| combobox (`.rk-combo`) | the field as above, and its chevron |
+| stepper (`.rk-stepper`) | the field as above, both buttons' frames and signs |
+| slider (`.rk-range`) | the thumb, the fill up to the value and the `<output>` beside it; the empty track stays a hairline |
+| segments (`.rk-segments`) | every frame and word; the chosen one keeps a `disabled` fill, its word in the ground colour. One option, or the whole group with `aria-disabled` on the fieldset |
+| drop zone (`.rk-drop`) | the frame and every word; it takes no files |
+
+`aria-disabled` alone changes the look and what assistive technology
+hears, not what the control does: `disable()` also refuses its clicks
+(the stepper's buttons and the drop zone refuse by themselves); a
+product that sets the attribute itself keeps the control from acting.

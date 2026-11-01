@@ -1619,6 +1619,8 @@ static void test_confirm_secret(void) {
   rk_app_run_for(500);
   rk_view *focused = rk_window_focused(w);
   CHECK(focused && focused->cls == &button_class && !strcmp(((button *)focused->state)->label, "cancel"), "the safe answer has focus");
+  rk_view *del = rk_view_find(w->sheets, "delete");
+  CHECK(del && ((button *)del->state)->kind == RK_BUTTON_DESTRUCTIVE, "what cannot be undone is the destructive button");
   shot(w, "confirm");
   rk_window_key(w, RK_KEY_ENTER);
   rk_app_run_for(600);

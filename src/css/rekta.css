@@ -157,7 +157,9 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-pivot > a, .rk-pivot > button {
   --_rk-s: var(--rk-pivot-scale, 0.6);
   position: relative; padding: 0; border: 0; background: none; cursor: pointer;
-  font: inherit; font-size: var(--rk-font-size-pivot-active); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-nav);
+  /* A button does not inherit these from the user agent; a product that sets its titles in lower case or spaced by
+     CSS writes the strip the same way. */
+  font: inherit; text-transform: inherit; letter-spacing: inherit; font-size: var(--rk-font-size-pivot-active); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-nav);
   color: var(--rk-text-contrast-medium); text-decoration: none;
   transform: scale(var(--_rk-s)); transform-origin: left bottom;
   /* A scaled title keeps its full layout width; rekta.js writes that width to --_rk-w, and the end margin takes
@@ -224,6 +226,18 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 /* A running action (data-rk-pending) refuses clicks with aria-disabled but is not disabled: every variant keeps its
    colours by itself, and only the line and the cursor say it runs. */
 .rk-btn:disabled, .rk-btn[aria-disabled='true']:not([data-rk-pending]) { border-color: var(--rk-disabled); background: none; color: var(--rk-disabled); cursor: not-allowed; }
+/* A toggle button (aria-pressed): one state a press switches at once, for a compact row of them (quick settings).
+   Pressed, the accent fill with on-accent words, like a chosen segment; not pressed, a quiet button. The icon sits
+   beside the word, a state word (.rk-btn-state: "on", a network's name) below it; with data-on and data-off it writes
+   the one that holds, as the toggle switch does. Disabled, it keeps its state: pressed, a disabled fill. */
+.rk-btn[aria-pressed='true'], .rk-btn[aria-pressed='true']:active { border-color: var(--rk-accent); background-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk-btn[aria-pressed='true']:active { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+.rk-btn[aria-pressed='false'] { border-color: transparent; color: var(--rk-text-contrast-high); }
+.rk-btn[aria-pressed='true']:is(:disabled, [aria-disabled='true']:not([data-rk-pending])) { border-color: var(--rk-disabled); background-color: var(--rk-disabled); color: var(--rk-bg); }
+.rk-btn[aria-pressed] { justify-content: flex-start; text-align: start; }
+.rk-btn-state { display: block; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-regular); line-height: var(--rk-line-height-compact); }
+.rk-btn-state[data-on]::before { content: attr(data-off); }
+.rk-btn[aria-pressed='true'] .rk-btn-state[data-on]::before { content: attr(data-on); }
 /* An icon-only button: square at the control's height (the row's, in a row), 44px under a coarse pointer whatever the
    density; it needs an aria-label. Quiet (.rk-btn--quiet) for row actions and a sheet's close. */
 .rk-btn--icon { width: var(--rk-control-height); min-width: var(--rk-control-height); padding: 0; }
@@ -250,11 +264,13 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10l3.5 3.5L15 6.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") center / 20px no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10l3.5 3.5L15 6.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") center / 20px no-repeat;
 }
-.rk-switch:active input:not(:disabled):not(:checked) { background-color: var(--rk-hover); box-shadow: 0 0 0 4px var(--rk-hover); }
-.rk-switch:has(> input:disabled) { color: var(--rk-disabled); cursor: not-allowed; }
-.rk-switch input:disabled { border-color: var(--rk-disabled); }
-.rk-switch input[type='checkbox']:disabled:checked { background-color: var(--rk-disabled); }
-.rk-switch input[type='radio']:disabled:checked { background-image: radial-gradient(circle, var(--rk-disabled) 0 4.5px, transparent 5.5px); }
+.rk-switch:active input:not(:disabled, [aria-disabled='true']):not(:checked) { background-color: var(--rk-hover); box-shadow: 0 0 0 4px var(--rk-hover); }
+/* Disabled, natively or with a reason (aria-disabled, forms.md): the frame, the mark and the label turn grey. Every
+   input below does the same for both, as buttons do. */
+.rk-switch:has(> input:is(:disabled, [aria-disabled='true'])) { color: var(--rk-disabled); cursor: not-allowed; }
+.rk-switch input:is(:disabled, [aria-disabled='true']) { border-color: var(--rk-disabled); }
+.rk-switch input[type='checkbox']:is(:disabled, [aria-disabled='true']):checked { background-color: var(--rk-disabled); }
+.rk-switch input[type='radio']:is(:disabled, [aria-disabled='true']):checked { background-image: radial-gradient(circle, var(--rk-disabled) 0 4.5px, transparent 5.5px); }
 @media (forced-colors: active) { .rk-switch input { forced-color-adjust: auto; -webkit-appearance: auto; appearance: auto; } .rk-switch::before { display: none; } }
 .rk-choices { display: flex; flex-wrap: wrap; gap: 0 var(--rk-space-l); margin: 0; padding: 0; border: 0; min-width: 0; }
 .rk-choices > legend { padding: 0; margin-bottom: var(--rk-space-xs); }
@@ -270,8 +286,15 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 }
 textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-input::placeholder { color: var(--rk-text-contrast-medium); opacity: 1; }
+/* Writing and choosing text (forms.md, "Fields"): the caret in the text colour, the browser's 1px, its height and
+   blinking the platform's; selected text takes the accent with on-accent text, as any selection does. On an accent
+   fill (a selected row) it turns over, so it still shows. */
+.rk-input { caret-color: currentColor; }
+.rk ::selection { background-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk :is([data-rk-select] > [aria-selected='true'], .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row) ::selection,
+.rk :is([data-rk-select] > [aria-selected='true'], .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row)::selection { background-color: var(--rk-on-accent); color: var(--rk-accent); }
 .rk-input:focus-visible { border-color: var(--rk-text-primary); outline: 2px solid var(--rk-focus); outline-offset: 2px; }
-.rk-input:disabled { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
+.rk-input:is(:disabled, [aria-disabled='true']) { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
 .rk-hint { font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
 .rk-field[data-status='error'] .rk-input { padding-inline: 11px; border: 2px solid var(--rk-status-error-full); }
 .rk-field[data-status='error'] .rk-hint { color: var(--rk-text-primary); }
@@ -293,10 +316,19 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 /* Inputs --------------------------------------------------------------------------------------------------------- */
 /* Native where it can be: a select, number, date and time are the platform's own controls in Rekta's frame, so
    their pickers, keyboard and screen-reader support come for free. */
+/* The chevron of a select and a combobox, as rekta-core draws it: 8 × 4px, a 1.6px stroke in the text colour, centred
+   18px before the end. A select takes no pseudo-element and a background image cannot take currentColor, so each arm
+   is a diagonal stroke drawn by a gradient in a 4 × 6px box; the two boxes meet at the middle, where the arms join in
+   a point. The browser opens its own list, so the chevron does not turn (rekta-core, which draws the list, turns it
+   up while it is open). */
+.rk-input, .rk-combo-btn {
+  --_rk-chevron:
+    linear-gradient(45deg, transparent calc(50% - 1.05px), currentColor calc(50% - 0.55px) calc(50% + 0.55px), transparent calc(50% + 1.05px)),
+    linear-gradient(-45deg, transparent calc(50% - 1.05px), currentColor calc(50% - 0.55px) calc(50% + 0.55px), transparent calc(50% + 1.05px));
+}
 select.rk-input {
   appearance: none; padding-right: 36px; cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
+  background-image: var(--_rk-chevron); background-position: right 18px center, right 14px center; background-size: 4px 6px; background-repeat: no-repeat;
 }
 select.rk-input[multiple] { padding: var(--rk-space-xs) 0; background-image: none; }
 select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary); }
@@ -319,7 +351,8 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-combo-btn {
   position: absolute; inset: 1px 1px 1px auto; width: 36px; border: 0; border-radius: 0 var(--rk-radius-s) var(--rk-radius-s) 0; background: none; color: inherit; cursor: pointer;
 }
-.rk-combo-btn::before { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -5px 0 0 -3px; border: solid currentColor; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); }
+.rk-combo-btn::before { content: ''; position: absolute; inset: 0; background: var(--_rk-chevron); background-position: 14px center, 18px center; background-size: 4px 6px; background-repeat: no-repeat; }
+.rk-combo:has(> .rk-input:is(:disabled, [aria-disabled='true'])) > .rk-combo-btn { color: var(--rk-disabled); cursor: not-allowed; }
 .rk-combo-list { padding: var(--rk-space-xs) 0; margin: 0; list-style: none; }
 .rk-combo-list [role='option'][aria-selected='true'] { outline: 2px solid var(--rk-focus); outline-offset: -2px; background-color: var(--rk-hover); }
 .rk-combo-list [role='option']::before { content: ''; flex: none; width: 10px; height: 6px; margin: -3px 2px 0 0; }
@@ -345,9 +378,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-toggle > input:checked + .rk-toggle-track { background-size: calc(100% - 14px) 100%; }
 .rk-toggle > input:checked + .rk-toggle-track::after { transform: translateX(34px); }
 .rk-toggle > input:focus-visible + .rk-toggle-track { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
-.rk-toggle > input:disabled + .rk-toggle-track { border-color: var(--rk-disabled); }
-.rk-toggle > input:disabled + .rk-toggle-track::after { background: var(--rk-disabled); }
-.rk-toggle:has(> input:disabled) { color: var(--rk-disabled); cursor: not-allowed; }
+/* Disabled: the frame, the fill, the thumb, the label and the state word turn grey. */
+.rk-toggle > input:is(:disabled, [aria-disabled='true']) + .rk-toggle-track { border-color: var(--rk-disabled); background-image: linear-gradient(var(--rk-disabled), var(--rk-disabled)); }
+.rk-toggle > input:is(:disabled, [aria-disabled='true']) + .rk-toggle-track::after { background: var(--rk-disabled); }
+.rk-toggle:has(> input:is(:disabled, [aria-disabled='true'])), .rk-toggle:has(> input:is(:disabled, [aria-disabled='true'])) .rk-toggle-word { color: var(--rk-disabled); cursor: not-allowed; }
 .rk-toggle-label { margin-right: var(--rk-space-s); }
 .rk-toggle-word { min-width: 2.2em; font-weight: var(--rk-font-weight-regular); color: var(--rk-text-contrast-high); }
 .rk-toggle-word::before { content: attr(data-off); }
@@ -363,6 +397,8 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-stepper > [data-rk-step]:last-child { border-left: 0; border-radius: 0 var(--rk-radius-s) var(--rk-radius-s) 0; }
 .rk-stepper > [data-rk-step]:active { background-color: var(--rk-hover); }
 .rk-stepper > [data-rk-step][aria-disabled='true'] { color: var(--rk-disabled); cursor: not-allowed; }
+/* A disabled stepper: the field and both buttons, frames and signs. */
+.rk-stepper:has(> .rk-input:is(:disabled, [aria-disabled='true'])) > [data-rk-step] { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
 
 /* Slider: a 6px track filled with the accent up to the value, an ink bar as the thumb (rekta.js writes --_rk-v). */
 .rk-range { -webkit-appearance: none; appearance: none; width: 100%; height: var(--rk-control-height); margin: 0; background: none; cursor: pointer; --_rk-v: 50%; }
@@ -374,14 +410,21 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-range:focus-visible { outline: none; }
 .rk-range:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
 .rk-range:focus-visible::-moz-range-thumb { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
-.rk-range:disabled { cursor: not-allowed; }
-.rk-range:disabled::-webkit-slider-thumb { background: var(--rk-disabled); }
+/* Disabled: the thumb, the fill up to the value and the value beside it turn grey; the empty track stays a hairline. */
+.rk-range:is(:disabled, [aria-disabled='true']) { cursor: not-allowed; }
+.rk-range:is(:disabled, [aria-disabled='true'])::-webkit-slider-thumb { background: var(--rk-disabled); }
+.rk-range:is(:disabled, [aria-disabled='true'])::-moz-range-thumb { background: var(--rk-disabled); }
+.rk-range:is(:disabled, [aria-disabled='true'])::-webkit-slider-runnable-track { background: linear-gradient(var(--rk-disabled), var(--rk-disabled)) 0 / var(--_rk-v) 100% no-repeat, var(--rk-text-contrast-low); }
+.rk-range:is(:disabled, [aria-disabled='true'])::-moz-range-progress { background: var(--rk-disabled); }
+.rk-range:is(:disabled, [aria-disabled='true']) + output { color: var(--rk-disabled); }
 .rk-range + output { min-width: 3.5em; font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; text-align: right; }
 .rk-slider { display: flex; align-items: center; gap: var(--rk-space-m); }
 
 /* Segments: two to five options side by side, one chosen; a row of joined buttons, the chosen one in the accent. */
 .rk-segments { position: relative; display: inline-flex; flex-wrap: wrap; margin: 0; padding: 0; border: 0; min-width: 0; }
 .rk-segments-slide { position: absolute; z-index: 0; background: var(--rk-accent); transform-origin: 0 50%; pointer-events: none; }
+/* Joined frames overlap by their width: every label lies above the sliding block, the chosen one above its
+   neighbours, so its accent frame shows at both joints, and the focus ring above all. */
 .rk-segments > label { z-index: 1; }
 .rk-segments[data-rk-sliding] > label { transition: none; }
 /* While the accent block slides in, the chosen label waits for it: no fill of its own, its text turns light halfway. */
@@ -395,9 +438,12 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-segments > label:first-of-type { border-radius: var(--rk-radius-s) 0 0 var(--rk-radius-s); }
 .rk-segments > label:last-of-type { border-radius: 0 var(--rk-radius-s) var(--rk-radius-s) 0; }
 .rk-segments > label > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
-.rk-segments > label:has(> input:checked) { z-index: 1; border-color: var(--rk-accent); background-color: var(--rk-accent); color: var(--rk-on-accent); }
-.rk-segments > label:has(> input:focus-visible) { z-index: 2; outline: 2px solid var(--rk-focus); outline-offset: 2px; }
-.rk-segments > label:has(> input:disabled) { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
+.rk-segments > label:has(> input:checked) { z-index: 2; border-color: var(--rk-accent); background-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk-segments > label:has(> input:focus-visible) { z-index: 3; outline: 2px solid var(--rk-focus); outline-offset: 2px; }
+/* Disabled, one option or the whole group (aria-disabled on the fieldset): frames and words grey; the chosen one keeps
+   its place as a grey fill. */
+.rk-segments > label:has(> input:is(:disabled, [aria-disabled='true'])), .rk-segments[aria-disabled='true'] > label { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
+.rk-segments > label:has(> input:checked:is(:disabled, [aria-disabled='true'])), .rk-segments[aria-disabled='true'] > label:has(> input:checked) { background-color: var(--rk-disabled); color: var(--rk-bg); }
 
 /* Drop zone: a dashed frame around a file input; files dragged over it make it solid and lay the hover over it. */
 .rk-drop {
@@ -410,6 +456,8 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-drop b { color: var(--rk-text-primary); }
 .rk-drop:has(> input:focus-visible) { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
 .rk-drop[data-rk-over] { border-style: solid; border-color: var(--rk-text-primary); background-color: var(--rk-hover); color: var(--rk-text-primary); }
+/* Disabled: the frame and every word grey; it takes no files (drop()). */
+.rk-drop:has(> input:is(:disabled, [aria-disabled='true'])), .rk-drop:has(> input:is(:disabled, [aria-disabled='true'])) b { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
 
 /* Desktop ------------------------------------------------------------------------------------------------------- */
 /* Tooltip: a small ink strip, like a toast, above its control (below when there is no room). It comes and goes; it
@@ -924,6 +972,11 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-toast[data-rk-phase='leaving'] { pointer-events: none; animation: rk-toast-out var(--rk-duration-short) var(--rk-ease-in) reverse both; }
 /* A toast with a status takes its fill, as a banner does: a failure whose control has gone (docs/states.md). */
 .rk-toast[data-status] { background-color: var(--_rk-fill); color: var(--rk-text-primary); }
+/* A tag in the plain (ink) toast: its word takes the toast's text colour, as on the ground it takes the ground's, and
+   its square an edge in that colour, since a status colour may sink into the ink; the neutral square's own colour
+   keeps 3:1 on the ink (--check). A soft tag keeps its tint and its ink words. */
+.rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft) { color: inherit; }
+.rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft)::before { box-shadow: 0 0 0 1px currentColor; }
 .rk-toast-msg { flex: 1 1 auto; align-self: center; min-width: 0; padding: calc(var(--rk-space-s) + var(--rk-space-xs)) var(--rk-space-m); text-wrap: pretty; }
 .rk-toast-act {
   position: relative; flex: none; display: inline-flex; align-items: center; gap: var(--rk-space-s);
@@ -1045,7 +1098,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-btn:hover { background-color: var(--rk-hover); }
   .rk-btn--primary:hover { background-color: var(--rk-accent); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
   .rk-btn:disabled:hover, .rk-btn[aria-disabled='true']:not([data-rk-pending]):hover { background: none; }
-  .rk-input:hover:not(:disabled) { border-color: var(--rk-text-primary); }
+  .rk-btn[aria-pressed='true']:hover { background-color: var(--rk-accent); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+  .rk-btn[aria-pressed='true']:is(:disabled, [aria-disabled='true']:not([data-rk-pending])):hover { background: var(--rk-disabled); }
+  .rk-btn[aria-pressed='false']:hover { color: var(--rk-text-primary); }
+  .rk-input:hover:not(:disabled, [aria-disabled='true']) { border-color: var(--rk-text-primary); }
   .rk-ab:hover { background-color: var(--rk-hover); }
   .rk-crumb:hover { color: var(--rk-text-primary); }
   .rk-menu-item:hover:not([aria-disabled='true']) { background-color: var(--rk-hover); }
@@ -1054,9 +1110,9 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-btn--quiet:hover { color: var(--rk-text-primary); }
   .rk-split-handle:hover::after { width: 2px; background-color: var(--rk-text-contrast-medium); }
   .rk-toast-act:hover { background-color: var(--rk-hover); }
-  .rk-segments > label:hover:not(:has(> input:checked, > input:disabled)) { background-color: var(--rk-hover); }
-  .rk-stepper > [data-rk-step]:hover:not([aria-disabled='true']), .rk-combo-btn:hover { background-color: var(--rk-hover); }
-  .rk-drop:hover { border-color: var(--rk-text-primary); color: var(--rk-text-primary); }
+  .rk-segments:not([aria-disabled='true']) > label:hover:not(:has(> input:checked, > input:is(:disabled, [aria-disabled='true']))) { background-color: var(--rk-hover); }
+  .rk-stepper:not(:has(> .rk-input:is(:disabled, [aria-disabled='true']))) > [data-rk-step]:hover:not([aria-disabled='true']), .rk-combo:not(:has(> .rk-input:is(:disabled, [aria-disabled='true']))) > .rk-combo-btn:hover { background-color: var(--rk-hover); }
+  .rk-drop:hover:not(:has(> input:is(:disabled, [aria-disabled='true']))) { border-color: var(--rk-text-primary); color: var(--rk-text-primary); }
   .rk-tree-row:hover, .rk-virtual-row:hover { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
   .rk-grip:hover { color: var(--rk-text-primary); }
   .rk-col-handle:hover::after { width: 2px; background: var(--rk-text-contrast-medium); }
@@ -1080,7 +1136,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-split-handle::after { background: CanvasText; }
   .rk-toggle-track { forced-color-adjust: none; border-color: CanvasText; background-image: linear-gradient(Highlight, Highlight); }
   .rk-toggle-track::after { background: CanvasText; }
-  .rk-segments > label:has(> input:checked) { forced-color-adjust: none; border-color: Highlight; background-color: Highlight; color: HighlightText; }
+  .rk-segments > label:has(> input:checked), .rk-btn[aria-pressed='true'] { forced-color-adjust: none; border-color: Highlight; background-color: Highlight; color: HighlightText; }
   .rk-range::-webkit-slider-runnable-track { background: linear-gradient(Highlight, Highlight) 0 / var(--_rk-v) 100% no-repeat, GrayText; }
   .rk-range::-webkit-slider-thumb { background: CanvasText; }
   .rk-tip, .rk-cell-error { border: 1px solid CanvasText; }

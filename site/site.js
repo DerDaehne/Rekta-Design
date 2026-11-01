@@ -688,6 +688,14 @@
       $('#find-hint').textContent = t ? `${t.value}${t.alt && t.alt !== t.value ? ` · ${t.altLabel} ${t.alt}` : ''}: ${t.description || 'a token of Rekta Design.'}` : 'A combobox: it filters as you type and keeps only a choice from its list.';
     },
   });
+  // Toggle buttons: a press switches the state at once; the state word follows from data-on and data-off, or is set here.
+  $('#quick').addEventListener('click', (e) => {
+    const b = e.target.closest('[aria-pressed]');
+    if (!b) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(on));
+    if (b.id === 'quick-pin') b.querySelector('.rk-btn-state').textContent = on ? '3 tiles' : 'none';
+  });
   $('#text-size').addEventListener('input', (e) => { root.style.fontSize = +e.target.value === 100 ? '' : `${e.target.value}%`; env(); });
   const later = new Date(); later.setDate(later.getDate() + 3);
   $('#when-d').value = `${later.getFullYear()}-${String(later.getMonth() + 1).padStart(2, '0')}-${String(later.getDate()).padStart(2, '0')}`;

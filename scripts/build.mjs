@@ -249,6 +249,9 @@ function check(tokens) {
       need('status-error-full', bg, 4.5, 'a destructive button\'s words (.rk-btn[data-status=error])');
     }
     need('on-accent', 'accent', 4.5, 'text');
+    // The plain toast is ink with ground-coloured words; a tag in it keeps its neutral square (rekta.css).
+    need('bg', 'text-primary', 4.5, 'a tag\'s word in an ink toast');
+    need('text-contrast-medium', 'text-primary', 3, 'a neutral tag\'s square in an ink toast');
     for (const s of STATUS) {
       need('text-primary', `status-${s}-tile`, 4.5, 'tile text');
       need('text-primary', `status-${s}-soft`, 4.5, 'soft label');
@@ -380,6 +383,12 @@ function check(tokens) {
     for (const n of declared) if (!exported.has(n)) problems.push(`src/js/rekta.d.ts declares ${n}, which rekta.js does not export`);
     for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
       if (!existsSync(join(root, 'src', 'js', f.replace(/\.js$/, '.d.ts')))) problems.push(`src/js/${f} has no declaration (${f.replace(/\.js$/, '.d.ts')})`);
+    }
+    // No `any` in a declaration: a product that keeps dist/ in its own tree lints these files with its code, and
+    // typescript-eslint's recommended rules refuse it. Comments are prose and may say "any".
+    for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => x.endsWith('.d.ts'))) {
+      const code = readFileSync(join(root, 'src', 'js', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+      code.split('\n').forEach((l, i) => { if (/(?<![\w$])any(?![\w$])/.test(l.replace(/'[^']*'|"[^"]*"/g, ''))) problems.push(`src/js/${f} uses the type any (${l.trim().slice(0, 60)})`); });
     }
   }
   // Importing the module touches no DOM, so a page that renders on the server can import it (call it in the browser).
