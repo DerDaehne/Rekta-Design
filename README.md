@@ -65,8 +65,9 @@ web and a native core, and each one is usable without the next:
 </script>
 ```
 
-Theme, density and motion follow the system and can be overridden on
-the root element (`data-theme`, `data-density`, `data-motion`) or with
+Theme, density, motion, contrast and transparency follow the system and
+can be overridden on the root element (`data-theme`, `data-density`,
+`data-motion`, `data-contrast`, `data-transparency`) or with
 `Rekta.prefs.set()`. Script state lives in `data-rk-*` attributes, never
 in classes, so a framework that owns `className` keeps working. The
 whole contract, with every hook, attribute and event, is in

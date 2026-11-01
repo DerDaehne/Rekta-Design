@@ -36,7 +36,7 @@ export declare const tokens: {
   px(name: string, el?: Element): number;
 };
 
-type PrefName = 'theme' | 'density' | 'motion';
+type PrefName = 'theme' | 'density' | 'motion' | 'contrast' | 'transparency';
 export declare const prefs: {
   key: string;
   read(): Partial<Record<PrefName, string>>;
@@ -44,9 +44,15 @@ export declare const prefs: {
   get(name: 'theme'): 'system' | 'light' | 'dark';
   get(name: 'density'): 'auto' | 'comfortable' | 'compact';
   get(name: 'motion'): 'system' | 'on' | 'off';
+  get(name: 'contrast'): 'system' | 'more' | 'normal';
+  get(name: 'transparency'): 'system' | 'reduce' | 'normal';
   set(name: 'theme', value: 'system' | 'light' | 'dark', options?: { remember?: boolean }): void;
   set(name: 'density', value: 'auto' | 'comfortable' | 'compact', options?: { remember?: boolean }): void;
   set(name: 'motion', value: 'system' | 'on' | 'off', options?: { remember?: boolean }): void;
+  /** more: every text pair at 7:1 and a frame on status tiles; normal: as designed, whatever the system asks. */
+  set(name: 'contrast', value: 'system' | 'more' | 'normal', options?: { remember?: boolean }): void;
+  /** reduce: glass is the ground and nothing blurs; normal: glass, whatever the system asks. */
+  set(name: 'transparency', value: 'system' | 'reduce' | 'normal', options?: { remember?: boolean }): void;
   restore(): void;
 };
 
@@ -325,6 +331,9 @@ export declare function contextMenu(scope: Element, el: HTMLElement, options?: {
   onSelect?: ((item: HTMLElement, target: HTMLElement) => void) | null;
 }): Destroyable & { open(target: HTMLElement): void; close(): void; readonly target: HTMLElement | null };
 
+/** A grid of tiles that open: one tab stop, ← → ↑ ↓ to the nearest tile that way (across a panorama's grids), Home
+ * End, letters jump. start() attaches it to every .rk-tiles holding a tile that opens. */
+export declare function grid(el: HTMLElement): Destroyable & { refresh(): void };
 export declare function tree(el: HTMLElement, options?: {
   onShow?: ((li: HTMLElement) => void) | null;
   onToggle?: ((li: HTMLElement, open: boolean) => void) | null;
@@ -345,6 +354,8 @@ export declare function sortable(list: HTMLElement, options?: {
 export declare function virtual(el: HTMLElement, options: {
   count?: number;
   render: (i: number, row: HTMLElement) => void;
+  /** An item's words, for the letter jump; without it, the text render() writes. */
+  text?: ((i: number) => string) | null;
   onShow?: ((i: number) => void) | null;
   onChange?: ((indices: number[], info: { mode: boolean }) => void) | null;
   appbar?: HTMLElement | null;

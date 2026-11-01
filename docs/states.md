@@ -49,7 +49,7 @@ A tag (`.rk-tag`) in a toast says a status in its words, as anywhere.
 In the plain, ink toast its word takes the toast's text colour and its
 square an edge in that colour, so a status colour that would sink into
 the ink still shows; the neutral square keeps 3:1 on the ink (`--check`
-holds it). In a toast with a status, the tag reads on the fill as on a
+holds it), and under more contrast it takes the toast's words' colour. In a toast with a status, the tag reads on the fill as on a
 tile.
 
 ## Floating surfaces
@@ -81,11 +81,12 @@ next to the control that opened them.
   carries a tick without a box instead: it is the field's value, not a
   setting. A key hint sits at the end in `rk-meta`. A hairline
   separates groups.
-- **Keys:** ↑ ↓ (wrapping), Home End, a letter jumps to the next item
+- **Keys:** ↑ ↓ (wrapping), Home End, letters jump to the next item
   starting with it, Enter or Space chooses, Escape closes and returns
   focus to the control, Tab closes and moves on. A click outside closes.
 - A disabled item stays in the list, greyed, and says why in its label
-  when it is not obvious ("print (needs a printer)").
+  when it is not obvious ("print (needs a printer)"). The app bar's
+  "more" does this for a disabled control it holds.
 
 ## Layers
 

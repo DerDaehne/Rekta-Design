@@ -566,6 +566,17 @@
             <label class="rk-switch"><input type="radio" name="motion" value="on"> on</label>
             <label class="rk-switch"><input type="radio" name="motion" value="off"> off</label>
           </fieldset>
+          <fieldset class="rk-choices"><legend class="rk-label">contrast</legend>
+            <label class="rk-switch"><input type="radio" name="contrast" value="system"> system</label>
+            <label class="rk-switch"><input type="radio" name="contrast" value="more"> more</label>
+            <label class="rk-switch"><input type="radio" name="contrast" value="normal"> normal</label>
+          </fieldset>
+          <fieldset class="rk-choices"><legend class="rk-label">transparency</legend>
+            <label class="rk-switch"><input type="radio" name="transparency" value="system"> system</label>
+            <label class="rk-switch"><input type="radio" name="transparency" value="reduce"> reduce</label>
+            <label class="rk-switch"><input type="radio" name="transparency" value="normal"> normal</label>
+          </fieldset>
+          <span class="rk-hint">More contrast holds every text at 7:1 and frames each status tile in its colour. Reduced transparency makes the app bar solid.</span>
           <fieldset class="rk-choices"><legend class="rk-label">accent</legend>
             <label class="rk-switch"><input type="radio" name="accent" value="ink"> ink</label>
             <label class="rk-switch"><input type="radio" name="accent" value="plum"> plum</label>
@@ -579,7 +590,7 @@
         <h2 class="rk-group" id="accessibility-title">Checked, not assumed.</h2>
         <ul class="rk-rows defs">
           <li><b>keyboard first</b><span>Every pointer action has a key; focus moves to what opens and comes back to what opened it.</span></li>
-          <li><b>focus on fills</b><span>On a tile the ring is drawn inset in the tile's text colour, so it survives every fill. Tab into the tiles below.</span></li>
+          <li><b>focus on fills</b><span>On a tile the ring is drawn inset in the tile's text colour, so it survives every fill. Tab to the tiles below; the arrows move between them.</span></li>
           <li><b>colour is never alone</b><span>Every status has its word, every chart a text equivalent, the app bar's square its word beside it.</span></li>
           <li><b>contrast is measured</b><span>The build fails when a pair drops below its minimum, or when two statuses come too close under colour blindness.</span></li>
           <li><b>touch</b><span>{{touch-target|px}} targets, no hover-only actions, 16px fields, and dragging never activates.</span></li>
@@ -760,6 +771,8 @@
         <li>back, or close what is open<span><kbd class="rk-key">Esc</kbd></span></li>
         <li>previous or next section (panorama focused)<span><kbd class="rk-key">←</kbd> <kbd class="rk-key">→</kbd></span></li>
         <li>first or last section<span><kbd class="rk-key">Home</kbd> <kbd class="rk-key">End</kbd></span></li>
+        <li>the next tile that way (a tile focused)<span><kbd class="rk-key">←</kbd> <kbd class="rk-key">→</kbd> <kbd class="rk-key">↑</kbd> <kbd class="rk-key">↓</kbd></span></li>
+        <li>jump to an entry in a list, a tree or a menu<span>its first letters</span></li>
         <li>select another row, start the selection mode<span><kbd class="rk-key">Ctrl</kbd>+click</span></li>
         <li>select a range<span><kbd class="rk-key">Shift</kbd>+click</span></li>
         <li>select all rows (table focused)<span><kbd class="rk-key">Ctrl+A</kbd></span></li>

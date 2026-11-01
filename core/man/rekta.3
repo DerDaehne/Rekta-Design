@@ -258,6 +258,12 @@ tells you when any of them changed and returns an id for
 and
 .Fn rk_app_is_reduced_motion
 say how things stand.
+.It Fn rk_app_set_contrast "bool more"
+More contrast: the contrast colours, every text pair at 7:1, and a 2px frame
+in its full colour on each status tile.
+Off until set; an app that reads the system's high-contrast setting passes it
+on.
+A change cross-fades the windows.
 .It Fn rk_app_set_series "int code" "rk_color light" "rk_color dark"
 A domain's colour code, as the web's
 .Li --rk-series-1
@@ -742,7 +748,11 @@ places.
 A click selects one and calls the
 .Fn rk_list_on_show
 handler; Ctrl and a click toggles and starts selecting several, Shift and
-a click takes a range, Escape ends it;
+a click takes a range, Escape ends it.
+Letters go to the next row whose title (a table's first cell) starts with
+them; typed less than
+.Li timing.type-ahead
+apart they are one prefix, and the same letter again moves on.
 .Fn rk_list_on_change
 hears what the user changes.
 .Fn rk_list_is_selected ,
@@ -794,7 +804,10 @@ and
 .Fn rk_tree_set_all_open
 do it.
 Up and Down move, Right opens or goes in, Left closes or goes up, * opens
-every sibling, a letter goes to the next item starting with it.
+every sibling, letters go to the next item starting with them (one prefix
+while typed less than
+.Li timing.type-ahead
+apart).
 .Fn rk_tree_select ,
 .Fn rk_tree_selected ,
 .Fn rk_tree_is_open ,

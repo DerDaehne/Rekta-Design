@@ -26,7 +26,7 @@ const METRICS = [['spacing', 'space-xs'], ['spacing', 'space-s'], ['spacing', 's
 const DURATIONS = [['motion', 'duration-press'], ['motion', 'duration-short'], ['motion', 'duration-moderate'], ['motion', 'duration-long'],
   ['motion', 'duration-stagger'], ['motion', 'duration-float'], ['motion', 'duration-pivot-glide'], ['motion', 'duration-pivot-size'],
   ['timing', 'duration-toast'], ['timing', 'duration-tap-delay'], ['timing', 'duration-long-press'], ['timing', 'duration-tip-delay'],
-  ['timing', 'duration-stale']];
+  ['timing', 'duration-stale'], ['timing', 'duration-type-ahead']];
 const MOTION_COUNT = 8;
 
 const rgba = (css) => {
@@ -37,11 +37,12 @@ const rgba = (css) => {
 
 export function coreTokens(json) {
   const problems = [];
-  const themes = ['light', 'dark'].map((t) => {
+  const table = (names) => names.map((t) => {
     const theme = json.themes[t];
     for (const k of Object.keys(theme)) if (!ROLES.includes(k)) problems.push(`colour ${k} has no rk_role in core/include/rekta.h`);
     return `  { 0x00000000u, ${ROLES.map((r) => rgba(theme[r])).join(', ')} }`;
   });
+  const themes = table(['light', 'dark']), contrast = table(['light-contrast', 'dark-contrast']);
   const densities = ['comfortable', 'compact'].map((d) => `  { ${METRICS.map(([g, k]) => f(g === 'density' ? json.densities[d][k] : json[g][k])).join(', ')} }`);
   const durations = DURATIONS.map(([g, k]) => f(json[g][k])).join(', ');
   const defs = [];
@@ -68,6 +69,7 @@ export function coreTokens(json) {
   const out = HEAD(`Rekta Design ${json.version} tokens for rekta-core`)
     + `#ifndef RK_TOKENS_H\n#define RK_TOKENS_H\n\n#define RK_TOKENS_VERSION "${json.version}"\n\n`
     + `/* [theme: light, dark][rk_role], 0xRRGGBBAA */\nstatic const rk_color rk_tok_colors[2][RK__ROLE_COUNT] = {\n${themes.join(',\n')}\n};\n\n`
+    + `/* The same for more contrast (rk_app_set_contrast): every text pair at 7:1, opaque glass */\nstatic const rk_color rk_tok_colors_contrast[2][RK__ROLE_COUNT] = {\n${contrast.join(',\n')}\n};\n\n`
     + `/* [density: comfortable, compact][rk_metric], logical px */\nstatic const float rk_tok_metrics[2][RK__METRIC_COUNT] = {\n${densities.join(',\n')}\n};\n\n`
     + `/* [rk_duration], ms; the first RK_TOK_MOTION_COUNT are motion (0 under reduced motion), the rest wall-clock timings */\n`
     + `#define RK_TOK_MOTION_COUNT ${MOTION_COUNT}\nstatic const float rk_tok_durations[RK__DURATION_COUNT] = { ${durations} };\n\n`

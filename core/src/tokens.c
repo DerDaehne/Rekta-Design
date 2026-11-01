@@ -25,7 +25,7 @@ rk_color rk_color_of(rk_role role) {
     float l = 0.2126f * ((a >> 24) & 255) + 0.7152f * ((a >> 16) & 255) + 0.0722f * ((a >> 8) & 255);
     return l > 140 ? rk_tok_colors[0][RK_ROLE_TEXT] : 0xffffffffu;
   }
-  return rk_tok_colors[t][role];
+  return (rk__prefs.contrast ? rk_tok_colors_contrast : rk_tok_colors)[t][role];
 }
 
 float rk_metric_of(rk_metric metric) {
@@ -39,6 +39,33 @@ double rk_duration_of(rk_duration d) {
   if (d < RK_TOK_MOTION_COUNT && rk__reduced()) return 0;
   if (rk__prefs.timing_set[d]) return rk__prefs.timing[d];
   return rk_tok_durations[d];
+}
+
+static int ahead_fold(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }   /* the locale's case rules are not the jump's */
+const char *rk__type_ahead(rk__typed *t, const char *text, double now, bool *again) {
+  unsigned char c = text ? (unsigned char)text[0] : 0;
+  size_t len = text ? strlen(text) : 0;
+  bool alnum = (c >= '0' && c <= '9') || (ahead_fold(c) >= 'a' && ahead_fold(c) <= 'z');
+  /* one letter or digit: an ASCII one, or one character of another script (its UTF-8 bytes, as they are) */
+  if (!c || (c < 0x80 ? !(alnum && len == 1) : len > 4)) return NULL;
+  if (now - t->at >= rk_duration_of(RK_TIMING_TYPE_AHEAD)) t->n = 0;
+  t->at = now;
+  for (size_t i = 0; i < len && t->n < (int)sizeof t->s - 1; i++) t->s[t->n++] = (char)ahead_fold((unsigned char)text[i]);
+  t->s[t->n] = 0;
+  size_t first = c < 0x80 ? 1 : len;                       /* the first character's bytes */
+  bool same = t->n % (int)first == 0;
+  for (int i = (int)first; same && i < t->n; i++) same = t->s[i] == t->s[i % (int)first];
+  *again = same;
+  static char want[32];
+  memcpy(want, t->s, same ? first : (size_t)t->n + 1);
+  want[same ? first : (size_t)t->n] = 0;
+  return want;
+}
+bool rk__starts_with(const char *s, const char *prefix) {
+  if (!s) return false;
+  while (*s == ' ') s++;
+  for (; *prefix; s++, prefix++) if (ahead_fold((unsigned char)*s) != (unsigned char)*prefix) return false;
+  return true;
 }
 
 rk_color rk__series(int code) {

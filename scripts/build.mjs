@@ -5,7 +5,10 @@
 //     rekta.tokens.css    every token as a --rk- custom property: light on :root, dark for a dark system setting
 //                         (unless the page chose light) and for [data-theme="dark"], compact density for a fine
 //                         pointer (unless [data-density="comfortable"]) and for [data-density="compact"], every
-//                         motion duration 0s under reduced motion (unless [data-motion="on"]) and [data-motion="off"]
+//                         motion duration 0s under reduced motion (unless [data-motion="on"]) and [data-motion="off"],
+//                         the contrast colours for more contrast (unless [data-contrast="normal"]) and for
+//                         [data-contrast="more"], opaque glass for reduced transparency (unless
+//                         [data-transparency="normal"]) and for [data-transparency="reduce"]
 //     rekta.tokens.json   resolved, platform-neutral values for other frameworks (see docs/platforms.md)
 //     rekta.css           the components (src/css/rekta.css)
 //     rekta.fonts.css     @font-face rules for the bundled Barlow files, copied to dist/fonts/
@@ -22,7 +25,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFi
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { contrast, distance, parse, toHex8 } from './lib/color.mjs';
+import { contrast, distance, over, parse, toHex8 } from './lib/color.mjs';
 import { coreFonts, coreIcons, coreTokens } from './lib/core.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -118,6 +121,7 @@ export function buildTokensCss(tokens) {
     .flatMap((g) => collect(tokens, tokens[g], [g]));
   const durations = collect(tokens, tokens.motion.duration, ['motion', 'duration']);
   const zero = durations.map(({ name }) => `  --${PREFIX}-${name}: 0s;`).join('\n');
+  const { contrastLight, contrastDark } = contrastLists(tokens);
   return `/* Rekta Design tokens. Generated from tokens/rekta.tokens.json by scripts/build.mjs; do not edit. */
 
 /* Light, comfortable, full motion. */
@@ -162,7 +166,62 @@ ${zero.replace(/^/gm, '  ')}
 :root[data-motion="off"] {
 ${zero}
 }
+
+/* More contrast: the system setting, unless the page chose normal; and an explicit choice. Light first, dark over it.
+   Both blocks set the same names (every colour either contrast set changes), so no light value reaches dark. */
+@media (prefers-contrast: more) {
+  :root:not([data-contrast="normal"]) {
+${decl(tokens, contrastLight).replace(/^/gm, '  ')}
+  }
+}
+:root[data-contrast="more"] {
+${decl(tokens, contrastLight)}
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root:not([data-contrast="normal"]):not([data-theme="light"]) {
+${decl(tokens, contrastDark).replace(/^/gm, '  ')}
+  }
+}
+@media (prefers-contrast: more) {
+  :root:not([data-contrast="normal"])[data-theme="dark"] {
+${decl(tokens, contrastDark).replace(/^/gm, '  ')}
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="more"]:not([data-theme="light"]) {
+${decl(tokens, contrastDark).replace(/^/gm, '  ')}
+  }
+}
+:root[data-contrast="more"][data-theme="dark"] {
+${decl(tokens, contrastDark)}
+}
+
+/* Reduced transparency: glass is the ground (rekta.css takes the blur away). */
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-transparency="normal"]) {
+    --${PREFIX}-glass: var(--${PREFIX}-bg);
+  }
+}
+:root[data-transparency="reduce"] {
+  --${PREFIX}-glass: var(--${PREFIX}-bg);
+}
 `;
+}
+
+// The contrast colours as declarations for each theme: every name either contrast set changes, from the theme's
+// contrast set where it has one and from the theme itself where not. The accent is never in them, so a product's
+// accent stays.
+export const CONTRAST = { light: 'light-contrast', dark: 'dark-contrast' };
+function contrastLists(tokens) {
+  const names = new Set();
+  for (const set of Object.values(CONTRAST)) walk(tokens.color[set], ['color', set], (p) => names.add(tokenName(p)));
+  const list = (theme) => {
+    const by = new Map();
+    for (const e of collect(tokens, tokens.color[theme], ['color', theme])) by.set(e.name, e);
+    for (const e of collect(tokens, tokens.color[CONTRAST[theme]], ['color', CONTRAST[theme]])) by.set(e.name, e);
+    return collect(tokens, tokens.color[theme], ['color', theme]).filter((e) => names.has(e.name)).map((e) => by.get(e.name));
+  };
+  return { contrastLight: list('light'), contrastDark: list('dark') };
 }
 
 // Resolved, platform-neutral values: colours as #rrggbb or #rrggbbaa, lengths in logical px, durations in ms,
@@ -190,13 +249,19 @@ export function buildTokensJson(tokens, version) {
     walk(node, base, (path, token) => { if (token.$description) out[tokenName(path)] = token.$description; });
     return out;
   };
-  const all = {};
-  for (const g of ['color', 'typography', 'spacing', 'radius', 'size', 'density', 'motion', 'timing', 'layer', 'breakpoint']) Object.assign(all, describe(tokens[g], [g]));
+  // A colour's description is its light and dark one; the contrast sets describe only why their value differs.
+  const all = describe({ light: tokens.color.light, dark: tokens.color.dark }, ['color']);
+  for (const g of ['typography', 'spacing', 'radius', 'size', 'density', 'motion', 'timing', 'layer', 'breakpoint']) Object.assign(all, describe(tokens[g], [g]));
   return {
     name: 'Rekta Design',
     version,
     units: { length: 'logical px (CSS px, Android dp, Apple pt)', duration: 'ms', angle: 'deg', easing: 'cubic-bezier [x1, y1, x2, y2]', fluid: '{min, max, viewport}: interpolate between min and max at viewport × hosting box width' },
-    themes: { light: group(tokens.color.light, ['color', 'light']), dark: group(tokens.color.dark, ['color', 'dark']) },
+    // light-contrast and dark-contrast: the whole theme for more contrast, its contrast set over it (docs/colour.md).
+    themes: {
+      light: group(tokens.color.light, ['color', 'light']), dark: group(tokens.color.dark, ['color', 'dark']),
+      'light-contrast': { ...group(tokens.color.light, ['color', 'light']), ...group(tokens.color[CONTRAST.light], ['color', CONTRAST.light]) },
+      'dark-contrast': { ...group(tokens.color.dark, ['color', 'dark']), ...group(tokens.color[CONTRAST.dark], ['color', CONTRAST.dark]) },
+    },
     densities: { comfortable: group(tokens.density.comfortable, ['density', 'comfortable']), compact: group(tokens.density.compact, ['density', 'compact']) },
     typography: group(tokens.typography, ['typography']),
     spacing: group(tokens.spacing, ['spacing']),
@@ -231,31 +296,55 @@ export function toGlobal(esm) {
 
 // Said by --check without failing it: trade-offs the docs name (accessibility.md), measured on every build.
 const notes = [];
+// The text colours allowed on glass, and the parts of rekta.css that stand on it: the app bar and everything in it
+// (.rk-appbar, .rk-ab, .rk-ab-*), but not its "more" menu, which floats on bg.
+const GLASS_TEXT = ['text-primary', 'text-contrast-high'];
+const GLASS_PARTS = { '.rk-appbar': /\.rk-(?:appbar|ab(?:-(?!menu\b)[\w-]+)?)(?![\w-])/ };
 
 function check(tokens) {
   const problems = [];
   const t = buildTokensJson(tokens, 'check');
   const STATUS = ['info', 'success', 'warning', 'error'];
-  for (const theme of ['light', 'dark']) {
+  // A contrast set changes only colours its theme has, and never the accent: that slot is the product's.
+  for (const [theme, set] of Object.entries(CONTRAST)) {
+    const own = new Set();
+    walk(tokens.color[theme], ['color', theme], (p) => own.add(tokenName(p)));
+    walk(tokens.color[set], ['color', set], (p) => {
+      const n = tokenName(p);
+      if (!own.has(n)) problems.push(`color.${set} sets ${n}, which color.${theme} does not have`);
+      if (n === 'accent' || n === 'on-accent') problems.push(`color.${set} sets ${n}: the accent is the product's (docs/platforms.md)`);
+    });
+  }
+  for (const theme of ['light', 'dark', CONTRAST.light, CONTRAST.dark]) {
     const c = t.themes[theme];
+    // More contrast holds every text pair at 7:1 (WCAG AAA); marks keep 3:1.
+    const text = theme.endsWith('-contrast') ? 7 : 4.5;
     const need = (fg, bg, min, what) => { const r = contrast(c[fg], c[bg]); if (r < min) problems.push(`${theme}: ${what} ${fg} on ${bg} is ${r.toFixed(2)}:1, needs ${min}:1`); };
     for (const bg of ['bg', 'surface']) {
-      need('text-primary', bg, 4.5, 'text');
-      need('text-contrast-high', bg, 4.5, 'secondary text');
-      need('text-contrast-medium', bg, 4.5, 'placeholder');
+      need('text-primary', bg, text, 'text');
+      need('text-contrast-high', bg, text, 'secondary text');
+      need('text-contrast-medium', bg, text, 'placeholder');
       need('focus', bg, 3, 'focus ring');
       need('accent', bg, 3, 'accent');
       for (const s of STATUS) need(`status-${s}-full`, bg, 3, 'status mark');
+      // Under more contrast rekta.css draws these words in ink and keeps the error frame.
       need('status-error-full', bg, 4.5, 'a destructive button\'s words (.rk-btn[data-status=error])');
     }
-    need('on-accent', 'accent', 4.5, 'text');
+    need('on-accent', 'accent', text, 'text');
     // The plain toast is ink with ground-coloured words; a tag in it keeps its neutral square (rekta.css).
-    need('bg', 'text-primary', 4.5, 'a tag\'s word in an ink toast');
-    need('text-contrast-medium', 'text-primary', 3, 'a neutral tag\'s square in an ink toast');
+    need('bg', 'text-primary', text, 'a tag\'s word in an ink toast');
+    // Under more contrast that square takes the toast's words' colour (rekta.css), checked by the line above.
+    if (!theme.endsWith('-contrast')) need('text-contrast-medium', 'text-primary', 3, 'a neutral tag\'s square in an ink toast');
     for (const s of STATUS) {
-      need('text-primary', `status-${s}-tile`, 4.5, 'tile text');
-      need('text-primary', `status-${s}-soft`, 4.5, 'soft label');
+      need('text-primary', `status-${s}-tile`, text, 'tile text');
+      need('text-primary', `status-${s}-soft`, text, 'soft label');
       need(`status-${s}-full`, `status-${s}-soft`, 3, 'mark on its soft tint');
+    }
+    // Text on glass: the blur averages what is behind, so all white and all black are the limits. Only text-primary
+    // and text-contrast-high may stand on it (docs/colour.md); rekta.css is held to that below.
+    for (const behind of ['#ffffff', '#000000']) for (const fg of GLASS_TEXT) {
+      const r = contrast(c[fg], over(c.glass, behind));
+      if (r < text) problems.push(`${theme}: ${fg} on glass over ${behind} is ${r.toFixed(2)}:1, needs ${text}:1`);
     }
     // Statuses must stay apart under red-green colour blindness (OKLab distance of the simulated colours).
     for (const form of ['full', 'tile']) for (const kind of ['protan', 'deutan']) {
@@ -273,6 +362,19 @@ function check(tokens) {
   }
   // Every --rk- property the stylesheet reads is a token or a documented hook.
   const css = readFileSync(join(root, 'src', 'css', 'rekta.css'), 'utf8');
+  // On glass only the text colours measured above: a rule that colours a part of a glass surface in a lower one
+  // fails (disabled stays allowed: it is not text to read, WCAG 1.4.3). A new glass surface names its parts here.
+  for (const [, sel, body] of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectors = sel.trim().split(/,(?![^(]*\))/).map((x) => x.trim());
+    if (/background(?:-color)?\s*:[^;]*var\(--rk-glass\)/.test(body)) {
+      for (const x of selectors) if (!(x in GLASS_PARTS)) problems.push(`rekta.css puts ${x} on glass: add its parts to GLASS_PARTS in scripts/build.mjs, so the text on it is checked`);
+    }
+    const color = /(?:^|;)\s*color\s*:\s*var\(--rk-([\w-]+)\)/.exec(body);
+    if (!color || GLASS_TEXT.includes(color[1]) || !/^text-/.test(color[1])) continue;
+    for (const x of selectors) for (const [host, parts] of Object.entries(GLASS_PARTS)) {
+      if (parts.test(x)) problems.push(`rekta.css colours ${x} in ${color[1]} on glass (${host}): only ${GLASS_TEXT.join(' and ')} stand on glass`);
+    }
+  }
   const defined = new Set();
   for (const g of ['color']) walk(tokens.color.light, ['color', 'light'], (p) => defined.add(tokenName(p)));
   for (const g of ['typography', 'spacing', 'radius', 'size', 'motion', 'timing', 'layer', 'breakpoint']) walk(tokens[g], [g], (p) => defined.add(tokenName(p)));
@@ -555,7 +657,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else if (process.argv.includes('--check')) {
     const problems = checkAll();
     if (problems.length) { console.error(problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
-    console.log('✓ tokens and stylesheet pass: contrast, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
+    console.log('✓ tokens and stylesheet pass: contrast (7:1 for more contrast), text on glass over white and black, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
     for (const n of notes) console.log(`  i ${n}`);
   } else {
     console.log(`✓ dist/ written (Rekta Design ${buildDist()})`);

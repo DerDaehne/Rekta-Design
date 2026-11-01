@@ -1,7 +1,7 @@
 {
   "$description": "Rekta Design tokens: the single source. W3C Design Tokens (DTCG) format. Dimensions are logical pixels (CSS px, Android dp, Apple pt); the web build converts type, control and tile sizes to rem. Colour comes in two independent sets (light, dark) and control sizes in two densities (comfortable, compact). Fluid sizes use $type \"fluidDimension\" (a documented extension): min and max in logical px plus the share of the hosting box's width between them. Every token's usage text is its $description. Generated outputs: dist/rekta.tokens.css (web, --rk- prefix), dist/rekta.tokens.json (resolved, platform-neutral). See docs/platforms.md.",
   "color": {
-    "$description": "Light and dark are two independent sets, not variants of one token. Status colours are corrected from the prototype for contrast and colour blindness (see CHANGELOG).",
+    "$description": "Light and dark are two independent sets, not variants of one token. Status colours are corrected from the prototype for contrast and colour blindness (see CHANGELOG). light-contrast and dark-contrast hold only what changes for more contrast (docs/colour.md).",
     "light": {
       "bg": {
         "$type": "color",
@@ -287,7 +287,86 @@
       "glass": {
         "$type": "color",
         "$value": "rgba(14, 14, 18, 0.82)",
-        "$description": "Frosted surfaces (nav bar, app bar); use with a backdrop blur."
+        "$description": "Frosted surfaces (nav bar, app bar); use with a backdrop blur. Only text-primary and text-contrast-high stand on it: checked over white and over black. Under reduced transparency it is the ground (bg), with no blur."
+      }
+    },
+    "light-contrast": {
+      "$description": "More contrast, light: the values that change from color.light when the person asks for more contrast (prefers-contrast: more, or the contrast pref). Every other light value stays. Every text pair holds 7:1, status tiles are shifted until ink holds 7:1 on them (each also gets a 2px frame in its full colour), and glass is opaque.",
+      "text": {
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#4d4e51",
+          "$description": "Raised to 7:1 on bg and surface."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#424346",
+          "$description": "Raised to 7:1 on bg and surface, still a step from text-primary."
+        }
+      },
+      "status": {
+        "success": {
+          "tile": {
+            "$type": "color",
+            "$value": "#74d8b0",
+            "$description": "Lightened so the error tile can lighten and still part from it under red-green colour blindness."
+          }
+        },
+        "error": {
+          "tile": {
+            "$type": "color",
+            "$value": "#dd7b7b",
+            "$description": "Lightened until text-primary holds 7:1 on it, its hue kept; still the darkest status fill."
+          }
+        }
+      },
+      "glass": {
+        "$type": "color",
+        "$value": "{color.light.bg}",
+        "$description": "Opaque: the ground, as macOS takes away transparency with increased contrast."
+      }
+    },
+    "dark-contrast": {
+      "$description": "More contrast, dark: the values that change from color.dark when the person asks for more contrast. Every other dark value stays. Every text pair holds 7:1, status tiles are shifted until ink holds 7:1 on them (each also gets a 2px frame in its full colour), and glass is opaque.",
+      "text": {
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#aeafb1",
+          "$description": "Raised to 7:1 on bg and surface."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#c2c3c5",
+          "$description": "Raised to 9:1 on surface, still a step from text-primary."
+        }
+      },
+      "status": {
+        "success": {
+          "tile": {
+            "$type": "color",
+            "$value": "#245f5b",
+            "$description": "Darkened until text-primary holds 7:1 on it, toward blue to stay apart from warning and error; still lighter than status-error-tile."
+          }
+        },
+        "warning": {
+          "tile": {
+            "$type": "color",
+            "$value": "#6c5310",
+            "$description": "Darkened until text-primary holds 7:1 on it."
+          }
+        },
+        "error": {
+          "tile": {
+            "$type": "color",
+            "$value": "#690615",
+            "$description": "Darkened so the darker success tile still parts from it by lightness."
+          }
+        }
+      },
+      "glass": {
+        "$type": "color",
+        "$value": "{color.dark.bg}",
+        "$description": "Opaque: the ground, as macOS takes away transparency with increased contrast."
       }
     }
   },
@@ -1199,6 +1278,11 @@
       "$type": "duration",
       "$value": "5000ms",
       "$description": "How long scrollState().restore() waits for content that renders after a navigation (a fetch on mount, streamed data) to put a saved scroll offset back; it gives up sooner when the user scrolls."
+    },
+    "type-ahead": {
+      "$type": "duration",
+      "$value": "1000ms",
+      "$description": "In a collection whose entries take focus, letters typed less than this apart form one prefix to jump to; after a pause a letter starts again. Wall time: reduced motion leaves it alone."
     }
   },
   "layer": {

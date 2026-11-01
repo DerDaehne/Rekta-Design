@@ -5,7 +5,7 @@
    classes, so a framework that owns className keeps working. Each controller returns { destroy() }.
 
    The parts:
-     prefs      theme, density and motion switches on the root element, remembered per user
+     prefs      theme, density, motion, contrast and transparency switches on the root element, remembered per user
      keys       one layered keyboard dispatcher: the innermost thing that owns a key gets it (Escape, Ctrl/Cmd+Z)
      press      tiles nudge back where they are pressed; dragging or selecting text never activates them
      turn       the place change (turnstile) as two primitives, leave() and enter(), any router can call
@@ -29,6 +29,7 @@
      disable    a control that cannot act now says why
      tips       a short ink label for a control, after a rest of the pointer or on keyboard focus
      contextMenu a menu where the pointer is: a right click, a long press, Shift+F10
+     grid       a grid of tiles that open is one tab stop; the arrows move to the nearest tile that way
      tree       a hierarchy that opens and closes, one tab stop
      sortable   items reordered by their grip, with the pointer or the keyboard
      virtual    a list of any length: only the rows in view exist
@@ -125,6 +126,7 @@ export const strings = {
   position: (item, at, of) => (item ? `${item}: position ${at} of ${of}.` : `position ${at} of ${of}`),
   loadFailed: 'Could not load the choices. Type to try again.',
   keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
+  cannotAct: (label, reason) => `${label} (${reason})`,
 };
 // rk-strings-end
 const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
@@ -164,6 +166,24 @@ export const tokens = { value: css, ms, number: num, px };
 const openLayer = (sel) => { try { return !!document.querySelector(sel); } catch { return false; } };
 const later = (fn, wait) => (wait > 0 ? setTimeout(fn, wait) : (queueMicrotask(fn), 0));
 const isEditable = (t) => !!t && (t.isContentEditable || (t.matches && t.matches('textarea, select, input:not([type=checkbox], [type=radio], [type=range], [type=color], [type=file], [type=button], [type=submit], [type=reset], [type=image])')));
+// Type-ahead (docs/navigation.md): in a collection whose entries take focus, a letter or digit goes to the next entry
+// whose text starts with it. Letters typed less than timing.type-ahead apart form a prefix ("mar" after "may"); the
+// same letter again moves on to the next entry with it. Never in a text field: where there is a field, typing filters.
+// typeAhead() keeps one collection's typing and returns find(e, entries, current, textOf): the entry to go to, or null
+// when the key is not one it takes or nothing starts so. Entries may be elements or anything textOf reads (an index).
+function typeAhead() {
+  let typed = '', at = 0;
+  return (e, entries, current, textOf = (x) => x.textContent) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || isEditable(e.target) || !/^[\p{L}\p{N}]$/u.test(e.key)) return null;
+    const now = Date.now();
+    typed = now - at < (ms('--rk-duration-type-ahead') || 1000) ? typed + e.key.toLowerCase() : e.key.toLowerCase();
+    at = now;
+    const again = [...typed].every((c) => c === typed[0]), want = again ? typed[0] : typed, i = entries.indexOf(current);
+    // A first letter, or the same one again, looks past the current entry; a longer prefix may still be the current one.
+    const from = again ? i + 1 : Math.max(0, i), order = [...entries.slice(from), ...entries.slice(0, from)];
+    return order.find((x) => String(textOf(x)).replace(/\s+/g, ' ').trim().toLowerCase().startsWith(want)) ?? null;
+  };
+}
 function animateScroll(el, to, duration, ease) {
   cancelAnimationFrame(el._rkRaf);
   const from = el.scrollLeft;
@@ -199,9 +219,11 @@ function focusHeading(scope) {
 }
 
 // Prefs --------------------------------------------------------------------------------------------------------------
-// theme: system | light | dark; density: auto | comfortable | compact; motion: system | on | off. The default
-// removes the attribute, so the system setting (or the pointer, for density) decides. Set them before first paint.
-const PREF_DEFAULT = { theme: 'system', density: 'auto', motion: 'system' };
+// theme: system | light | dark; density: auto | comfortable | compact; motion: system | on | off; contrast: system |
+// more | normal (more: every text pair at 7:1, a frame on status tiles); transparency: system | reduce | normal
+// (reduce: glass is the ground, nothing blurs). The default removes the attribute, so the system setting (or the
+// pointer, for density) decides. Set them before first paint.
+const PREF_DEFAULT = { theme: 'system', density: 'auto', motion: 'system', contrast: 'system', transparency: 'system' };
 export const prefs = {
   key: 'rekta-prefs',
   read() { try { return JSON.parse(localStorage.getItem(this.key) || '{}'); } catch { return {}; } },
@@ -214,8 +236,9 @@ export const prefs = {
       if (remember) { const all = this.read(); all[name] = this.get(name); this.write(all); }
       document.dispatchEvent(new CustomEvent('rk:prefs', { detail: { name, value: this.get(name) } }));
     };
-    // A theme chosen by the user cross-fades (view transitions); a restored one applies before the first paint.
-    if (name === 'theme' && remember && this.get('theme') !== (value || PREF_DEFAULT.theme)) crossfade(commit);
+    // A theme or contrast chosen by the user cross-fades (view transitions); a restored one applies before the first
+    // paint.
+    if ((name === 'theme' || name === 'contrast') && remember && this.get(name) !== (value || PREF_DEFAULT[name])) crossfade(commit);
     else commit();
   },
   restore() { const all = this.read(); for (const name of Object.keys(PREF_DEFAULT)) if (all[name]) this.set(name, all[name], { remember: false }); },
@@ -1781,7 +1804,7 @@ const isOpen = (el) => (canPopover ? el.matches(':popover-open') : !el.hidden);
 
 // menu(trigger, el, { onSelect }): a menu button. el is a .rk-float of .rk-menu-item buttons (role menuitem,
 // menuitemcheckbox or menuitemradio), opened by a click, Enter, Space or ↓ (↑ from the end). In the menu: ↑ ↓ wrap,
-// Home End, a letter jumps to the next item starting with it; Enter or Space chooses; Escape, Tab or a click outside
+// Home End, letters jump (typeAhead); Enter or Space chooses; Escape, Tab or a click outside
 // closes and focus returns to the trigger after a choice or Escape. A checkbox item toggles and leaves the menu open,
 // so several can be ticked in a row. With summary ("status"), the trigger says what is ticked: "status: failed, done",
 // or "status: any" when nothing is (a filter button). align goes to place(): by default the trigger's data-rk-align.
@@ -1795,6 +1818,7 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   trigger.setAttribute('aria-expanded', 'false');
   const items = () => [...el.querySelectorAll('.rk-menu-item')].filter((i) => i.getClientRects().length);
   const focusItem = (i) => { const list = items(); if (list.length) list[(i + list.length) % list.length].focus(); };
+  const find = typeAhead();
   function summarize() {
     if (!summary) return;
     const on = [...el.querySelectorAll('[aria-checked="true"]')].map((i) => i.textContent.trim());
@@ -1834,11 +1858,7 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
     else if (e.key === 'End') { e.preventDefault(); focusItem(-1); }
     else if (e.key === 'Escape') { e.preventDefault(); close(); }
     else if (e.key === 'Tab') close(false);
-    else if (e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      const k = e.key.toLowerCase(), order = [...list.slice(i + 1), ...list.slice(0, i + 1)];
-      const hit = order.find((it) => it.textContent.trim().toLowerCase().startsWith(k));
-      if (hit) hit.focus();
-    }
+    else { const hit = find(e, list, list[i]); if (hit) { e.preventDefault(); hit.focus(); } }
   };
   const choose = (e) => {
     const item = e.target.closest('.rk-menu-item');
@@ -1876,8 +1896,9 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
 // select(el, { items, onShow, onChange, appbar }): Metro selection over the items of a list (li) or a table body (tr).
 // A click selects an item and shows it (onShow), the way a file list does. Ctrl/Cmd+click adds or removes an item and
 // starts the selection mode: then every click adds or removes, until the selection is empty or Escape ends it.
-// Shift+click selects the range from the last item. Keys: ↑ ↓ (← → in a grid) Home End move the focus; Space and
-// Enter act as a click, Ctrl/Cmd+Space as a Ctrl+click; Ctrl/Cmd+A selects all. A selected item takes the accent fill
+// Shift+click selects the range from the last item. Keys: ↑ ↓ (← → in a grid) Home End move the focus, and letters
+// jump (typeAhead: an item's aria-label, a row's th, else its text); Space and Enter act as a click, Ctrl/Cmd+Space as
+// a Ctrl+click; Ctrl/Cmd+A selects all. A selected item takes the accent fill
 // and a checkmark; it nudges where it is pressed (data-rk-press). Items a filter hides drop out. With an appbar, the
 // bar carries the selection in the mode (data-rk-selecting, .rk-ab-count, [data-rk-clear]).
 const selecting = new WeakMap();                                       // app bar → the selections in their mode
@@ -1899,6 +1920,7 @@ export function select(el, { items = ':scope > li, :scope > tr', onShow = null, 
   const isTable = el.tagName === 'TBODY';
   const host = isTable ? el.closest('table') : el;
   let mode = false, anchor = null;
+  const find = typeAhead(), nameOf = (i) => i.getAttribute('aria-label') || (i.querySelector(':scope > th') || i).textContent;
   host.setAttribute('role', isTable ? 'grid' : 'listbox');
   host.setAttribute('aria-multiselectable', 'true');
   el.setAttribute('data-rk-select', '');
@@ -1980,7 +2002,10 @@ export function select(el, { items = ':scope > li, :scope > tr', onShow = null, 
       return;
     }
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); act(item, { add: e.ctrlKey || e.metaKey, extend: e.shiftKey }); return; }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); mode = true; for (const v of vis) set(v, true); sync(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); mode = true; for (const v of vis) set(v, true); sync(); return; }
+    if (e.target !== item) return;
+    const hit = find(e, vis, item, nameOf);
+    if (hit) { e.preventDefault(); roving(hit); hit.focus(); }
   };
   const offEsc = keys.on(20, (e) => {
     if (e.key !== 'Escape' || !mode || isEditable(e.target)) return false;
@@ -2398,7 +2423,8 @@ export function palette(el, { items = () => [], trigger = null, router = null, s
 // appbar(el, { more }): controls that do not fit move into a "more" menu, the least important first (data-rk-priority,
 // higher stays longer, none is 0; then from the end). more is a .rk-ab button shown only while something has moved;
 // its menu repeats each moved control's words (its key hint apart, as the palette shows it), and choosing one clicks
-// the control. Back, the live state, a selection's controls and data-rk-priority="pinned" never move (pinned ones do
+// the control; a control that cannot act (disable()) is a disabled item whose label names the reason. Back, the live
+// state, a selection's controls and data-rk-priority="pinned" never move (pinned ones do
 // while the bar holds the places, which come first). While the bar holds the places, data-rk-places is on the bar and the root, and rekta.css leaves the places' top strip out.
 const placesBars = new Set();                                         // bars holding the places: the root says so while any does
 const markPlaces = (bar, on) => { if (on) placesBars.add(bar); else placesBars.delete(bar); bar.toggleAttribute('data-rk-places', on); docEl().toggleAttribute('data-rk-places', placesBars.size > 0); };
@@ -2421,6 +2447,11 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
     pop.replaceChildren(...[...el.querySelectorAll(':scope > .rk-ab[data-rk-overflow]')].map((c) => {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'rk-menu-item'; b.setAttribute('role', 'menuitem'); b.textContent = words(c);
+      if (c.getAttribute('aria-disabled') === 'true' || c.disabled) {
+        const why = document.getElementById(c.dataset.rkWhy || '');
+        b.setAttribute('aria-disabled', 'true');
+        if (why && why.textContent.trim()) b.textContent = tx('cannotAct', words(c), why.textContent.trim());
+      }
       const k = keyHint(c);
       if (k) {
         const kk = b.appendChild(document.createElement('span')); kk.className = 'rk-menu-key'; kk.setAttribute('aria-hidden', 'true'); kk.textContent = k;
@@ -2486,23 +2517,38 @@ const labelOf = (c) => { const l = c.id && document.querySelector(`label[for="${
 
 // disable(control, reason): a control that cannot act now, and says why next to it (a .rk-hint linked by
 // aria-describedby). It stays focusable (aria-disabled), so the reason is read with it; clicks do nothing.
+// An app-bar control (.rk-ab) has no room beside it: its reason is its tooltip (data-rk-tip, shown on a resting
+// pointer, keyboard focus or a tap), read from a hidden element linked the same way; in "more" its item says it.
 // disable(control, null) enables it again.
 export function disable(control, reason) {
   const id = control.dataset.rkWhy || uid('rk-why');
   control.dataset.rkWhy = id;
   let hint = document.getElementById(id);
   const ids = (control.getAttribute('aria-describedby') || '').split(/\s+/).filter((x) => x && x !== id);
+  const bar = control.matches('.rk-ab');
   if (!control._rkBlock) control._rkBlock = (e) => { if (control.getAttribute('aria-disabled') === 'true') { e.preventDefault(); e.stopImmediatePropagation(); } };
   if (reason) {
     control.disabled = false;
     control.setAttribute('aria-disabled', 'true');
-    if (!hint) { hint = document.createElement('span'); hint.className = 'rk-hint rk-why'; hint.id = id; control.after(hint); }
+    if (!hint) {
+      hint = document.createElement('span'); hint.className = bar ? 'rk-why' : 'rk-hint rk-why'; hint.id = id; hint.hidden = bar;
+      control.after(hint);
+    }
     hint.textContent = reason;
+    if (bar) {
+      if (!('_rkTipWas' in control)) control._rkTipWas = control.getAttribute('data-rk-tip');
+      control.setAttribute('data-rk-tip', reason);
+    }
     control.setAttribute('aria-describedby', [...ids, id].join(' '));
     control.addEventListener('click', control._rkBlock, true);
   } else {
     control.removeAttribute('aria-disabled');
     if (hint) hint.remove();
+    if ('_rkTipWas' in control) {
+      if (control._rkTipWas === null) control.removeAttribute('data-rk-tip'); else control.setAttribute('data-rk-tip', control._rkTipWas);
+      delete control._rkTipWas;
+      if (tip.for === control) hideTip(false);
+    }
     if (ids.length) control.setAttribute('aria-describedby', ids.join(' ')); else control.removeAttribute('aria-describedby');
     control.removeEventListener('click', control._rkBlock, true);
   }
@@ -2642,7 +2688,8 @@ export function guard(el, { router = null, what = tx('guardWhat') } = {}) {
 // Tooltip ----------------------------------------------------------------------------------------------------------
 // tips(): a short ink label for a control that has one (data-rk-tip="text"; the control's aria-keyshortcuts adds
 // its keys), or for text its box cuts off (data-rk-tip="overflow": the element's own text, only while it is cut). It
-// shows after tip-delay under a mouse or pen, at once after another tip or on keyboard focus, never on touch;
+// shows after tip-delay under a mouse or pen, at once after another tip or on keyboard focus; on touch only a tap on
+// a disabled control (aria-disabled) shows its tip, the reason it cannot act (disable() in the app bar).
 // Escape, a press, scrolling or leaving hide it. It repeats or completes what the control says: never the only way to
 // learn what it does. start() turns it on.
 const tip = { el: null, for: null, timer: 0, hid: 0, described: null, on: false };
@@ -2694,8 +2741,11 @@ function showTip(el, given = null) {
   tip.el.replaceChildren(text);
   if (keysText) { const k = document.createElement('span'); k.className = 'rk-key'; k.textContent = keysText; tip.el.append(' ', k); }
   openFloat(tip.el); placeTip(tip.el, el);
+  // It describes its control while it shows, unless it repeats the control's name or a description it already has
+  // (a disabled app-bar control's reason).
   const name = (el.getAttribute('aria-label') || el.textContent || '').trim();
-  if (text !== name) { tip.described = el.getAttribute('aria-describedby'); el.setAttribute('aria-describedby', `${tip.described ? `${tip.described} ` : ''}rk-tip`); }
+  const said = (el.getAttribute('aria-describedby') || '').split(/\s+/).some((d) => { const x = d && document.getElementById(d); return x && x.textContent.trim() === text; });
+  if (text !== name && !said) { tip.described = el.getAttribute('aria-describedby'); el.setAttribute('aria-describedby', `${tip.described ? `${tip.described} ` : ''}rk-tip`); }
   else tip.described = undefined;
   tip.for = el;
 }
@@ -2719,6 +2769,7 @@ function tips() {
     if (tip.for || Date.now() - tip.hid < wait) showTip(el); else tip.timer = setTimeout(() => showTip(el), wait);
   };
   const out = (e) => {
+    if (e.pointerType === 'touch') return;                           // a lifted finger leaves: a tapped tip stays
     const el = e.target.closest && e.target.closest('[data-rk-tip]');
     if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;
     if (tip.for === el || tip.timer) hideTip();
@@ -2726,13 +2777,20 @@ function tips() {
   const focus = (e) => { const el = e.target.closest && e.target.closest('[data-rk-tip]'); if (el && e.target.matches(':focus-visible')) showTip(el); };
   const blur = (e) => { if (tip.for && tip.for.contains(e.target)) hideTip(); };
   const away = () => hideTip();
+  // A tap cannot rest: on a control that cannot act anyway it shows the reason, until the next press or a scroll.
+  const tap = (e) => {
+    const el = e.pointerType === 'touch' && e.target.closest && e.target.closest('[aria-disabled="true"][data-rk-tip]');
+    if (el) showTip(el);
+  };
   const offEsc = keys.on(45, (e) => { if (e.key !== 'Escape' || !tip.for) return false; hideTip(); return true; });
+  document.addEventListener('pointerup', tap);
   document.addEventListener('pointerover', over); document.addEventListener('pointerout', out);
   document.addEventListener('focusin', focus); document.addEventListener('focusout', blur);
   document.addEventListener('pointerdown', away, true); addEventListener('scroll', away, true); addEventListener('blur', away);
   return {
     destroy() {
       tip.on = false; hideTip(); offEsc();
+      document.removeEventListener('pointerup', tap);
       document.removeEventListener('pointerover', over); document.removeEventListener('pointerout', out);
       document.removeEventListener('focusin', focus); document.removeEventListener('focusout', blur);
       document.removeEventListener('pointerdown', away, true); removeEventListener('scroll', away, true); removeEventListener('blur', away);
@@ -2750,16 +2808,13 @@ function placeAt(el, x, y) {
   el.style.left = `${Math.round(left)}px`; el.style.top = `${Math.round(top)}px`;
   el.dataset.rkSide = top < y ? 'above' : 'below';
 }
-// The keys of an open menu: ↑ ↓ wrap, Home End, a letter jumps; Escape and Tab close.
-function menuKeys(e, list, close) {
+// The keys of an open menu: ↑ ↓ wrap, Home End, letters jump (find, a typeAhead()); Escape and Tab close.
+function menuKeys(e, list, close, find) {
   const i = list.indexOf(document.activeElement), go = (k) => { if (list.length) list[(k + list.length) % list.length].focus(); };
   if (e.key === 'ArrowDown') { e.preventDefault(); go(i + 1); } else if (e.key === 'ArrowUp') { e.preventDefault(); go(i < 0 ? -1 : i - 1); }
   else if (e.key === 'Home') { e.preventDefault(); go(0); } else if (e.key === 'End') { e.preventDefault(); go(-1); }
   else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); } else if (e.key === 'Tab') { e.preventDefault(); close(true); }
-  else if (e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    const k = e.key.toLowerCase(), hit = [...list.slice(i + 1), ...list.slice(0, i + 1)].find((it) => it.textContent.trim().toLowerCase().startsWith(k));
-    if (hit) hit.focus();
-  }
+  else { const hit = find(e, list, list[i]); if (hit) { e.preventDefault(); hit.focus(); } }
 }
 // contextMenu(scope, el, { target, onOpen, onSelect }): a menu opened where the pointer is: a right click, a long
 // press on touch (long-press), or Shift+F10 or the context-menu key on a focused target, then below it. target picks
@@ -2816,7 +2871,7 @@ export function contextMenu(scope, el, { target = '[tabindex], a, button', onOpe
   const move = (e) => { if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) { clearTimeout(hold); hold = 0; start = null; } };
   const up = () => { if (hold > 0) clearTimeout(hold); hold = 0; start = null; };
   const click = (e) => { if (swallow) { swallow = false; e.preventDefault(); e.stopPropagation(); } };
-  const key = (e) => menuKeys(e, items(), close);
+  const jump = typeAhead(), key = (e) => menuKeys(e, items(), close, jump);
   const choose = (e) => {
     const item = e.target.closest('.rk-menu-item');
     if (!item || item.getAttribute('aria-disabled') === 'true') { if (item) e.preventDefault(); return; }
@@ -2857,10 +2912,84 @@ export function contextMenu(scope, el, { target = '[tabindex], a, button', onOpe
   };
 }
 
+// Tile grid --------------------------------------------------------------------------------------------------------
+// grid(el): a grid of tiles that open (a.rk-tile, button.rk-tile in a .rk-tiles) is one tab stop, and the arrows move
+// through it the way the eye does: ← → ↑ ↓ go to the nearest tile that way, one sharing the row or column first (on a
+// tie the better-aligned one), and on into the grids of the panorama's other sections; at the edge focus stays. Home
+// End go to the grid's first and last tile, letters jump (typeAhead: a tile's aria-label, else its words without its
+// status word), Tab leaves. The tile last focused is the grid's tab stop. start() attaches it to every .rk-tiles that
+// holds a tile that opens; a grid a framework renders later calls it itself. Returns { refresh, destroy }.
+const OPENS = 'a.rk-tile, button.rk-tile';
+const ARROWS = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
+const grids = new WeakMap();
+const tileName = (t) => t.getAttribute('aria-label') || [...t.childNodes].filter((n) => !(n.nodeType === 1 && n.matches('.rk-tile-word, [aria-hidden="true"]'))).map((n) => n.textContent).join(' ');
+export function grid(el) {
+  if (grids.has(el)) return grids.get(el);
+  el.setAttribute('data-rk-grid', '');
+  const shown = (t) => t.getClientRects().length > 0 && !t.closest('[hidden], [inert]');
+  const own = () => [...el.querySelectorAll(OPENS)].filter((t) => t.closest('[data-rk-grid]') === el);
+  // Every tile the arrows may reach: in this grid and, in a panorama, in its other sections' grids.
+  const reach = () => [...(el.closest('.rk-panorama') || el).querySelectorAll(OPENS)].filter((t) => t.closest('[data-rk-grid]') && shown(t));
+  let stop = null;
+  function prepare() {
+    const list = own();
+    if (!list.includes(stop) || !shown(stop)) stop = list.find(shown) || list[0] || null;
+    for (const t of list) t.tabIndex = t === stop ? 0 : -1;
+  }
+  // The nearest tile from `from` in the direction [dx, dy]: wholly that way, sharing the row (or column) before not,
+  // then by the gap to it, then by how much of its row (column) it shares. One that shares none counts only while it
+  // lies more that way than across (within 45°), so → reaches the next section's grid and ↓ at a grid's foot stays.
+  function nearest(from, [dx, dy]) {
+    const a = from.getBoundingClientRect();
+    let best = null, bk = null;
+    for (const t of reach()) {
+      if (t === from) continue;
+      const b = t.getBoundingClientRect();
+      const gap = dx > 0 ? b.left - a.right : dx < 0 ? a.left - b.right : dy > 0 ? b.top - a.bottom : a.top - b.bottom;
+      if (gap < -1) continue;
+      const shared = dx ? Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) : Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const mx = (b.left + b.right - a.left - a.right) / 2, my = (b.top + b.bottom - a.top - a.bottom) / 2;
+      if (shared <= 0 && Math.abs(dx ? my : mx) > Math.abs(dx ? mx : my)) continue;
+      const k = shared > 0 ? [0, gap, -shared] : [1, gap - 2 * shared, 0];
+      if (!bk || k[0] < bk[0] || (k[0] === bk[0] && (k[1] < bk[1] - 1 || (Math.abs(k[1] - bk[1]) <= 1 && k[2] < bk[2])))) { best = t; bk = k; }
+    }
+    return best;
+  }
+  const find = typeAhead();
+  const key = (e) => {
+    const t = e.target;
+    if (!t.matches || !t.matches(OPENS) || t.closest('[data-rk-grid]') !== el || e.ctrlKey || e.metaKey || e.altKey) return;
+    let to;
+    if (ARROWS[e.key]) to = nearest(t, ARROWS[e.key]);                       // none at the edge: focus stays
+    else if (e.key === 'Home' || e.key === 'End') { const list = own().filter(shown); to = list[e.key === 'Home' ? 0 : list.length - 1]; }
+    else if (!(to = find(e, reach(), t, tileName))) return;
+    e.preventDefault();
+    if (to && to !== t) to.focus();
+  };
+  const focusin = (e) => { const t = e.target; if (t.matches && t.matches(OPENS) && t.closest('[data-rk-grid]') === el) { stop = t; prepare(); } };
+  let queued = 0;
+  const mo = new MutationObserver(() => { if (!queued) queued = requestAnimationFrame(() => { queued = 0; prepare(); }); });
+  mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  el.addEventListener('keydown', key);
+  el.addEventListener('focusin', focusin);
+  prepare();
+  const ctl = {
+    refresh: prepare,
+    destroy() {
+      mo.disconnect(); cancelAnimationFrame(queued); grids.delete(el);
+      el.removeEventListener('keydown', key); el.removeEventListener('focusin', focusin);
+      el.removeAttribute('data-rk-grid');
+      for (const t of own()) t.removeAttribute('tabindex');
+    },
+  };
+  grids.set(el, ctl);
+  return ctl;
+}
+
 // Tree -------------------------------------------------------------------------------------------------------------
 // tree(el, { onShow, onToggle }): a hierarchy (ul.rk-tree of li, each its row first, then a ul of children). A click
 // selects an item and shows it; the chevron or a double click opens and closes it. Keys: ↑ ↓, → opens or goes in,
-// ← closes or goes up, Home End, Enter or Space shows, * opens the siblings, a letter jumps. One tab stop.
+// ← closes or goes up, Home End, Enter or Space shows, * opens the siblings, letters jump (typeAhead). One tab stop.
 export function tree(el, { onShow = null, onToggle = null } = {}) {
   el.setAttribute('role', 'tree');
   function prepare(ul, level) {
@@ -2889,6 +3018,7 @@ export function tree(el, { onShow = null, onToggle = null } = {}) {
   const roving = (li) => { for (const x of all()) x.tabIndex = x === li ? 0 : -1; };
   roving(all().find((li) => li.getAttribute('aria-selected') === 'true') || all()[0]);
   const rowOf = (li) => li.querySelector(':scope > .rk-tree-row');
+  const find = typeAhead();
   function expand(li, open) {
     const sub = li.querySelector(':scope > ul');
     if (!sub || (li.getAttribute('aria-expanded') === 'true') === open) return;
@@ -2933,10 +3063,7 @@ export function tree(el, { onShow = null, onToggle = null } = {}) {
     else if (e.key === 'ArrowLeft') { if (open === 'true') expand(li, false); else go(li.parentElement.closest('[role=treeitem]')); }
     else if (e.key === 'Enter' || e.key === ' ') choose(li);
     else if (e.key === '*') [...li.parentElement.children].forEach((x) => expand(x, true));
-    else if (e.key.length === 1 && /\S/.test(e.key)) {
-      const k = e.key.toLowerCase(), hit = [...list.slice(i + 1), ...list.slice(0, i + 1)].find((x) => rowOf(x).textContent.trim().toLowerCase().startsWith(k));
-      go(hit); if (!hit) return;
-    } else return;
+    else { const hit = find(e, list, li, (x) => rowOf(x).textContent); if (!hit) return; go(hit); }
     e.preventDefault();
   };
   el.addEventListener('click', click); el.addEventListener('dblclick', dbl); el.addEventListener('keydown', key);
@@ -3050,8 +3177,9 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
 // with a bounded height. Only the rows in view (and a few more) exist; render(i, row) fills a row. It is one tab stop
 // (a listbox; the active row by aria-activedescendant) chosen the Metro way like select(): a click selects and shows,
 // Ctrl/Cmd+click starts the selection mode, Shift takes a range, Ctrl/Cmd+A all, Escape ends the mode. ↑ ↓ PageUp
-// PageDown Home End move. The row height is the density's.
-export function virtual(el, { count = 0, render, onShow = null, onChange = null, appbar = null, label = '' } = {}) {
+// PageDown Home End move, and letters jump (typeAhead) by text(i), an item's words; without it, by the text render()
+// writes into a row that is not shown (once per item, until refresh()). The row height is the density's.
+export function virtual(el, { count = 0, render, text = null, onShow = null, onChange = null, appbar = null, label = '' } = {}) {
   const id = uid('rk-virtual');
   el.setAttribute('role', 'listbox'); el.setAttribute('aria-multiselectable', 'true'); el.tabIndex = 0;
   if (label) el.setAttribute('aria-label', label);
@@ -3059,7 +3187,12 @@ export function virtual(el, { count = 0, render, onShow = null, onChange = null,
   body.className = 'rk-virtual-body';
   el.replaceChildren(body);
   let n = count, h = 0, first = 0, last = 0, active = -1, anchor = -1, mode = false, frame = 0;
-  const sel = new Set();
+  const sel = new Set(), find = typeAhead(), words = new Map();
+  const textAt = (i) => {
+    if (text) return text(i);
+    if (!words.has(i)) { const row = document.createElement('div'); render(i, row); words.set(i, row.textContent); }
+    return words.get(i);
+  };
   function paint(force = false) {
     frame = 0;
     h = px('--rk-row-height') || 44;
@@ -3128,6 +3261,10 @@ export function virtual(el, { count = 0, render, onShow = null, onChange = null,
     }
     if ((e.key === ' ' || e.key === 'Enter') && active >= 0) { e.preventDefault(); act(active, { add: e.ctrlKey || e.metaKey, extend: e.shiftKey }); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); mode = true; for (let i = 0; i < n; i++) sel.add(i); sync(); }
+    else {
+      const hit = find(e, Array.from({ length: n }, (_, i) => i), active, textAt);
+      if (hit !== null) { e.preventDefault(); active = hit; mark(); reveal(hit); }
+    }
   };
   const focus = () => { if (active < 0 && n) { active = Math.min(n - 1, Math.floor(el.scrollTop / (h || 1))); mark(); } };
   const offEsc = keys.on(20, (e) => {
@@ -3144,7 +3281,7 @@ export function virtual(el, { count = 0, render, onShow = null, onChange = null,
   if (appbar) appbar.addEventListener('click', clearClick);
   paint(true);
   return {
-    refresh(count = n) { n = count; for (const i of [...sel]) if (i >= n) sel.delete(i); if (active >= n) active = n - 1; paint(true); sync(); },
+    refresh(count = n) { n = count; words.clear(); for (const i of [...sel]) if (i >= n) sel.delete(i); if (active >= n) active = n - 1; paint(true); sync(); },
     scrollTo(i) { active = i; reveal(i); },
     selected: () => [...sel].sort((x, y) => x - y),
     only, clear() { sel.clear(); sync(); },
@@ -3895,8 +4032,8 @@ export function drop(el, { onFiles = null, accept = null } = {}) {
 }
 
 // Start --------------------------------------------------------------------------------------------------------------
-// The defaults for a page: restore the user's prefs, press on tiles, sheets, steppers, sliders, switches, and the
-// first paint's build-in. An embedded page whose host owns theme, density and motion passes restore: false.
+// The defaults for a page: restore the user's prefs, press on tiles, sheets, steppers, sliders, switches, tile grids
+// (one tab stop, arrows), and the first paint's build-in. An embedded page whose host owns theme, density and motion passes restore: false.
 export function start({ root = document, restore = true, locale: tag = '', strings: words = null, focusFallback = null } = {}) {
   if (tag) setLocale(tag);
   if (focusFallback) fallbackFocus = focusFallback;
@@ -3905,6 +4042,7 @@ export function start({ root = document, restore = true, locale: tag = '', strin
   const parts = [press(root)];
   root.querySelectorAll('dialog.rk-sheet').forEach((d) => parts.push(sheet(d)));
   root.querySelectorAll('.rk-stepper').forEach((s) => parts.push(stepper(s)));
+  root.querySelectorAll('.rk-tiles').forEach((g) => { if (!g.hasAttribute('data-rk-select') && g.querySelector(OPENS)) parts.push(grid(g)); });
   root.querySelectorAll('input.rk-range').forEach(rangeFill);
   root.querySelectorAll('.rk-toggle input[type=checkbox]').forEach((i) => i.setAttribute('role', 'switch'));
   parts.push(tips());

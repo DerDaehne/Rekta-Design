@@ -79,7 +79,9 @@ data.
 
 - **A tile that opens** is a link (to a place) or a button (that opens a
   sheet). It nudges back where it is pressed, and a link turns the place
-  (see [motion.md](motion.md)). There is no arrow glyph on it: the press
+  (see [motion.md](motion.md)). A grid of them is one tab stop, the
+  arrows moving to the nearest tile that way
+  ([navigation.md](navigation.md#a-grid-of-tiles)). There is no arrow glyph on it: the press
   and the turn say that it goes somewhere.
 - **A tile that only informs** is not a control. It does not press and
   takes no focus.

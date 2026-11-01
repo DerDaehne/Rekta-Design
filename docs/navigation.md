@@ -223,7 +223,8 @@ with an icon over a lowercase word.
   `.rk-ab-places` is not shown and the pivot holds the places as always.
   A landscape phone (wide but short) keeps the pivot.
 - **Where you are:** the place you are in is in `text-primary`, the
-  others in `text-contrast-medium`; `aria-current="page"` marks it, and
+  others in `text-contrast-high` (on glass nothing lower, [colour.md](colour.md#text-on-glass));
+  `aria-current="page"` marks it, and
   `places()` keeps the mark on the bar's links. On a place below it (a
   detail), the place you came from stays marked, and choosing it goes
   back to its top.
@@ -302,6 +303,18 @@ controls.
 <span class="rk-ab-mid" data-rk-priority="pinned"><span>go to</span><kbd class="rk-key">g</kbd><span>then a place</span></span>
 ```
 
+### A control that cannot act now
+
+A command that cannot run now ("print" with no printer) stays in the
+bar, in place: glyph and word in `disabled`, no hover or press tint,
+still focusable, so its reason can be heard. The reason is its tooltip,
+not a hint beside it, which the bar has no room for: after
+`timing.tip-delay` under a resting pointer, at once on keyboard focus,
+on touch when it is tapped. `disable(control, reason)` does it on a
+`.rk-ab`. When the control moves into "more", the reason moves with it:
+its item is disabled and says it in the label, "print (needs a
+printer)".
+
 ### When the bar is full
 
 Controls that do not fit move into "more", the least important first
@@ -318,8 +331,9 @@ A tooltip is a small ink strip, like a toast, centred above its control
 (below when there is no room), `size.tip-gap` (6px) from it and at least
 `space-m` from the window's edges. It shows after the pointer has rested for
 `timing.tip-delay`, at once when focus arrives by keyboard, and at once
-when moving on from another tip; never on touch. Escape, a press,
-scrolling or leaving hide it. It names an icon-only control, completes a
+when moving on from another tip. On touch it shows only when a disabled
+control is tapped (its reason, [forms.md](forms.md#disabled-controls-say-why));
+otherwise never. Escape, a press, scrolling or leaving hide it. It names an icon-only control, completes a
 label with its shortcut, or shows the whole of a text its box cuts off
 (`data-rk-tip="overflow"`). It never holds the only way to learn what a
 control does: an icon-only control still has its accessible name.
@@ -335,6 +349,10 @@ Every pointer action has a keyboard path.
 | A section strip | Enter on a title | Aligns the section and moves focus to its heading |
 | A facet pivot (tabs) | ← → Home End | The previous, next, first or last facet; focus follows |
 | A tile | Enter (Space on a button tile) | Presses it; release activates |
+| A grid of tiles that open | ← → ↑ ↓ | The nearest tile that way: one in the same row (column) first, on a tie the better-aligned one; on into the grids of the panorama's other sections; at the edge focus stays |
+| | Home End | The grid's first or last tile |
+| | Tab | Leaves the grid: it is one tab stop, the tile last focused |
+| A list, a table, a long list, a tile grid, a tree, a menu | a letter or digit | The next entry that starts with it; letters typed within `timing.type-ahead` form a prefix (below) |
 | Anywhere | Escape | Closes the innermost thing that is open (see below) |
 | Anywhere but a text field | Ctrl/Cmd+Z | Undoes the last action (the open toast's first) |
 | Anywhere but a text field | Ctrl/Cmd+Shift+Z, Ctrl+Y | Does the undone action again |
@@ -363,6 +381,40 @@ sequence stand apart, with a space ("← →", "Space ↑ ↓"). These pages
 write "Ctrl/Cmd+K" for a key that is Ctrl on one platform and ⌘ on the
 other; an app shows the one for where it runs, as `tips()` and the app
 bar's menu do from `aria-keyshortcuts` ("Control+K Meta+K").
+
+### Typing: filter or jump
+
+Where there is a field, typing filters; where there is none, typing
+jumps.
+
+- **Filter:** the palette, a combobox and a search field narrow their
+  list as you type. Focus stays in the field.
+- **Jump:** in a collection whose entries take focus (a list or table
+  with `select()`, a long list, a grid of tiles that open, a tree, a
+  menu), a letter or digit moves focus to the next entry whose text
+  starts with it, and the view scrolls along. Letters typed less than
+  `timing.type-ahead` (1s) apart form one prefix ("ma" finds "march"
+  after "may"); the same letter again moves on to the next entry with
+  it, round to the first. Nothing that matches: focus stays. A jump
+  never selects or acts: it only moves focus.
+- A place offers one or the other for one collection, never both: a
+  long alphabetical list ("all apps") jumps; the start surface, with
+  its search field, filters.
+
+### A grid of tiles
+
+A grid of tiles that open (a start screen, a dashboard) is one tab stop,
+like a list: Tab reaches the tile last focused (the first, to begin
+with) and the next Tab leaves the grid. The arrows move the way the eye
+does, by position, not by order in the page: the nearest tile that way,
+one that shares the row (or column) before one that does not, and of
+two as near the one better aligned; a tile in no shared row counts
+only while it lies more that way than across. In a panorama they go on
+into the next section's grid (sideways → reaches the section beside,
+compact ↓ the one below); at the edge focus stays where it is (no
+wrap). Home and End go to the grid's first and last tile, letters
+jump. A grid of tiles that only inform takes no focus at all
+([tiles.md](tiles.md#what-a-tile-does)).
 
 ### Who gets a key
 

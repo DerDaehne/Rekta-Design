@@ -49,7 +49,7 @@ const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const WORD = { info: 'active', success: 'done', warning: 'waiting', error: 'failed' };
 const blocks = {
   status: () => ['info', 'success', 'warning', 'error'].map((st, i) => `<div class="rk-tile" data-status="${st}" style="--rk-i:${i}"><span class="rk-tile-word">${WORD[st]}</span>`
-    + `<span class="rk-stat"><b data-contrast="text-primary status-${st}-tile">–</b><span>primary text on ${st}</span></span>`
+    + `<span class="rk-stat"><b data-ratio="text-primary status-${st}-tile">–</b><span>primary text on ${st}</span></span>`
     + `<span class="rk-meta">${byName.get(`status-${st}-tile`).value} · ${byName.get(`status-${st}-tile`).alt}</span></div>`).join('\n'),
   swatches: () => `<ul class="swatches">${['bg', 'surface', 'surface-2', 'text-primary', 'text-contrast-high', 'text-contrast-medium', 'text-contrast-low', 'accent', 'focus', 'disabled'].map((n) => {
     const t = byName.get(n), v = t.value.startsWith('var(') ? 'text-primary' : t.value, a = t.alt.startsWith('var(') ? 'text-primary' : t.alt;
@@ -58,7 +58,7 @@ const blocks = {
   pairs: () => `<table class="rk-table pairs"><thead><tr><th scope="col">pair</th><th scope="col" class="rk-num">needs</th><th scope="col" class="rk-num">now</th></tr></thead><tbody>${[
     ['text-primary', 'bg', 4.5], ['text-primary', 'surface', 4.5], ['text-contrast-high', 'bg', 4.5], ['text-contrast-high', 'surface', 4.5],
     ['text-contrast-medium', 'bg', 3], ['focus', 'bg', 3], ['on-accent', 'accent', 4.5],
-  ].map(([fg, bg, min]) => `<tr><th scope="row"><code>${fg}</code> on <code>${bg}</code></th><td class="rk-num">${min} : 1</td><td class="rk-num"><b data-contrast="${fg} ${bg}" data-min="${min}">–</b></td></tr>`).join('')}</tbody></table>`,
+  ].map(([fg, bg, min]) => `<tr><th scope="row"><code>${fg}</code> on <code>${bg}</code></th><td class="rk-num">${min} : 1</td><td class="rk-num"><b data-ratio="${fg} ${bg}" data-min="${min}">–</b></td></tr>`).join('')}</tbody></table>`,
   typescale: () => `<ul class="rk-rows scale">${data.filter((t) => t.group === 'type' && t.name.startsWith('font-size-')).map((t) => `<li><span class="scale-sample" style="font-size:var(--rk-${t.name})">Rekta</span><span><code>${t.name.slice(10)}</code> <span class="rk-meta">${esc(t.value)}</span></span></li>`).join('')}</ul>`,
   'tokens-data': () => `<script type="application/json" id="tokens-data">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`,
   // The icon sprite inline, so <use href="#rk-i-NAME"> works in the page and in the single-file build alike.
