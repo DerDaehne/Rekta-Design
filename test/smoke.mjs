@@ -966,16 +966,26 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
   // A place called up turns at half the pace; the display step is twice nav-active, light, tabular.
   const called = await p.evaluate(async () => {
     const make = (name) => { const m = document.createElement('main'); m.className = 'rk-place'; m.dataset.rkPlace = name; m.style.cssText = 'position:fixed;inset:0;background:var(--rk-bg);z-index:5'; m.innerHTML = '<h1 class="rk-title">A place</h1><div class="rk-tiles"><a class="rk-tile" href="#">one</a><a class="rk-tile" href="#">two</a></div>'; document.body.append(m); return m; };
-    const time = async (opts) => { const a = make('t-a'), b = make('t-b'); b.hidden = true; const t0 = performance.now(); await Rekta.turn.leave(a, opts); await Rekta.turn.enter(b, opts); const t = performance.now() - t0; a.remove(); b.remove(); return t; };
+    // The pace is read from the durations the turn gives its parts, which a busy runner does not stretch; a wall-clock
+    // ratio would carry the fixed cost of a frame or two in every turn.
+    const dur = (place) => parseFloat(place.querySelector('.rk-tile').style.getPropertyValue('--_rk-turn-duration'));
+    const time = async (opts) => {
+      const a = make('t-a'), b = make('t-b'); b.hidden = true;
+      const out = Rekta.turn.leave(a, opts), dOut = dur(a); await out;
+      const into = Rekta.turn.enter(b, opts), dIn = dur(b); await into;
+      a.remove(); b.remove(); return dOut + dIn;
+    };
     const full = await time({}), half = await time({ called: true });
     const a = make('t-c'); a.setAttribute('data-rk-called', ''); a.hidden = true;
-    const t0 = performance.now(); await Rekta.turn.enter(a); const byAttr = performance.now() - t0; a.remove();
+    const plain = make('t-d'); plain.hidden = true;
+    const p1 = Rekta.turn.enter(plain), dPlain = dur(plain); await p1; plain.remove();
+    const p2 = Rekta.turn.enter(a), byAttr = dur(a) / dPlain; await p2; a.remove();
     const d = document.createElement('p'); d.className = 'rk-display'; d.textContent = '12:45'; document.querySelector('.rk-place:not([hidden])').append(d);
     const s = getComputedStyle(d), r = { full, half, byAttr, size: parseFloat(s.fontSize), weight: s.fontWeight, nums: s.fontVariantNumeric, nav: 2 * Rekta.tokens.px('--rk-font-size-nav-active') };
     d.remove();
     return r;
   });
-  ok(called.half > 0.35 * called.full && called.half < 0.65 * called.full && called.byAttr < 0.65 * called.full, 'a place called up (data-rk-called) turns at half the pace', JSON.stringify(called));
+  ok(Math.abs(called.half / called.full - 0.5) < 0.02 && Math.abs(called.byAttr - 0.5) < 0.02, 'a place called up (data-rk-called) turns at half the pace', JSON.stringify(called));
   ok(Math.abs(called.size - called.nav) < 1 && called.weight === '300' && called.nums === 'tabular-nums', '.rk-display: twice nav-active, light, tabular figures', JSON.stringify(called));
   // A month to look at (#127): day-cell squares, seven wide, today framed 2px inside its cell.
   const month = await p.evaluate(() => {
@@ -1933,11 +1943,11 @@ await sp.click('#t-wifi'); await sp.waitForTimeout(400); await sp.keyboard.press
 ok(await sp.evaluate(() => !document.querySelector('#t-group').hidden && document.activeElement.id === 't-wifi'), '← goes back too');
 const leaving = await sp.evaluate(async () => {
   const d = document.querySelector('#t-panel'); d.close();
-  await new Promise((res) => setTimeout(res, 120));
-  const m = new DOMMatrixReadOnly(getComputedStyle(d).transform);
-  return { phase: d.dataset.rkPhase, x: m.m41, opacity: getComputedStyle(d).opacity };
+  // What it does is read from its own leaving animation, not sampled at a moment a busy runner may not have reached.
+  const own = d.getAnimations().find((a) => !a.effect.pseudoElement), frames = own ? own.effect.getKeyframes() : [];
+  return { phase: d.dataset.rkPhase, to: frames.length ? frames.at(-1).transform : '', fades: frames.some((f) => 'opacity' in f), d: own ? own.effect.getTiming().duration : 0 };
 });
-ok(leaving.phase === 'leaving' && leaving.x > 0 && leaving.opacity === '1', 'it leaves whole towards its trailing edge', JSON.stringify(leaving));
+ok(leaving.phase === 'leaving' && leaving.to === 'translateX(100%)' && !leaving.fades && leaving.d > 0, 'it leaves whole towards its trailing edge', JSON.stringify(leaving));
 ok(await until(sp, async () => !(await sp.evaluate(() => document.querySelector('#t-panel').open))), 'then it is closed');
 await sp.evaluate(() => document.querySelector('#t-panel').remove());
 // The level indicator: one toast, again with the same word it stays and its value changes; it goes timing.level after.
