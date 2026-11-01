@@ -380,7 +380,7 @@
           "Arial",
           "sans-serif"
         ],
-        "$description": "The one family. Ship the font files with the app (fonts/), never from a CDN."
+        "$description": "The one family. Ship the font files with the app (fonts/), never from a CDN. A product may set its own (docs/typography.md, The family): with the four weights the roles use (300, 400, 500, 600), tabular figures and a licence to ship it; the type scale stays."
       },
       "mono": {
         "$type": "fontFamily",
@@ -712,7 +712,7 @@
         "value": 150,
         "unit": "px"
       },
-      "$description": "Tile grid cell from 760px up; tiles span 1 or 2 units."
+      "$description": "Tile grid cell from 760px up; tiles span 1 to 4 units across and 1 or 2 down, by the importance of what they show."
     },
     "tile-unit-ultrawide": {
       "$type": "dimension",
@@ -753,6 +753,22 @@
         "unit": "px"
       },
       "$description": "Between a tooltip and its control: a little more than a floating surface's space-xs, so the ink strip does not touch the control's focus ring."
+    },
+    "tile-icon": {
+      "$type": "dimension",
+      "$value": {
+        "value": 48,
+        "unit": "px"
+      },
+      "$description": "The icon of a tile that opens something launchable (an app, a tool), on a tile one unit high: about a third of the unit, at the tile's padding. A picture icon is drawn at this size, a Rekta icon scaled to it."
+    },
+    "tile-icon-large": {
+      "$type": "dimension",
+      "$value": {
+        "value": 96,
+        "unit": "px"
+      },
+      "$description": "The same on a tile two units high."
     },
     "pivot-wide": {
       "$type": "dimension",
@@ -1071,6 +1087,16 @@
             "unit": "deg"
           }
         }
+      },
+      "step-back-scale": {
+        "$type": "number",
+        "$value": 0.86,
+        "$description": "Windows stepping back for a full-screen place over them shrink about the screen's centre to this share of their size (docs/motion.md)."
+      },
+      "step-back-brightness": {
+        "$type": "number",
+        "$value": 0.78,
+        "$description": "Windows stepping back for a full-screen place over them darken to this share of their brightness, in both themes: they are further away, not disabled."
       }
     },
     "proportion": {
@@ -1283,6 +1309,11 @@
       "$type": "duration",
       "$value": "1000ms",
       "$description": "In a collection whose entries take focus, letters typed less than this apart form one prefix to jump to; after a pause a letter starts again. Wall time: reduced motion leaves it alone."
+    },
+    "level": {
+      "$type": "duration",
+      "$value": "1500ms",
+      "$description": "How long a level indicator (a value changed by a key: volume, brightness, zoom) stays after the last change. Shorter than a toast: it only confirms what the key just did, and each press starts it again."
     }
   },
   "layer": {
