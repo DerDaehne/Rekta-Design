@@ -707,6 +707,22 @@ const btns = await p.evaluate(async () => {
 ok(btns.pendingKeeps, 'a running button keeps its colours (it is not disabled)', JSON.stringify(btns));
 ok(btns.danger, 'a destructive button: frame and words in the error colour, not filled', JSON.stringify(btns));
 ok(btns.quiet, 'a quiet button keeps its look while it runs (no frame appears)', JSON.stringify(btns));
+// A running button's line comes after busy-delay and goes with the label, in the same step: no busy-min (#110).
+const lineGoes = await p.evaluate(async () => {
+  const b = document.createElement('button'); b.className = 'rk-btn'; b.type = 'button'; b.textContent = 'save';
+  document.querySelector('#forms').append(b);
+  const line = () => { const a = getComputedStyle(b, '::after'); return a.content !== 'none' && a.visibility === 'visible'; };
+  let release; const run = Rekta.pending(b, new Promise((r) => { release = r; }));
+  const early = line();
+  await new Promise((r) => setTimeout(r, Rekta.tokens.ms('--rk-duration-busy-delay') + 200));
+  const shown = line(), during = b.textContent;
+  release(); await run;
+  const out = { early, shown, during, after: line(), label: b.textContent };
+  b.remove();
+  return out;
+});
+ok(!lineGoes.early && lineGoes.shown && lineGoes.during === 'save…', 'a running button: the line only after busy-delay', JSON.stringify(lineGoes));
+ok(!lineGoes.after && lineGoes.label === 'save', 'and it goes with the label, in the same step', JSON.stringify(lineGoes));
 // Every input disabled with a reason (aria-disabled) looks disabled, as a natively disabled one does (#108).
 const dis = await p.evaluate(async () => {
   const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };

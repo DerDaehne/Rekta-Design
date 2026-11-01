@@ -1628,6 +1628,7 @@ export async function busy(region, work) {
 }
 // pending(button, work, { label }): the button says what it is doing ("saving…") at the same width, refuses further
 // clicks, and runs the line under it after busy-delay. Label: the option, data-rk-pending-label, or its text plus "…".
+// The line goes with the label, in one step, and no busy-min holds it: the label coming back says the end.
 export async function pending(button, work, { label } = {}) {
   if (button.hasAttribute('data-rk-pending')) return undefined;
   const nodes = [...button.childNodes], width = button.offsetWidth;

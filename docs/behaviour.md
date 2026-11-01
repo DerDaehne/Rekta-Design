@@ -688,8 +688,10 @@ work. See [states.md](states.md).
 
 The button says what it is doing (`label`, its `data-rk-pending-label`,
 or its text plus "…") at the same width, refuses more clicks and writes
-`data-rk-pending` (the line under it) until `work` settles. Resolves or
-rejects with the work.
+`data-rk-pending` (the line under it, after `timing.busy-delay`) until
+`work` settles; the label and the line go in the same step, with no
+`busy-min` (states.md, "Pending actions"). Resolves or rejects with the
+work.
 
 ### `menu(trigger, el, { onSelect, summary })`
 

@@ -31,6 +31,11 @@ schedule…". It refuses more clicks (`aria-disabled`), and after
 it. When the action ends, the label comes back and a toast reports the
 result; a failure is said at the control that caused it.
 
+The line goes with the label: once shown, it stays until the label comes
+back and leaves in the same moment, never before. No `timing.busy-min`
+holds it, as one holds a region's line: the label coming back says the
+action has ended, so the line ending with it is that answer, not a flash.
+
 A failure whose control has gone (a background save, an action from a
 sheet that has closed, a place the user has left) has nowhere else to
 be said: it goes in a toast with `status: 'error'` (`toaster.show(text,
