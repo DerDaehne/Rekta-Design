@@ -312,6 +312,7 @@ bool rk__glide_moving(const rk_glide *g, double now);
 bool rk__anim_tick(double now);                            /* true while any animation runs */
 bool rk__anim_running(void);
 void rk__anim_view_gone(rk_view *v);
+bool rk__in_bar(rk_view *v);                              /* a control in a one-line row: it fades, with no path */
 double rk__motion_duration(rk_motion m, bool tile);
 const float *rk__motion_ease(rk_motion m);
 

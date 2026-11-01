@@ -227,9 +227,29 @@ void rk_animate_on_done(void (*fn)(void *), void *user) {
   g->fn = fn; g->user = user;
 }
 
+/* A control in a one-line row (an hstack) is neither a row nor a tile: a path from above would lead out of a bar of
+   fixed height, one towards the trailing edge into the next control. It arrives and leaves by a fade alone, and grows
+   without its content fading (its edge moves; nothing is stretched). Arriving, it waits, unseen, until the others in
+   its row have glided apart to make room for it: the mirror of leaving, so nothing lies over its neighbour. */
+bool rk__in_bar(rk_view *v) { return v->parent && v->parent->layout == RK_LAYOUT_HSTACK && !rk__is_tile(v); }
+
+static rk_view **bar_in; static int nbar_in, bar_in_cap;
+
+static void bar_settle(void) {
+  for (int i = 0; i < nbar_in; i++) {
+    rk_view *v = bar_in[i];
+    double end = 0;
+    for (int k = 0; k < nanims; k++)
+      if (anims[k].prop == RK_PROP_FRAME && anims[k].view != v && anims[k].view->parent == v->parent) end = RK_MAX(end, anims[k].start + anims[k].delay + anims[k].dur);
+    for (int k = 0; k < nanims; k++) if (anims[k].view == v && anims[k].prop == RK_PROP_OPACITY) anims[k].delay = RK_MAX(0.0, end - anims[k].start);
+    rk_release(v);
+  }
+  nbar_in = 0;
+}
+
 void rk_animate_commit(void) {
   if (!depth) { rk__warn("rk_animate_commit without rk_animate_begin"); return; }
-  if (depth == 1) rk__layout_pending();                    /* the layout runs inside the block, so it animates */
+  if (depth == 1) { rk__layout_pending(); bar_settle(); }  /* the layout runs inside the block, so it animates */
   group *g = ctx_group[depth - 1];
   depth--;
   if (g) { g->committed = true; g->pending++; group_done(g); }
@@ -261,6 +281,12 @@ void rk__set_frame(rk_view *v, rk_rect f) {
     bool tile = rk__is_tile(v);
     double d = rk__motion_duration(RK_MOTION_ENTER, tile);
     float o0 = 0, o1 = v->opacity;
+    if (rk__in_bar(v)) {
+      rk__animate_cb(v, RK_PROP_OPACITY, &o0, &o1, 1, d, 0, rk__ease_in, entered, NULL);
+      bar_in = rk__grow(bar_in, &bar_in_cap, nbar_in + 1, sizeof *bar_in);
+      bar_in[nbar_in++] = rk_retain(v);
+      return;
+    }
     rk__animate(v, RK_PROP_OPACITY, &o0, &o1, 1, d, 0, rk__ease_in);
     rk_transform t0 = v->transform, t1 = v->transform;
     if (tile) { t0.translate_y += 6; t0.scale_x *= 0.96f; t0.scale_y *= 0.96f; } else t0.translate_y -= 6;
@@ -284,7 +310,7 @@ void rk__set_frame(rk_view *v, rk_rect f) {
   rk__animate(v, RK_PROP_FRAME, p4, f4, 4, d, delay, rk__ease_base);
   /* a box that changes size fades its content back in near the end, so text is never seen stretched; a container
      only makes room, its children move on their own */
-  if (v->cls && (fabsf(p.w - f.w) > 1 || fabsf(p.h - f.h) > 1)) {
+  if (v->cls && !rk__in_bar(v) && (fabsf(p.w - f.w) > 1 || fabsf(p.h - f.h) > 1)) {
     float a = 0, b = 1;
     rk__animate(v, RK_PROP_CONTENT, &a, &b, 1, d, delay, NULL);
   }

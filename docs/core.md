@@ -188,6 +188,11 @@ caller never picks numbers:
 | `RK_MOTION_LEAVE` | 0.6 × duration-short, ease-out | views removed in the block leave first, then the rest close up |
 | `RK_MOTION_MORPH` | duration-long, ease-base | values of a chart or sparkline |
 
+A control in a one-line row (an `rk_hstack`) has no path: it enters and
+leaves by the fade alone, and entering, it waits until the rest of its row
+has glided apart to make room for it. Its content does not fade when it
+grows.
+
 `rk_view_transition(view, RK_TRANSITION_PEEK | FLIP | CROSSFADE)`, called
 before a change, animates from the old look to the new: a tile's new number
 peeks in, a new status flips it. Tiles of one window that peek or flip within

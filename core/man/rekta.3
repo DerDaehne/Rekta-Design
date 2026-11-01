@@ -1023,6 +1023,10 @@ Changes between the two travel with the motion:
 .Dv RK_MOTION_ENTER ,
 .Dv RK_MOTION_LEAVE ,
 .Dv RK_MOTION_MORPH .
+A control in an
+.Fn rk_hstack
+enters and leaves by a fade alone, entering once the rest of its row has
+made room.
 .Fn rk_animate_on_done
 runs when they have arrived.
 .It Fn rk_view_transition "rk_view *view" "rk_transition transition"

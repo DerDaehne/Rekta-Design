@@ -157,6 +157,34 @@ static void test_layout(void) {
   done(w);
 }
 
+/* A control in a one-line row has no path: it fades in once the others have made room, and fades out. */
+static void test_bar_motion(void) {
+  rk_window *w = window(600, 200);
+  rk_view *root = col(16, 32), *bar = rk_add(root, rk_hstack());
+  rk_view *one = rk_add(bar, rk_button("one", NULL, NULL)), *three = rk_add(bar, rk_button("three", NULL, NULL));
+  (void)one;
+  show(w, root, "bar");
+  float x0 = three->frame.x;
+  rk_animate_begin(RK_MOTION_ENTER);
+  rk_view *two = rk_insert(bar, rk_button("two", NULL, NULL), 1);
+  rk_animate_commit();
+  rk_app_run_for(200);
+  CHECK(three->frame.x > x0 && three->pframe.x > x0 && three->pframe.x < three->frame.x, "its neighbour glides to make room (%g)", three->pframe.x);
+  CHECK(two->popacity == 0 && two->ptransform.translate_y == 0, "the new control waits unseen while it does, with no path (%g)", two->popacity);
+  rk_app_run_for(300);
+  CHECK(two->popacity > 0 && two->popacity < 1 && two->ptransform.translate_y == 0, "then fades in where it stands (%g)", two->popacity);
+  rk_app_run_for(400);
+  CHECK(two->popacity == 1 && !two->entering, "and is there");
+  rk_animate_begin(RK_MOTION_LEAVE);
+  rk_view_remove(two);
+  rk_animate_commit();
+  rk_app_run_for(80);
+  CHECK(two->leaving && two->popacity < 1 && two->ptransform.translate_x == 0, "leaving, it only fades (%g)", two->ptransform.translate_x);
+  rk_app_run_for(600);
+  CHECK(rk_view_count(bar) == 2, "and is gone");
+  done(w);
+}
+
 /* Input ----------------------------------------------------------------------------------------------------------- */
 
 static int activations;
@@ -3491,6 +3519,7 @@ static void launch(void *user) {
   test_api_rules();
   test_spring();
   test_news_order();
+  test_bar_motion();
   { int lv = rk__live_views; test_declare(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declare_same_pixels(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare_same_pixels: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }

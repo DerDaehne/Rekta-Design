@@ -318,6 +318,23 @@ const greeted = await p.evaluate(async () => {
   return waits.join();
 });
 ok(greeted === '0,75,150,225,225,225', 'news on several tiles goes in reading order, duration-greet apart, four steps', greeted);
+// A control in a one-line bar has no path: it fades in once its neighbours have made room, and fades out.
+const inline = await p.evaluate(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const bar = document.createElement('div'); bar.className = 'rk-actions'; bar.style.cssText = 'position:fixed;left:0;top:0;width:600px;z-index:-1';
+  bar.innerHTML = '<button class="rk-btn">one</button><button class="rk-btn" hidden>two</button><button class="rk-btn">three</button>';
+  document.querySelector('.rk').append(bar);
+  const [, b, c] = bar.children, path = (el) => el.getAnimations().some((x) => x.effect.getKeyframes().some((k) => k.transform && k.transform !== 'none'));
+  const run = Rekta.presence(bar, { show: () => true });
+  await frame();
+  const out = { waits: getComputedStyle(b).opacity, glides: c.getAnimations().length > 0, path: path(b) };
+  await run;
+  out.after = getComputedStyle(b).opacity;
+  const l = await Rekta.leave(c); out.leavePath = l.effect.getKeyframes().some((k) => k.transform); l.cancel();
+  bar.remove();
+  return out;
+});
+ok(inline.waits === '0' && inline.glides && !inline.path && inline.after === '1' && !inline.leavePath, 'a bar control fades in after its neighbours make room, and leaves by a fade, without a path', JSON.stringify(inline));
 ok(stripped.arrive, 'arrive() is exported for framework routers', JSON.stringify(stripped));
 
 // A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.

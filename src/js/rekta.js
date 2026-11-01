@@ -3390,10 +3390,15 @@ export function pwa({ sw = 'sw.js', toaster: toasts = null, onChange = null } = 
 // from a token, so reduced motion makes it instant, never skipped.
 const shown = (el) => el.getClientRects().length > 0;
 const finished = (anims) => Promise.all(anims.map((a) => a.finished.catch(() => {})));
+// A control in a one-line bar (the app bar, a row of actions, a row of tags marked data-rk-motion="inline") is neither
+// a row nor a tile: a path would lead out of a bar of fixed height, or into the next control. It arrives and leaves
+// by a fade only, and grows or shrinks without scaling, its content standing.
+const INLINE = '.rk-appbar > *, .rk-actions > *, [data-rk-motion="inline"]';
 // reflow(scope, change, { items, size }): FLIP. Whatever change() moves or resizes among the items (scope's children
 // by default) glides from where it was to where it is, over duration-moderate. A box that changes size scales from
 // its old size and fades its content back in near the end, so text is never seen stretched: a tile resized, a grid
-// re-flowed around it. Resolves with change()'s result once everything has settled.
+// re-flowed around it. A bar control only glides: it takes its new size at once and its content stands. Resolves
+// with change()'s result once everything has settled.
 export function reflow(scope, change, { items = null, size = true } = {}) {
   const list = () => (items ? [...(typeof items === 'function' ? items() : items)] : [...scope.children]);
   const before = new Map(list().filter(shown).map((el) => [el, el.getBoundingClientRect()]));
@@ -3405,7 +3410,8 @@ export function reflow(scope, change, { items = null, size = true } = {}) {
     const a = before.get(el);
     if (!a || !shown(el)) continue;
     const b = el.getBoundingClientRect();
-    const dx = a.left - b.left, dy = a.top - b.top, sx = size && b.width ? a.width / b.width : 1, sy = size && b.height ? a.height / b.height : 1;
+    const scale = size && !el.matches(INLINE);
+    const dx = a.left - b.left, dy = a.top - b.top, sx = scale && b.width ? a.width / b.width : 1, sy = scale && b.height ? a.height / b.height : 1;
     const resized = Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01;
     if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && !resized) continue;
     anims.push(el.animate([{ transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` }, { transformOrigin: '0 0', transform: 'none' }], { duration: d, easing: ease }));
@@ -3413,42 +3419,57 @@ export function reflow(scope, change, { items = null, size = true } = {}) {
   }
   return finished(anims).then(() => out);
 }
-// enter(el): something new arrives in a list or a grid: a row slides in by 6px and fades up, a tile builds in.
-export function enter(el) {
+// enter(el): something new arrives in a list or a grid: a row slides in by 6px and fades up, a tile builds in, a bar
+// control fades in.
+export function enter(el) { const a = arrival(el); return a ? a.finished.catch(() => {}) : Promise.resolve(); }
+function arrival(el) {
   const d = ms('--rk-duration-short');
-  if (!d || !shown(el)) return Promise.resolve();
+  if (!d || !shown(el)) return null;
   const tile = el.classList.contains('rk-tile');
-  const frames = tile ? [{ opacity: 0, transform: 'translateY(6px) scale(0.96)' }, { opacity: 1, transform: 'none' }] : [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }];
-  return el.animate(frames, { duration: tile ? ms('--rk-duration-moderate') : d, easing: css('--rk-ease-in'), fill: 'backwards' }).finished.catch(() => {});
+  const frames = tile ? [{ opacity: 0, transform: 'translateY(6px) scale(0.96)' }, { opacity: 1, transform: 'none' }]
+    : el.matches(INLINE) ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }];
+  return el.animate(frames, { duration: tile ? ms('--rk-duration-moderate') : d, easing: css('--rk-ease-in'), fill: 'backwards' });
 }
-// leave(el): something goes: a row fades and drifts 12px towards its trailing edge, a tile shrinks and fades. The
-// animation holds its end until the caller hides or removes the element; resolves with it (cancel it afterwards).
+// leave(el): something goes: a row fades and drifts 12px towards its trailing edge, a tile shrinks and fades, a bar
+// control fades. The animation holds its end until the caller hides or removes the element; resolves with it (cancel
+// it afterwards).
 export function leave(el) {
   const d = ms('--rk-duration-short') * 0.6;
   if (!d || !shown(el)) return Promise.resolve(null);
   const tile = el.classList.contains('rk-tile');
-  const a = el.animate(tile ? [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.9)' }] : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(12px)' }], { duration: d, easing: css('--rk-ease-out'), fill: 'forwards' });
+  const frames = tile ? [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.9)' }]
+    : el.matches(INLINE) ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(12px)' }];
+  const a = el.animate(frames, { duration: d, easing: css('--rk-ease-out'), fill: 'forwards' });
   return a.finished.then(() => a, () => a);
 }
 // presence(scope, { items, show }): items come and go by show(item). Those that go leave first; then the rest close
-// the gap (FLIP) while those that come enter. A newer call finishes the one still running at once. More than 60
-// changes at a time are shown at once: motion is for a few things moving, not for a whole list replaced.
+// the gap (FLIP) while those that come enter. A bar control that comes waits, unseen, until the others have made room
+// for it, then fades in: the mirror of leaving, so nothing lies over its neighbour. A newer call finishes the one still
+// running at once. More than 60 changes at a time are shown at once: motion is for a few things moving, not for a
+// whole list replaced.
 const presenceRuns = new WeakMap();
 export async function presence(scope, { items = () => [...scope.children], show }) {
   const prev = presenceRuns.get(scope);
   if (prev) prev.finish();
   const all = typeof items === 'function' ? items() : [...items];
   const going = all.filter((el) => !el.hidden && !show(el)), coming = all.filter((el) => el.hidden && show(el));
-  let done = false, leaving = [];
+  let done = false, leaving = [], waiting = [];
   const apply = () => { going.forEach((el) => { el.hidden = true; }); coming.forEach((el) => { el.hidden = false; }); };
-  const run = { finish() { if (done) return; done = true; leaving.forEach((a) => a && a.cancel()); apply(); } };
+  const run = { finish() { waiting.forEach((a) => a.finish()); waiting = []; if (done) return; done = true; leaving.forEach((a) => a && a.cancel()); apply(); } };
   presenceRuns.set(scope, run);
   if (!going.length && !coming.length) { done = true; return; }
   if (!ms('--rk-duration-short') || going.length + coming.length > 60) { run.finish(); return; }
   leaving = await Promise.all(going.map(leave));
   if (done) return;
   done = true;
-  await reflow(scope, () => { apply(); leaving.forEach((a) => a && a.cancel()); coming.forEach(enter); }, { items: () => all.filter((el) => !el.hidden || going.includes(el)), size: false });
+  await reflow(scope, () => {
+    apply(); leaving.forEach((a) => a && a.cancel());
+    // A bar control's fade is held at its start, unseen, while the others glide.
+    for (const el of coming) { const a = arrival(el); if (a && el.matches(INLINE)) { a.pause(); waiting.push(a); } }
+  }, { items: () => all.filter((el) => !el.hidden || going.includes(el)), size: false });
+  waiting.forEach((a) => a.play());
+  await finished(waiting);
+  waiting = [];
   if (presenceRuns.get(scope) === run) presenceRuns.delete(scope);
 }
 // Several tiles with news within duration-moderate show it one after another in reading order (the document's),

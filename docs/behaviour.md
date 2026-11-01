@@ -965,6 +965,11 @@ the change itself always happens.
   (they are hidden or shown): those that go leave, the rest close up,
   those that come enter. A newer call finishes the running one at once.
   Resolves when done.
+- A control in a one-line bar (a child of `.rk-appbar` or `.rk-actions`,
+  or any element with `data-rk-motion="inline"`, such as a tag in a row of
+  tags) has no path: `enter()` and `leave()` only fade it, `reflow()` only
+  glides it (its content stands, unscaled), and `presence()` fades it in
+  once the others have made room for it.
 - `tileUpdate(tile, change, { kind })`: a live tile has news. `'peek'` (a
   new number or line, the default) brings the new `.rk-stat` up from
   below; `'flip'` (a new status) turns the tile over. A continuous reading
