@@ -280,8 +280,9 @@ those of every floating surface ([states.md](states.md#floating-surfaces)).
 
 ## Tooltips
 
-A tooltip is a small ink strip, like a toast, above its control (below
-when there is no room). It shows after the pointer has rested for
+A tooltip is a small ink strip, like a toast, centred above its control
+(below when there is no room), `size.tip-gap` (6px) from it and at least
+`space-m` from the window's edges. It shows after the pointer has rested for
 `timing.tip-delay`, at once when focus arrives by keyboard, and at once
 when moving on from another tip; never on touch. Escape, a press,
 scrolling or leaving hide it. It names an icon-only control, completes a

@@ -650,6 +650,47 @@ await go(p, 'navigation');
 await p.click('#n-sort'); await p.waitForTimeout(200); await p.click('#n-sort-menu [data-sort="2"]'); await p.waitForTimeout(500);
 ok((await p.evaluate(() => document.querySelector('#tok-body tr td:nth-child(3)').textContent)) === 'breakpoint', 'a radio menu sorts the tokens by group');
 await p.click('#n-sort'); await p.waitForTimeout(200); await p.click('#n-sort-menu [data-sort="1"]'); await p.waitForTimeout(300);
+// Floating surfaces by one rule (states.md): space-xs from the control, space-m from the window; one that fits on
+// neither side takes the side with more room and stays inside the window; a centred control centres its surface.
+const flo = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const px = (n) => Rekta.tokens.px(n), edge = px('--rk-space-m'), gap = px('--rk-space-xs'), vh = innerHeight, vw = document.documentElement.clientWidth;
+  const rows = (n) => '<p style="height:44px;margin:0">row</p>'.repeat(n);
+  const host = document.createElement('div'); host.innerHTML = '<style>#fx-float { max-height: 500px } #fx-tall { max-height: none }</style>'
+    + '<button id="fx-ctl" class="rk-btn" style="position:fixed;left:40%;top:400px;height:40px">ctl</button>'
+    + `<div id="fx-float" class="rk-float" popover="manual">${rows(20)}</div><div id="fx-small" class="rk-float" popover="manual">${rows(2)}</div>`
+    + `<div id="fx-tall" class="rk-float" popover="manual">${rows(30)}</div>`;
+  document.querySelector('.rk').append(host);
+  const ctl = host.querySelector('#fx-ctl'), f = host.querySelector('#fx-float'), small = host.querySelector('#fx-small'), tall = host.querySelector('#fx-tall'), out = {};
+  // Where place() put a surface, without the 4px shift of its entry.
+  const box = (el) => { const l = parseFloat(el.style.left), t = parseFloat(el.style.top); return { left: l, top: t, width: el.offsetWidth, right: l + el.offsetWidth, bottom: t + el.offsetHeight }; }, c = ctl.getBoundingClientRect();
+  // 500px under a control at 400-440 in a 900px window: 440 below, 380 above, so neither; below has more room.
+  f.showPopover(); Rekta.place(f, ctl);
+  out.nowhere = { side: f.dataset.rkSide, top: box(f).top, bottom: box(f).bottom, inside: box(f).top >= edge - 0.5 && box(f).bottom <= vh - edge + 0.5 };
+  f.hidePopover();
+  small.showPopover(); Rekta.place(small, ctl);
+  out.below = { side: small.dataset.rkSide, gap: box(small).top - c.bottom, left: box(small).left - c.left };
+  small.hidePopover();
+  tall.showPopover(); Rekta.place(tall, ctl);
+  out.tall = { top: box(tall).top, bottom: box(tall).bottom, inside: box(tall).top >= edge - 0.5 && box(tall).bottom <= vh - edge + 0.5, scrolls: tall.scrollHeight > tall.clientHeight };
+  tall.hidePopover();
+  // A control in the middle of its bar: menu() places by the trigger's data-rk-align.
+  ctl.setAttribute('data-rk-align', 'center');
+  const m = document.createElement('div'); m.innerHTML = '<button class="rk-menu-item" role="menuitem">one</button><button class="rk-menu-item" role="menuitem">two</button>';
+  host.append(m);
+  const mm = Rekta.menu(ctl, m); mm.open(); await wait(250);
+  const mc = box(m);
+  out.centre = { menu: mc.left + mc.width / 2, ctl: c.left + c.width / 2, side: m.dataset.rkSide };
+  mm.close(); ctl.style.left = `${vw - 30}px`; mm.open(); await wait(250);
+  out.atEdge = { right: box(m).right, limit: vw - edge };
+  mm.close(); mm.destroy(); host.remove();
+  return { ...out, gap, vh };
+});
+ok(flo.nowhere.side === 'below' && flo.nowhere.inside, 'a surface that fits on neither side takes the side with more room and stays in the window', JSON.stringify(flo.nowhere));
+ok(flo.below.side === 'below' && Math.abs(flo.below.gap - flo.gap) < 1 && Math.abs(flo.below.left) < 1, 'below its control by space-xs, at its leading edge', JSON.stringify(flo.below));
+ok(flo.tall.inside && flo.tall.scrolls, 'a surface taller than the window keeps to it and scrolls', JSON.stringify(flo.tall));
+ok(Math.abs(flo.centre.menu - flo.centre.ctl) <= 1, 'a menu under a control marked data-rk-align="center" is centred on it', JSON.stringify(flo.centre));
+ok(flo.atEdge.right <= flo.atEdge.limit + 0.5, 'centred near the window\'s edge, it stays inside', JSON.stringify(flo.atEdge));
 
 // Forms: make an accent. Late checks, the summary, real contrast, server refusals, the guard, confirm, disable.
 await go(p, 'forms');

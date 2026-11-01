@@ -1665,18 +1665,26 @@ export async function pending(button, work, { label } = {}) {
 }
 
 // Floating surfaces -------------------------------------------------------------------------------------------------
-// place(el, anchor): puts a fixed floating surface below its control, aligned to its leading edge, or above it when
-// there is no room below; it never leaves the viewport. data-rk-side says which side it took.
-export function place(el, anchor) {
-  const a = anchor.getBoundingClientRect(), gap = 4, edge = num('--rk-space-s') || 8;
+// place(el, anchor, { align }): puts a fixed floating surface next to its control, by one rule (docs/states.md, the same
+// in rekta-core): space-xs from the control, space-m from the window's edges (the stylesheet's width limit). Below when
+// it fits there; else above when it fits there; else on the side with more room, kept inside the window, where it may
+// cover the control and its content scrolls. Aligned to the control's leading edge, or with align 'center' (the
+// default for a control marked data-rk-align="center") to its centre; either way inside the window. data-rk-side says
+// which side it took.
+export function place(el, anchor, { align = anchor.getAttribute('data-rk-align') === 'center' ? 'center' : 'start' } = {}) {
+  const a = anchor.getBoundingClientRect(), gap = px('--rk-space-xs'), edge = px('--rk-space-m');
   el.style.left = '0px'; el.style.top = '0px'; el.style.right = 'auto'; el.style.bottom = 'auto';   /* over a stylesheet's own placement */
-  const w = el.offsetWidth, h = el.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
+  el.style.maxHeight = '';
+  const vw = document.documentElement.clientWidth, vh = innerHeight;
+  if (el.offsetHeight > vh - 2 * edge) el.style.maxHeight = `${Math.max(0, vh - 2 * edge)}px`;
+  const w = el.offsetWidth, h = el.offsetHeight;
   const below = vh - a.bottom - gap - edge, above = a.top - gap - edge;
-  const side = h <= below || below >= above ? 'below' : 'above';
-  const top = side === 'below' ? a.bottom + gap : Math.max(edge, a.top - gap - h);
+  const side = h <= below ? 'below' : h <= above ? 'above' : below >= above ? 'below' : 'above';
+  const top = side === 'below' ? a.bottom + gap : a.top - gap - h;
   // From the control's leading edge; one too near the trailing edge for that opens from its trailing edge instead.
-  const left = a.left + w <= vw - edge ? Math.max(edge, a.left) : Math.max(edge, Math.min(a.right, vw - edge) - w);
-  el.style.left = `${Math.round(left)}px`; el.style.top = `${Math.round(top)}px`;
+  const left = align === 'center' ? a.left + a.width / 2 - w / 2 : a.left + w <= vw - edge ? a.left : Math.min(a.right, vw - edge) - w;
+  el.style.left = `${Math.round(Math.max(edge, Math.min(left, vw - edge - w)))}px`;
+  el.style.top = `${Math.round(Math.max(edge, Math.min(top, vh - edge - h)))}px`;
   el.dataset.rkSide = side;
 }
 const canPopover = typeof HTMLElement !== 'undefined' && 'popover' in HTMLElement.prototype;
@@ -1689,8 +1697,8 @@ const isOpen = (el) => (canPopover ? el.matches(':popover-open') : !el.hidden);
 // Home End, a letter jumps to the next item starting with it; Enter or Space chooses; Escape, Tab or a click outside
 // closes and focus returns to the trigger after a choice or Escape. A checkbox item toggles and leaves the menu open,
 // so several can be ticked in a row. With summary ("status"), the trigger says what is ticked: "status: failed, done",
-// or "status: any" when nothing is (a filter button).
-export function menu(trigger, el, { onSelect, summary = null } = {}) {
+// or "status: any" when nothing is (a filter button). align goes to place(): by default the trigger's data-rk-align.
+export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   el.id = el.id || `rk-menu-${Math.random().toString(36).slice(2, 8)}`;
   el.setAttribute('role', 'menu');
   if (canPopover) el.setAttribute('popover', 'auto'); else el.hidden = true;
@@ -1710,7 +1718,7 @@ export function menu(trigger, el, { onSelect, summary = null } = {}) {
   // never counts as a click outside. Placement and focus follow the toggle.
   let first = 0;
   if (canPopover && 'popoverTargetElement' in trigger) trigger.popoverTargetElement = el;
-  const shown = () => { place(el, trigger); trigger.setAttribute('aria-expanded', 'true'); focusItem(first); first = 0; };
+  const shown = () => { place(el, trigger, { align }); trigger.setAttribute('aria-expanded', 'true'); focusItem(first); first = 0; };
   function open(at = 0) {
     if (isOpen(el)) { focusItem(at); return; }
     first = at;
@@ -1752,11 +1760,11 @@ export function menu(trigger, el, { onSelect, summary = null } = {}) {
     if (checkbox) item.setAttribute('aria-checked', String(item.getAttribute('aria-checked') !== 'true'));
     if (item.getAttribute('role') === 'menuitemradio') el.querySelectorAll('[role=menuitemradio]').forEach((r) => r.setAttribute('aria-checked', String(r === item)));
     summarize();
-    if (!checkbox) close(); else if (!canPopover || el.matches(':popover-open')) place(el, trigger);
+    if (!checkbox) close(); else if (!canPopover || el.matches(':popover-open')) place(el, trigger, { align });
     if (onSelect) onSelect(item);
   };
   const outside = (e) => { if (!canPopover && isOpen(el) && !el.contains(e.target) && !trigger.contains(e.target)) close(false); };
-  const reflow = () => { if (isOpen(el)) place(el, trigger); };
+  const reflow = () => { if (isOpen(el)) place(el, trigger, { align }); };
   trigger.addEventListener('click', click);
   trigger.addEventListener('keydown', triggerKey);
   el.addEventListener('keydown', key);
@@ -2562,7 +2570,7 @@ function tipText(el) {
   return t || '';
 }
 function placeTip(t, anchor) {
-  const a = anchor.getBoundingClientRect(), gap = 6, edge = num('--rk-space-s') || 8;
+  const a = anchor.getBoundingClientRect(), gap = px('--rk-tip-gap'), edge = px('--rk-space-m');
   t.style.left = '0px'; t.style.top = '0px';
   const w = t.offsetWidth, h = t.offsetHeight, vw = document.documentElement.clientWidth;
   const above = a.top - gap - h >= edge;
@@ -2633,7 +2641,7 @@ function tips() {
 // Context menu ------------------------------------------------------------------------------------------------------
 // placeAt(el, x, y): a floating surface at a point (a context menu at the pointer), turned to stay in the viewport.
 function placeAt(el, x, y) {
-  const edge = num('--rk-space-s') || 8;
+  const edge = px('--rk-space-m');
   el.style.left = '0px'; el.style.top = '0px';
   const w = el.offsetWidth, h = el.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
   const left = x + w > vw - edge ? Math.max(edge, x - w) : x, top = y + h > vh - edge ? Math.max(edge, y - h) : y;

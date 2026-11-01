@@ -667,6 +667,14 @@
       },
       "$description": "The narrowest a pane of a split view may be dragged; below twice this plus the handle the split shows one pane at a time."
     },
+    "tip-gap": {
+      "$type": "dimension",
+      "$value": {
+        "value": 6,
+        "unit": "px"
+      },
+      "$description": "Between a tooltip and its control: a little more than a floating surface's space-xs, so the ink strip does not touch the control's focus ring."
+    },
     "pivot-wide": {
       "$type": "dimension",
       "$value": {

@@ -597,8 +597,16 @@ and
 .Fn rk_menu_open_at
 open it by hand,
 .Fn rk_menu_close
-closes it; it floats below what opened it, above where there is no
-room, never outside the window.
+closes it; it floats space-xs below what opened it when it fits there,
+else above when it fits there, else on the side with more room, never
+outside the window (space-m from its edges; a menu taller than the
+window scrolls its rows).
+It starts at the opener's leading edge;
+.Fn rk_menu_set_align
+with
+.Dv RK_ALIGN_CENTER
+centres it on the opener, for a control that stands in the middle of
+its bar.
 Keys: Up and Down, Home and End, a letter, Enter or Space, Escape; Tab or
 a press outside closes it.
 .Fn rk_menu_opener

@@ -190,6 +190,7 @@ them:
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
+| `data-rk-align` | a control that opens a floating surface (written by the page) | `center`: the control stands in the middle of its container, and `place()` (so `menu()` and `combobox()`) centres the surface on it instead of starting at its leading edge. |
 | `aria-busy` | a `.rk-region` | Loading (`busy()`). |
 | `data-rk-select` | a list or table body | Its items are chosen the Metro way (`select()`). |
 | `aria-selected` | an item of it | `true` when selected: the accent fill and the checkmark. |
@@ -690,7 +691,7 @@ or its text plus "…") at the same width, refuses more clicks and writes
 `data-rk-pending` (the line under it) until `work` settles. Resolves or
 rejects with the work.
 
-### `menu(trigger, el, { onSelect, summary })`
+### `menu(trigger, el, { onSelect, summary, align })`
 
 A menu button. `el` holds `.rk-menu-item` buttons (`role` `menuitem`,
 `menuitemcheckbox` or `menuitemradio`), `.rk-menu-sep` and
@@ -701,7 +702,9 @@ A menu button. `el` holds `.rk-menu-item` buttons (`role` `menuitem`,
 item or picks a radio item, closes the menu, returns focus to the
 trigger and calls `onSelect(item)`; a checkbox item toggles and leaves the
 menu open. With `summary` ("status") the trigger says what is ticked
-("status: failed, done", or "status: any"): a filter button. Returns
+("status: failed, done", or "status: any"): a filter button. `align`
+(`'start'` or `'center'`, by default the trigger's `data-rk-align`)
+goes to `place()`. Returns
 `{ open(index), close(), set(isChecked), destroy }` (`set` ticks
 checkbox items from outside, as when a filter comes back from the
 address).
@@ -999,10 +1002,17 @@ it to take over and reloads. Keeps the browser's install prompt for
 change of `{ supported, installed, canInstall, offlineReady, updateReady }`.
 Returns `{ state, install(), update(), check(), destroy }`.
 
-### `place(el, anchor)`
+### `place(el, anchor, { align })`
 
-Places a fixed floating surface below `anchor`, or above it when there
-is no room; writes `data-rk-side`. For your own floating surfaces.
+Places a fixed floating surface by the rule in
+[states.md](states.md#floating-surfaces): `space-xs` from `anchor`,
+`space-m` from the window's edges; below it when it fits, else above
+when it fits, else on the side with more room, inside the window (it
+may cover `anchor`; a surface taller than the window gets a
+`max-height` and scrolls). At `anchor`'s leading edge, or centred on it
+with `align: 'center'` (the default when `anchor` has
+`data-rk-align="center"`). Writes `data-rk-side`. For your own floating
+surfaces.
 
 ### `tokens`
 
