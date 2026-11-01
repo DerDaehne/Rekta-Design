@@ -528,6 +528,21 @@
         },
         "$description": "Fluid size role."
       },
+      "display": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 80,
+            "unit": "px"
+          },
+          "max": {
+            "value": 144,
+            "unit": "px"
+          },
+          "viewport": 0.084
+        },
+        "$description": "A time or a number read from across a room (a lock screen, a wall display, a kiosk): twice nav-active at every width, light, never for anything read up close (typography.md)."
+      },
       "pivot-active": {
         "$type": "fluidDimension",
         "$value": {

@@ -153,6 +153,7 @@ rk_textfmt rk__textfmt(rk_text_style style, float host) {
     case RK_TEXT_STAT: f.size = SIZE(XXL, host); f.line = 1.0f; f.weight = RK_TOK_WEIGHT_MEDIUM; f.tabular = true; break;
     case RK_TEXT_PIVOT: f.size = SIZE(PIVOT_ACTIVE, host); f.line = RK_TOK_LINE_NAV; f.weight = RK_TOK_WEIGHT_LIGHT; break;
     case RK_TEXT_NAV: f.size = SIZE(NAV_ACTIVE, host); f.line = RK_TOK_LINE_NAV; f.weight = RK_TOK_WEIGHT_LIGHT; break;
+    case RK_TEXT_DISPLAY: f.size = SIZE(DISPLAY, host); f.line = RK_TOK_LINE_TITLE; f.weight = RK_TOK_WEIGHT_LIGHT; f.tabular = true; break;
     default: break;
   }
   return f;

@@ -19,6 +19,7 @@ struct rk_controller {
   rk_controller **embedded; int nembedded, embed_cap;      /* what it holds in its own views (rk_controller_embed) */
   bool appeared;
   bool transparent;                                        /* only holds embedded[0]: it stands for it */
+  bool called;                                             /* called up and left many times an hour: half the pace */
   void (*told)(void); void *told_user;                     /* places, a pivot, a sheet: hears what the user did */
 };
 
@@ -300,11 +301,12 @@ static double heft(rk_rect r) {
    trace of speed left (ease-turn-in), so the motion ends when the animation does. Heft also sets when a part starts:
    (heft - heft-min) x heft-spread x duration-stagger after the turn begins, light parts first, heavy ones later.
    Parts of one size (heft within 0.05) follow one another in reading order, half a duration-stagger apart, six steps
-   at most: the size leads, the order only sorts what weighs the same. */
+   at most: the size leads, the order only sorts what weighs the same. pace is 1, or 0.5 for a change to or from a
+   place that is called up (rk_controller_set_called): half the stagger as well as half the time. */
 #define TURN_CLASSES 32                                    /* heft x 20, up to 1.4 x 20 = 28 */
-static void turn_starts(turn *t, int n, rk_view *pressed, double *hs, double *at) {
+static void turn_starts(turn *t, int n, rk_view *pressed, double *hs, double *at, double pace) {
   int seen[TURN_CLASSES] = { 0 };
-  double step = rk_duration_of(RK_DURATION_STAGGER);
+  double step = rk_duration_of(RK_DURATION_STAGGER) * pace;
   for (int i = 0; i < n; i++) {
     hs[i] = heft(rk__window_rect(t->units[i]));
     if (t->units[i] == pressed) { at[i] = 0; continue; }
@@ -319,7 +321,7 @@ static const float turn_ease_out[4] = RK_TOK_EASE_TURN_OUT, turn_ease_in[4] = RK
 typedef struct plan { int n; int *slots; float *reach; double *hs, *starts; } plan;
 static void plan_free(plan *p) { free(p->slots); free(p->reach); free(p->hs); free(p->starts); }
 
-static plan turn_gather(turn *t, rk_view *place, rk_view *pressed) {
+static plan turn_gather(turn *t, rk_view *place, rk_view *pressed, double pace) {
   turn_release(t);
   collect_units(place, t);
   if (t->n > 1) qsort(t->units, (size_t)t->n, sizeof *t->units, unit_order);
@@ -339,7 +341,7 @@ static plan turn_gather(turn *t, rk_view *place, rk_view *pressed) {
     p.slots[i] = slot;
     p.reach[slot] = RK_MAX(p.reach[slot], r.x + r.w - cr.x);
   }
-  turn_starts(t, n, pressed, p.hs, p.starts);
+  turn_starts(t, n, pressed, p.hs, p.starts, pace);
   return p;
 }
 
@@ -355,11 +357,11 @@ static void turn_pivot(rk_transform *t, rk_view *u, rk_view *place, float reach)
    duration-short by its heft; the pressed tile keeps its press and goes last, once its press has sunk in
    (duration-press), and the press gives way along its turn. Returns when the place can go: its last unit turn-overlap
    through, fading, so the next swings in without a gap. */
-static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back) {
-  plan pl = turn_gather(t, place, pressed);
+static double turn_out(turn *t, rk_view *place, rk_view *pressed, bool back, double pace) {
+  plan pl = turn_gather(t, place, pressed, pace);
   int n = pl.n;
   double *hs = pl.hs, *starts = pl.starts;
-  double out = rk_duration_of(RK_DURATION_SHORT), end = 0;
+  double out = rk_duration_of(RK_DURATION_SHORT) * pace, end = 0;
   float angle = back ? RK_TOK_TURNSTILE_OUT_ANGLE : -RK_TOK_TURNSTILE_OUT_ANGLE;
   double last = 0;                                         /* the pressed tile goes when the last other does */
   for (int i = 0; i < n; i++) if (t->units[i] != pressed) last = RK_MAX(last, starts[i]);
@@ -394,13 +396,13 @@ static void turn_reset(turn *t) {
 /* Arriving: each unit swings in from the other side, fading in over turn-in-whole, light ones first, over
    duration-moderate by its heft. The place assembles itself; nothing builds in after it. Back runs it the other
    way round. */
-static void turn_in(rk_view *place, bool back) {
+static void turn_in(rk_view *place, bool back, double pace) {
   turn t = { 0 };
   rk__layout_pending();
-  plan pl = turn_gather(&t, place, NULL);
+  plan pl = turn_gather(&t, place, NULL, pace);
   int n = pl.n;
   double *hs = pl.hs, *starts = pl.starts;
-  double in = rk_duration_of(RK_DURATION_MODERATE);
+  double in = rk_duration_of(RK_DURATION_MODERATE) * pace;
   for (int i = 0; i < n; i++) {
     rk_view *u = t.units[i];
     double h = hs[i], at = starts[i], d = in * h;
@@ -420,11 +422,15 @@ static void turn_in(rk_view *place, bool back) {
 /* The turn for what is not a controller: the panes of a split, which turn as places do. */
 struct turn *rk__turn_new(void) { return rk__alloc(sizeof(turn)); }
 void rk__turn_free(struct turn *t) { if (t) { turn_reset(t); free(t->units); free(t); } }
-double rk__turn_away(struct turn *t, rk_view *place, bool back) { return turn_out(t, place, NULL, back); }
+double rk__turn_away(struct turn *t, rk_view *place, bool back) { return turn_out(t, place, NULL, back, 1); }
 void rk__turn_settle(struct turn *t) { turn_reset(t); }
-void rk__turn_arrive(rk_view *place, bool back) { turn_in(place, back); }
+void rk__turn_arrive(rk_view *place, bool back) { turn_in(place, back, 1); }
 
-typedef struct swap { rk_controller *places, *to; bool back; } swap;
+/* A change to or from a place that is called up (a launcher) turns at half the pace, both ways (motion.md). */
+static double turn_pace(rk_controller *from, rk_controller *to) { return (from && from->called) || (to && to->called) ? 0.5 : 1; }
+void rk_controller_set_called(rk_controller *c, bool called) { if (c) c->called = called; }
+
+typedef struct swap { rk_controller *places, *to; bool back; double pace; } swap;
 
 /* The leaving place is gone: the next one turns in. */
 static void swap_now(void *user) {
@@ -441,7 +447,7 @@ static void swap_now(void *user) {
   nv->ptransform = nv->transform; nv->popacity = nv->opacity;
   rk__view_add(c->view, nv);
   rk__controller_attach(s->to, c->window);
-  turn_in(turning_view(s->to), s->back);
+  turn_in(turning_view(s->to), s->back, s->pace);
   if (c->appeared) rk__controller_appear(s->to, true);
   rk_window *w = c->window;
   if (w) {
@@ -459,8 +465,8 @@ static void start_turn(rk_controller *c, rk_controller *old, bool owned, rk_cont
   if (pl->pending) { rk_app_cancel(pl->timer); swap_now(pl->pending); }   /* a turn still running finishes at once */
   pl->leaving = old; pl->leaving_owned = owned;
   swap *s = rk__alloc(sizeof *s);
-  s->places = c; s->to = to; s->back = back;
-  double wait = old && old->view && rk__view_visible(old->view) ? turn_out(&pl->out, turning_view(old), pressed, back) : 0;
+  s->places = c; s->to = to; s->back = back; s->pace = turn_pace(old, to);
+  double wait = old && old->view && rk__view_visible(old->view) ? turn_out(&pl->out, turning_view(old), pressed, back, s->pace) : 0;
   if (wait <= 0) { swap_now(s); return; }
   pl->pending = s;
   pl->timer = rk_app_after(wait, swap_now, s);
@@ -1411,7 +1417,7 @@ static void pivot_arrive(void *user) {
   nv->ptransform = nv->transform; nv->popacity = nv->opacity;
   rk__view_add(p->body, nv);
   rk__controller_attach(to, c->window);
-  turn_in(turning_view(to), p->back);
+  turn_in(turning_view(to), p->back, turn_pace(old, to));
   if (c->appeared) rk__controller_appear(to, true);
   if (c->window && c->window->titlebar) rk__titlebar_update(c->window->titlebar);
 }
@@ -1436,7 +1442,7 @@ void rk_pivot_select(rk_controller *c, int index) {
   strip_activate(p->strip, index);
   if (((strip *)p->strip->state)->nav) {
     p->leaving = old; p->back = dir < 0;
-    double wait = rk__view_visible(rk_controller_view(old)) ? turn_out(&p->out, turning_view(old), NULL, p->back) : 0;
+    double wait = rk__view_visible(rk_controller_view(old)) ? turn_out(&p->out, turning_view(old), NULL, p->back, turn_pace(old, to)) : 0;
     if (wait > 0) p->timer = rk_app_after(wait, pivot_arrive, p); else pivot_arrive(p);
     return;
   }

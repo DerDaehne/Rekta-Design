@@ -45,7 +45,7 @@
 #define RK__ROLE_COUNT (RK_ROLE_GLASS + 1)
 #define RK__METRIC_COUNT (RK_PIVOT_WIDE + 1)
 #define RK__DURATION_COUNT (RK_TIMING_TYPE_AHEAD + 1)
-#define RK__TEXT_STYLE_COUNT (RK_TEXT_NAV + 1)
+#define RK__TEXT_STYLE_COUNT (RK_TEXT_DISPLAY + 1)
 
 /* Objects --------------------------------------------------------------------------------------------------------- */
 

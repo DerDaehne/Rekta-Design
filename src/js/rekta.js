@@ -404,9 +404,9 @@ function heftOf() {
 // Heft sets when a part starts as well as how long it takes: light parts first, heavy ones later, (heft - heft-min) ×
 // heft-spread × duration-stagger after the turn begins. Parts of one size (heft within 0.05) follow one another in
 // reading order, half a duration-stagger apart, six steps at most: the size leads, the order only sorts what weighs
-// the same.
-function turnStarts(list, at, held) {
-  const step = ms('--rk-duration-stagger'), seen = new Map(), heft = heftOf(), lo = num('--rk-heft-min'), spread = num('--rk-heft-spread');
+// the same. `pace` is 1, or 0.5 for a place that is called up (calledUp()): half the stagger as well as half the time.
+function turnStarts(list, at, held, pace = 1) {
+  const step = ms('--rk-duration-stagger') * pace, seen = new Map(), heft = heftOf(), lo = num('--rk-heft-min'), spread = num('--rk-heft-spread');
   return list.map((el) => {
     const h = heft(at.get(el));
     if (el === held) return { h, at: 0 };
@@ -472,6 +472,10 @@ function turnRows(u, place, held) {
 }
 // A row's perspective grows with its reach from the edge it turns about, so a wide row turns as flat as a narrow one.
 function perspective(far) { return Math.round((num('--rk-turnstile-perspective') || 800) + num('--rk-turnstile-reach') * Math.max(0, far)) + 'px'; }
+// A place that is called up and left again many times an hour (a launcher, a start surface; data-rk-called) turns at
+// half the pace, in and out: every duration and the stagger halve, the curves, angles and hand-over stay (motion.md).
+// A change takes that pace when either side is such a place, so the way in and the way out match.
+const calledUp = (...list) => list.some((p) => p && p.hasAttribute && p.hasAttribute('data-rk-called'));
 // arrive(el): a place (or the root) builds in: tiles rise and sparklines draw while data-rk-arriving is on, for the arrival
 // window. A framework router calls it for a place it opened by client navigation.
 export function arrive(el) {
@@ -483,7 +487,7 @@ export function arrive(el) {
 export const turn = {
   get running() { return !!turning; },
   finish() { if (turning) turning.finish(); },
-  leave(place, { pressed = null, back = false } = {}) {
+  leave(place, { pressed = null, back = false, called = calledUp(place) } = {}) {
     turn.finish();
     // A place still building in leaves from its end state: the turn wins over the arrival.
     for (const el of [place, docEl()]) { clearTimeout(el._rkArrive); el.removeAttribute('data-rk-arriving'); }
@@ -500,11 +504,11 @@ export const turn = {
       }
       releasePress(true);
       if (held) held.setAttribute('data-rk-pressed', '');
-      const out = ms('--rk-duration-short'), overlap = num('--rk-turn-overlap');
+      const pace = called ? 0.5 : 1, out = ms('--rk-duration-short') * pace, overlap = num('--rk-turn-overlap');
       const u = turnUnits(place, held), kind = back ? 'back-out' : 'out';
       turnRows(u, place, held);
       // the pressed tile goes when the last of the others does, or later
-      const starts = turnStarts(u.list, u.at, held), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
+      const starts = turnStarts(u.list, u.at, held, pace), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
       let end = 0;
       u.list.forEach((el, i) => {
         const h = starts[i].h, d = out * h;
@@ -532,7 +536,7 @@ export const turn = {
       timers.push(later(done, u.list.length ? end : 0));
     });
   },
-  enter(place, { back = false, focus = null, arriving = !back } = {}) {
+  enter(place, { back = false, focus = null, arriving = !back, called = calledUp(place) } = {}) {
     turn.finish();
     return new Promise((resolve) => {
       place.hidden = false;
@@ -540,11 +544,11 @@ export const turn = {
       if (arriving) arrive(place);
       else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
       // Its units turn in from the other side, light ones first, each in its own time.
-      const d0 = ms('--rk-duration-moderate');
+      const pace = called ? 0.5 : 1, d0 = ms('--rk-duration-moderate') * pace;
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
       turnRows(u, place, null);
       let end = 0;
-      const starts = turnStarts(u.list, u.at, null);
+      const starts = turnStarts(u.list, u.at, null, pace);
       u.list.forEach((el, i) => {
         const { h, at } = starts[i], d = d0 * h;
         el.style.setProperty('--_rk-turn-delay', `${at}ms`);
@@ -667,13 +671,13 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     showBack();
     const run = async () => {
       if (from && from !== to) {
-        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed });
+        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed, called: calledUp(from, to) });
       }
       to.hidden = false;
       setItem(state && state.item, { back, place: true });
       restore(to, state);
       const f = focusTarget(to, state, back);
-      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f });
+      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f, called: calledUp(from, to) });
       if (onChange) onChange({ from: prev, to: name, back });
       document.dispatchEvent(new CustomEvent('rk:placechange', { detail: { from: prev, to: name, back } }));
     };
@@ -1153,7 +1157,7 @@ export function pivot(el, { onSelect, turn: placeTurn = null, gone = 'select' } 
       list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; const p = panel(t); if (p && p !== from) p.hidden = true; });
       pivotGlide(el, list[i]);
       if (focus) list[i].focus();
-      (from ? turn.leave(from, { back }) : Promise.resolve()).then(() => { if (mine === gen && to) turn.enter(to, { back }); });
+      (from ? turn.leave(from, { back, called: calledUp(from, to) }) : Promise.resolve()).then(() => { if (mine === gen && to) turn.enter(to, { back, called: calledUp(from, to) }); });
       told(i);
       return;
     }

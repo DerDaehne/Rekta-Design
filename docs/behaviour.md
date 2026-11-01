@@ -193,6 +193,7 @@ them:
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
+| `data-rk-called` | a place (written by the page) | It is called up and left again many times an hour (a launcher): a change to or from it turns at half the pace (`turn`). |
 | `data-rk-align` | a control that opens a floating surface (written by the page) | `center`: the control stands in the middle of its container, and `place()` (so `menu()` and `combobox()`) centres the surface on it instead of starting at its leading edge. |
 | `aria-busy` | a `.rk-region` | Loading (`busy()`). |
 | `data-rk-select` | a list or table body | Its items are chosen the Metro way (`select()`). |
@@ -385,13 +386,22 @@ The place change as two primitives that any router can call.
 
 | Member | Does |
 |---|---|
-| `turn.leave(place, { pressed, back })` | Turns the visible units of `place` away, each by its weight ([motion.md](motion.md)), `pressed` last from its pressed pose once its press has sunk in; then hides `place`. Resolves when it is gone. |
-| `turn.enter(place, { back, focus, arriving })` | Shows `place` and turns it in, then focuses `focus`. Its tiles build in unless `arriving` is false (the default for `back`). |
+| `turn.leave(place, { pressed, back, called })` | Turns the visible units of `place` away, each by its weight ([motion.md](motion.md)), `pressed` last from its pressed pose once its press has sunk in; then hides `place`. Resolves when it is gone. |
+| `turn.enter(place, { back, focus, arriving, called })` | Shows `place` and turns it in, then focuses `focus`. Its tiles build in unless `arriving` is false (the default for `back`). |
 | `turn.finish()` | Ends a running turn in its end state. Call it before any navigation that does not wait: a navigation is never refused. |
 | `turn.running` | Whether a turn runs. |
 
 With a framework router: `await turn.leave(oldEl, { pressed })`, render
 the new route, then `await turn.enter(newEl, { focus: heading })`.
+
+A place that is called up and left again many times an hour (a
+launcher, a start surface) carries `data-rk-called`: a change to or
+from it turns at half the pace, every duration and the stagger halved,
+the curves, angles and hand-over as they are ([motion.md](motion.md)).
+`places()` and a pivot that picks the place see the attribute on either
+side; `called` defaults to whether `place` has it, so a router of its
+own passes `called: true` to both calls when the other side is the
+called place.
 
 ### `places({ mode, base, home, title, onChange })`
 

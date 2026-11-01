@@ -54,6 +54,9 @@
 .rk-facts { font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
 .rk-group { font-size: var(--rk-font-size-group); font-weight: var(--rk-font-weight-regular); line-height: var(--rk-line-height-tight); }
 .rk-meta { font-size: var(--rk-font-size-xxs); color: var(--rk-text-contrast-high); font-variant-numeric: tabular-nums; }
+/* A time or a number read from across a room (a lock screen, a wall display): twice nav-active, light like every
+   navigation title, in tabular figures so a clock's digits do not shift as they change (docs/typography.md). */
+.rk-display { font-size: var(--rk-font-size-display); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-title); font-variant-numeric: tabular-nums; }
 
 /* Status: one rule per status; tiles, tags, sparklines, fields and the banner read these. An element without its own
    data-status does not inherit one: a neutral tag inside an info row stays neutral. */

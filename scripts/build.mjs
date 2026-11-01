@@ -391,6 +391,11 @@ function check(tokens) {
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }
+  // The display step is derived, not chosen: twice nav-active at every width (docs/typography.md).
+  {
+    const d = t.typography['font-size-display'], n = t.typography['font-size-nav-active'];
+    if (!d || d.min !== 2 * n.min || d.max !== 2 * n.max || Math.abs(d.viewport - 2 * n.viewport) > 1e-9) problems.push('typography.size.display is not twice typography.size.nav-active (min, max and viewport)');
+  }
   // Every curve is a token: a CSS keyword curve (ease, ease-in, ease-out, ease-in-out) has no value a native
   // implementation could read.
   for (const m of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/[\s:,](ease(?:-in-out|-in|-out)?)(?=[\s;,)])/g)) problems.push(`rekta.css uses the keyword curve ${m[1]}: read a --rk-ease-* token`);

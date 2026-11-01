@@ -91,6 +91,15 @@ values. Two kinds of size token exist:
   `nav-inactive` (22–72px) for the two navigation levels described
   above.
 
+One fluid step stands above them: **`display`** (80–144px), exactly
+twice `nav-active` at every width (`--check` holds the two together).
+It is for a time or a number read from across a room: the clock of a
+lock screen, a wall display, a kiosk, an always-on clock. Light, in
+tabular figures (`.rk-display`; `RK_TEXT_DISPLAY` in rekta-core), so a
+clock's digits do not shift as they change. It takes the place of the
+screen's navigation title, not a fourth level; nothing read up close
+takes it, and a screen has one at most.
+
 A platform without CSS `clamp()` (see [platforms.md](platforms.md))
 should interpolate the same min/preferred/max triple against its own
 window-width signal — the fluid token's three numbers are the contract,

@@ -2211,6 +2211,37 @@ static void test_navigation(void) {
   done(w);
 }
 
+/* A place that is called up (a launcher) turns at half the pace, to it and back from it; the rest at full pace. */
+static double turn_takes(bool called, bool back) {
+  rk_window *w = window(600, 400);
+  rk_view *h = col(16, 0);
+  rk_add(h, rk_label("Home", RK_TEXT_TITLE));
+  rk_view *grid = rk_add(h, rk_tile_grid());
+  for (int i = 0; i < 3; i++) rk_add(grid, rk_tile("12", "builds"));
+  rk_controller *pl = rk_places(rk_controller_create_with_view(h, "home"));
+  rk_window_show(w, pl);
+  rk_app_run_for(1500);
+  rk_view *p = col(16, 0);
+  rk_add(p, rk_label("Launcher", RK_TEXT_TITLE));
+  rk_view *apps = rk_add(p, rk_tile_grid());
+  for (int i = 0; i < 3; i++) rk_add(apps, rk_tile("", "an app"));
+  rk_controller *c = rk_controller_create_with_view(p, "launcher");
+  rk_controller_set_called(c, called);
+  rk_places_go(pl, c);
+  if (back) { rk_app_run_for(1500); rk_places_back(pl); }
+  double t0 = rk_app_now();
+  while (rk__anim_running() && rk_app_now() - t0 < 3000) rk_app_run_for(1000.0 / 60);
+  double took = rk_app_now() - t0;
+  done(w);
+  return took;
+}
+
+static void test_called_place(void) {
+  double full = turn_takes(false, false), half = turn_takes(true, false), away = turn_takes(true, true);
+  CHECK(full > 400 && half > 0.4 * full && half < 0.6 * full, "a called place turns in at half the pace (%.0f ms, %.0f in full)", half, full);
+  CHECK(away > 0.4 * full && away < 0.6 * full, "and back from it too (%.0f ms)", away);
+}
+
 /* Scenes for the reference images --------------------------------------------------------------------------------- */
 
 static rk_view *add_tile(rk_view *grid, rk_status st, const char *v, const char *l, int c, int r) {
@@ -3612,6 +3643,7 @@ static void launch(void *user) {
   test_undo();
   test_focus();
   test_navigation();
+  test_called_place();
   test_side_pivot();
   test_tree();
   test_split();

@@ -80,8 +80,9 @@ export declare function press(scope?: Document | Element): Destroyable;
 
 export declare function arrive(el: Element): void;
 export declare const turn: {
-  leave(place: Element, options?: { pressed?: Element | null; back?: boolean }): Promise<void>;
-  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean }): Promise<void>;
+  /** `called`: a change to or from a place that is called up (`data-rk-called`) turns at half the pace; by default, whether `place` is one. */
+  leave(place: Element, options?: { pressed?: Element | null; back?: boolean; called?: boolean }): Promise<void>;
+  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean; called?: boolean }): Promise<void>;
   finish(): void;
   readonly running: boolean;
 };

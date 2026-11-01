@@ -521,7 +521,9 @@ Text that wraps at its width, in one of the type roles
 .Pf ( Dv RK_TEXT_BODY ,
 .Dv RK_TEXT_GROUP ,
 .Dv RK_TEXT_TITLE ,
-\&...).
+\&...;
+.Dv RK_TEXT_DISPLAY
+for a time or a number read from across a room, twice the nav size).
 .It Fn rk_button "const char *label" "void (*on_press)(rk_view *, void *)" "void *user"
 A button.
 .Fn rk_button_set_kind
@@ -970,6 +972,10 @@ turns the current place away and the new one in;
 Escape or the back button turn back, and
 .Fn rk_places_on_back
 hears it.
+.Fn rk_controller_set_called
+marks a place that is called up and left again many times an hour (a
+launcher): a change to or from it turns at half the pace, every duration and
+the stagger halved, the curves and angles as they are.
 .It Fn rk_panorama , Fn rk_panorama_add
 One place laid out sideways in sections under a strip of their titles.
 .Fn rk_panorama_insert ,

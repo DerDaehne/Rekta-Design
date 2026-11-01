@@ -429,6 +429,7 @@ typedef enum rk_text_style {
   RK_TEXT_STAT,                                    /* size-xxl, medium, tabular figures: a tile's number */
   RK_TEXT_PIVOT,                                   /* size-pivot-active, light: a pivot title */
   RK_TEXT_NAV,                                     /* size-nav-active, light: a place's strip */
+  RK_TEXT_DISPLAY,                                 /* size-display, light, tabular figures: read from across a room */
   RK_TEXT_FORCE32 = 0x7fffffff
 } rk_text_style;
 
@@ -672,6 +673,9 @@ RK_API void rk_places_go(rk_controller *places, rk_controller *place);   /* take
 RK_API void rk_places_back(rk_controller *places);
 RK_API int rk_places_depth(rk_controller *places);
 RK_API void rk_places_on_back(rk_controller *places, void (*fn)(rk_controller *places, void *user), void *user);   /* the user went back (Escape, the back key) */
+/* A place that is called up and left again many times an hour (a launcher, a start surface): a change to or from it,
+   by places or a pivot that picks the place, turns at half the pace, every duration and the stagger halved. */
+RK_API void rk_controller_set_called(rk_controller *place, bool called);
 
 /* Panorama: one place laid out sideways in sections under a strip of their titles that glides by place. */
 RK_API rk_controller *rk_panorama(void);
