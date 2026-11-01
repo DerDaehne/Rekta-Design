@@ -850,6 +850,22 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
   ok(back.tip === 'print it' && back.off === null && back.desc === null && !back.why, 'enabled again: its own tooltip comes back', JSON.stringify(back));
   await p.evaluate(() => { window.tBar.destroy(); document.querySelector('#t-bar').remove(); });
 }
+// In a compact bar a place's own colours are for one that can act: a disabled place, current or not, keeps the disabled
+// colour (#137, reported by jay23606).
+{
+  const places = await p.evaluate(() => {
+    const bar = document.createElement('div'); bar.className = 'rk-appbar'; bar.style.cssText = 'width:400px;left:0;right:auto;bottom:200px';
+    bar.innerHTML = '<nav class="rk-ab-places"><a class="rk-ab" href="#" aria-current="page" aria-disabled="true"><span>here</span></a>'
+      + '<a class="rk-ab" href="#" aria-disabled="true"><span>off</span></a><a class="rk-ab" href="#"><span>on</span></a><a class="rk-ab" href="#" aria-current="page"><span>now</span></a></nav>';
+    document.querySelector('.rk').append(bar);
+    const probe = (v) => { const i = document.createElement('i'); i.style.color = `var(${v})`; bar.append(i); const c = getComputedStyle(i).color; i.remove(); return c; };
+    const [cur, off, on, now] = [...bar.querySelectorAll('.rk-ab')].map((a) => getComputedStyle(a).color);
+    const r = { cur, off, on, now, disabled: probe('--rk-disabled'), high: probe('--rk-text-contrast-high'), ink: probe('--rk-text-primary') };
+    bar.remove();
+    return r;
+  });
+  ok(places.cur === places.disabled && places.off === places.disabled && places.on === places.high && places.now === places.ink, 'a disabled place in a compact bar keeps the disabled colour, current or not', JSON.stringify(places));
+}
 // Shell patterns (#120 #121 #128 #133 #142): an app bar with a centred control, a short indicator, a count that peeks,
 // giving way to full screen; a notification from another program; a menu's second level and icons; a called place;
 // the display step.

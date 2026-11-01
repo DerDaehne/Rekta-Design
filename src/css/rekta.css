@@ -1433,10 +1433,12 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
   .rk-ab-places { display: flex; flex: 1 1 auto; min-width: 0; align-self: stretch; }
   .rk-ab-places > .rk-ab {
     flex: 1 1 0; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; padding: 0 2px;
-    font-size: var(--rk-font-size-xxs); font-weight: var(--rk-font-weight-semibold); color: var(--rk-text-contrast-high); text-decoration: none;
+    font-size: var(--rk-font-size-xxs); font-weight: var(--rk-font-weight-semibold); text-decoration: none;
   }
+  /* A place's own colours are for one that can act; a disabled place keeps the disabled colour, current or not. */
+  .rk-ab-places > .rk-ab:not([aria-disabled='true'], :disabled) { color: var(--rk-text-contrast-high); }
   .rk-ab-places > .rk-ab > :not(svg) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rk-ab-places > .rk-ab[aria-current] { color: var(--rk-text-primary); }
+  .rk-ab-places > .rk-ab[aria-current]:not([aria-disabled='true'], :disabled) { color: var(--rk-text-primary); }
   .rk-appbar:has(> .rk-ab-places) > .rk-ab-status { flex-direction: column; justify-content: center; gap: 4px; min-width: 48px; margin-inline-end: 0; font-size: var(--rk-font-size-xxs); }
   .rk-appbar:has(> .rk-ab-places) > .rk-ab-more { flex-direction: column; justify-content: center; gap: 2px; font-size: var(--rk-font-size-xxs); }
   .rk-appbar[data-rk-selecting] > .rk-ab-places { display: none; }
