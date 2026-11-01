@@ -508,6 +508,40 @@ const inline = await p.evaluate(async () => {
 });
 ok(inline.waits === '0' && inline.glides && !inline.path && inline.after === '1' && !inline.leavePath, 'a bar control fades in after its neighbours make room, and leaves by a fade, without a path', JSON.stringify(inline));
 ok(stripped.arrive, 'arrive() is exported for framework routers', JSON.stringify(stripped));
+// Tiles building in (#144): each rises arrive-distance over duration-long on ease-landing and is whole after
+// duration-short on the same curve; they follow one another duration-greet apart, four steps at most.
+const built = await p.evaluate(() => {
+  const place = document.createElement('div'); place.style.cssText = 'position:fixed;left:0;top:0;width:1000px;z-index:-1';
+  place.innerHTML = `<div class="rk-tiles">${[0, 1, 2, 3, 4, 5].map((i) => `<div class="rk-tile" style="--rk-i:${i}"><span class="rk-stat">${i}</span></div>`).join('')}</div>`;
+  document.querySelector('.rk').append(place);
+  Rekta.arrive(place);
+  const tiles = [...place.querySelectorAll('.rk-tile')], anim = (t, name) => t.getAnimations().find((a) => a.animationName === name);
+  const rise = anim(tiles[0], 'rk-build-in'), fade = anim(tiles[0], 'rk-build-in-fade');
+  const out = { rise: Math.round(rise.effect.getTiming().duration), fade: Math.round(fade.effect.getTiming().duration), ease: [rise, fade].map((a) => a.effect.getKeyframes()[0].easing).join(' '), delays: tiles.map((t) => Math.round(anim(t, 'rk-build-in').effect.getTiming().delay)).join() };
+  rise.pause(); fade.pause(); rise.currentTime = 0; fade.currentTime = 0;
+  out.from = getComputedStyle(tiles[0]).transform; out.hidden = getComputedStyle(tiles[0]).opacity;
+  rise.currentTime = fade.currentTime = out.fade;
+  out.wholeAt = getComputedStyle(tiles[0]).opacity; out.still = new DOMMatrix(getComputedStyle(tiles[0]).transform).f;
+  place.remove();
+  return out;
+});
+ok(built.rise === 600 && built.fade === 250 && built.ease === 'cubic-bezier(0.1, 0.9, 0.2, 1) cubic-bezier(0.1, 0.9, 0.2, 1)' && built.delays === '0,75,150,225,225,225', 'tiles build in over duration-long on ease-landing, whole after duration-short, duration-greet apart, four steps', JSON.stringify(built));
+ok(built.from === 'matrix(1, 0, 0, 1, 0, 32)' && built.hidden === '0' && built.wholeAt === '1' && built.still > 0 && built.still < 3, 'a tile rises arrive-distance; it is whole while it still settles', JSON.stringify(built));
+// The gesture hint (#149): nudge-distance the gesture's way and back, duration-short each way on ease-landing, added
+// to the part's own transform; it rests where it was.
+const nudged = await p.evaluate(async () => {
+  const t = document.createElement('div'); t.className = 'rk-tile'; t.style.cssText = 'position:fixed;left:200px;top:200px;width:150px;height:150px;z-index:-1';
+  document.querySelector('.rk').append(t);
+  const run = Rekta.nudge(t, 'left'), a = t.getAnimations()[0], k = a.effect.getKeyframes();
+  const out = { to: k[1].transform, at: k[1].computedOffset, ease: k[0].easing, back: k[1].easing, composite: a.effect.composite, d: a.effect.getTiming().duration };
+  await run;
+  out.after = t.getAnimations().length; out.rest = getComputedStyle(t).transform;
+  try { Rekta.nudge(t, 'sideways'); out.unknown = 'accepted'; } catch { out.unknown = 'refused'; }
+  t.remove();
+  return out;
+});
+ok(nudged.to === 'translate(-16px, 0px)' && nudged.at === 0.5 && nudged.ease === 'cubic-bezier(0.1, 0.9, 0.2, 1)' && nudged.back === nudged.ease && nudged.composite === 'add' && nudged.d === 500, 'a gesture hint moves nudge-distance the gesture\'s way and back on ease-landing, added to the part\'s own transform', JSON.stringify(nudged));
+ok(nudged.after === 0 && nudged.rest === 'none' && nudged.unknown === 'refused', 'a gesture hint rests where the part was; an unknown direction is refused', JSON.stringify(nudged));
 
 // A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.
 const codes = await p.evaluate(() => {
@@ -1576,6 +1610,14 @@ ok(await r.evaluate(() => {
   box.remove();
   return still && lefts.join() === '235,247,259';
 }), 'reduced motion: the beads stand still in the middle');
+ok(await r.evaluate(async () => {
+  const t = document.createElement('div'); t.className = 'rk-tile'; t.style.cssText = 'position:fixed;left:0;top:0;width:150px;height:150px';
+  document.querySelector('.rk').append(t);
+  await Rekta.nudge(t, 'right');
+  const still = !t.getAnimations().length;
+  t.remove();
+  return still;
+}), 'reduced motion: no gesture hint');
 await r.close();
 
 await browser.close();

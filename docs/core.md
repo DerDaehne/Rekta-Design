@@ -197,8 +197,10 @@ grows.
 before a change, animates from the old look to the new: a tile's new number
 peeks in, a new status flips it. Tiles of one window that peek or flip within
 duration-moderate go one after another in reading order, duration-greet
-apart, four steps at most. Reduced motion zeroes every duration; the end
-state is always reached.
+apart, four steps at most. `rk_view_nudge(view, dx, dy)` is the gesture
+hint: a view that answers a gesture nobody can see moves `nudge-distance`
+its way and back when it is only tapped. Reduced motion zeroes every
+duration; the end state is always reached.
 
 ## Accessibility
 

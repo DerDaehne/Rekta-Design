@@ -184,7 +184,7 @@ them:
 |---|---|---|
 | `data-rk-pressed` | a tile, a `[data-rk-press]` item | Being pressed, or held for the rest of `duration-press` after a quick tap. |
 | `data-rk-turn` | units of a place, or the place | `out`, `back-out`, `pressed` while leaving; `in`, `back-in` while arriving. |
-| `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it; `turned` after a place turn, where only sparklines draw. Removed once the build-in is over (`duration-moderate` + 10 × `duration-stagger` + `duration-long` + 50ms), so a re-render never replays it. A page without the script may set and remove it itself, with the same value and window. |
+| `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it; `turned` after a place turn, where only sparklines draw. Removed once the build-in is over (3 × `duration-greet` + 2 × `duration-long` + 50ms), so a re-render never replays it. A page without the script may set and remove it itself, with the same value and window. |
 | `data-rk-phase` | a toast, the banner | `leaving` while it goes; `clear` on the banner when no state stands. |
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
 | `data-rk-measured` | a pivot | `rekta.js` has measured its titles: inactive ones shrink by a scale that animates, instead of the stylesheet's measure-free font-size. |
@@ -227,7 +227,7 @@ them:
 
 | Property | Written by | Read by |
 |---|---|---|
-| `--rk-i` | the page | A tile's build-in order (0–10). |
+| `--rk-i` | the page | A tile's build-in order (0–3; a higher one goes with the fourth). |
 | `--rk-v` | the page | A meter's value, 0 to 1; a share of a `.rk-shares` bar, in any unit. |
 | `--rk-titlebar-controls` | a native shell | Room kept at the title bar's end for the window's own buttons (140px by default) when `data-rk-titlebar` shows it. |
 | `--rk-sec-w` | the page | A panorama section's width when sideways. |
@@ -1057,7 +1057,7 @@ Returns `{ update(options), active, destroy }`: `update` with new values
 on the same labels moves the line or the bars to them, and the axis with
 them, over `duration-long`; new labels redraw.
 
-### Motion: `reflow`, `enter`, `leave`, `presence`, `tileUpdate`, `sparkTo`, `crossfade`
+### Motion: `reflow`, `enter`, `leave`, `presence`, `tileUpdate`, `nudge`, `sparkTo`, `crossfade`
 
 The movements that follow a change of content ([motion.md](motion.md)).
 Each takes its duration from a token, so reduced motion makes it instant;
@@ -1088,6 +1088,12 @@ the change itself always happens.
   `duration-moderate` move one after another in document order,
   `duration-greet` apart, four steps at most; `change()` still runs at
   once (for a flip, at the half as before).
+- `nudge(el, direction)`: a part that answers a gesture nobody can see (a
+  swipe) hints at it when someone only taps it: it moves
+  `nudge-distance` the gesture's way (`'left'`, `'right'`, `'up'`,
+  `'down'`) and back, `duration-short` each way. Call it from the tap;
+  the words that name the gesture stay. Under reduced motion it does
+  nothing. Resolves when it rests.
 - `sparkTo(polyline, points)`: a line moves its points to new ones over
   `duration-long`; a different number of points redraws at once.
 - `crossfade(change)`: a change of the whole look cross-fades, where view

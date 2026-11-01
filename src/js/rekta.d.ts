@@ -431,6 +431,8 @@ export declare function enter(el: Element): Promise<void>;
 export declare function leave(el: Element): Promise<Animation | null>;
 export declare function presence(scope: Element, options: { items?: (() => Element[]) | Iterable<Element>; show: (item: Element) => boolean }): Promise<void>;
 export declare function tileUpdate(tile: HTMLElement, change: () => void, options?: { kind?: 'peek' | 'flip' }): Promise<void>;
+/** A part that answers a gesture nobody can see hints at it when tapped: the gesture's way and back. */
+export declare function nudge(el: Element, direction: 'left' | 'right' | 'up' | 'down'): Promise<void>;
 /** `points` as in the polyline's attribute ("0,4 10,2 20,6"). */
 export declare function sparkTo(line: SVGPolylineElement, points: string): void;
 export declare function crossfade(change: () => void): Promise<void>;

@@ -185,6 +185,29 @@ static void test_bar_motion(void) {
   done(w);
 }
 
+/* A gesture hint: nudge-distance the gesture's way, then back to rest; nothing under reduced motion. */
+static void test_nudge(void) {
+  rk_window *w = window(600, 400);
+  rk_view *root = col(8, 16), *grid = rk_add(root, rk_tile_grid()), *t = rk_add(grid, rk_tile("3", "swipe to dismiss"));
+  show(w, root, "nudge");
+  rk_view_nudge(t, -1, 0);
+  rk_app_run_for(60);
+  CHECK(t->ptransform.translate_x < -RK_TOK_NUDGE_DISTANCE / 2 && t->ptransform.translate_y == 0, "quick away, the gesture's way (%g)", t->ptransform.translate_x);
+  rk_app_run_for(rk_duration_of(RK_DURATION_SHORT));
+  CHECK(t->ptransform.translate_x > -RK_TOK_NUDGE_DISTANCE && t->ptransform.translate_x < 0, "on its way back (%g)", t->ptransform.translate_x);
+  rk_app_run_for(rk_duration_of(RK_DURATION_SHORT));
+  CHECK(t->ptransform.translate_x == 0 && t->anims == 0, "and rests where it was, without a bounce (%g)", t->ptransform.translate_x);
+  float lo = 0;
+  rk_view_nudge(t, 0, 1);
+  for (int i = 0; i < 40; i++) { rk_app_run_for(16); lo = RK_MIN(lo, t->ptransform.translate_y); }
+  CHECK(lo >= 0 && t->ptransform.translate_y == 0, "down and back, never past its rest (%g)", lo);
+  rk_app_set_motion(RK_MOTION_PREF_OFF);
+  rk_view_nudge(t, 1, 0);
+  CHECK(t->ptransform.translate_x == 0 && t->anims == 0, "reduced motion: no hint");
+  rk_app_set_motion(RK_MOTION_PREF_SYSTEM);
+  done(w);
+}
+
 /* Input ----------------------------------------------------------------------------------------------------------- */
 
 static int activations;
@@ -3631,6 +3654,7 @@ static void launch(void *user) {
   test_spring();
   test_news_order();
   test_bar_motion();
+  test_nudge();
   { int lv = rk__live_views; test_declare(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declare_same_pixels(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare_same_pixels: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }

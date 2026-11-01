@@ -17,7 +17,7 @@
    - Hide with the hidden attribute: inside .rk it wins over every display rule, Rekta's and the page's (!important).
      data-rk-reveal on the element is the way out: hidden stays (for the script, for a page without CSS) and the
      page's own display applies.
-   - Public hooks a page may set: --rk-i (build-in index of a tile, 0-10), --rk-sec-w (width of a panorama section),
+   - Public hooks a page may set: --rk-i (build-in order of a tile, 0-3; higher goes with the fourth), --rk-sec-w (width of a panorama section),
      --rk-split-w (width of a split's list pane; rekta.js writes it while the handle is dragged), --rk-toast-left (what
      is left of a toast's undo window, 1 to 0; toaster() writes it).
      Public hooks rekta.js writes and a page may read: --rk-banner-h, --rk-pivot-h, --rk-pivot-scale.
@@ -88,9 +88,15 @@
   color: var(--rk-text-primary); font: inherit; font-size: var(--rk-font-size-xs); line-height: var(--rk-line-height-compact); text-align: left; text-decoration: none;
   transition: background-color var(--rk-duration-short) var(--rk-ease-base), transform var(--rk-duration-short) var(--rk-ease-base);
 }
-/* Build-in plays on arrival only (first paint, or a place a tile opened): a re-render never replays it. */
+/* Build-in plays on arrival only (first paint, or a place a tile opened): a re-render never replays it. Each tile
+   rises arrive-distance over duration-long on ease-landing, quick at first and settling long, and is whole after
+   duration-short, so the eye sees it arrive rather than appear. Tiles follow one another by --rk-i, duration-greet
+   apart, four steps at most: the rest go with the fourth. */
 /* A place that turned in has built itself already: its tiles do not rise a second time. */
-[data-rk-arriving]:where(:not([data-rk-arriving='turned'])) .rk-tile { animation: rk-build-in var(--rk-duration-moderate) var(--rk-ease-in) calc(min(var(--rk-i, 0), 10) * var(--rk-duration-stagger)) backwards; }
+[data-rk-arriving]:where(:not([data-rk-arriving='turned'])) .rk-tile {
+  animation: rk-build-in var(--rk-duration-long) var(--rk-ease-landing) calc(min(var(--rk-i, 0), 3) * var(--rk-duration-greet)) backwards,
+    rk-build-in-fade var(--rk-duration-short) var(--rk-ease-landing) calc(min(var(--rk-i, 0), 3) * var(--rk-duration-greet)) backwards;
+}
 a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-user-drag: none; }
 .rk-tile:focus-visible { outline: 2px solid currentColor; outline-offset: -5px; }
 .rk-tile-word { position: absolute; top: 10px; right: 12px; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold); }
@@ -113,7 +119,8 @@ a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit
 .rk-w2 > .rk-tile-msg { -webkit-line-clamp: 6; line-clamp: 6; }   /* past it, an ellipsis; the whole sentence is still read */
 .rk-w2 { grid-column: span 2; }
 .rk-h2 { grid-row: span 2; }
-@keyframes rk-build-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes rk-build-in { from { transform: translateY(var(--rk-arrive-distance)); } }
+@keyframes rk-build-in-fade { from { opacity: 0; } }
 /* Press: a tile nudges back where it is pressed, as a Metro tile does. rekta.js sets --_rk-px and --_rk-py (-1 to 1
    from the tile's centre; 0 0 for Space or Enter) and data-rk-pressed. Pressed in the middle it sinks straight back;
    near an edge, that edge goes back further, by up to tile-tilt. It sinks over duration-press and comes back over

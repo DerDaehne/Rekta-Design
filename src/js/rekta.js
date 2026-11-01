@@ -42,6 +42,7 @@
      reflow     FLIP: what a change moves or resizes glides there (a tile resized, a grid re-flowed)
      enter, leave, presence   things arrive in and leave a list or a grid; the rest close the gap
      tileUpdate a live tile has news: the new number peeks up, a new status flips the tile
+     nudge      a part whose gesture nobody can see (a swipe) hints at it when it is only tapped
      sparkTo    a live line moves to its new points
      crossfade  a change of the whole look fades instead of flipping
      combobox   a field with a list of choices that filters as you type
@@ -473,10 +474,11 @@ function turnRows(u, place, held) {
 // A row's perspective grows with its reach from the edge it turns about, so a wide row turns as flat as a narrow one.
 function perspective(far) { return Math.round((num('--rk-turnstile-perspective') || 800) + num('--rk-turnstile-reach') * Math.max(0, far)) + 'px'; }
 // arrive(el): a place (or the root) builds in: tiles rise and sparklines draw while data-rk-arriving is on, for the arrival
-// window. A framework router calls it for a place it opened by client navigation.
+// window: the last tile (three duration-greet steps, then its duration-long rise), a sparkline's duration-long after
+// it, and a frame to spare. A framework router calls it for a place it opened by client navigation.
 export function arrive(el) {
   el.setAttribute('data-rk-arriving', '');
-  const wait = ms('--rk-duration-moderate') + 10 * ms('--rk-duration-stagger') + ms('--rk-duration-long') + 50;
+  const wait = 3 * ms('--rk-duration-greet') + 2 * ms('--rk-duration-long') + 50;
   clearTimeout(el._rkArrive);
   el._rkArrive = setTimeout(() => el.removeAttribute('data-rk-arriving'), wait);
 }
@@ -538,7 +540,7 @@ export const turn = {
       place.hidden = false;
       // A place you return to comes back as you left it: no second build-in, no redraw.
       if (arriving) arrive(place);
-      else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
+      else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-build-in-fade', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
       // Its units turn in from the other side, light ones first, each in its own time.
       const d0 = ms('--rk-duration-moderate');
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
@@ -3782,6 +3784,22 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
   const inn = target.animate([{ opacity: 0, transform: `translateY(${travel}%)` }, { opacity: 1, transform: 'none' }], { duration: d * 0.8, delay: d * 0.2, easing: css('--rk-ease-in'), fill: 'backwards' });
   greet(tile, [out, inn]);
   return finished([out, inn]).then(() => { ghost.remove(); if (!tile.querySelector('.rk-stat[aria-hidden]')) tile.style.overflow = ''; });
+}
+// nudge(el, direction): a part that answers a gesture nobody can see (a swipe) hints at it when it is only tapped: it
+// moves nudge-distance the gesture's way ('left', 'right', 'up', 'down') and back, duration-short each way on
+// ease-landing, and rests where it was. The movement adds to the part's own transform, so a press still shows under
+// it; a tap while it moves starts it again. Under reduced motion it stays still: the words that name the gesture say it.
+const nudges = new WeakMap();
+export function nudge(el, direction) {
+  const d = ms('--rk-duration-short'), n = num('--rk-nudge-distance');
+  const to = { left: [-n, 0], right: [n, 0], up: [0, -n], down: [0, n] }[direction];
+  if (!to) throw new Error(`unknown nudge direction ${direction}`);
+  if (nudges.has(el)) nudges.get(el).cancel();
+  if (!d || !shown(el)) return Promise.resolve();
+  const ease = css('--rk-ease-landing');
+  const a = el.animate([{ transform: 'none', easing: ease }, { transform: `translate(${to[0]}px, ${to[1]}px)`, easing: ease }, { transform: 'none' }], { duration: 2 * d, composite: 'add' });
+  nudges.set(el, a);
+  return a.finished.catch(() => {}).then(() => { if (nudges.get(el) === a) nudges.delete(el); });
 }
 // sparkTo(line, points): a live line moves to its new points over duration-long instead of jumping. Points are an
 // SVG points list; with the same number of points each one travels, otherwise the line is redrawn at once.

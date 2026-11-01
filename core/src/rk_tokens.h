@@ -88,6 +88,7 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_EASE_PIVOT_GLIDE { 0.65f, 0.0f, 0.35f, 1.0f }
 #define RK_TOK_EASE_TURN_OUT { 0.35f, 0.0f, 0.65f, 0.6f }
 #define RK_TOK_EASE_TURN_IN { 0.22f, 0.9f, 0.6f, 0.98f }
+#define RK_TOK_EASE_LANDING { 0.1f, 0.9f, 0.2f, 1.0f }
 #define RK_TOK_TURNSTILE_OUT_ANGLE 60.0f
 #define RK_TOK_TURNSTILE_IN_ANGLE 70.0f
 #define RK_TOK_TURNSTILE_ANGLE 60.0f
@@ -96,6 +97,8 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_TURNSTILE_ROW 8.0f
 #define RK_TOK_TURNSTILE_FLUSH 2.0f
 #define RK_TOK_SLIDE_DISTANCE 24.0f
+#define RK_TOK_ARRIVE_DISTANCE 32.0f
+#define RK_TOK_NUDGE_DISTANCE 16.0f
 #define RK_TOK_TILE_TILT 8.0f
 #define RK_TOK_TILE_PRESS_SCALE 0.97f
 #define RK_TOK_ROW_TILT 2.0f

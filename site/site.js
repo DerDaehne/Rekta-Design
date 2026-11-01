@@ -218,7 +218,7 @@
     const place = $('[data-rk-place=home]');
     place.removeAttribute('data-rk-arriving'); void place.offsetWidth;
     place.setAttribute('data-rk-arriving', '');
-    setTimeout(() => place.removeAttribute('data-rk-arriving'), tok.ms('--rk-duration-moderate') + 10 * tok.ms('--rk-duration-stagger') + tok.ms('--rk-duration-long') + 50);
+    setTimeout(() => place.removeAttribute('data-rk-arriving'), 3 * tok.ms('--rk-duration-greet') + 2 * tok.ms('--rk-duration-long') + 50);
   });
 
   /* ---------- feedback ---------- */

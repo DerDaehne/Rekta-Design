@@ -417,6 +417,10 @@ function check(tokens) {
     curve('rk-dots', String(+(m['dots-middle-end-at'] * 100).toFixed(4)), 'dots-ease-leave');
     want('rk-beads', 'opacity: 1', 'beads-fade', m['beads-fade']);
     want('rk-beads', 'opacity: 1', '1 - beads-fade', 1 - m['beads-fade']);
+    // The build-in's travel and its fade are two animations on the same curve: the travel reads its distance, the
+    // tile rule runs both on ease-landing, travel over duration-long and opacity over duration-short.
+    if (!/@keyframes rk-build-in \{ from \{ transform: translateY\(var\(--rk-arrive-distance\)\); \} \}/.test(css)) problems.push('rekta.css @keyframes rk-build-in does not rise by --rk-arrive-distance');
+    if (!/rk-build-in var\(--rk-duration-long\) var\(--rk-ease-landing\)/.test(css) || !/rk-build-in-fade var\(--rk-duration-short\) var\(--rk-ease-landing\)/.test(css)) problems.push('rekta.css: a tile builds in over duration-long and is whole after duration-short, both on ease-landing');
   }
   // The script reads tokens by name too (and builds the pivot's font-size names from a stem).
   const js = readFileSync(join(root, 'src', 'js', 'rekta.js'), 'utf8');

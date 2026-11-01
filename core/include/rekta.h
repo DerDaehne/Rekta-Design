@@ -733,6 +733,9 @@ RK_API void rk_animate_begin(rk_motion motion);    /* blocks nest; the innermost
 RK_API void rk_animate_on_done(void (*fn)(void *user), void *user);
 RK_API void rk_animate_commit(void);
 RK_API void rk_view_transition(rk_view *view, rk_transition transition);   /* call before changing the view */
+/* A view that answers a gesture nobody can see (a swipe) hints at it when it is only tapped: it moves nudge-distance
+   the gesture's way (dx, dy: (1, 0) right, (0, -1) up) and back, duration-short each way. Call it from the tap. */
+RK_API void rk_view_nudge(rk_view *view, float dx, float dy);
 
 /* Declared UI -----------------------------------------------------------------------------------------------------
  *
