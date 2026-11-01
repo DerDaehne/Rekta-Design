@@ -2,11 +2,19 @@
 
 ## Icons
 
-Fifty-one icons on one grid (`src/icons/*.svg`): 20 × 20, a 1.6 stroke,
+Sixty-one icons on one grid (`src/icons/*.svg`): 20 × 20, a 1.6 stroke,
 square ends (`butt` caps, `miter` joins), no fill except where a shape
 is solid by nature (the dots of `more` and `grip`, the half disc of
 `theme`). They are drawn in the text colour, so they follow every theme
 and forced colours.
+
+- **Devices and media:** `speaker`, `microphone`, `wireless`,
+  `bluetooth`, `battery`, `music`, and `previous` and `next` for a
+  track (`back` and `forward` are for places, not media). A muted or
+  lost state strikes its glyph through corner to corner:
+  `speaker-muted`, `microphone-muted`, and `offline` for `wireless`.
+  The battery shows no level: the value stands beside it as a word
+  ("battery 64%"), so it is read, not guessed from a fill.
 
 - **Web:** `dist/rekta.icons.svg` is a sprite of `<symbol id="rk-i-NAME">`.
   Inline it once in the page (or reference the file) and use
