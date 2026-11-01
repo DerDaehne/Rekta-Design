@@ -905,6 +905,22 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-menu-item[role='menuitemcheckbox']::before, .rk-menu-item[role='menuitemradio']::before { content: ''; flex: none; width: 10px; height: 10px; border: 1px solid currentColor; }
 .rk-menu-item[aria-checked='true']::before { background: currentColor; }
 .rk-menu-key { margin-left: auto; padding-left: var(--rk-space-l); font-size: var(--rk-font-size-xxs); color: var(--rk-text-contrast-high); }
+/* An icon per item (docs/states.md): at the start, after a choice's square, space-s before the words. Once one item
+   of a list has one, the others keep its room, so every row's words start at one edge. */
+.rk-menu-item > .rk-icon { color: inherit; }
+:is(.rk-float, .rk-menu-level):has(> .rk-menu-item > .rk-icon) > .rk-menu-item:not(:has(> .rk-icon), .rk-menu-back) { padding-left: calc(var(--rk-space-m) + 20px + var(--rk-space-s)); }
+/* A second level stands in place of the list, in the same surface: the item that has one ends in a chevron pointing
+   on (in place of a key hint); open, its level hides the rows around it and starts with a back row, a chevron
+   pointing back and the level's name. rekta.js shows and hides the level (hidden); nothing moves. */
+.rk-menu-item[aria-haspopup='menu']::after, .rk-menu-back::before {
+  content: ''; flex: none; width: 6px; height: 6px; border: solid currentColor; border-width: 1.6px 1.6px 0 0;
+}
+.rk-menu-item[aria-haspopup='menu']::after { margin-left: auto; transform: translateX(-2px) rotate(45deg); }
+.rk-menu-back { color: var(--rk-text-contrast-high); font-weight: var(--rk-font-weight-semibold); }
+.rk-menu-back::before { transform: translateX(2px) rotate(-135deg); }
+.rk-menu-level { padding: 0; }
+:is(.rk-float, .rk-menu-level):has(> .rk-menu-level:not([hidden])) > :not(.rk-menu-level:not([hidden])) { display: none; }
+.rk-menu-level:has(> .rk-menu-back) > .rk-menu-back { border-bottom: 1px solid var(--rk-text-contrast-low); }
 .rk-menu-sep { height: 0; margin: var(--rk-space-xs) 0; border: 0; border-top: 1px solid var(--rk-text-contrast-low); }
 /* Palette: go to a place or run a command. It rises from the app bar at every width, centred, up to 40rem wide;
    the active option (aria-selected) looks focused while focus stays in the input. */
@@ -1020,6 +1036,29 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft) { color: inherit; }
 .rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft)::before { box-shadow: 0 0 0 1px currentColor; }
 .rk-toast-msg { flex: 1 1 auto; align-self: center; min-width: 0; padding: calc(var(--rk-space-s) + var(--rk-space-xs)) var(--rk-space-m); text-wrap: pretty; }
+/* A notification from another program (docs/states.md): its text is a button that runs the default action, tinted on
+   press and ringed on focus as the action is. The sender's icon, or the notification's own picture cropped square,
+   stands at its start in the icon's 20px field; a title in semibold over at most two lines of text, then an ellipsis
+   (the whole text is still read). */
+button.rk-toast-msg {
+  align-self: stretch; display: flex; align-items: center; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer;
+  transition: background-color var(--rk-duration-short) var(--rk-ease-base);
+}
+button.rk-toast-msg:active { background-color: var(--rk-hover); }
+button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-offset: calc(-1 * var(--rk-space-xs)); }
+.rk-toast-msg:has(> .rk-toast-body) { display: flex; align-items: center; gap: var(--rk-space-s); }
+.rk-toast-pic { display: inline-flex; flex: none; width: 20px; height: 20px; }
+.rk-toast-pic > * { width: 100%; height: 100%; object-fit: cover; }
+.rk-toast-body { flex: 1 1 auto; min-width: 0; }
+.rk-toast-title { display: block; font-weight: var(--rk-font-weight-semibold); overflow-wrap: anywhere; }
+.rk-toast-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+/* It came from outside: it enters whole from the window's edge, without a fade, and goes back out the way it came
+   (motion.md, Toast). Sideways that is the top edge; compact, where toasts rise from the app bar, the bottom. */
+.rk-toasts { --_rk-edge: calc(-100% - var(--rk-banner-h, 0px) - env(safe-area-inset-top, 0px) - var(--rk-space-m)); }
+.rk-toast[data-rk-from='edge'] { animation: rk-toast-edge var(--rk-duration-short) var(--rk-ease-in) both; }
+.rk-toast[data-rk-from='edge'][data-rk-phase='leaving'] { animation: rk-toast-edge-out calc(0.6 * var(--rk-duration-short)) var(--rk-ease-out) both; }
+@keyframes rk-toast-edge { from { transform: translateY(var(--_rk-edge)); } }
+@keyframes rk-toast-edge-out { to { transform: translateY(var(--_rk-edge)); } }
 .rk-toast-act {
   position: relative; flex: none; display: inline-flex; align-items: center; gap: var(--rk-space-s);
   min-width: var(--rk-control-height); padding: 0 var(--rk-space-m); border: 0; background: none; color: inherit;
@@ -1151,7 +1190,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-sort:hover { color: var(--rk-text-primary); }
   .rk-btn--quiet:hover { color: var(--rk-text-primary); }
   .rk-split-handle:hover::after { width: 2px; background-color: var(--rk-text-contrast-medium); }
-  .rk-toast-act:hover { background-color: var(--rk-hover); }
+  .rk-toast-act:hover, button.rk-toast-msg:hover { background-color: var(--rk-hover); }
   .rk-segments:not([aria-disabled='true']) > label:hover:not(:has(> input:checked, > input:is(:disabled, [aria-disabled='true']))) { background-color: var(--rk-hover); }
   .rk-stepper:not(:has(> .rk-input:is(:disabled, [aria-disabled='true']))) > [data-rk-step]:hover:not([aria-disabled='true']), .rk-combo:not(:has(> .rk-input:is(:disabled, [aria-disabled='true']))) > .rk-combo-btn:hover { background-color: var(--rk-hover); }
   .rk-drop:hover:not(:has(> input:is(:disabled, [aria-disabled='true']))) { border-color: var(--rk-text-primary); color: var(--rk-text-primary); }
@@ -1215,7 +1254,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-pivot--side:not([data-rk-measured]) > :is(a, button):not([aria-current], [aria-selected='true']) {
     --_rk-s: 1; font-size: var(--_rk-inactive); transform: none; margin-inline-end: 0;
   }
-  .rk-toasts { --_rk-from: 12px; inset: auto 0 calc(var(--rk-appbar-height) + env(safe-area-inset-bottom) + var(--rk-space-s)); top: auto; }
+  .rk-toasts { --_rk-from: 12px; --_rk-edge: calc(100% + var(--rk-appbar-height) + env(safe-area-inset-bottom) + var(--rk-space-s)); inset: auto 0 calc(var(--rk-appbar-height) + env(safe-area-inset-bottom) + var(--rk-space-s)); top: auto; }
   @supports (anchor-name: --a) { .rk-toasts { top: auto; } }
 }
 /* Sideways viewport: chrome at desktop scale. */

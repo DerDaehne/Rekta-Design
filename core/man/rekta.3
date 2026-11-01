@@ -600,7 +600,10 @@ gives an item a square
 .Dv RK_CHECKMARK_ON )
 that a choice toggles while the menu stays open;
 .Fn rk_menu_set_enabled
-greys one out, and
+greys one out,
+.Fn rk_menu_set_icon
+puts an icon from the set at an item's start (once one item has one, every
+row's words start at one edge), and
 .Fn rk_menu_clear
 empties the menu to build it again.
 .Fn rk_view_set_menu

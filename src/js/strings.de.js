@@ -44,4 +44,5 @@ export const de = {
   position: (item, at, of) => (item ? `${item}: Position ${at} von ${of}.` : `Position ${at} von ${of}`),
   keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
   cannotAct: (label, reason) => `${label} (${reason})`,
+  back: 'zurück',
 };

@@ -127,6 +127,7 @@ export const strings = {
   loadFailed: 'Could not load the choices. Type to try again.',
   keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
   cannotAct: (label, reason) => `${label} (${reason})`,
+  back: 'back',
 };
 // rk-strings-end
 const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
@@ -1376,7 +1377,7 @@ export function toaster(region) {
     sr.textContent = tx('undoWindow', secs, again);
     msg.appendChild(sr);
   }
-  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null, status = '', windowMs = 0, onEnd = null } = {}) {
+  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null, status = '', windowMs = 0, onEnd = null, title = '', icon: pic = null, picture = '', open: run = null, edge = false } = {}) {
     if (open && open.key === key && open.undo && undo) { open.update(text, undo, { windowMs, onEnd }); return open; }
     if (open) open.leave(false, 'replaced');
     // The window runs against a deadline in wall-clock time, so a late or throttled timer (a busy page, a background
@@ -1387,8 +1388,30 @@ export function toaster(region) {
     const el = document.createElement('div');
     el.className = 'rk-toast';
     if (status) { el.dataset.status = status; if (status === 'error') el.setAttribute('role', 'alert'); }
-    const msg = el.appendChild(document.createElement('p'));
+    // A notification from another program enters whole from the window's edge: it came from outside (motion.md).
+    if (edge) el.setAttribute('data-rk-from', 'edge');
+    // Its text is pressable when it has a default action ("open what this is about"); a notification without one
+    // closes when its text is pressed. It may bring a title, and the sender's icon or its own picture at the start.
+    const pressable = !!run || edge;
+    const msg = el.appendChild(document.createElement(pressable ? 'button' : 'p'));
     msg.className = 'rk-toast-msg';
+    let words = msg;
+    if (pressable) {
+      msg.type = 'button';
+      msg.addEventListener('click', () => { if (run) { leave(false, 'opened'); run(); } else leave(false); });
+    }
+    if (title || pic || picture) {
+      if (pic || picture) {
+        const field = msg.appendChild(document.createElement('span'));
+        field.className = 'rk-toast-pic'; field.setAttribute('aria-hidden', 'true');
+        if (picture) { const img = field.appendChild(document.createElement('img')); img.src = picture; img.alt = ''; } else field.appendChild(typeof pic === 'string' ? icon(pic) : pic);
+      }
+      const body = msg.appendChild(document.createElement('span'));
+      body.className = 'rk-toast-body';
+      if (title) { const b = body.appendChild(document.createElement('b')); b.className = 'rk-toast-title'; b.textContent = title; }
+      words = body.appendChild(document.createElement('span'));
+      words.className = 'rk-toast-text';
+    }
     let count = null;
     if (undo) {
       const btn = el.appendChild(document.createElement('button'));
@@ -1407,7 +1430,7 @@ export function toaster(region) {
     }
     const left = () => (running ? Math.max(0, deadline - Date.now()) : remaining);
     const secs = () => Math.max(0, Math.ceil(left() / 1000));
-    say(msg, text, !!undo, false, secs());
+    say(words, text, !!undo, false, secs());
     const paint = () => { if (count) { count.textContent = secs(); el.style.setProperty('--rk-toast-left', total ? left() / total : 0); } };
     function schedule() {
       clearTimeout(timer);
@@ -1420,13 +1443,13 @@ export function toaster(region) {
       if (deadline - Date.now() <= 0) { running = false; remaining = 0; paint(); leave(false, 'expired'); return; }
       paint(); schedule();
     }
-    function run() { if (running || done || waiting) return; running = true; deadline = Date.now() + remaining; schedule(); }
+    function go() { if (running || done || waiting) return; running = true; deadline = Date.now() + remaining; schedule(); }
     function stop() { if (!running) return; remaining = Math.max(0, deadline - Date.now()); running = false; clearTimeout(timer); timer = 0; }
     function hold() {
       if (done || waiting) return;
       const was = held;
       held = (hover || focus) && !released;
-      if (held) stop(); else run();
+      if (held) stop(); else go();
       if (held !== was) {
         el.toggleAttribute('data-rk-held', held);
         el.dispatchEvent(new CustomEvent('rk:toasthold', { bubbles: true, detail: { held, remaining: left() } }));
@@ -1439,7 +1462,7 @@ export function toaster(region) {
       if (waiting) { clearTimeout(waiting); waiting = 0; if (open === api) open = null; end(); return; }
       const hadFocus = el.contains(document.activeElement);
       el.setAttribute('data-rk-phase', 'leaving');
-      setTimeout(() => el.remove(), ms('--rk-duration-short'));
+      setTimeout(() => el.remove(), ms('--rk-duration-short') * (edge ? 0.6 : 1));
       if (open === api) open = null;
       end();
       if (hadFocus) returnFocus(from);
@@ -1452,7 +1475,7 @@ export function toaster(region) {
       remaining = Math.max(0, t); total = Math.max(total, remaining);
       if (!remaining) { paint(); leave(false, 'expired'); return; }
       paint();
-      if (was || !held) run();
+      if (was || !held) go();
     }
     const api = {
       key, el, action,
@@ -1463,7 +1486,7 @@ export function toaster(region) {
       // A new text, the window left alone; announced once (without the window sentence) only when asked.
       setText(t, { announce = false } = {}) {
         if (done) return;
-        const node = msg.firstChild && msg.firstChild.nodeType === 3 ? msg.firstChild : msg.insertBefore(document.createTextNode(''), msg.firstChild);
+        const node = words.firstChild && words.firstChild.nodeType === 3 ? words.firstChild : words.insertBefore(document.createTextNode(''), words.firstChild);
         if (announce) node.nodeValue = t; else quietly(el, () => { node.nodeValue = t; });
       },
       get remaining() { return left(); },
@@ -1477,7 +1500,7 @@ export function toaster(region) {
         if (e) { const before = onEnd; onEnd = e; if (before && before !== e) before('merged'); }
         stop(); released = false;
         total = remaining = w || (undo ? windowMs || tokenWindow() : total);
-        say(msg, t, !!u, true, secs()); paint(); hold(); if (!held) run();
+        say(words, t, !!u, true, secs()); paint(); hold(); if (!held) go();
       },
       sync() { if (running) { clearTimeout(timer); tick(); } },
     };
@@ -1487,7 +1510,7 @@ export function toaster(region) {
     el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) { focus = false; hold(); } });
     paint();
     open = api;
-    const insert = () => { waiting = 0; region.appendChild(el); hold(); if (!held) run(); };
+    const insert = () => { waiting = 0; region.appendChild(el); hold(); if (!held) go(); };
     if (region.querySelector('.rk-toast[data-rk-phase="leaving"]')) waiting = setTimeout(insert, ms('--rk-duration-short')); else insert();
     return api;
   }
@@ -1812,6 +1835,9 @@ const isOpen = (el) => (canPopover ? el.matches(':popover-open') : !el.hidden);
 // closes and focus returns to the trigger after a choice or Escape. A checkbox item toggles and leaves the menu open,
 // so several can be ticked in a row. With summary ("status"), the trigger says what is ticked: "status: failed, done",
 // or "status: any" when nothing is (a filter button). align goes to place(): by default the trigger's data-rk-align.
+// A second level stands in place of the list (docs/states.md): an item with aria-haspopup="menu" and aria-controls
+// names a .rk-menu-level (role menu, hidden) inside the menu; → Enter or Space opens it under a "back" row with its
+// name, the surface keeping its width and place; ← or Escape goes back one level, focus to the item that opened it.
 export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   el.id = el.id || `rk-menu-${Math.random().toString(36).slice(2, 8)}`;
   el.setAttribute('role', 'menu');
@@ -1833,6 +1859,39 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   // never counts as a click outside. Placement and focus follow the toggle.
   let first = 0;
   if (canPopover && 'popoverTargetElement' in trigger) trigger.popoverTargetElement = el;
+  const levelOf = (item) => { const id = item && item.getAttribute('aria-haspopup') === 'menu' && item.getAttribute('aria-controls'); const l = id && document.getElementById(id); return l && el.contains(l) ? l : null; };
+  const openLevels = () => [...el.querySelectorAll('.rk-menu-level:not([hidden])')];
+  // The level in sight: its rows stand in place of the list, under a back row with the level's name. The surface
+  // keeps its width and place (moved back inside the window only when the level does not fit there); nothing moves.
+  function enter(item) {
+    const level = levelOf(item);
+    if (!level || item.getAttribute('aria-disabled') === 'true') return false;
+    let back = level.querySelector(':scope > .rk-menu-back');
+    if (!back) {
+      back = level.insertBefore(document.createElement('button'), level.firstChild);
+      back.type = 'button'; back.className = 'rk-menu-item rk-menu-back'; back.setAttribute('role', 'menuitem');
+      back.textContent = level.getAttribute('aria-label') || item.textContent.trim();
+      back.setAttribute('aria-label', `${tx('back')}: ${back.textContent}`);
+    }
+    el.style.minWidth = `${el.offsetWidth}px`;
+    level.hidden = false;
+    item.setAttribute('aria-expanded', 'true');
+    reflow();
+    const rows = items();
+    (rows[rows.indexOf(back) + 1] || back).focus();
+    return true;
+  }
+  function out() {
+    const level = openLevels().pop();
+    if (!level) return false;
+    const item = el.querySelector(`[aria-controls="${CSS.escape(level.id)}"]`);
+    level.hidden = true;
+    if (item) { item.setAttribute('aria-expanded', 'false'); item.focus(); }
+    if (!openLevels().length) el.style.minWidth = '';
+    reflow();
+    return true;
+  }
+  const reset = () => { openLevels().forEach((l) => { l.hidden = true; }); el.querySelectorAll('[aria-haspopup="menu"][aria-expanded]').forEach((i) => i.setAttribute('aria-expanded', 'false')); el.style.minWidth = ''; };
   const shown = () => { place(el, trigger, { align }); trigger.setAttribute('aria-expanded', 'true'); focusItem(first); first = 0; };
   function open(at = 0) {
     if (isOpen(el)) { focusItem(at); return; }
@@ -1843,10 +1902,11 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   function close(refocus = true) {
     if (!isOpen(el)) return;
     closeFloat(el);
+    reset();
     trigger.setAttribute('aria-expanded', 'false');
     if (refocus) trigger.focus();
   }
-  const toggle = (e) => { if (e.newState === 'open') shown(); else trigger.setAttribute('aria-expanded', 'false'); };
+  const toggle = (e) => { if (e.newState === 'open') shown(); else { trigger.setAttribute('aria-expanded', 'false'); reset(); } };
   const click = (e) => {
     if (canPopover && trigger.popoverTargetElement === el) return;                    // the browser toggles
     e.preventDefault(); if (isOpen(el)) close(); else open(0);
@@ -1860,13 +1920,17 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
     else if (e.key === 'ArrowUp') { e.preventDefault(); focusItem(i - 1); }
     else if (e.key === 'Home') { e.preventDefault(); focusItem(0); }
     else if (e.key === 'End') { e.preventDefault(); focusItem(-1); }
-    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'ArrowRight' && levelOf(list[i])) { e.preventDefault(); enter(list[i]); }
+    else if (e.key === 'ArrowLeft' && openLevels().length) { e.preventDefault(); out(); }
+    else if (e.key === 'Escape') { e.preventDefault(); if (!out()) close(); }
     else if (e.key === 'Tab') close(false);
     else { const hit = find(e, list, list[i]); if (hit) { e.preventDefault(); hit.focus(); } }
   };
   const choose = (e) => {
     const item = e.target.closest('.rk-menu-item');
     if (!item || item.getAttribute('aria-disabled') === 'true') { if (item) e.preventDefault(); return; }
+    if (item.classList.contains('rk-menu-back')) { out(); return; }
+    if (enter(item)) return;
     const checkbox = item.getAttribute('role') === 'menuitemcheckbox';
     if (checkbox) item.setAttribute('aria-checked', String(item.getAttribute('aria-checked') !== 'true'));
     if (item.getAttribute('role') === 'menuitemradio') el.querySelectorAll('[role=menuitemradio]').forEach((r) => r.setAttribute('aria-checked', String(r === item)));
@@ -1875,7 +1939,7 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
     if (onSelect) onSelect(item);
   };
   const outside = (e) => { if (!canPopover && isOpen(el) && !el.contains(e.target) && !trigger.contains(e.target)) close(false); };
-  const reflow = () => { if (isOpen(el)) place(el, trigger, { align }); };
+  function reflow() { if (isOpen(el)) place(el, trigger, { align }); }
   trigger.addEventListener('click', click);
   trigger.addEventListener('keydown', triggerKey);
   el.addEventListener('keydown', key);

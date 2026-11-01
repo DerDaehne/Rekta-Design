@@ -135,7 +135,7 @@ export declare function strip(el: HTMLElement): Destroyable & { layout(): void }
 
 // Feedback ------------------------------------------------------------------------------------------------------------
 
-export type ToastEnd = 'expired' | 'undone' | 'replaced' | 'acted' | 'dismissed' | 'merged';
+export type ToastEnd = 'expired' | 'undone' | 'replaced' | 'acted' | 'opened' | 'dismissed' | 'merged';
 export interface ToastOptions {
   key?: string;
   undo?: (() => void) | null;
@@ -146,6 +146,16 @@ export interface ToastOptions {
   /** The undo window in ms (default: duration-toast). */
   windowMs?: number;
   onEnd?: ((reason: ToastEnd) => void) | null;
+  /** A notification's title, in semibold over its text (which is then cut after two lines). */
+  title?: string;
+  /** The sender's icon at the start: a name from the icon set, or an element drawn in the text colour. */
+  icon?: string | Element | null;
+  /** The notification's own picture (an avatar, a cover) in place of the icon, cropped square. */
+  picture?: string;
+  /** The default action: pressing the text runs it and the toast ends `opened`. */
+  open?: (() => void) | null;
+  /** From another program: it enters whole from the window's edge, and pressing its text closes it when it has no `open`. */
+  edge?: boolean;
 }
 export interface Toast {
   readonly key: string;

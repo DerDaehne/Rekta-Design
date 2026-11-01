@@ -810,6 +810,17 @@ static void test_menu(void) {
   CHECK(tm->active == 19 && tm->scroll > 0 && last >= 0 && last + rk_metric_of(RK_ROW_HEIGHT) <= tr.h + 0.5f, "End scrolls its rows to the last one (%g)", tm->scroll);
   key(w, RK_KEY_ESCAPE, 0);
   rk_view_set_menu(more, m);                                   /* takes m back, lets go of the tall one */
+  /* an icon per item: at the start, and once one has one, every row's words start at one edge */
+  rk_view *im = rk_menu();
+  rk_menu_add(im, "network", NULL, on_menu, NULL);
+  int sound_i = rk_menu_add(im, "sound and the devices that play it", NULL, on_menu, NULL);
+  float plain = menu_measure(im, (rk_size){ 1000, 1000 }, im->state).w;
+  rk_menu_set_icon(im, sound_i, "speaker");
+  float with = menu_measure(im, (rk_size){ 1000, 1000 }, im->state).w;
+  CHECK(((menu *)im->state)->items[sound_i].icon && plain > 192 && with >= plain + 20 + rk_metric_of(RK_SPACE_S) - 0.5f, "an icon makes room at the start (%g, was %g)", with, plain);
+  rk_menu_set_icon(im, sound_i, NULL);
+  CHECK(!((menu *)im->state)->items[sound_i].icon, "and goes again");
+  rk_release(im);
   done(w);
 }
 

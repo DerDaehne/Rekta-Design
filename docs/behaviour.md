@@ -140,6 +140,7 @@ state's `word`) are the caller's, in its own language.
 | `loadFailed` | `combobox()` | “Could not load the choices. Type to try again.” |
 | `keyMeta` | `tips()`, `appbar()` | ("windows") → “Win”, ("other") → “Super”: the Meta key outside Apple |
 | `cannotAct` | `appbar()` | ("print", "needs a printer") → “print (needs a printer)”: a disabled control's item in "more" |
+| `back` | `menu()` | “back”: the row over a menu's second level, read with the level's name |
 
 ## The contract
 
@@ -186,6 +187,7 @@ them:
 | `data-rk-turn` | units of a place, or the place | `out`, `back-out`, `pressed` while leaving; `in`, `back-in` while arriving. |
 | `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it; `turned` after a place turn, where only sparklines draw. Removed once the build-in is over (`duration-moderate` + 10 × `duration-stagger` + `duration-long` + 50ms), so a re-render never replays it. A page without the script may set and remove it itself, with the same value and window. |
 | `data-rk-phase` | a toast, the banner | `leaving` while it goes; `clear` on the banner when no state stands. |
+| `data-rk-from` | a toast | `edge`: a notification from another program; it enters whole from the window's edge and leaves back out (`toaster.show({ edge })`). |
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
 | `data-rk-measured` | a pivot | `rekta.js` has measured its titles: inactive ones shrink by a scale that animates, instead of the stylesheet's measure-free font-size. |
 | `data-rk-wide` | a pivot and its facets' parent | The facets show side by side (`pivot()`, from `size.pivot-wide` up). |
@@ -628,7 +630,7 @@ place is in the page.
 `aria-atomic="false"`, placed after the content whose actions raise
 toasts.
 
-`toaster.show(text, { key, undo, from, action, act, status, windowMs, onEnd })`
+`toaster.show(text, { key, undo, from, action, act, status, windowMs, onEnd, title, icon, picture, open, edge })`
 shows one toast, replacing the one open. With `undo`, the toast has an
 undo button and a window (`windowMs`, or `duration-toast`) that counts
 down once a second and holds while it is hovered or has focus. The same
@@ -645,9 +647,19 @@ countdown ("reload").
   announced at once. Use it for a failure whose control has gone (a
   background save); a failure at a control that is still there is said
   at the control (`docs/states.md`).
+- **A notification from another program** ([states.md](states.md#a-notification-from-another-program)):
+  `edge: true` makes it enter whole from the window's edge
+  (`data-rk-from="edge"`); `title` sets a title in semibold over the
+  text, which is then cut after two lines (all of it is read); `icon` (a
+  name from the icon set, or an element drawn in the text colour) or
+  `picture` (a URL: an avatar, a cover) stands at its start. `open` is
+  its default action: the text becomes a button that runs it, and `act`
+  stays the one further action. Without `open`, pressing the text of an
+  `edge` toast closes it.
 - `onEnd(reason)` is called once when the toast goes: `expired` (its
   window ran out), `undone`, `replaced` (another toast took its place),
-  `acted` (its `act` ran) or `dismissed` (Escape, `dismiss()`); or
+  `acted` (its `act` ran), `opened` (its text ran `open`) or `dismissed`
+  (Escape, `dismiss()`, a notification's text pressed); or
   `merged`, when a `show()` with the same `key` and a new `onEnd` joined
   a second action to this toast: the first action now rides on the
   second, whose `onEnd` reports the toast's end. A same-key `show()`
@@ -794,6 +806,27 @@ goes to `place()`. Returns
 `{ open(index), close(), set(isChecked), destroy }` (`set` ticks
 checkbox items from outside, as when a filter comes back from the
 address).
+
+A **second level** is a `.rk-menu-level` (`role="menu"`, `hidden`,
+an `aria-label` with its name) inside `el`, named by an item with
+`aria-haspopup="menu"` and `aria-controls`. → Enter, Space or a click
+on the item shows it in place of the list, under a back row the script
+adds (`.rk-menu-back`, the level's name), and focuses its first item;
+the surface keeps its width and place. ← Escape or the back row go back
+one level, focus to the item that opened it; Tab or a click outside
+close every level. Levels may nest. An item may start with an icon
+(`<svg class="rk-icon">`), after its choice's square
+([states.md](states.md#floating-surfaces)).
+
+```html
+<div class="rk-float" id="tray">
+  <button class="rk-menu-item" role="menuitem" aria-haspopup="menu" aria-controls="tray-net"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-wireless"/></svg>network</button>
+  <div class="rk-menu-level" id="tray-net" role="menu" aria-label="network" hidden>
+    <button class="rk-menu-item" role="menuitemradio" aria-checked="true">Home</button>
+    <button class="rk-menu-item" role="menuitemradio" aria-checked="false">Office 5G</button>
+  </div>
+</div>
+```
 
 ### `select(el, { items, onShow, onChange, appbar })`
 
