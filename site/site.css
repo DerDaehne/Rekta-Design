@@ -156,3 +156,49 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
 }
 .phone-screen > .rk-title { margin-block: var(--rk-space-xs); font-size: var(--rk-font-size-l); }
 .phone .phone-bar { position: absolute; z-index: auto; padding-inline: var(--rk-space-m); }   /* a phone's, at any window width */
+
+/* Lists: the statuses a filter shows, as tags in a row; each fades in and out in place (data-rk-motion="inline"). */
+.chosen { display: flex; flex-wrap: wrap; gap: var(--rk-space-xs) var(--rk-space-m); margin: var(--rk-space-xs) 0 0; }
+
+/* A whole system in small: a screen with a desktop, one window, the bar under them and the lock screen over all of
+   it. The bar is the screen's at any window width, as the phone's is; the screen is a container, so the lock screen's
+   display type and its corners follow the screen, not the window. */
+.screen { position: relative; isolation: isolate; height: 27rem; overflow: hidden; border: 1px solid var(--rk-text-contrast-low); border-radius: var(--rk-radius-s); background: var(--rk-bg); container: screen / inline-size; }
+.screen-desk { position: absolute; inset: 0 0 var(--rk-appbar-height); }
+.screen-empty { position: absolute; inset: auto var(--rk-space-m) var(--rk-space-m); margin: 0; color: var(--rk-text-contrast-high); }
+.screen-win { position: absolute; top: var(--rk-space-m); left: var(--rk-space-m); width: min(24rem, calc(100% - 2 * var(--rk-space-m))); border: 1px solid var(--rk-text-contrast-medium); border-radius: var(--rk-radius-s); background: var(--rk-bg); overflow: hidden; }
+.screen-win[data-max] { inset: 0; width: auto; border-width: 0; border-radius: 0; }
+.screen-win > .rk-titlebar { border-bottom: 1px solid var(--rk-text-contrast-low); }
+.screen .screen-bar { position: absolute; z-index: auto; padding-inline: var(--rk-space-s); }
+.clock-face { display: grid; justify-items: center; line-height: var(--rk-line-height-compact); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.clock-face > span { font-weight: var(--rk-font-weight-regular); color: var(--rk-text-contrast-high); }
+.level { display: inline-flex; align-items: center; gap: var(--rk-space-s); font-variant-numeric: tabular-nums; }
+.screen-cal { padding: var(--rk-space-s) var(--rk-space-m); }
+.screen-lock { position: absolute; inset: 0; z-index: 1; display: grid; grid-template: 'time time' 1fr 'account status' auto / minmax(0, 1fr) auto; gap: var(--rk-space-m) var(--rk-space-l); padding: var(--rk-space-l); overflow-y: auto; background: var(--rk-bg); }
+.lock-time { grid-area: time; }
+.lock-time > * { margin: 0; }
+.lock-account { grid-area: account; display: grid; gap: var(--rk-space-s); max-width: 18rem; }
+.lock-account > * { margin: 0; }
+.lock-status { grid-area: status; align-self: end; }
+@container screen (max-width: 34rem) {
+  .screen-lock { grid-template: 'time' auto 'account' auto 'status' auto / minmax(0, 1fr); padding: var(--rk-space-m); }
+}
+
+/* The notification centre: the sender's picture or icon, its title over one line of text, the time and the dismiss
+   button at the end; an entry with progress carries its status word and bar under the text. */
+.centre > li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; align-items: center; gap: 0 var(--rk-space-s); padding-block: var(--rk-space-xs); }
+.centre-text { display: grid; min-width: 0; }
+.centre-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rk-text-contrast-high); }
+.centre-state { grid-column: 2 / 4; grid-row: 2; display: flex; align-items: center; gap: var(--rk-space-s); }
+.centre-state > .rk-progress { flex: 1 1 auto; }
+.centre > li > .rk-btn { grid-column: 4; grid-row: 1; }
+
+/* All apps: the header is the place's accent surface; a preview shows a running program's content small. Quick
+   settings: each group a heading over its controls. */
+.apps-head { padding-block: var(--rk-space-l); margin-bottom: var(--rk-space-m); }
+.mock { display: grid; align-content: start; gap: var(--rk-space-xs); padding: var(--rk-space-s) 12px; background: var(--rk-bg); font-size: var(--rk-font-size-xxs); line-height: var(--rk-line-height-compact); overflow: hidden; }
+.mock > :first-child { font-weight: var(--rk-font-weight-semibold); }
+.mock > :not(:first-child) { color: var(--rk-text-contrast-high); }
+.quick > section { display: grid; gap: var(--rk-space-s); }
+.quick > section > h3 { margin: 0; }
+.qs-in > span { flex: 1 1 auto; text-align: start; }

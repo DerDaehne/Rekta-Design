@@ -174,14 +174,21 @@ ok(!(await p.evaluate(() => /\{\{|<!--@/.test(document.body.innerHTML))), 'every
 ok((await p.evaluate(() => { const seen = new Set(), twice = []; document.querySelectorAll('[id]').forEach((e) => { if (seen.has(e.id)) twice.push(e.id); seen.add(e.id); }); return twice.join(); })) === '', 'every id is unique');
 
 // Tile → place: the turnstile, the address, the title, focus; the crumb back.
-await p.click('#tile-notes'); await p.waitForTimeout(120);
-ok(await p.evaluate(() => document.querySelectorAll('[data-rk-turn]').length > 3), 'leaving units turn');
-// The turn takes its angle and curve from the tokens (turnstile-out-angle, ease-turn-out), not from literals.
+await p.click('#tile-notes');
+// The turn takes its angle and curve from the tokens (turnstile-out-angle, ease-turn-out), not from literals. Both are
+// read in one look while the parts leave: the leaving lasts about 0.4s, and the time a click takes to return varies
+// with the page and the runner, so a fixed wait and a second round trip could land after it.
 {
-  const t = await p.evaluate(() => {
-    const u = document.querySelector('[data-rk-turn="out"]'), s = getComputedStyle(document.documentElement);
-    return { ease: u && getComputedStyle(u).animationTimingFunction, want: s.getPropertyValue('--rk-ease-turn-out').trim(), angle: s.getPropertyValue('--rk-turnstile-out-angle').trim() };
-  });
+  const t = await p.evaluate(() => new Promise((res) => {
+    const end = performance.now() + 1000;
+    (function look() {
+      const u = document.querySelector('[data-rk-turn="out"]');
+      if (!u && performance.now() < end) { requestAnimationFrame(look); return; }
+      const s = getComputedStyle(document.documentElement);
+      res({ n: document.querySelectorAll('[data-rk-turn]').length, ease: u && getComputedStyle(u).animationTimingFunction, want: s.getPropertyValue('--rk-ease-turn-out').trim(), angle: s.getPropertyValue('--rk-turnstile-out-angle').trim() });
+    }());
+  }));
+  ok(t.n > 3, 'leaving units turn', t.n);
   ok(t.ease === t.want && t.want === 'cubic-bezier(0.35, 0, 0.65, 0.6)' && t.angle === '60deg', 'a leaving part turns by the token angle on the token curve', JSON.stringify(t));
 }
 await p.screenshot({ path: join(shots, 'turn-mid.png') });
@@ -709,7 +716,7 @@ await p.keyboard.press('Escape');
   ok(s1 === 'Sparkline' && s2 === 'Sheet' && pan === 'Panorama' && stop === 'Panorama' && JSON.stringify(await sel()) === '["Sparkline"]', 'letters jump in a table: s, s again, then "pan"; the tab stop follows, the selection stays', `${s1} ${s2} ${pan} / ${stop} / ${await sel()}`);
 }
 await p.click('#comp-table thead th:nth-child(2) .rk-sort'); await p.waitForTimeout(500);
-ok((await p.evaluate(() => document.querySelector('#comp-body tr').dataset.name)) === 'App bar', 'sort by component');
+ok((await p.evaluate(() => document.querySelector('#comp-body tr').dataset.name)) === 'Accent surface', 'sort by component');
 await p.click('#comp-status'); await p.waitForTimeout(200); await p.click('#comp-status-menu [data-v=warning]'); await p.waitForTimeout(200);
 ok((await text(p, '#comp-status')) === 'status: waiting' && (await p.evaluate(() => [...document.querySelectorAll('#comp-body tr')].filter((r) => !r.hidden).length)) === 3, 'a filter keeps the waiting components', await text(p, '#comp-status'));
 await p.keyboard.press('Escape'); await p.click('#comp-clear'); await p.waitForTimeout(200);
@@ -2077,6 +2084,156 @@ const run = await sp.evaluate(async () => {
 ok(run.front && run.back && run.end === 0, 'running things: the one in front in the primary colour, the others stepped back; with no live state the commands still stand at the end', JSON.stringify(run));
 ok(run.moved === '1011' || run.moved === '1010' || run.moved === '0010', 'a full bar moves running things into "more" first, the latest started first, the one in front last', JSON.stringify(run));
 await sp.close();
+
+// The showcase shows what the reports on 0.5.0 added, each demo where it belongs and working: a status region, a
+// field disabled with its reason, the beads, tags that fade in place, the facets' first paint, the carried titles,
+// a called place on its accent surface with launch tiles in every width and content fills, a desktop with window
+// buttons, running things, a clock with its month, the level in a toast or the bar, programs in the background, a
+// disabled bar control, notifications from other programs in a centre, quick settings chosen in place, the session,
+// the lock screen and the recent stack.
+const sy = await open();
+{
+  // Tiles: a status region runs; cancelling asks with the destructive answer, then a control that could not act can.
+  await sy.evaluate(() => window.site.home.goTo('tiles')); await sy.waitForTimeout(600);
+  const job = await sy.evaluate(() => ({ region: !!document.querySelector('#tiles .rk-status-region .rk-figures'), run: +document.querySelector('#job-run').textContent, word: document.querySelector('#job-tag').textContent, again: document.querySelector('#job-again').getAttribute('aria-disabled'), why: (document.getElementById(document.querySelector('#job-again').dataset.rkWhy) || {}).textContent }));
+  ok(job.region && job.run > 0 && job.word === 'active' && job.again === 'true' && /still running/.test(job.why), 'tiles: a status region counts, its tag says active, "start again" says why it cannot act', JSON.stringify(job));
+  await sy.click('#job-cancel'); await sy.waitForTimeout(400);
+  const ask = await sy.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return d && { ok: d.querySelector('[value=ok]').dataset.status, primary: d.querySelector('.rk-btn--primary').value, focus: document.activeElement.value }; });
+  ok(ask && ask.ok === 'error' && ask.primary === 'cancel' && ask.focus === 'cancel', 'confirm({ safe: "cancel" }): keeping it is the primary answer, cancelling the build is destructive', JSON.stringify(ask));
+  await sy.click('dialog[open] [value=ok]'); await sy.waitForTimeout(500);
+  ok(await sy.evaluate(() => document.querySelector('#job-tag').textContent === 'idle' && !document.querySelector('#job-tag').dataset.status && document.querySelector('#job-cancel').hidden && document.querySelector('#job-again').getAttribute('aria-disabled') !== 'true'), 'cancelled, the region is idle and can start again');
+  ok(await sy.evaluate(() => !!document.querySelector('#live-tiles a[href="#notes"] [data-rk-carry]') && !!document.querySelector('#tile-apps [data-rk-carry]')), 'more tiles carry their title into the place they open');
+  // Inputs: a field disabled with its reason looks disabled, says why and refuses.
+  const keep = await sy.evaluate(() => {
+    const i = document.querySelector('#keep-days'), plus = i.nextElementSibling; plus.click();
+    return { value: i.value, aria: i.getAttribute('aria-disabled'), why: document.querySelector('#keep-why').textContent, described: (i.getAttribute('aria-describedby') || '').includes('keep-why')};
+  });
+  ok(keep.value === '30' && keep.aria === 'true' && /organisation/.test(keep.why) && keep.described, 'inputs: a stepper with aria-disabled says why and refuses its buttons', JSON.stringify(keep));
+  // Data: the beads run for a long wait.
+  await sy.evaluate(() => document.querySelector('#startup').click()); await sy.waitForTimeout(200);
+  ok(await sy.evaluate(() => { const b = document.querySelector('#beads'); return !b.hidden && b.matches('.rk-dots--beads') && b.children.length === 3 && [...b.children].every((i) => i.getAnimations().length); }), 'data: "start up" runs the beads');
+  // Lists: the statuses a filter shows stand as tags that fade in place, without a path.
+  await sy.evaluate(() => window.site.home.goTo('lists')); await sy.waitForTimeout(500);
+  await sy.click('#comp-status'); await sy.click('#comp-status-menu [data-v="success"]'); await sy.keyboard.press('Escape'); await sy.waitForTimeout(60);
+  const tagIn = await sy.evaluate(() => { const t = document.querySelector('#comp-tags [data-v="success"]'); const k = t.getAnimations().flatMap((a) => a.effect.getKeyframes()); return { shown: !t.hidden, moves: k.some((f) => f.transform && f.transform !== 'none'), fades: k.some((f) => 'opacity' in f), others: [...document.querySelectorAll('#comp-tags .rk-tag:not([data-v="success"])')].every((x) => x.hidden) }; });
+  ok(tagIn.shown && tagIn.others && !tagIn.moves, 'lists: the chosen status stands as a tag and fades in place (data-rk-motion="inline")', JSON.stringify(tagIn));
+  await sy.evaluate(() => document.querySelector('#comp-clear').click()); await sy.waitForTimeout(500);
+  ok(await sy.evaluate(() => [...document.querySelectorAll('#comp-tags .rk-tag')].every((t) => t.hidden)), 'cleared, the tag goes');
+  // The showcase's own panorama never ends flush: the window's edge cuts into a section, space-xl from its ends.
+  await sy.evaluate(() => window.site.home.goTo('overview')); await sy.waitForTimeout(800);
+  const edge = await sy.evaluate(() => {
+    const pan = document.querySelector('#pan'), at = pan.getBoundingClientRect().left + pan.clientWidth, xl = Rekta.tokens.px('--rk-space-xl');
+    const sec = [...pan.querySelectorAll(':scope > .rk-sec')].map((x) => x.getBoundingClientRect()).find((r) => r.left <= at && r.right >= at);
+    return { inside: !!sec, room: sec ? Math.round(Math.min(at - sec.left, sec.right - at)) : 0, xl };
+  });
+  ok(edge.inside && edge.room >= edge.xl - 1, 'panorama: the window\'s edge falls inside a section, never flush', JSON.stringify(edge));
+  ok(await sy.evaluate(() => { const f = document.querySelector('#panorama .rk-facets > div'); return !!f && f.contains(document.querySelector('#facet-0')) && f.hasAttribute('data-rk-narrow'); }), 'panorama: the facets sit in .rk-facets, and pivot() decides narrow there');
+}
+{
+  // A whole system: the desktop's window buttons, the running things, the inactive name.
+  await sy.evaluate(() => window.site.home.goTo('system')); await sy.waitForTimeout(700);
+  const run0 = await sy.evaluate(() => ({ runs: [...document.querySelectorAll('#screen-bar .rk-ab-run')].map((b) => `${b.dataset.app}${b.getAttribute('aria-current') === 'true' ? '*' : ''}`).join(), pic: document.querySelector('#screen-bar .rk-ab-run img.rk-picture').naturalWidth > 0, win: document.querySelector('#win-name').textContent, btns: [...document.querySelectorAll('#win-bar .rk-titlebar-win > .rk-btn')].map((b) => b.getAttribute('aria-label')).join() }));
+  ok(run0.runs === 'notes*,chat' && run0.pic && run0.win === 'Notes' && run0.btns === 'minimize,maximize,close', 'system: running things in the bar, the one in front marked, a picture icon; the window has its three buttons', JSON.stringify(run0));
+  await sy.click('#win-max'); await sy.waitForTimeout(500);
+  const max = await sy.evaluate(() => ({ max: document.querySelector('#win').hasAttribute('data-max'), label: document.querySelector('#win-max').getAttribute('aria-label'), glyph: document.querySelector('#win-max use').getAttribute('href'), w: Math.round(document.querySelector('#win').getBoundingClientRect().width), desk: Math.round(document.querySelector('#desk').getBoundingClientRect().width) }));
+  ok(max.max && max.label === 'restore' && max.glyph === '#rk-i-restore' && Math.abs(max.w - max.desk) <= 1, 'maximize fills the desktop and the button becomes restore', JSON.stringify(max));
+  await sy.click('#win-max'); await sy.waitForTimeout(500);
+  ok(await sy.evaluate(() => !document.querySelector('#win').hasAttribute('data-max') && document.querySelector('#win-max').getAttribute('aria-label') === 'maximize'), 'restore brings it back');
+  await sy.mouse.click(...(await sy.evaluate(() => { const r = document.querySelector('#desk').getBoundingClientRect(); return [r.right - 20, r.bottom - 20]; }))); await sy.waitForTimeout(100);
+  ok(await sy.evaluate(() => document.querySelector('#win-bar').hasAttribute('data-rk-inactive') && !document.querySelector('#screen-bar [aria-current]')), 'a press on the desktop: the window is inactive, its name steps back');
+  await sy.click('#win-min'); await sy.waitForTimeout(100);
+  ok(await sy.evaluate(() => document.querySelector('#win-name').textContent === 'Chat'), 'minimize brings the next one to the front');
+  await sy.click('#win-min'); await sy.waitForTimeout(100);
+  ok(await sy.evaluate(() => document.querySelector('#win').hidden && !document.querySelector('#screen-bar [aria-current]')), 'all minimized, no window shows');
+  await sy.click('#screen-bar .rk-ab-run[data-app="notes"]'); await sy.waitForTimeout(100);
+  ok(await sy.evaluate(() => !document.querySelector('#win').hidden && document.querySelector('#win-name').textContent === 'Notes' && document.querySelector('#screen-bar .rk-ab-run[data-app="notes"]').getAttribute('aria-current') === 'true'), 'a running thing brings its window back');
+  // The bar: a centred clock and its month, a disabled control with its reason, two sides that give way.
+  const clock = await sy.evaluate(() => { const b = document.querySelector('#screen-bar').getBoundingClientRect(), c = document.querySelector('#clock').getBoundingClientRect(); return { off: Math.abs(c.left + c.width / 2 - (b.left + b.width / 2)), cast: document.querySelector('#sb-cast').getAttribute('aria-disabled'), tip: document.querySelector('#sb-cast').dataset.rkTip }; });
+  ok(clock.off <= 1 && clock.cast === 'true' && /nearby/.test(clock.tip), 'the clock stands in the middle of the bar; "cast" cannot act and its tooltip says why', JSON.stringify(clock));
+  await sy.click('#clock'); await sy.waitForTimeout(300);
+  const cal = await sy.evaluate(() => { const f = document.querySelector('#clock-cal'), c = document.querySelector('#clock').getBoundingClientRect(), r = f.getBoundingClientRect(); return { open: f.matches(':popover-open'), today: +document.querySelector('#month [aria-current="date"]').textContent === new Date().getDate(), off: Math.abs(r.left + r.width / 2 - (c.left + c.width / 2)), days: document.querySelectorAll('#month thead th').length }; });
+  ok(cal.open && cal.today && cal.days === 7 && cal.off <= 1, 'the clock opens this month (.rk-month), today framed, centred on the clock', JSON.stringify(cal));
+  await sy.keyboard.press('Escape'); await sy.waitForTimeout(200);
+  // The level: in a toast, then in the bar's middle in place of the clock.
+  await sy.click('#vol-up'); await sy.waitForTimeout(400);
+  ok(await sy.evaluate(() => { const t = document.querySelector('.rk-toast.rk-toast--level:not([data-rk-phase])'); return !!t && t.textContent.includes('volume') && t.textContent.includes('70') && !t.dataset.status; }), 'volume up: the level indicator in a toast, at 70%');
+  await sy.click('label:has(> input[name=level-in][value=bar])'); await sy.click('#vol-down'); await sy.waitForTimeout(600);
+  ok(await sy.evaluate(() => document.querySelector('#clock').hasAttribute('data-rk-indicating') && document.querySelector('#clock .level b').textContent === '60%' && document.querySelector('#level-said').textContent === 'volume 60%'), 'in the bar: the level stands in place of the clock (indicate()) and is said in a live region');
+  ok(await until(sy, () => sy.evaluate(() => !document.querySelector('#clock').hasAttribute('data-rk-indicating') && !!document.querySelector('#clock-time').offsetWidth), 3500), 'then the clock turns back');
+  // Programs in the background: a menu with icons and a second level.
+  await sy.evaluate(() => { const b = document.querySelector('#sb-bg'); if (b.hasAttribute('data-rk-overflow')) window.site.screenBar.layout(); });
+  const bgShown = await sy.evaluate(() => !document.querySelector('#sb-bg').hasAttribute('data-rk-overflow'));
+  if (bgShown) {
+    await sy.click('#sb-bg'); await sy.waitForTimeout(300); await sy.keyboard.press('Enter'); await sy.waitForTimeout(200);
+    const lvl = await sy.evaluate(() => ({ level: !document.querySelector('#bg-music').hidden, back: (document.querySelector('#bg-music .rk-menu-back') || {}).textContent, focus: document.activeElement.dataset.act, icons: document.querySelectorAll('#bg-menu .rk-menu-item > .rk-icon').length }));
+    ok(lvl.level && /Music/.test(lvl.back || '') && lvl.focus === 'previous' && lvl.icons >= 5, 'in the background: a program\'s own menu is a second level with icons', JSON.stringify(lvl));
+    await sy.keyboard.press('Escape'); await sy.keyboard.press('Escape'); await sy.waitForTimeout(200);
+  } else ok(true, 'in the background: in "more" at this width');
+  // Notifications from another program: from the edge, with its picture and title; the centre takes it on top and
+  // the count peeks; dismissed with undo; a tap hints at the swipe.
+  await sy.click('#n-message'); await sy.waitForTimeout(400);
+  const note = await sy.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase])'); return { edge: t.getAttribute('data-rk-from'), title: (t.querySelector('.rk-toast-title') || {}).textContent, pic: !!t.querySelector('img'), first: document.querySelector('#centre > li b').textContent, n: document.querySelectorAll('#centre > li').length, count: document.querySelector('#sb-count').textContent }; });
+  ok(note.edge === 'edge' && note.title === 'Ana Ruiz' && note.pic && note.first === 'Ana Ruiz' && note.n === 4 && note.count === '4', 'a message arrives: a toast from the edge with its picture and title; on top of the centre; the count follows', JSON.stringify(note));
+  await sy.click('#n-backup'); await sy.waitForTimeout(400);
+  ok(await sy.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase])'); return !!t.querySelector('.rk-toast-msg svg.rk-icon') && t.querySelector('.rk-toast-title').textContent === 'Backup'; }), 'a backup finishes: its icon, drawn in the toast\'s colour');
+  await sy.click('#centre > li:nth-child(2) .centre-text'); await sy.waitForTimeout(80);
+  ok(await sy.evaluate(() => document.querySelector('#centre > li:nth-child(2)').getAnimations().length > 0), 'a tap on a notification hints at its swipe (nudge())');
+  await sy.click('#centre > li:first-child [data-rk-remove]');
+  ok(await until(sy, () => sy.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase]) .rk-toast-msg'); return document.querySelectorAll('#centre > li').length === 4 && !!t && /Dismissed/.test(t.textContent); })), 'dismiss removes it, and a toast offers undo');
+  await sy.click('.rk-toast:not([data-rk-phase]) .rk-toast-act'); await sy.waitForTimeout(700);
+  ok(await sy.evaluate(() => document.querySelectorAll('#centre > li').length === 5 && document.querySelector('#centre > li b').textContent === 'Backup'), 'undo puts it back where it was');
+  // Quick settings: a side panel; a group gives its place to its list.
+  await sy.evaluate(() => document.querySelector('#sb-quick').click()); await sy.waitForTimeout(600);
+  ok(await sy.evaluate(() => { const d = document.querySelector('#quick-panel'), r = d.getBoundingClientRect(); return d.open && Math.round(r.right) === document.documentElement.clientWidth && Math.round(r.height) === innerHeight; }), 'quick settings: a side panel at the trailing edge, full height');
+  await sy.click('#qs-net'); await sy.waitForTimeout(400);
+  ok(await sy.evaluate(() => !document.querySelector('#qs-nets').hidden && document.querySelector('#qs-nets > .rk-in-back').textContent === 'back · wi-fi'), 'wi-fi opens its networks in place, under "back · wi-fi"');
+  await sy.click('label:has(> input[value="Office 5G"])'); await sy.waitForTimeout(400);
+  ok(await sy.evaluate(() => document.querySelector('#qs-nets').hidden && document.querySelector('#qs-net-v').textContent === 'Office 5G' && document.activeElement.id === 'qs-net'), 'choosing one goes back to the group, which says it');
+  await sy.keyboard.press('Escape'); await sy.waitForTimeout(700);
+  // The session, the lock screen and signing in again.
+  await sy.click('#session-open'); await sy.waitForTimeout(400);
+  ok(await sy.evaluate(() => { const d = document.querySelector('#session'); return d.open && d.querySelector('.rk-btn--primary').value === 'lock' && Math.round(d.getBoundingClientRect().width) === document.documentElement.clientWidth; }), 'session: a bar across the top, lock first');
+  await sy.click('#session [value=lock]'); await sy.waitForTimeout(1200);
+  const locked = await sy.evaluate(() => ({ shown: !document.querySelector('#lock').hidden, display: document.querySelector('#lock-time').matches('.rk-display'), size: parseFloat(getComputedStyle(document.querySelector('#lock-time')).fontSize), inert: document.querySelector('#desk').inert, focus: document.activeElement.id }));
+  ok(locked.shown && locked.display && locked.size >= 80 && locked.inert && locked.focus === 'lock-pw', 'lock: the lock screen with the time in the display step; the desktop behind it is inert', JSON.stringify(locked));
+  await sy.click('#lock-in'); await sy.waitForTimeout(300);
+  ok(await sy.evaluate(() => /Type the password/.test(document.querySelector('#lock-form').textContent) && document.querySelector('#lock-pw').getAttribute('aria-invalid') === 'true'), 'an empty password is refused at the field');
+  await sy.fill('#lock-pw', 'x'); await sy.click('#lock-in'); await sy.waitForTimeout(300);
+  ok(await sy.evaluate(() => !document.querySelector('#lock-dots').hidden), 'signing in: the dots run');
+  ok(await until(sy, () => sy.evaluate(() => document.querySelector('#lock').hidden && !document.querySelector('#desk').inert), 4000), 'then the desktop is back');
+  // The recent stack: the one before the current one has focus; Enter brings it to the front.
+  await sy.click('#recent-open'); await sy.waitForTimeout(400);
+  const rec = await sy.evaluate(() => ({ open: document.querySelector('#recent').open, tiles: [...document.querySelectorAll('#recent-tiles > .rk-tile--preview')].map((t) => t.dataset.app).join(), focus: document.activeElement.dataset.app, foot: !!document.querySelector('#recent-tiles .rk-tile-foot') }));
+  ok(rec.open && rec.tiles.startsWith('notes,') && rec.focus === rec.tiles.split(',')[1] && rec.foot, 'the recent stack: preview tiles, the last used first, the one before has focus', JSON.stringify(rec));
+  await sy.keyboard.press('Enter'); await sy.waitForTimeout(300);
+  ok(await sy.evaluate((f) => !document.querySelector('#recent').open && window.site.desk().front === f, rec.focus), 'Enter brings it to the front');
+}
+{
+  // All apps: a called place on its accent surface; launch tiles one to four units wide, content fills, the grid's
+  // arrows and letters; a launch tile opens its program on the desktop.
+  await sy.click('#tile-apps'); await sy.waitForTimeout(1500);
+  const apps = await sy.evaluate(() => {
+    const head = document.querySelector('[data-rk-place="apps"] .rk-accent-surface'), probe = document.createElement('i');
+    probe.style.color = 'var(--rk-accent)'; head.append(probe); const accent = getComputedStyle(probe).color; probe.remove();
+    const tiles = [...document.querySelectorAll('#apps-grid .rk-launch')], unit = Rekta.tokens.px('--rk-tile-unit');
+    return { shown: !document.querySelector('[data-rk-place="apps"]').hidden, called: document.querySelector('[data-rk-place="apps"]').hasAttribute('data-rk-called'), bg: getComputedStyle(head).backgroundColor === accent,
+      widths: tiles.map((t) => Math.round(t.getBoundingClientRect().width / unit)).join(), icons: tiles.map((t) => Math.round(t.querySelector('.rk-icon, .rk-picture').getBoundingClientRect().width)).join(),
+      fill: getComputedStyle(document.querySelector('#apps-grid [data-app="notes"]')).backgroundColor, teal: (() => { const i = document.createElement('i'); i.style.color = 'var(--rk-content-teal)'; document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c; })(),
+      running: document.querySelectorAll('#apps-running > .rk-tile--preview').length };
+  });
+  ok(apps.shown && apps.called && apps.bg, 'all apps: a called place whose header is the accent surface', JSON.stringify(apps));
+  ok(apps.widths === '2,1,1,2,3,4' && apps.icons === '96,48,48,48,48,48', 'launch tiles one to four units wide; the icon 48px, 96px on a tile two high', JSON.stringify(apps));
+  ok(apps.fill === apps.teal && apps.running >= 2, 'content fills on the launch tiles; the running programs as preview tiles', JSON.stringify(apps));
+  await sy.click('label:has(> #apps-fills)'); await sy.waitForTimeout(300);
+  ok(await sy.evaluate(() => document.querySelector('#apps-grid').dataset.rkFills === 'plain' && getComputedStyle(document.querySelector('#apps-grid [data-app="notes"]')).backgroundColor === getComputedStyle(document.querySelector('#apps-grid [data-app="chat"]')).backgroundColor), 'one switch makes the set plain');
+  await sy.focus('#apps-grid [data-app="chat"]'); await sy.keyboard.press('ArrowRight');
+  ok((await sy.evaluate(() => document.activeElement.dataset.app)) === 'notes', 'the arrows move between launch tiles (grid())');
+  await sy.keyboard.press('t');
+  ok((await sy.evaluate(() => document.activeElement.dataset.app)) === 'terminal', 'a letter jumps to the program that starts with it');
+  await sy.keyboard.press('Enter'); await sy.waitForTimeout(2200);
+  ok(await sy.evaluate(() => !document.querySelector('[data-rk-place="home"]').hidden && document.querySelector('#win-name').textContent === 'Terminal' && document.querySelector('#screen-bar .rk-ab-run[data-app="terminal"]').getAttribute('aria-current') === 'true'), 'a launch tile opens its program on the desktop, in front, in the bar');
+}
+await sy.close();
 
 // Reduced motion: a place change is instant, never skipped.
 const r = await open({ reducedMotion: 'reduce' });
