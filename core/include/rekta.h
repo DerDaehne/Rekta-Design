@@ -804,7 +804,8 @@ typedef struct rk_ui {
   const char *hint, *error;                        /* a field's (an error takes the hint's place); a drop's hint */
   const char *placeholder;                         /* a field's */
   const char *icon;                                /* a button's; an icon's name */
-  const char *shortcut;                            /* a menu item's key hint: "Ctrl+E" */
+  const char *shortcut;                            /* a menu item's key hint, as navigation.md writes one: "Ctrl+E",
+                                                      "Ctrl+Shift+Z" (Ctrl, Alt, Shift, Super, then the key) */
   const char *tooltip;
   const char *access;                              /* what a screen reader says, where the view says too little (an icon) */
   const char *accept;                              /* a drop's filter: ".png,.jpg", "image/" with a star */

@@ -78,7 +78,7 @@
             <span class="rk-stat"><b>next</b><span>date ranges</span></span>
           </div>
         </div>
-        <p class="note">Move sideways with the mouse wheel, a trackpad swipe, or ← → once the panorama has focus. On a phone, just scroll down. <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">K</kbd> goes anywhere; <kbd class="rk-key">?</kbd> lists every key.</p>
+        <p class="note">Move sideways with the mouse wheel, a trackpad swipe, or ← → once the panorama has focus. On a phone, just scroll down. <kbd class="rk-key">Ctrl+K</kbd> goes anywhere; <kbd class="rk-key">?</kbd> lists every key.</p>
       </section>
 
       <section class="rk-sec" id="roots" aria-labelledby="roots-title">
@@ -287,7 +287,7 @@
 
       <section class="rk-sec sec-wide" id="desktop" aria-labelledby="desktop-title">
         <h2 class="rk-group" id="desktop-title">A desktop app, by mouse and by keys.</h2>
-        <p>Rest the pointer on a control: a tooltip. Right-click, long-press or <kbd class="rk-key">Shift</kbd> <kbd class="rk-key">F10</kbd> on a file: a context menu. A tree that opens and closes, a list you order by its grip, and ten thousand lines that scroll like ten.</p>
+        <p>Rest the pointer on a control: a tooltip. Right-click, long-press or <kbd class="rk-key">Shift+F10</kbd> on a file: a context menu. A tree that opens and closes, a list you order by its grip, and ten thousand lines that scroll like ten.</p>
         <div class="desk">
           <div class="desk-tree">
             <div class="toolbar" role="toolbar" aria-label="files">
@@ -323,7 +323,7 @@
         </div>
         <div id="tree-menu">
           <button class="rk-menu-item" role="menuitem" type="button" data-act="show">show</button>
-          <button class="rk-menu-item" role="menuitem" type="button" data-act="copy">copy the path<span class="rk-menu-key">Ctrl C</span></button>
+          <button class="rk-menu-item" role="menuitem" type="button" data-act="copy">copy the path<span class="rk-menu-key">Ctrl+C</span></button>
           <hr class="rk-menu-sep">
           <button class="rk-menu-item" role="menuitem" type="button" data-act="open">open every folder</button>
           <button class="rk-menu-item" role="menuitem" type="button" data-act="rename" aria-disabled="true">rename (read-only here)</button>
@@ -389,7 +389,7 @@
         <p class="rk-kicker group-label">undo history</p>
         <p class="rk-actions"><button class="rk-btn" type="button" id="h-undo" data-rk-tip="undo the last action" aria-keyshortcuts="Control+Z Meta+Z">undo</button><button class="rk-btn" type="button" id="h-redo" data-rk-tip="do it again" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">redo</button></p>
         <ol class="rk-rows history" id="h-list" aria-label="what you did"><li class="rk-empty">Nothing yet. Archive a component, edit a group, or order the release.</li></ol>
-        <p class="note">Everything you archive, edit or move on this page lands here. <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd> takes the last step back, <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Shift</kbd> <kbd class="rk-key">Z</kbd> does it again; the toast offers the same.</p>
+        <p class="note">Everything you archive, edit or move on this page lands here. <kbd class="rk-key">Ctrl+Z</kbd> takes the last step back, <kbd class="rk-key">Ctrl+Shift+Z</kbd> does it again; the toast offers the same.</p>
       </section>
 
       <section class="rk-sec" id="navigation" aria-labelledby="navigation-title">
@@ -397,7 +397,7 @@
         <ul class="rk-rows defs">
           <li><b>places have addresses</b><span>Open <a href="#tokens">the tokens</a> or <a href="#tokens/accent">one token</a>: the address changes; reload it, share it.</span></li>
           <li><b>one back</b><span>The crumb, <kbd class="rk-key">Esc</kbd>, the browser's back and the phone's back all go back one place, to where you were.</span></li>
-          <li><b>go to</b><span>“go to” in the app bar, or <kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">K</kbd>: places, sections, tokens and commands in one list.</span></li>
+          <li><b>go to</b><span>“go to” in the app bar, or <kbd class="rk-key">Ctrl+K</kbd>: places, sections, tokens and commands in one list.</span></li>
           <li><b>menus</b><span>They float next to their control and take keys: ↑ ↓, a letter, Enter, <kbd class="rk-key">Esc</kbd>.</span></li>
           <li><b>a full app bar</b><span>Make the window narrow: what does not fit moves into “more”.</span></li>
         </ul>
@@ -732,7 +732,7 @@
   <div class="rk-appbar" id="bar" role="region" aria-label="app bar">
     <button class="rk-ab rk-ab-back" id="back" type="button" data-rk-back hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 4 5 10l6 6M5 10h11"/></svg><span>back</span></button>
     <span class="rk-ab-status"><i class="rk-pulse" aria-hidden="true"></i><span class="rk-ab-k" id="live">live</span></span>
-    <button class="rk-ab" id="ab-goto" type="button" data-rk-priority="2" aria-keyshortcuts="Control+K Meta+K"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13 13 4 4"/></svg><span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl K</span></button>
+    <button class="rk-ab" id="ab-goto" type="button" data-rk-priority="2" aria-keyshortcuts="Control+K Meta+K"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13 13 4 4"/></svg><span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl+K</span></button>
     <button class="rk-ab" id="ab-pause" type="button" data-rk-priority="3"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12"/></svg><span>pause</span></button>
     <button class="rk-ab" id="ab-theme" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 4a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span><span class="rk-ab-k">theme </span><b id="theme-word">system</b></span></button>
     <button class="rk-ab" id="ab-motion" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10h4l2-5 3 10 2-5h5"/></svg><span><span class="rk-ab-k">motion </span><b id="motion-word">on</b></span></button>
@@ -755,17 +755,17 @@
       <p class="rk-kicker">help</p>
       <h2 class="rk-group" id="keys-title">Keyboard shortcuts</h2>
       <ul class="rk-rows keys-list">
-        <li>go to a place or run a command<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">K</kbd></span></li>
+        <li>go to a place or run a command<span><kbd class="rk-key">Ctrl+K</kbd></span></li>
         <li>this list<span><kbd class="rk-key">?</kbd></span></li>
         <li>back, or close what is open<span><kbd class="rk-key">Esc</kbd></span></li>
         <li>previous or next section (panorama focused)<span><kbd class="rk-key">←</kbd> <kbd class="rk-key">→</kbd></span></li>
         <li>first or last section<span><kbd class="rk-key">Home</kbd> <kbd class="rk-key">End</kbd></span></li>
-        <li>select another row, start the selection mode<span><kbd class="rk-key">Ctrl</kbd> + click</span></li>
-        <li>select a range<span><kbd class="rk-key">Shift</kbd> + click</span></li>
-        <li>select all rows (table focused)<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">A</kbd></span></li>
-        <li>undo the last action<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Z</kbd></span></li>
-        <li>do it again<span><kbd class="rk-key">Ctrl</kbd> <kbd class="rk-key">Shift</kbd> <kbd class="rk-key">Z</kbd></span></li>
-        <li>the menu of a row or a file<span><kbd class="rk-key">Shift</kbd> <kbd class="rk-key">F10</kbd></span></li>
+        <li>select another row, start the selection mode<span><kbd class="rk-key">Ctrl</kbd>+click</span></li>
+        <li>select a range<span><kbd class="rk-key">Shift</kbd>+click</span></li>
+        <li>select all rows (table focused)<span><kbd class="rk-key">Ctrl+A</kbd></span></li>
+        <li>undo the last action<span><kbd class="rk-key">Ctrl+Z</kbd></span></li>
+        <li>do it again<span><kbd class="rk-key">Ctrl+Shift+Z</kbd></span></li>
+        <li>the menu of a row or a file<span><kbd class="rk-key">Shift+F10</kbd></span></li>
         <li>edit a cell (table row focused)<span><kbd class="rk-key">F2</kbd></span></li>
         <li>move an item by its grip<span><kbd class="rk-key">Space</kbd> <kbd class="rk-key">↑</kbd> <kbd class="rk-key">↓</kbd></span></li>
       </ul>

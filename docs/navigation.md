@@ -310,6 +310,21 @@ Every pointer action has a keyboard path.
 The keyboard shortcuts are listed in the app itself (a sheet behind `?`
 and an entry in the palette), never only in a manual.
 
+### Writing a key
+
+A key hint (a tooltip's, a menu item's, the shortcut sheet's) writes a
+combination one way on every platform: the modifiers in the order Ctrl,
+Alt, Shift, Meta, then the key, with "+" between them and no spaces:
+"Ctrl+K", "Ctrl+Shift+Z", "Shift+F10". A letter is a capital. On Apple
+the modifiers are their symbols, in the same order and with no
+separator: ⌘K, ⇧⌘Z. The Meta key outside Apple is "Win" on Windows and
+"Super" elsewhere (Linux, ChromeOS, a platform not known); rekta.js takes
+the word from its catalogue (`keyMeta`). Keys that are alternatives or a
+sequence stand apart, with a space ("← →", "Space ↑ ↓"). These pages
+write "Ctrl/Cmd+K" for a key that is Ctrl on one platform and ⌘ on the
+other; an app shows the one for where it runs, as `tips()` and the app
+bar's menu do from `aria-keyshortcuts` ("Control+K Meta+K").
+
 ### Who gets a key
 
 Keys are layered: the innermost thing that is open gets the key first,

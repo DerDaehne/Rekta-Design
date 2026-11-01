@@ -124,6 +124,7 @@ export const strings = {
   putBack: (item) => `${item} put back.`,
   position: (item, at, of) => (item ? `${item}: position ${at} of ${of}.` : `position ${at} of ${of}`),
   loadFailed: 'Could not load the choices. Type to try again.',
+  keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
 };
 // rk-strings-end
 const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
@@ -2536,12 +2537,25 @@ export function guard(el, { router = null, what = tx('guardWhat') } = {}) {
 // Escape, a press, scrolling or leaving hide it. It repeats or completes what the control says: never the only way to
 // learn what it does. start() turns it on.
 const tip = { el: null, for: null, timer: 0, hid: 0, described: null, on: false };
-const KEY_NAMES = { Control: 'Ctrl', Meta: '⌘', Alt: 'Alt', Shift: 'Shift', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' };
+// A combination is written one way (navigation.md, "Writing a key"): the modifiers in the order Ctrl, Alt, Shift, Meta,
+// then the key, joined by "+" ("Ctrl+Shift+Z"); on Apple, the symbols with no separator ("⇧⌘Z"). Meta outside Apple
+// is the catalogue's keyMeta: "Win" on Windows, "Super" elsewhere.
+const KEY_NAMES = { Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' };
+const APPLE_KEYS = { Control: '⌃', Alt: '⌥', Shift: '⇧', Meta: '⌘' };
+const MODIFIERS = ['Control', 'Alt', 'Shift', 'Meta'];
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const isWindows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform || navigator.userAgent);
+function keyName(k) {
+  if (isMac && APPLE_KEYS[k]) return APPLE_KEYS[k];
+  if (k === 'Meta') return tx('keyMeta', isWindows ? 'windows' : 'other');
+  return KEY_NAMES[k] || (k.length === 1 ? k.toUpperCase() : k);
+}
 function shortcutText(el) {
   const all = (el.getAttribute('aria-keyshortcuts') || '').split(/\s+/).filter(Boolean);
   const pick = all.find((k) => (isMac ? /Meta/.test(k) : !/Meta/.test(k))) || all[0];
-  return pick ? pick.split('+').map((k) => KEY_NAMES[k] || k.toUpperCase()).join(isMac ? '' : ' ') : '';
+  if (!pick) return '';
+  const rank = (k) => { const i = MODIFIERS.indexOf(k); return i < 0 ? MODIFIERS.length : i; };
+  return pick.split('+').sort((a, b) => rank(a) - rank(b)).map(keyName).join(isMac ? '' : '+');
 }
 function tipText(el) {
   const t = el.getAttribute('data-rk-tip');

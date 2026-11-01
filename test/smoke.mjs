@@ -479,6 +479,22 @@ await p.hover('#tree-close'); await p.waitForTimeout(60);
 ok((await p.evaluate(() => document.querySelector('.rk-tip').textContent)) === 'close every folder', 'the next tooltip comes at once');
 await p.keyboard.press('Escape'); await p.waitForTimeout(100);
 ok(!(await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open'))) && await visible(p, 'home'), 'Escape hides the tooltip, nothing more');
+// A key combination is written one way: Ctrl, Alt, Shift, Meta, then the key, joined by "+"; Meta outside Apple is the
+// catalogue's keyMeta, "Super" here on Linux (#141).
+await p.evaluate(() => {
+  const box = document.createElement('p'); box.id = 'keys-fixture'; box.style.cssText = 'position:fixed;left:200px;top:200px;z-index:9999;display:flex;gap:40px';
+  box.innerHTML = '<button class="rk-btn" type="button" data-rk-tip="redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">a</button>'
+    + '<button class="rk-btn" type="button" data-rk-tip="launcher" aria-keyshortcuts="Meta+Shift+Z">b</button>'
+    + '<button class="rk-btn" type="button" data-rk-tip="find" aria-keyshortcuts="Shift+Alt+Control+f">c</button>';
+  document.querySelector('.rk').append(box);
+});
+const keyOf = async (n) => { await p.hover(`#keys-fixture > :nth-child(${n})`); await p.waitForTimeout(900); const k = await text(p, '.rk-tip .rk-key'); await p.mouse.move(5, 5); await p.waitForTimeout(200); return k; };
+const written = { both: await keyOf(1), meta: await keyOf(2), order: await keyOf(3) };
+await p.evaluate(() => Rekta.setStrings({ keyMeta: (os) => (os === 'windows' ? 'Win' : 'Meta') }));
+written.word = await keyOf(2);
+await p.evaluate(() => { Rekta.setStrings(null); document.querySelector('#keys-fixture').remove(); });
+ok(written.both === 'Ctrl+Shift+Z' && written.order === 'Ctrl+Alt+Shift+F', 'a key combination: modifiers in order, joined by +', JSON.stringify(written));
+ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Meta key outside Apple is the catalogue\'s keyMeta', JSON.stringify(written));
 await p.mouse.move(5, 5);
 await p.click('#tree > li:nth-child(1) > .rk-tree-row'); await p.waitForTimeout(100);
 await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.waitForTimeout(100);
@@ -1042,7 +1058,7 @@ const bar = await m.evaluate(async () => {
   const el = document.createElement('div'); el.className = 'rk-appbar'; el.style.cssText = 'width:320px;left:0;right:auto';
   el.innerHTML = `<button class="rk-ab rk-ab-back" type="button">${icon}<span>back</span></button><span class="rk-ab-status"><i class="rk-pulse"></i><span class="rk-ab-k">live</span></span>`
     + `<button class="rk-ab" id="t-search" type="button" data-rk-priority="pinned">${icon}<span>search</span></button>`
-    + `<button class="rk-ab" id="t-goto" type="button" aria-keyshortcuts="Control+K Meta+K">${icon}<span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl K</span></button>`
+    + `<button class="rk-ab" id="t-goto" type="button" aria-keyshortcuts="Control+K Meta+K">${icon}<span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl+K</span></button>`
     + `<button class="rk-ab" type="button" data-rk-priority="5">${icon}<span>other</span></button><button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
   const name = document.createElement('h1'); name.className = 'rk-place-name'; name.textContent = 'overview';
   document.querySelector('[data-rk-place="home"]').prepend(name);
@@ -1066,7 +1082,7 @@ const bar = await m.evaluate(async () => {
   return r;
 });
 ok(bar.pinned, 'a pinned control stays in the bar; one without a priority moves first');
-ok(bar.words === 'go to' && bar.key && bar.ks === 'Control+K Meta+K', 'a moved control\'s menu item keeps its key hint apart', JSON.stringify(bar));
+ok(bar.words === 'go to' && bar.key === 'Ctrl+K' && bar.ks === 'Control+K Meta+K', 'a moved control\'s menu item keeps its key hint apart', JSON.stringify(bar));
 ok(bar.places && bar.after, 'places in the bar: data-rk-places on the bar and the root, the strip steps aside, back when it goes');
 ok(bar.nameHidden && bar.nameShown, '.rk-place-name shows only while the places are in the bar');
 const grow = await m.evaluate(async () => {

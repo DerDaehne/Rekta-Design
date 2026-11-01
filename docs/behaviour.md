@@ -138,6 +138,7 @@ state's `word`) are the caller's, in its own language.
 | `putBack` | `sortable()` | ("Build") → “Build put back.” |
 | `position` | `sortable()` | ("Build", 3, 4) → “Build: position 3 of 4.” |
 | `loadFailed` | `combobox()` | “Could not load the choices. Type to try again.” |
+| `keyMeta` | `tips()`, `appbar()` | ("windows") → “Win”, ("other") → “Super”: the Meta key outside Apple |
 
 ## The contract
 
@@ -791,7 +792,8 @@ Moves the app bar's controls that do not fit into the menu of `more` (a
 - **The menu** repeats each moved control's words: its `aria-label`, or
   its text without `aria-hidden` parts and `.rk-key` hints. A key hint
   shows apart, at the item's end, as in the palette (`.rk-menu-key`,
-  from the control's `aria-keyshortcuts` or its `.rk-key`), and the item
+  from the control's `aria-keyshortcuts`, written as for a tooltip, or
+  its `.rk-key`), and the item
   carries the same `aria-keyshortcuts`.
 - **Places.** While `.rk-ab-places` shows (compact), every command is
   in "more", and `data-rk-places` is on the bar and the
@@ -870,7 +872,9 @@ not opened by the browser. Returns `{ destroy }`.
 Started by `start()`. Any element with `data-rk-tip="text"` gets an ink
 tooltip (`.rk-tip`, `role=tooltip`) after a rest of `timing.tip-delay`
 under a mouse or pen, at once on keyboard focus or after another tip,
-never on touch; its `aria-keyshortcuts` adds the keys. `data-rk-tip="overflow"`
+never on touch; its `aria-keyshortcuts` adds the keys, written as
+[navigation.md](navigation.md#writing-a-key) says (the platform's form:
+"Ctrl+Shift+Z", ⇧⌘Z on Apple; Meta outside Apple is `keyMeta`). `data-rk-tip="overflow"`
 shows the element's own text, only while its box cuts it off. Escape
 (key layer 45), a press, scrolling or leaving hide it. While shown, it
 describes its control (`aria-describedby`) unless it repeats its name.

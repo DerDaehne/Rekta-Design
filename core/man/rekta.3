@@ -577,7 +577,10 @@ moves a row from the app.
 A menu.
 .Fn rk_menu_add
 adds an item \(em a lowercase verb or option, a key hint, a handler \(em
-and returns its index;
+and returns its index.
+A key hint is written with a plus between the keys, the modifiers in the
+order Ctrl, Alt, Shift, Super, then the key, as in
+.Dq Ctrl+Shift+Z .
 .Fn rk_menu_add_separator
 and
 .Fn rk_menu_add_label
