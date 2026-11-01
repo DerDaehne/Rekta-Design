@@ -3,7 +3,9 @@
 Every transition in Rekta Design has one specific meaning. The table below
 is the full system — if a new transition is needed, it should map onto
 one of these meanings or extend the table with a new, equally specific
-one; it should never be "add some animation because it feels nice."
+one; it should never be "add some animation because it feels nice." A
+surface that shows other programs' windows maps their movements onto the
+same meanings ([below](#other-programs-windows)).
 
 | Transition | Duration · easing | Meaning |
 |---|---|---|
@@ -19,6 +21,7 @@ one; it should never be "add some animation because it feels nice."
 | **Reordering (FLIP)** | `motion.duration.moderate` (400ms) · `motion.easing.base`, computed per-element (first/last/invert/play); dragged and keyboard-moved items alike | "Something just moved because of what you did" — an item leaving, arriving, or changing group should be *seen* moving, not just appear/disappear, so cause and effect stay visible. |
 | **Resize and re-flow** | `motion.duration.moderate` (400ms) · `motion.easing.base`, FLIP: the resized box scales from its old size while its content fades back in over the last 45%; the boxes around it glide to their new places. A box that grows without scaling (only its edge moves, as a control in a one-line bar does) keeps its content standing, with no fade; a count in it still peeks (live tile news) | "This grew (or shrank), and the rest made room." A tile changing size, a grid re-flowing around it. Content is never seen stretched. |
 | **Arriving, leaving** | Arriving: a row `motion.duration.short`, 6px from above with a fade; a tile `motion.duration.moderate`, 6px rise, from 96%. Leaving: 0.6 × `motion.duration.short` · `motion.easing.out`, a row drifts 12px towards its trailing edge, a tile shrinks to 90%, with a fade. Then the rest close the gap (reorder). A control in a one-line bar (the app bar, a toolbar, a row of tags) has no path: it arrives and leaves by the fade alone, with the same durations and curves. Leaving, it fades first and then its neighbours close the gap; arriving, the mirror: its neighbours glide apart first and it fades in once they have made room, so nothing lies over anything | "This one is new; that one is gone." Filtering, archiving and undoing it, a live event, a pinned tile, a file dropped in. More than 60 changes at a time apply at once: motion is for a few things moving, not a whole list replaced. A path from above would lead out of a bar of fixed height, one towards the trailing edge into the next control. |
+| **A row dragged away** | the row follows the pointer sideways towards its trailing edge; let go past half its width, it goes on out of sight with a fade over 0.6 × `motion.duration.short` · `motion.easing.out` and the rest close the gap (reorder); let go before, it glides back over `motion.duration.short` · `motion.easing.base` | "Gone, the way you pushed it." The undo toast follows, as for every removal. |
 | **Live tile news** | `motion.duration.moderate`. Peek: the old content leaves upwards by `motion.transform.peek-travel` (40%) of its height with `motion.easing.out` (0.6×), while the new one rises from 40% below with `motion.easing.in` (0.8×, after 0.2×); the tile clips both. Flip: the tile turns `motion.transform.flip-angle` (90°) away around its horizontal axis with `easing.out` (half), changes, and turns back from 90° on the other side with `easing.in` (half), perspective `turnstile-perspective` | Peek: "a new number or line"; flip: "a new status." A continuous reading (frames a second, requests a second) is no news: it changes in place. Inside a live region the change waits while the region is held. Several tiles with news within `duration-moderate` show it one after another in reading order, `motion.duration.greet` (75ms) apart, four steps at most (the rest with the fourth), so the order stays legible; each piece of news moves as it would alone, and only real news is ordered, never invented. Under reduced motion all of it appears at once. |
 | **Data morph** | `motion.duration.long` (600ms) · `motion.easing.base`; the axis travels from the old extent to the new | "The same thing, measured again": new figures on the same labels bend the line or grow the bars to them. New labels redraw and draw in again. A sparkline moves its points the same way. |
 | **Mode change (app bar)** | `motion.duration.short` · `motion.easing.in`, 12px rise with a fade | "The bar now acts on your selection" — and back. Its commands change, the bar stays. |
@@ -27,7 +30,10 @@ one; it should never be "add some animation because it feels nice."
 | **Tree branch** | open `motion.duration.short` · `motion.easing.in` to its height, with a fade; close 0.7 × that · `motion.easing.out` | "These belong to it." |
 | **Whole-look change** (theme, accent) | `motion.duration.short` · `motion.easing.base` cross-fade (a view transition, where the browser has them) | "Same page, new light." Nothing moves. |
 | **Sheets (dialogs, command entry)** | `motion.duration.short` (250ms) · `motion.easing.in`, 16px from the top edge, its shaded + blurred backdrop fading in with it; leaving 0.8 × that · `motion.easing.out`, back up 16px, the shading fading out with it. A close request while it leaves ends the leaving at once | "A short question, from above; everything behind it stays exactly where it was." Sheets enter from the top edge, never scale in from the center, and leave the way they came. |
+| **Side panel** | `motion.duration.moderate` (400ms) · `motion.easing.in`: the panel slides in whole from the trailing edge, its shading fading in with it; leaving 0.8 × that · `motion.easing.out`, whole, the way it came. No fade: it travels its own width | "Settings and news for everything, from the side; everything behind it stays where it was." A sheet's meaning, from the side and for longer: a longer way takes a longer time. |
+| **Choosing in place** (a panel's group opens its list) | as the next item in a place: 0.75 × `motion.duration.moderate` · `motion.easing.out`, `motion.slide-distance` with a fade, the list from the trailing edge; back, the group from the leading edge | "One level down, in the same place." The panel and its width stay. |
 | **Toast** | `motion.duration.short` (250ms), 12px from the top | "Something happened"; a toast with an undo action shows a countdown rather than just vanishing, so the user can see their window closing. A notification from another program enters whole from the window's edge instead, without a fade, and leaves back out over 0.6 × that · `motion.easing.out`: "this came from outside". |
+| **Level indicator** | arrives as a toast, once; pressed again, it stays and its meter glides to the new value over `motion.duration.moderate` · `motion.easing.base` (as progress); it goes `timing.level` after the last change, as a toast leaves | "The key did this, and this is where it stands now." It never arrives twice for one run of presses. |
 | **A message in place** (error summary, a refusal under a cell, waiting updates) | `motion.duration.short` (a cell's refusal `motion.duration.float`), fade + 8px from above | "This needs you, here." Once on arrival; it does not move again. |
 | **Status banner** | `motion.duration.short` (250ms), fade + 8px | A persistent state change (e.g. "the system is halted") announces itself once via this fade-in, then stays static — its *colour* (not continued motion) carries which kind of halt it is. |
 | **Live indicators** | lines draw in over `motion.duration.long` (600ms); bars grow over the same; the app bar's live pulse fades to a quarter and back over `motion.duration.pulse` (1400ms) · `motion.easing.in-out` | "This is updating right now." Reserved for genuinely live data — a finished/static item's charts render immediately, with no draw-in and no pulse, so stillness itself signals "done." |
@@ -74,6 +80,48 @@ them, never copies them.
 - **Fading.** A leaving part stays whole for `turn-out-whole` of its
   time, then fades out over the rest; an arriving part fades in over
   `turn-in-whole` and is whole after it.
+
+## Other programs' windows
+
+A surface that shows other programs' windows (a desktop shell, a window
+manager, a remote desktop) gives each of their movements one of the
+meanings above. None of it is tied to a particular desktop, compositor or
+toolkit.
+
+| Movement | Is | Why |
+|---|---|---|
+| A window opened from a tile | a place arriving (the turnstile in) | The tile opened it, as a tile opens a place. |
+| A window opening otherwise | a tile arriving ("Arriving, leaving") | Something new is here. |
+| A window closing | a tile leaving | That one is gone. |
+| A window minimised | leaving, towards the app bar that holds it | It is gone from sight, not gone: the bar shows where. |
+| Re-arranging: tiling, maximising, restoring | "Resize and re-flow" | It grew or shrank, and the rest made room. |
+| A new window beside one already there | the window there first glides to its new size ("Resize and re-flow"), then the new one arrives as a place | Both at once would be restless, a fade alone too weak. |
+| A workspace | a place change | A different place, with its own windows. |
+| A program's dialog | a sheet | A short question, from above. |
+| A program's popup (a menu, a list) | a floating surface | Options for that control, right there. |
+| **The windows step back, a place comes forward** | see below | A full-screen place over the windows. |
+| From signing in to the first place | the loading screen fades to the ground over `motion.duration.moderate` · `motion.easing.in`; fixed bars glide in from their edges with `motion.easing.in`; the place's parts arrive as in a place change | The session is here; the place is the first thing in it. |
+
+**The windows step back, a place comes forward.** A full-screen place
+(a start screen, an overview, a launcher) over other programs' windows
+takes all the attention, so the windows go back instead of staying where
+they are, as they do behind a sheet.
+
+- **Opening:** the windows shrink about the screen's centre to
+  `motion.transform.step-back-scale` (0.86) and darken to
+  `motion.transform.step-back-brightness` (0.78) over
+  `motion.duration.moderate` · `motion.easing.in`; the place's ground
+  (`glass`, with the blur behind it) fades in over the same time. The
+  place's parts start arriving when the windows are `turn-overlap` (75%)
+  back: the same hand-over as a place change.
+- **Closing:** the parts leave as in a place change; when the last is
+  75% out, the windows come back to their size and brightness over
+  `motion.duration.moderate` · `motion.easing.out` and the ground fades
+  out.
+- **Reduced motion:** the end states at once.
+
+rekta.css and rekta-core draw no other programs' windows; the two tokens
+are there for the surfaces that do.
 
 ## Reduced motion
 

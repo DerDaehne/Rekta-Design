@@ -26,6 +26,12 @@ question, something failed) is given a larger tile than something
 merely informative. A grid of tiles therefore reads as a priority map at
 a glance, before any individual value is read.
 
+Tiles span 1 to 4 units across (`.rk-w2`, `.rk-w3`, `.rk-w4`) and 1 or 2
+down (`.rk-h2`); in rekta-core `rk_view_set_span()`. Sideways a tile
+three or four units wide spans them, in a section at least that wide
+(`--rk-sec-w`); in a compact grid, which may have only two columns, it
+takes the whole row.
+
 ## Content fills
 
 A set of objects without a status, such as a launcher's programs,
@@ -130,6 +136,32 @@ rather than ad-hoc layout per tile type:
     <span class="rk-tile-preview"><img src="capture.png" alt=""></span>
     <span class="rk-tile-foot"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-file"/></svg><span>Quarterly report.odt</span></span>
   </button>
+  ```
+
+- **Launch** — a tile that opens something launchable (an app, a tool,
+  an integration): its icon at the top leading corner, a count at the
+  top trailing corner in tabular figures (unread, waiting; none at
+  zero), and its name at the foot, written as the thing writes it. On a
+  tile two units or more wide, the newest line (the latest notification:
+  peek) stands between them, two lines at most. The order is the same at
+  every size. The icon is `size.tile-icon` (48) on a tile one unit high
+  and `size.tile-icon-large` (96) on one two units high: about a third
+  of the tile's height, at its padding. A picture icon is drawn at that
+  size from its source ([shell.md](shell.md#picture-icons)); a Rekta icon
+  scales to it. The tile stays neutral (`surface`) while the thing has
+  unread items: a count is not a status. It takes a status fill and word
+  only for a real status (the tool's job failed). A live launch tile shows
+  news as any live tile does (peek for a new count or line). Its name is
+  read first: give the link an `aria-label` that says it in that order
+  ("Mail, 12 unread").
+
+  ```html
+  <a class="rk-tile rk-launch rk-w2" href="#mail">
+    <img class="rk-picture" src="mail.svg" alt="">
+    <span class="rk-launch-count">12</span>
+    <span class="rk-launch-peek">Ana: the build is green again</span>
+    <span class="rk-launch-name">Mail</span>
+  </a>
   ```
 
 A tile combines at most two or three of these — a tile that tries to

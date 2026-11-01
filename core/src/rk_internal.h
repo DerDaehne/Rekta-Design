@@ -339,6 +339,7 @@ struct rk_window {
   rk_bitmap *own_fb; bool fb_elsewhere;                    /* ours, where the platform gives no buffer */
   float scale; rk_size size;
   bool system_frame, shown, closed, needs_draw, needs_layout;
+  bool inactive;                                           /* another window is the active one: the title steps back */
   rk_irect damage[RK_DAMAGE_MAX]; int ndamage; bool damage_all;   /* what the next frame draws, in device pixels */
   char *title;
   rk_view *focus, *hover, *pressed, *capture;
@@ -416,8 +417,11 @@ void rk__turn_arrive(rk_view *place, bool back);           /* its parts turn in 
 /* Built-in views (widgets.c) -------------------------------------------------------------------------------------- */
 
 rk_view *rk__titlebar_create(rk_window *w);
+void rk__window_set_active(rk_window *w, bool active);    /* the platform: it became (or stopped being) the active window */
 void rk__titlebar_update(rk_view *bar);
 rk_view *rk__toast_create(const char *message, const char *action, void (*on_action)(void *), void *user);
+rk_view *rk__toast_level_create(const char *icon, const char *word, float value, const char *figure);
+bool rk__toast_level_update(rk_view *toast, const char *word, float value, const char *figure);
 bool rk__view_within(const rk_view *v, const rk_view *ancestor);
 extern const rk_class rk__sheets_class;                    /* controller.c: the window's sheet layer */
 bool rk__view_disabled(const rk_view *v);                  /* it or a view holding it is disabled */
@@ -483,6 +487,7 @@ typedef struct rk_platform {
   /* NULL, or the system's file chooser: false if it cannot open; else done() comes later, n 0 if it was cancelled */
   bool (*choose_files)(void *native, const char *accept, bool multiple, void (*done)(void *ctx, const char *const *files, int n), void *ctx);
   bool (*notify)(const rk_app_desc *app, const char *title, const char *body);   /* NULL, or a system notification */
+  bool (*maximized)(void *native);                         /* NULL, or whether it is maximized: the title bar offers restore */
 } rk_platform;
 extern const char *const *rk__headless_choice; extern int rk__headless_nchoice;   /* what the headless chooser answers */
 extern char rk__headless_note[512];                         /* the last notification, "title: body" */

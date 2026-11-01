@@ -103,6 +103,7 @@ export const strings = {
   guardKeep: 'keep editing',
   discardTitle: 'Discard what you entered?',
   move: (item) => `move ${item}`,
+  inBack: (name) => `back · ${name}`,
   nothingToUndo: 'Nothing to undo.',
   undone: (what) => `Undone: ${what}`,
   justNow: 'just now',
@@ -1380,28 +1381,40 @@ export function toaster(region) {
     sr.textContent = tx('undoWindow', secs, again);
     msg.appendChild(sr);
   }
-  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null, status = '', windowMs = 0, onEnd = null, title = '', icon: pic = null, picture = '', open: run = null, edge = false } = {}) {
+  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null, status = '', windowMs = 0, onEnd = null, title = '', icon: pic = null, picture = '', open: run = null, edge = false } = {}, gauge = null) {
     if (open && open.key === key && open.undo && undo) { open.update(text, undo, { windowMs, onEnd }); return open; }
     if (open) open.leave(false, 'replaced');
     // The window runs against a deadline in wall-clock time, so a late or throttled timer (a busy page, a background
     // tab) never stretches it: each tick reads the clock. remaining is what is left while it stands still (held, or not
     // yet in); an undo toast steps its figure on whole seconds, a plain one goes when it runs out.
-    let total = undo ? windowMs || tokenWindow() : ms('--rk-duration-toast'), remaining = total;
+    let total = undo ? windowMs || tokenWindow() : ms(gauge ? '--rk-duration-level' : '--rk-duration-toast'), remaining = total;
     let timer = 0, deadline = 0, running = false, hover = false, focus = false, held = false, released = false, done = false, waiting = 0;
     const el = document.createElement('div');
     el.className = 'rk-toast';
     if (status) { el.dataset.status = status; if (status === 'error') el.setAttribute('role', 'alert'); }
     // A notification from another program enters whole from the window's edge: it came from outside (motion.md).
     if (edge) el.setAttribute('data-rk-from', 'edge');
+    // A level indicator (toaster.level()): the value's icon, its word, a meter and the figure, no action.
+    let bar = null, figure = null;
+    if (gauge) {
+      el.className = 'rk-toast rk-toast--level';
+      if (gauge.icon) el.appendChild(icon(gauge.icon));
+    }
     // Its text is pressable when it has a default action ("open what this is about"); a notification without one
     // closes when its text is pressed. It may bring a title, and the sender's icon or its own picture at the start.
-    const pressable = !!run || edge;
+    const pressable = !gauge && (!!run || edge);
     const msg = el.appendChild(document.createElement(pressable ? 'button' : 'p'));
     msg.className = 'rk-toast-msg';
     let words = msg;
     if (pressable) {
       msg.type = 'button';
       msg.addEventListener('click', () => { if (run) { leave(false, 'opened'); run(); } else leave(false); });
+    }
+    if (gauge) {
+      bar = el.appendChild(document.createElement('span'));
+      bar.className = 'rk-meter'; bar.setAttribute('aria-hidden', 'true');
+      figure = el.appendChild(document.createElement('span'));
+      figure.className = 'rk-toast-level';
     }
     if (title || pic || picture) {
       if (pic || picture) {
@@ -1482,6 +1495,10 @@ export function toaster(region) {
     }
     const api = {
       key, el, action,
+      level: gauge ? gauge.key : null,
+      // A level indicator's new value: the meter glides to it, the figure changes, and its time starts again.
+      setLevel(v, t) { if (done || !bar) return; bar.style.setProperty('--rk-v', v); figure.textContent = t; setRemaining(ms('--rk-duration-level')); },
+      get done() { return done; },
       leave,
       setRemaining,
       // The server no longer extends: the window runs out from here although the pointer or focus rests on it.
@@ -1512,6 +1529,7 @@ export function toaster(region) {
     el.addEventListener('focusin', () => { focus = true; hold(); });
     el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) { focus = false; hold(); } });
     paint();
+    if (gauge) { bar.style.setProperty('--rk-v', gauge.value); figure.textContent = gauge.text; }
     open = api;
     const insert = () => { waiting = 0; region.appendChild(el); hold(); if (!held) go(); };
     if (region.querySelector('.rk-toast[data-rk-phase="leaving"]')) waiting = setTimeout(insert, ms('--rk-duration-short')); else insert();
@@ -1528,8 +1546,20 @@ export function toaster(region) {
     if (!open || !open.undo || open.action !== 'undo' || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || isEditable(e.target)) return false;
     open.undo(); return true;
   });
+  // level(word, value, { icon, text, key }): a level indicator for a value the user changed by a key (volume,
+  // brightness, zoom): a toast without an action, an icon, the word, a meter at value (0 to 1) and the figure (text,
+  // else the share in per cent). It takes the toast's place like any toast; again while it shows (the same key, the
+  // word by default) it stays where it is and only its value glides. It goes timing.level after the last change.
+  function level(word, value, { icon: name = '', text = '', key = word } = {}) {
+    const v = Math.max(0, Math.min(1, Number(value) || 0));
+    let t = text;
+    if (!t) { try { t = new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v); } catch { t = `${Math.round(v * 100)}%`; } }
+    if (open && open.level === key && !open.done) { open.setLevel(v, t); return open; }
+    return show(word, { key: `level:${key}` }, { key, value: v, text: t, icon: name });
+  }
   return {
     show,
+    level,
     get open() { return open; },
     dismiss() { if (open) open.leave(false); },
     destroy() { offEsc(); offUndo(); document.removeEventListener('visibilitychange', visible); },
@@ -1670,15 +1700,18 @@ export function sheet(dialog, opts = {}) {
   // The answer is given as the sheet starts to leave. A further close request while it leaves (a tap on the shading,
   // Escape, another button) changes no answer and asks nothing: it only ends the leaving at once.
   function leaveThen(value) {
-    const d = ms('--rk-duration-short') * 0.8;
+    const side = dialog.classList.contains('rk-sheet--side');
+    const d = ms(side ? '--rk-duration-moderate' : '--rk-duration-short') * 0.8;
     if (!dialog.open) return;
     if (leaving) { leaving.end(); return; }
     if (ask) unask(false);
     if (!d) { close.call(dialog, value); return; }
     dialog.setAttribute('data-rk-phase', 'leaving');
-    // The sheet and its shading leave together, as they came: 0.8 × duration-short, easing out.
-    const ease = css('--rk-ease-out');
-    const anims = [dialog.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: d, easing: ease, fill: 'forwards' })];
+    // The sheet and its shading leave together, as they came: 0.8 × duration-short, easing out; a side panel whole
+    // towards its trailing edge, over 0.8 × duration-moderate.
+    const ease = css('--rk-ease-out'), away = getComputedStyle(dialog).direction === 'rtl' ? '-100%' : '100%';
+    const frames = side ? [{ transform: 'none' }, { transform: `translateX(${away})` }] : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-16px)' }];
+    const anims = [dialog.animate(frames, { duration: d, easing: ease, fill: 'forwards' })];
     try { anims.push(dialog.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, easing: ease, fill: 'forwards', pseudoElement: '::backdrop' })); } catch { /* no pseudo-element animation */ }
     const run = leaving = {
       value,
@@ -1764,6 +1797,65 @@ export function sheet(dialog, opts = {}) {
   };
   sheets.set(dialog, { opts: o, api });
   return api;
+}
+
+// inPlace(scope): choosing in place (docs/states.md). A control with data-rk-in="ID" opens the element with that id (a
+// list, hidden until then) in the place of the group that holds the control (its closest [data-rk-group], else its
+// parent): the group hides and the list shows, under a row "back · name" (.rk-in-back, made when the list has none;
+// name is the control's data-rk-in-name, else the list's aria-label), and focus goes to the list's first control.
+// That row, Escape and ← (outside a text field) go back one level: the list hides, the group shows, focus returns to
+// the control that opened it. Levels may nest. Each step slides in like the next item of a place, back from the other
+// side. Escape here goes back before it would close the sheet or panel around it.
+export function inPlace(scope) {
+  const open = [];                                     // { control, group, list }, innermost last
+  const slide = (el, dir) => {
+    const d = ms('--rk-duration-moderate') * 0.75;
+    if (d) el.animate([{ transform: `translateX(${dir * num('--rk-slide-distance')}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: d, easing: css('--rk-ease-out') });
+  };
+  const focusIn = (el) => { const f = el.querySelector('[aria-selected="true"], [aria-checked="true"], :checked, a[href], button:not(.rk-in-back), input, select, [tabindex]:not([tabindex="-1"])') || el.querySelector('.rk-in-back'); if (f) f.focus(); };
+  function go(control) {
+    const list = document.getElementById(control.dataset.rkIn);
+    if (!list) return;
+    const group = control.closest('[data-rk-group]') || control.parentElement;
+    let back = list.querySelector(':scope > .rk-in-back');
+    if (!back) {
+      back = document.createElement('button');
+      back.type = 'button'; back.className = 'rk-in-back';
+      back.append(icon('chevron-left'), tx('inBack', control.dataset.rkInName || list.getAttribute('aria-label') || control.textContent.replace(/\s+/g, ' ').trim()));
+      list.prepend(back);
+    }
+    open.push({ control, group, list });
+    group.hidden = true; list.hidden = false;
+    slide(list, 1); focusIn(list);
+  }
+  function out() {
+    const top = open.pop();
+    if (!top) return false;
+    top.list.hidden = true; top.group.hidden = false;
+    slide(top.group, -1);
+    if (top.control.isConnected) top.control.focus();
+    return true;
+  }
+  const click = (e) => {
+    const t = e.target.closest && e.target.closest('[data-rk-in], .rk-in-back');
+    if (!t || !scope.contains(t)) return;
+    if (t.matches('.rk-in-back')) { if (open.length && open[open.length - 1].list.contains(t)) out(); return; }
+    e.preventDefault(); go(t);
+  };
+  const key = (e) => {
+    if (!open.length || e.defaultPrevented || e.isComposing || isEditable(e.target)) return;
+    const top = open[open.length - 1];
+    if (!top.list.contains(e.target)) return;
+    if (e.key === 'Escape' || (e.key === 'ArrowLeft' && !e.target.closest('[role=slider], input[type=range], [role=tree], [role=tablist]'))) { e.preventDefault(); e.stopPropagation(); out(); }
+  };
+  scope.addEventListener('click', click);
+  scope.addEventListener('keydown', key);
+  return {
+    get depth() { return open.length; },
+    back: out,
+    reset() { while (open.length) out(); },
+    destroy() { scope.removeEventListener('click', click); scope.removeEventListener('keydown', key); },
+  };
 }
 
 // Data states ------------------------------------------------------------------------------------------------------
@@ -2511,9 +2603,11 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
     return copy.textContent.replace(/\s+/g, ' ').trim();
   };
   const keyHint = (c) => shortcutText(c) || ((c.querySelector('.rk-key') || {}).textContent || '').trim();
+  // Running things (.rk-ab-run) give way before any command, the latest started first and the one in front last.
+  const runRank = (c) => (!c.classList.contains('rk-ab-run') ? 2 : /^(true|page)$/.test(c.getAttribute('aria-current') || '') ? 1 : 0);
   const candidates = (pinned = false) => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back') && c.dataset.rkAlign !== 'center' && (pinned || c.dataset.rkPriority !== 'pinned'))
-    .map((c, i) => ({ c, i, p: Number(c.dataset.rkPriority || 0) }))
-    .sort((a, b) => a.p - b.p || b.i - a.i).map((x) => x.c);
+    .map((c, i) => ({ c, i, r: runRank(c), p: Number(c.dataset.rkPriority || 0) }))
+    .sort((a, b) => a.r - b.r || a.p - b.p || b.i - a.i).map((x) => x.c);
   function build() {
     pop.replaceChildren(...[...el.querySelectorAll(':scope > .rk-ab[data-rk-overflow]')].map((c) => {
       const b = document.createElement('button');
@@ -3269,6 +3363,93 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
   };
 }
 
+// Removable ----------------------------------------------------------------------------------------------------------
+// removable(list, { items, onRemove }): entries a person may remove, each removal reversible (docs/collections.md).
+// Three ways, all calling onRemove(item, { left }): a button marked data-rk-remove inside the entry; Delete (or ⌫,
+// outside a text field) on the entry focus is in, after which focus moves to the next entry, or the one before at the
+// end; and dragging the entry towards its trailing edge, a shortcut beside the other two. Dragged, the entry follows
+// the pointer sideways; let go past half its width it leaves that way (left: true: it has gone from sight, so remove it
+// at once, with no leave() of its own), else it glides back. A drag starts only sideways and never from the window's
+// edges, where a phone's back gesture begins; a click that ends one is cancelled, so dragging never activates.
+export function removable(list, { items = ':scope > li, :scope > tr', onRemove = () => {} } = {}) {
+  const entries = () => [...list.querySelectorAll(items)].filter((x) => !x.hidden);
+  const entryOf = (t) => { const x = t && t.closest && t.closest(items.split(',').map((s) => s.trim().replace(/^:scope > /, '')).join(', ')); return x && list.contains(x) && entries().includes(x) ? x : null; };
+  const away = () => (getComputedStyle(list).direction === 'rtl' ? -1 : 1);
+  const focusable = (x) => (x.matches('[tabindex], a[href], button') ? x : x.querySelector('[tabindex]:not([tabindex="-1"]), a[href], button:not([data-rk-remove])') || x);
+  function remove(item, left) {
+    const all = entries(), i = all.indexOf(item), next = all[i + 1] || all[i - 1] || null;
+    const hadFocus = item.contains(document.activeElement);
+    onRemove(item, { left });
+    if (hadFocus && next && next.isConnected) { const f = focusable(next); if (f.tabIndex < 0 && !f.hasAttribute('tabindex')) f.tabIndex = -1; f.focus(); }
+  }
+  const click = (e) => {
+    const b = e.target.closest && e.target.closest('[data-rk-remove]'), item = b && entryOf(b);
+    if (item) { e.preventDefault(); remove(item, false); }
+  };
+  const key = (e) => {
+    if ((e.key !== 'Delete' && e.key !== 'Backspace') || e.defaultPrevented || e.isComposing || e.altKey || e.ctrlKey || e.metaKey || isEditable(e.target)) return;
+    const item = entryOf(e.target);
+    if (!item) return;
+    e.preventDefault(); remove(item, false);
+  };
+  let drag = null, swallow = false;
+  const down = (e) => {
+    if (e.button !== 0 || drag) return;
+    const item = entryOf(e.target);
+    if (!item || e.target.closest('a, button, input, select, textarea, label, .rk-grip, [data-rk-remove]')) return;
+    const edge = px('--rk-space-l');
+    if (e.pointerType !== 'mouse' && (e.clientX < edge || e.clientX > innerWidth - edge)) return;
+    drag = { item, id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, on: false };
+  };
+  const move = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.on) {
+      if (Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx)) { drag = null; return; }      // a scroll, not a drag
+      if (dx * away() < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+      drag.on = true;
+      try { list.setPointerCapture(e.pointerId); } catch { /* the pointer has gone */ }
+      for (const a of drag.item.getAnimations()) a.cancel();
+    }
+    drag.dx = Math.max(0, dx * away()) * away();
+    drag.item.style.transform = `translateX(${drag.dx}px)`;
+  };
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { item, dx, on } = drag;
+    drag = null;
+    if (!on) return;
+    swallow = true; setTimeout(() => { swallow = false; });
+    const w = item.getBoundingClientRect().width, gone = e.type === 'pointerup' && Math.abs(dx) > w / 2;
+    item.style.transform = '';
+    const from = `translateX(${dx}px)`;
+    if (gone) {
+      const d = ms('--rk-duration-short') * 0.6;
+      if (d) item.animate([{ transform: from, opacity: 1 }, { transform: `translateX(${away() * w}px)`, opacity: 0 }], { duration: d, easing: css('--rk-ease-out'), fill: 'forwards' }).finished.then(() => remove(item, true), () => {});
+      else { item.style.opacity = '0'; remove(item, true); }
+    } else {
+      const d = ms('--rk-duration-short');
+      if (d) item.animate([{ transform: from }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') });
+    }
+  };
+  const stopClick = (e) => { if (swallow) { e.preventDefault(); e.stopImmediatePropagation(); swallow = false; } };
+  list.setAttribute('data-rk-removable', '');
+  list.addEventListener('click', click); list.addEventListener('keydown', key);
+  list.addEventListener('pointerdown', down); list.addEventListener('pointermove', move);
+  list.addEventListener('pointerup', end); list.addEventListener('pointercancel', end);
+  list.addEventListener('click', stopClick, true);
+  return {
+    remove: (item) => remove(item, false),
+    destroy() {
+      list.removeAttribute('data-rk-removable');
+      list.removeEventListener('click', click); list.removeEventListener('keydown', key);
+      list.removeEventListener('pointerdown', down); list.removeEventListener('pointermove', move);
+      list.removeEventListener('pointerup', end); list.removeEventListener('pointercancel', end);
+      list.removeEventListener('click', stopClick, true);
+    },
+  };
+}
+
 // Virtual list -----------------------------------------------------------------------------------------------------
 // virtual(el, { count, render, onShow, onChange, appbar, label }): a list of any length in a .rk-virtual scroller
 // with a bounded height. Only the rows in view (and a few more) exist; render(i, row) fills a row. It is one tab stop
@@ -3681,10 +3862,19 @@ export function titlebar(el, { router = null } = {}) {
     place.textContent = p && p.dataset.rkParent && h ? h.textContent.trim() : '';
   };
   const geometry = () => docEl().toggleAttribute('data-rk-wco', !!(wco && wco.visible));
+  // Another window is the active one: the name steps back (data-rk-inactive). Read after the event, since focus
+  // moving into a frame of the page blurs the window first and still leaves the page active.
+  const active = () => setTimeout(() => el.toggleAttribute('data-rk-inactive', !document.hasFocus()));
   document.addEventListener('rk:placechange', paint);
   if (wco) wco.addEventListener('geometrychange', geometry);
-  paint(); geometry();
-  return { destroy() { document.removeEventListener('rk:placechange', paint); if (wco) wco.removeEventListener('geometrychange', geometry); } };
+  addEventListener('focus', active); addEventListener('blur', active);
+  paint(); geometry(); active();
+  return {
+    destroy() {
+      document.removeEventListener('rk:placechange', paint); if (wco) wco.removeEventListener('geometrychange', geometry);
+      removeEventListener('focus', active); removeEventListener('blur', active); el.removeAttribute('data-rk-inactive');
+    },
+  };
 }
 
 // pwa({ sw, toaster, onChange }): the page as an installable app. Registers the service worker (only where a web app
@@ -3847,7 +4037,7 @@ function greet(tile, anims) {
   });
 }
 // indicate(control, content): a short indicator (a volume or a brightness being set) stands in place of a control:
-// the control turns away as a live tile does for a new status, and the indicator turns in; timing.indicator after the
+// the control turns away as a live tile does for a new status, and the indicator turns in; timing.level after the
 // last call it turns back. A call while it stands changes it in place: a reading that keeps changing is no news. The
 // control's own children are hidden meanwhile, and data-rk-indicating is on it. The words to hear go through a live
 // region, not through this.
@@ -3873,7 +4063,7 @@ export function indicate(control, content) {
     }, { kind: 'flip' });
   }
   clearTimeout(s.timer);
-  s.timer = setTimeout(back, ms('--rk-duration-indicator'));
+  s.timer = setTimeout(back, ms('--rk-duration-level'));
 }
 // tileUpdate(tile, change, { kind }): a live tile has news. 'peek' (a new number or line): the new content rises
 // from peek-travel of its height below while the old one leaves upwards by as much, over duration-moderate. 'flip' (a

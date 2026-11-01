@@ -52,6 +52,29 @@ the ink still shows; the neutral square keeps 3:1 on the ink (`--check`
 holds it), and under more contrast it takes the toast's words' colour. In a toast with a status, the tag reads on the fill as on a
 tile.
 
+### A level indicator
+
+A value the user changes with a key (volume, brightness, a keyboard
+layout, zoom in an app) shows its new level briefly: a toast without an
+action, its icon, the word, a meter and the value in tabular figures
+("volume ▬▬▬── 60%"). `toaster.level(word, value, { icon, text })` on
+the web, `rk_window_level()` in rekta-core.
+
+- **Once.** It arrives like a toast; pressed again while it shows, it
+  stays where it is and only its value glides, as progress does. Its own
+  time, `timing.level` (1.5s), starts again with each change: it confirms
+  what the key did, so it goes sooner than a toast.
+- **One at a time,** like any toast: it takes the open toast's place,
+  and a toast takes its. An undo that goes with a replaced toast stays in
+  the history (Ctrl/Cmd+Z).
+- **No status, no action.** The meter is in the toast's own colour, never
+  a status fill: a loud volume is not a warning.
+- **Where:** in the toast region, also over full-screen content. A
+  product whose app bar is always in view (a desktop shell) may show it
+  in the bar's middle instead, pinned while it shows (`indicate()`,
+  [behaviour.md](behaviour.md)): the same parts in one line. One form
+  per product, never both.
+
 ## A notification from another program
 
 A product that shows what other programs report (a desktop shell, a
@@ -141,6 +164,56 @@ next to the control that opened them.
   when it is not obvious ("print (needs a printer)"). The app bar's
   "more" does this for a disabled control it holds.
 
+## Side panel
+
+A surface that slides in from the trailing edge, full height, for
+switches, sliders and lists that belong to the whole app or system: quick
+settings, notifications ([live.md](live.md#a-notification-centre)).
+It is a sheet from the side: `<dialog class="rk-sheet rk-sheet--side">`,
+opened with `showModal()` and run by `sheet()` like any sheet.
+
+- **Look:** `bg`, like a sheet, with a hairline on its leading edge; no
+  status fill. Two tile units wide plus its padding
+  (`2 × tile-unit + space-s + 2 × space-m`), never under `pane-min` and
+  never wider than the window (a phone: the whole width). The width is
+  the same on every facet, so the panel never jumps; a longer text is cut
+  with an ellipsis (`data-rk-tip="overflow"` shows it whole).
+- **Motion:** whole from the trailing edge over `duration-moderate`, and
+  back the same way ([motion.md](motion.md)).
+- **Behaves as a sheet:** it shades the rest (`shading` and the blur), a
+  tap on the shading closes it, it holds focus, Escape closes it, it sits
+  in the top layer and has a visible way out (its close button).
+- **Content:** groups, each a heading over rows with a toggle
+  (`rk-toggle`) or a slider (`rk-range`); never tiles as switches (a tile
+  never toggles). It may carry a pivot for its facets (settings and
+  notifications), in the facet level.
+- **Input it cannot hold** (a password for a new network) is asked in a
+  sheet over it.
+
+### Choosing in place
+
+Picking one of several values in a group (a network, a device, an
+output) does not open anything over the panel: the group gives its place
+to the list of values, under a row "back · name" (`.rk-in-back`), and the
+list slides in like the next item of a place. The back row, Escape and
+← go back up to the group, with focus on the control that opened the
+list; levels may nest. It is the tree's ← (up to the parent) and the
+compact split's crumb, in one surface. `inPlace(scope)` does it on the
+web: a control with `data-rk-in="ID"` opens the list with that id in the
+place of its group (`[data-rk-group]`). The second level of a menu can
+work the same way.
+
+```html
+<section class="rk-region" data-rk-group aria-labelledby="g-net">
+  <h2 class="rk-kicker" id="g-net">network</h2>
+  <ul class="rk-rows"><li><button class="rk-btn rk-btn--quiet" data-rk-in="nets" data-rk-in-name="wi-fi">wi-fi · home</button></li></ul>
+</section>
+<section class="rk-region" id="nets" aria-label="wi-fi" hidden>…the networks…</section>
+```
+
+rekta-core has no side panel yet: its sheets come from the top
+([platforms.md](platforms.md#what-rekta-core-does-not-draw-yet)).
+
 ## Layers
 
 From bottom to top:
@@ -153,7 +226,7 @@ From bottom to top:
 | `layer.banner` | The status banner |
 | `layer.toast` | The toast region |
 | `layer.float` | Floating surfaces (menus, lists) where the browser has no popover top layer |
-| Top layer | Sheets (modal dialogs), floating surfaces (popovers, where the browser has them), in the order they opened |
+| Top layer | Sheets (modal dialogs) and side panels, floating surfaces (popovers, where the browser has them), in the order they opened |
 
 - One modal at a time. A floating surface may open from inside a sheet;
   it sits above it.

@@ -618,7 +618,8 @@ function check(tokens) {
 // --rk-on-accent, per theme) holds the accent rules (docs/colour.md): 3:1 on bg and surface, on-accent 4.5:1 on it,
 // apart from status; under more contrast on-accent 7:1, where a value set in the contrast selectors must hold it and
 // one that is not set there is warned about. A product that changes --rk-pivot-wide is warned when no container query
-// repeats the value: the wide facets' first paint would use another.
+// repeats the value: the wide facets' first paint would use another. A font loaded
+// from another server fails: a family of the product's ships with the app.
 //   node scripts/build.mjs --check-product product.css
 export function checkProduct(css, file = 'product CSS') {
   const problems = [], notes = [], warnings = [], t = buildTokensJson(loadTokens(), 'check'), codes = { light: {}, dark: {} };
@@ -653,6 +654,12 @@ export function checkProduct(css, file = 'product CSS') {
     if (/^\s*(color|-webkit-text-fill-color)\s*:.*var\(--rk-series-/.test(decl)) problems.push(`${file}: text drawn in a series colour (${decl.trim()}); codes are for small marks only`);
     const w = /^\s*--rk-pivot-wide\s*:\s*(.+?)\s*$/.exec(decl);
     if (w) wides.add(w[1]);
+    // A family of the product's ships with the app (docs/typography.md, The family): never from another server.
+    const remote = /url\(\s*['"]?(?:https?:)?\/\//;
+    if ((/^\s*src\s*:/.test(decl) && remote.test(decl) && stack.some((x) => /^@font-face\b/.test(x))) || (/^\s*@import\b/.test(decl) && /(?:https?:)?\/\/[^'")\s]*font/i.test(decl))) {
+      problems.push(`${file}: a font from another server (${decl.trim().slice(0, 80)}); the family ships with the app (docs/typography.md)`);
+    }
+    if (/^\s*--rk-font-sans\s*:/.test(decl)) notes.push(`${file}: a family of the product's (${decl.trim().slice(0, 80)}): measure the text budgets again with it (docs/typography.md)`);
   }
   for (const theme of ['light', 'dark']) {
     const c = t.themes[theme], set = codes[theme], ns = Object.keys(set).map(Number).sort((x, y) => x - y);

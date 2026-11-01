@@ -19,6 +19,7 @@ export const de = {
   guardKeep: 'weiter bearbeiten',
   discardTitle: 'Eingaben verwerfen?',
   move: (item) => `${item} verschieben`,
+  inBack: (name) => `zurück · ${name}`,
   nothingToUndo: 'Nichts rückgängig zu machen.',
   undone: (what) => `Rückgängig: ${what}`,
   justNow: 'gerade eben',

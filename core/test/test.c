@@ -886,6 +886,71 @@ static void test_list_keys(void) {
   done(w);
 }
 
+/* Shell patterns: Delete removes a list's row (the next takes its place); a level indicator stays and glides when the
+   same key comes again, and goes timing.level after the last change; the title bar steps back when the window is not
+   the active one, and its middle button is named maximize (restore while maximized, from the app's words too). */
+static void remove_build(rk_view *t, int index, void *u) {
+  (void)u;
+  memmove(order + index, order + index + 1, (size_t)(norder - index - 1) * sizeof *order); norder--;
+  rk_list_set_count(t, norder);
+}
+
+static void test_shell(void) {
+  rk_window *w = window(400, 360);
+  rk_view *page = col(8, 16);
+  rk_view *t = rk_add(page, rk_table(0, build_cell, NULL));
+  rk_table_add_column(t, "build", 0, 0);
+  norder = 4;
+  for (int i = 0; i < norder; i++) order[i] = 20 + i;           /* #20 .. #23 */
+  rk_list_set_count(t, norder);
+  rk_list_set_key(t, build_key);
+  show(w, page, "shell");
+  rk_window_focus(w, t);
+  rk_list_scroll_to(t, 1);
+  key(w, RK_KEY_DELETE, 0);
+  CHECK(norder == 4, "without rk_list_on_remove, Delete removes nothing");
+  rk_list_on_remove(t, remove_build, NULL);
+  key(w, RK_KEY_DELETE, 0);
+  CHECK(norder == 3 && order[1] == 22 && rk_list_active(t) == 1, "Delete removes the active row, the next takes its place (#%d)", order[rk_list_active(t)]);
+  rk_list_scroll_to(t, 2);
+  key(w, RK_KEY_BACKSPACE, 0);
+  CHECK(norder == 2 && rk_list_active(t) == 1 && order[1] == 22, "at the end the one before takes it (row %d)", rk_list_active(t));
+  /* a level indicator */
+  rk_window_level(w, "theme", "brightness", 0.4f, "40%");
+  rk_app_run_for(300);
+  CHECK(w->toasts->nkids == 1, "a level indicator shows as a toast");
+  rk_view *lv = w->toasts->kids[0];
+  toast *ts = lv->state;
+  CHECK(ts->meter && CLOSE_TO(ts->meter->pvalue, 0.4, 0.001) && !strcmp(((label *)ts->figure->state)->text, "40%"), "its meter and figure");
+  rk_app_run_for(RK_TOK_TIMING_LEVEL - 500);
+  rk_window_level(w, "theme", "brightness", 0.6f, "60%");
+  rk_app_run_for(rk_duration_of(RK_DURATION_MODERATE) / 2);
+  CHECK(w->toasts->nkids == 1 && w->toasts->kids[0] == lv && ts->meter->pvalue > 0.4f && ts->meter->pvalue < 0.6f, "the same word again: it stays and the value glides (%.2f)", ts->meter->pvalue);
+  rk_app_run_for(RK_TOK_TIMING_LEVEL - 500);
+  CHECK(lv->parent && !lv->leaving && !strcmp(((label *)ts->figure->state)->text, "60%"), "its time starts again with the change");
+  rk_app_run_for(1500);
+  CHECK(w->toasts->nkids == 0, "and it goes timing.level after the last change");
+  rk_window_level(w, NULL, "volume", 0.2f, "20%");
+  rk_app_run_for(300);
+  rk_window_level(w, NULL, "zoom", 0.5f, "50%");
+  rk_app_run_for(400);
+  CHECK(w->toasts->nkids == 1 && strcmp(((toast *)w->toasts->kids[0]->state)->word, "zoom") == 0, "another word takes the place, as any toast");
+  /* the title bar */
+  rk_view *bar = w->titlebar;
+  CHECK(bar->nkids == 3 && !strcmp(bar->kids[1]->access_label, "maximize") && !strcmp(((button *)bar->kids[1]->state)->icon, "maximize"), "the middle button maximizes, with the maximize icon");
+  CHECK(CLOSE_TO(bar->kids[0]->frame.w, rk_metric_of(RK_TOUCH_TARGET), 0.01), "each window button is touch-target wide (%.0f)", bar->kids[0]->frame.w);
+  rk__window_set_active(w, false);
+  CHECK(w->inactive, "another window active: the title steps back");
+  rk__window_set_active(w, true);
+  CHECK(!w->inactive, "active again");
+  CHECK(!strcmp(rk__words()->restore, "restore"), "restore is an English word until the app's");
+  rk_app_set_strings(&(rk_strings){ .size = sizeof(rk_strings), .restore = "wiederherstellen" });
+  CHECK(!strcmp(rk__words()->restore, "wiederherstellen") && !strcmp(rk__words()->maximize, "maximize"), "a word added after plural is the app's too");
+  rk_app_set_strings(NULL);
+  CHECK(!strcmp(rk__words()->restore, "restore"), "and English again");
+  done(w);
+}
+
 static void test_table(void) {
   rk_window *w = window(560, 360);
   rk_view *page = col(8, 16);
@@ -3741,6 +3806,7 @@ static void launch(void *user) {
   test_limits();
   test_damage();
   test_list_keys();
+  test_shell();
   test_collections();
   test_embed();
   test_confirm_secret();

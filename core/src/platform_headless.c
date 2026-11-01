@@ -51,12 +51,12 @@ static bool hl_notify(const rk_app_desc *app, const char *title, const char *bod
 
 const rk_platform rk__platform_headless = {
   "headless", hl_init, hl_shutdown, hl_open, hl_close, hl_show, hl_title, hl_present, hl_nop, hl_nop, hl_nop,
-  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose, hl_notify
+  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose, hl_notify, NULL
 };
 
 #if defined(RK_HEADLESS_ONLY)
 const rk_platform rk__platform_native = {
   "headless", hl_init, hl_shutdown, hl_open, hl_close, hl_show, hl_title, hl_present, hl_nop, hl_nop, hl_nop,
-  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose, hl_notify
+  hl_wait, hl_wake, hl_now, hl_settings, hl_resize, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hl_choose, hl_notify, NULL
 };
 #endif

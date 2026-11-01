@@ -209,6 +209,7 @@ typedef struct rk_strings {
                                                       (1234, but 12.345) */
   int (*plural)(long n);                           /* n's rk_plural, for the counting words; NULL: English (1 one, the
                                                       rest other); one outside rk_plural is other */
+  const char *restore;                             /* the window's maximize button while it is maximized, read aloud */
 } rk_strings;
 RK_API void rk_app_set_strings(const rk_strings *strings);
 /* A figure in the app's words, as the web's number(): up to two decimals, the decimal sign and digit groups of
@@ -271,6 +272,10 @@ RK_API bool rk_window_redo(rk_window *window);
 /* A toast: a short message from the top edge, with an optional action (undo, retry) that keeps it for the toast
    timing and shows the time running out. */
 RK_API void rk_window_toast(rk_window *window, const char *message, const char *action, void (*on_action)(void *user), void *user);
+/* A level indicator, for a value the user changed by a key (volume, brightness, zoom): a toast without an action, an
+   icon from the set (NULL: none), the word, a meter at value (0 to 1) and the figure ("60%"). Again with the same word
+   while it shows, it stays and only its value glides; it goes timing.level after the last change. */
+RK_API void rk_window_level(rk_window *window, const char *icon, const char *word, float value, const char *figure);
 
 /* Views ----------------------------------------------------------------------------------------------------------- */
 
@@ -582,6 +587,9 @@ RK_API void rk_list_set_count(rk_view *list, int count);   /* the items changed:
 RK_API void rk_list_set_key(rk_view *list, uint64_t (*key)(int index, void *user));
 RK_API void rk_list_on_show(rk_view *list, void (*fn)(rk_view *list, int index, void *user), void *user);
 RK_API void rk_list_on_change(rk_view *list, void (*fn)(rk_view *list, void *user), void *user);   /* the user changed the selection */
+/* Delete (or Backspace) on the active row asks fn to remove it, reversibly (rk_window_do, with undo in its toast); the
+   next row takes its place, the one before at the end. NULL: the keys do nothing here. */
+RK_API void rk_list_on_remove(rk_view *list, void (*fn)(rk_view *list, int index, void *user), void *user);
 RK_API bool rk_list_is_selected(rk_view *list, int index);
 RK_API int rk_list_selection_count(rk_view *list);
 RK_API int rk_list_selection(rk_view *list, int *indices, int max);   /* fills up to max, in order; returns how many there are */

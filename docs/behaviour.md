@@ -228,6 +228,8 @@ them:
 | `data-rk-peek` | a part of an element (written by the page) | What peeks when `tileUpdate()` brings it news: a count in an app-bar control. A tile's `.rk-stat` needs none. |
 | `data-rk-probe` | a `span` inside a measured element (a pivot strip; any element whose length token is a `calc()`) | A measuring probe, in and out within one call: an app's own `MutationObserver` on such an element should ignore it. |
 | `data-rk-places` | the app bar, the root | The bar holds the places (`appbar()`, compact). |
+| `data-rk-inactive` | a title bar | Another window is the active one: the name steps back (`titlebar()`). |
+| `data-rk-removable` | a list | Its entries can be dragged away (`removable()`): the browser keeps only the vertical scroll on them. |
 | `data-rk-held` | a toast | Its window holds: the pointer rests on it or focus is in it. |
 | `data-theme`, `data-density`, `data-motion`, `data-contrast`, `data-transparency`, `data-accent` | the root | Prefs overrides (see `prefs`). |
 
@@ -376,6 +378,8 @@ its `aria-label`, else a table row's `th`, else its text; a tile's
 status word is left out.
 | `split()` handle | ← → (Shift: four steps), Home End |
 | `sortable()` | Space/Enter picks up and puts down, ↑ ↓ move, Escape puts back; Alt+↑ ↓ moves at once |
+| `removable()` | Delete or Backspace on an entry (not in a text field, no modifier) removes it; focus moves to the next |
+| `inPlace()` | Escape, ← (not in a text field, a slider, a tree or a tab list) go back one level; Escape here comes before the sheet's |
 | `chart()` | ← → Home End |
 
 ### `press(scope)`
@@ -678,6 +682,17 @@ countdown ("reload").
   never stretches it; back in view, it catches up at once and ends if
   its time has passed.
 
+`toaster.level(word, value, { icon, text, key })` shows a level
+indicator, for a value the user changed by a key (volume, brightness,
+zoom): a toast without an action (`.rk-toast.rk-toast--level`), an icon
+from the set, the word, a meter at `value` (0 to 1) and the figure
+(`text`, else the value in per cent in the locale's way). It takes the
+open toast's place like any toast. Called again with the same `key`
+(the word by default) while it shows, it stays and only its value
+glides (`toast.setLevel(value, text)`); it goes `timing.level` after
+the last change, held while hovered or focused as any toast
+([states.md](states.md#a-level-indicator)).
+
 `show()` returns the toast: `{ key, el, undo(), leave(), setRemaining(ms),
 release(), setText(text, { announce }), remaining, held, released }`.
 
@@ -715,7 +730,7 @@ api.onExtendRefused(ids, (leftMs) => { t.setRemaining(leftMs); t.release(); t.se
 
 An app timer of its own is not needed: `windowMs` alone ends on time.
 
-Returns `{ show, open, dismiss(), destroy }`.
+Returns `{ show, level, open, dismiss(), destroy }`.
 
 ### `banner(el, { states, order, appbar, liveWord, toaster, onAction })`
 
@@ -757,7 +772,9 @@ Returns `{ set(name, on, { from, since, text }), update(name, text), toggle(name
 
 ### `sheet(dialog, { dirty })`
 
-For `<dialog class="rk-sheet">` opened with `showModal()`. A tap on the
+For `<dialog class="rk-sheet">` opened with `showModal()`, and for a
+side panel, `<dialog class="rk-sheet rk-sheet--side">`, which leaves
+whole towards its trailing edge over 0.8 × `duration-moderate`. A tap on the
 shading cancels where `closedby` is not supported. Use
 `closedby="closerequest"` on a sheet with unsaved input. The sheet leaves
 the way it came before it closes (`data-rk-phase="leaving"`), its
@@ -781,6 +798,20 @@ something to lose, Escape is taken on its `keydown`, so repeated presses
 keep asking instead of closing on the third. `showModal()` first
 measures the scrollbar into `--rk-scrollbar` on the root. Returns
 `{ asking, destroy }`.
+
+### `inPlace(scope)`
+
+Choosing in place ([states.md](states.md#choosing-in-place)). A
+control in `scope` with `data-rk-in="ID"` opens the element with that id
+(hidden until then) in the place of its group: its closest
+`[data-rk-group]`, else its parent. The group gets `hidden`, the list
+loses it and slides in, under a back row (`.rk-in-back`: the `chevron-left`
+icon and "back · name", the `inBack` string; made when the list has
+none), and focus goes to the list's chosen entry or its first control.
+The name is the control's `data-rk-in-name`, else the list's
+`aria-label`, else the control's text. The back row, Escape and ← go
+back one level, with focus on the control that opened it; levels may
+nest. Returns `{ depth, back(), reset(), destroy }`.
 
 ### `busy(region, work)`
 
@@ -937,6 +968,9 @@ Moves the app bar's controls that do not fit into the menu of `more` (a
   side. `.rk-ab-mid` cuts before the centred control (pinned, up to half
   the bar) and is gone only while the leading side has given controls
   away; `data-rk-full` (`start`, `end`) names the sides that have.
+- **Running things** (`.rk-ab.rk-ab-run`, `aria-current="true"` on the
+  one in front) move into "more" before any command, whatever its
+  priority: the latest started first, the one in front last.
 - **It lays itself out again** when the bar's width changes, when its
   children change (places a framework renders later), when a child
   grows or shrinks on its own (the live word a banner writes, a pinned
@@ -949,7 +983,7 @@ A short indicator (a volume or a brightness being set) stands in place
 of an app-bar control: the control turns away about its horizontal axis
 as a live tile does for a new status, and `content` (an element: an
 icon, a word, a meter) turns in. A call while it stands changes it in
-place; `timing.indicator` (1.7s) after the last call the control turns
+place; `timing.level` (1.5s) after the last call the control turns
 back. Its own children are `hidden` meanwhile and `data-rk-indicating`
 is on it. The words to hear go through a live region
 (`.rk-status-region`), not through the control.
@@ -1083,6 +1117,26 @@ Keys on the grip: Space or Enter picks up (`data-rk-grabbed`,
 Alt+↑ ↓ moves at once. A live region after the list says each move.
 `onMove(from, to, item)` follows a move. Returns `{ move(item, to), refresh(), destroy }`.
 
+### `removable(list, { items, onRemove })`
+
+Entries (`:scope > li, :scope > tr` by default) a person may remove,
+each removal reversible ([collections.md](collections.md#removing-entries)).
+`onRemove(item, { left })` removes it and offers undo in a toast; three
+ways call it:
+
+- a button marked `data-rk-remove` inside the entry;
+- Delete or Backspace on the entry focus is in (not in a text field),
+  after which focus moves to the next entry, or the one before at the end;
+- a drag towards the trailing edge: the entry follows the pointer, and
+  let go past half its width it leaves that way, with a fade over
+  0.6 × `duration-short`; `left` is then true, and the entry, already out
+  of sight, is removed at once (no `leave()` of its own). Let go before,
+  it glides back. The drag starts only sideways, never on a control in
+  the entry, and on touch never within `space-l` of the window's edges;
+  the click that ends it is cancelled.
+
+The list gets `data-rk-removable`. Returns `{ remove(item), destroy }`.
+
 ### `virtual(el, { count, render, text, onShow, onChange, appbar, label })`
 
 `el` is a `.rk-virtual` with a bounded height. Only the rows in view and
@@ -1182,7 +1236,10 @@ the page, or at `src`, e.g. `'rekta.icons.svg'`). Without `label` it is
 installed PWA's window-controls overlay, or when the root has
 `data-rk-titlebar`. Its `[data-rk-back]` button follows the router like
 the app bar's; its `.rk-titlebar-place` names the current place (none
-at home). The root gets `data-rk-wco` while the overlay is visible.
+at home). The root gets `data-rk-wco` while the overlay is visible. The
+bar gets `data-rk-inactive` while another window is the active one, and
+its name steps back to `text-contrast-high`. Window buttons a page draws
+itself go in `.rk-titlebar-win` at its end ([shell.md](shell.md#window-buttons)).
 Returns `{ destroy }`.
 
 ### `pwa({ sw, toaster, onChange })`

@@ -798,7 +798,7 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
     Rekta.indicate(clock, meter); await wait(30);
     r.flips = clock.getAnimations().length > 0; await wait(400);
     r.stands = clock.hasAttribute('data-rk-indicating') && clock.contains(meter) && clock.querySelector(':scope > span').hidden && meter.getBoundingClientRect().width > 100;
-    await wait(Rekta.tokens.ms('--rk-duration-indicator') + 700);
+    await wait(Rekta.tokens.ms('--rk-duration-level') + 700);
     r.back = !clock.hasAttribute('data-rk-indicating') && !clock.contains(meter) && !clock.querySelector(':scope > span').hidden;
     el.setAttribute('data-rk-away', ''); await wait(Rekta.tokens.ms('--rk-duration-short') + 100);
     r.away = el.getBoundingClientRect().top >= b2.bottom - 1 && getComputedStyle(el).visibility === 'hidden';
@@ -810,7 +810,7 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
   ok(two.narrow.more && two.narrow.lastIsMore && /start|end/.test(two.narrow.full || ''), 'a side that does not fit gives its own controls away; more ends the trailing side', JSON.stringify(two.narrow));
   ok(two.narrow.full === 'end' ? two.narrow.midShown && two.narrow.midBefore : !two.narrow.midShown, 'the middle line goes only when the leading side is full, and cuts before the centred control', JSON.stringify(two.narrow));
   ok(two.peeks, 'a count in a control (data-rk-peek) peeks');
-  ok(two.flips && two.stands && two.back, 'indicate(): the indicator turns in, stands in place, and turns back after timing.indicator', JSON.stringify(two));
+  ok(two.flips && two.stands && two.back, 'indicate(): the indicator turns in, stands in place, and turns back after timing.level', JSON.stringify(two));
   ok(two.away, 'data-rk-away: the bar glides out over its edge and takes no focus');
 
   // A notification from another program: from the edge, title over two lines at most, a picture, a pressable text.
@@ -1629,7 +1629,7 @@ await d2.close();
 
 // Icons and the app shell: the sprite, the gallery, the title bar, installable, offline.
 const sh = await open();
-ok((await sh.evaluate(() => document.querySelectorAll('symbol[id^="rk-i-"]').length)) === 61 && (await sh.evaluate(() => document.querySelectorAll('.icon-gallery li').length)) === 61, 'sixty-one icons in the sprite and the gallery');
+ok((await sh.evaluate(() => document.querySelectorAll('symbol[id^="rk-i-"]').length)) === 63 && (await sh.evaluate(() => document.querySelectorAll('.icon-gallery li').length)) === 63, 'sixty-three icons in the sprite and the gallery');
 ok(await sh.evaluate(() => { const u = document.querySelector('.icon-gallery use'); const b = u.closest('svg').getBBox(); return b.width > 4 && b.height > 4; }), 'an icon draws from the sprite');
 ok((await sh.evaluate(() => getComputedStyle(document.querySelector('#titlebar')).display)) === 'none', 'the title bar hides in a browser tab');
 await sh.evaluate(() => document.documentElement.setAttribute('data-rk-titlebar', '')); await sh.waitForTimeout(100);
@@ -1817,6 +1817,154 @@ ok(l1 !== l0 && l1 !== l2 && (await q.evaluate(() => document.querySelectorAll('
 await q.evaluate(() => window.site.files.expandAll(false)); await q.waitForTimeout(600);
 ok(await q.evaluate(() => { window.site.files.expandAll(true); return [...document.querySelectorAll('#tree [role=group]')].some((u) => u.getAnimations().length); }), 'a tree branch opens to its height');
 await q.close();
+
+// Shell patterns (#89 to #98): a side panel from the trailing edge with a list chosen in place, a level indicator,
+// entries removed by Delete, a button or a drag, a launch tile, the title bar's window buttons and inactive name, and
+// running things in an app bar without a live state.
+const sp = await open();
+const panel = await sp.evaluate(async () => {
+  const wait = (t) => new Promise((res) => setTimeout(res, t));
+  const d = document.createElement('dialog'); d.className = 'rk-sheet rk-sheet--side'; d.id = 't-panel';
+  d.innerHTML = '<form method="dialog"><button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close">×</button>'
+    + '<section class="rk-region" data-rk-group id="t-group"><p class="rk-kicker">network</p><button class="rk-btn" type="button" id="t-wifi" data-rk-in="t-nets" data-rk-in-name="wi-fi">wi-fi · home</button></section>'
+    + '<section class="rk-region" id="t-nets" aria-label="wi-fi" hidden><button class="rk-btn" type="button" id="t-net1">home</button><button class="rk-btn" type="button">office</button></section></form>';
+  document.querySelector('.rk').append(d);
+  Rekta.sheet(d); window.tIn = Rekta.inPlace(d);
+  d.showModal();
+  const moving = d.getAnimations().length > 0;
+  await wait(600);
+  const r = d.getBoundingClientRect();
+  return { moving, right: Math.round(r.right), vw: innerWidth, h: Math.round(r.height), vh: innerHeight, w: Math.round(r.width), want: Math.round(2 * Rekta.tokens.px('--rk-tile-unit') + Rekta.tokens.px('--rk-space-s') + 2 * Rekta.tokens.px('--rk-space-m')) };
+});
+ok(panel.moving && panel.right === panel.vw && panel.h === panel.vh && panel.w === panel.want, 'a side panel slides in at the trailing edge, full height, two tile units wide with its padding', JSON.stringify(panel));
+await sp.click('#t-wifi'); await sp.waitForTimeout(400);
+const chose = await sp.evaluate(() => ({ group: document.querySelector('#t-group').hidden, list: !document.querySelector('#t-nets').hidden, back: (document.querySelector('#t-nets > .rk-in-back') || {}).textContent, focus: document.activeElement.id, depth: window.tIn.depth }));
+ok(chose.group && chose.list && chose.back === 'back · wi-fi' && chose.focus === 't-net1' && chose.depth === 1, 'choosing in place: the list takes the group\'s place under "back · name", focus in it', JSON.stringify(chose));
+await sp.keyboard.press('Escape'); await sp.waitForTimeout(400);
+const back1 = await sp.evaluate(() => ({ open: document.querySelector('#t-panel').open, group: !document.querySelector('#t-group').hidden, list: document.querySelector('#t-nets').hidden, focus: document.activeElement.id }));
+ok(back1.open && back1.group && back1.list && back1.focus === 't-wifi', 'Escape goes back to the group first; the panel stays open', JSON.stringify(back1));
+await sp.click('#t-wifi'); await sp.waitForTimeout(400); await sp.keyboard.press('ArrowLeft'); await sp.waitForTimeout(300);
+ok(await sp.evaluate(() => !document.querySelector('#t-group').hidden && document.activeElement.id === 't-wifi'), '← goes back too');
+const leaving = await sp.evaluate(async () => {
+  const d = document.querySelector('#t-panel'); d.close();
+  await new Promise((res) => setTimeout(res, 120));
+  const m = new DOMMatrixReadOnly(getComputedStyle(d).transform);
+  return { phase: d.dataset.rkPhase, x: m.m41, opacity: getComputedStyle(d).opacity };
+});
+ok(leaving.phase === 'leaving' && leaving.x > 0 && leaving.opacity === '1', 'it leaves whole towards its trailing edge', JSON.stringify(leaving));
+ok(await until(sp, async () => !(await sp.evaluate(() => document.querySelector('#t-panel').open))), 'then it is closed');
+await sp.evaluate(() => document.querySelector('#t-panel').remove());
+// The level indicator: one toast, again with the same word it stays and its value changes; it goes timing.level after.
+await sp.evaluate(() => {
+  const reg = document.createElement('div'); reg.className = 'rk-toasts'; reg.setAttribute('role', 'status'); reg.id = 't-toasts';
+  document.querySelector('.rk').append(reg); window.tToasts = Rekta.toaster(reg);
+  window.tToasts.level('volume', 0.4, { icon: 'theme' });
+});
+await sp.waitForTimeout(300);
+const lv1 = await sp.evaluate(() => { const t = document.querySelector('#t-toasts .rk-toast'); window.tLevelEl = t; return { level: t.classList.contains('rk-toast--level'), word: t.querySelector('.rk-toast-msg').textContent, fig: t.querySelector('.rk-toast-level').textContent, v: t.querySelector('.rk-meter').style.getPropertyValue('--rk-v'), icon: !!t.querySelector('svg.rk-icon'), act: !!t.querySelector('button') }; });
+ok(lv1.level && lv1.word === 'volume' && lv1.fig === '40%' && lv1.v === '0.4' && lv1.icon && !lv1.act, 'a level indicator: icon, word, meter and figure, no action', JSON.stringify(lv1));
+await sp.waitForTimeout(1000);
+await sp.evaluate(() => window.tToasts.level('volume', 0.6));
+await sp.waitForTimeout(800);
+const lv2 = await sp.evaluate(() => { const all = document.querySelectorAll('#t-toasts .rk-toast'); return { n: all.length, same: all[0] === window.tLevelEl, fig: all[0].querySelector('.rk-toast-level').textContent, leaving: all[0].hasAttribute('data-rk-phase') }; });
+ok(lv2.n === 1 && lv2.same && lv2.fig === '60%' && !lv2.leaving, 'pressed again, it stays and only its value changes; its time starts again', JSON.stringify(lv2));
+ok(await until(sp, async () => (await sp.evaluate(() => document.querySelectorAll('#t-toasts .rk-toast').length)) === 0, 2500), 'it goes timing.level after the last change');
+await sp.evaluate(() => { window.tToasts.destroy(); document.querySelector('#t-toasts').remove(); });
+// Removing entries: Delete moves focus on, a button, a drag past half; a short drag glides back and clicks nothing.
+await sp.evaluate(() => {
+  const ul = document.createElement('ul'); ul.className = 'rk-rows'; ul.id = 't-rem'; ul.style.cssText = 'position:fixed;left:200px;top:200px;width:300px;background:var(--rk-bg);z-index:5;margin:0';
+  ul.innerHTML = ['a', 'b', 'c', 'd'].map((x) => `<li id="t-r-${x}" tabindex="0"><span>${x}</span><button class="rk-btn rk-btn--icon rk-btn--quiet" type="button" data-rk-remove aria-label="dismiss">×</button></li>`).join('');
+  document.body.append(ul);
+  window.tRemoved = []; window.tClicks = 0;
+  ul.addEventListener('click', () => { window.tClicks += 1; });
+  Rekta.removable(ul, { onRemove: (li, { left }) => { window.tRemoved.push(`${li.id.slice(4)}:${left}`); li.remove(); } });
+  document.querySelector('#t-r-b').focus();
+});
+await sp.keyboard.press('Delete');
+const del = await sp.evaluate(() => ({ removed: window.tRemoved.join(), focus: document.activeElement.id, attr: document.querySelector('#t-rem').hasAttribute('data-rk-removable'), ta: getComputedStyle(document.querySelector('#t-r-a')).touchAction }));
+ok(del.removed === 'b:false' && del.focus === 't-r-c' && del.attr && del.ta === 'pan-y', 'Delete removes the focused entry, focus moves to the next', JSON.stringify(del));
+await sp.click('#t-r-a [data-rk-remove]');
+ok((await sp.evaluate(() => window.tRemoved.join())) === 'b:false,a:false', 'its remove button removes it');
+const dragRow = async (sel, dx) => {
+  const b = await sp.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; }, sel);
+  await sp.mouse.move(b.x, b.y); await sp.mouse.down();
+  for (let i = 1; i <= 8; i += 1) { await sp.mouse.move(b.x + (dx * i) / 8, b.y); await sp.waitForTimeout(16); }
+  const mid = await sp.evaluate((s) => new DOMMatrixReadOnly(getComputedStyle(document.querySelector(s)).transform).m41, sel);
+  await sp.mouse.up();
+  return mid;
+};
+const followed = await dragRow('#t-r-c', 60);
+await sp.waitForTimeout(400);
+const short = await sp.evaluate(() => ({ removed: window.tRemoved.length, there: !!document.querySelector('#t-r-c'), x: new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#t-r-c')).transform).m41, clicks: window.tClicks }));
+ok(Math.round(followed) === 60 && short.removed === 2 && short.there && short.x === 0 && short.clicks === 1, 'dragged a little, the entry follows and glides back; the drag clicks nothing', JSON.stringify({ followed, ...short }));
+await dragRow('#t-r-d', 200);
+ok(await until(sp, async () => (await sp.evaluate(() => window.tRemoved.join())) === 'b:false,a:false,d:true'), 'dragged past half its width, it leaves that way and is removed', await sp.evaluate(() => window.tRemoved.join()));
+await sp.evaluate(() => document.querySelector('#t-rem').remove());
+// A launch tile: icon at the top leading corner, the count at the trailing one, the name at the foot; peek only when wide.
+const launch = await sp.evaluate(() => {
+  const g = document.createElement('div'); g.className = 'rk-tiles'; g.style.cssText = 'width:700px';
+  const pic = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="%23c33"/></svg>');
+  const tile = (cls, id) => `<a class="rk-tile rk-launch ${cls}" id="${id}" href="#"><img class="rk-picture" src="${pic}" alt=""><span class="rk-launch-count">12</span><span class="rk-launch-peek">Ana: the build is green again</span><span class="rk-launch-name">Mail</span></a>`;
+  g.innerHTML = tile('rk-w2', 't-l2') + tile('', 't-l1') + tile('rk-w4', 't-l4') + tile('rk-h2', 't-lh');
+  document.querySelector('[data-rk-place="home"] .rk-sec').append(g);
+  const box = (s) => document.querySelector(s).getBoundingClientRect();
+  const t = box('#t-l2'), i = box('#t-l2 .rk-picture'), c = box('#t-l2 .rk-launch-count'), n = box('#t-l2 .rk-launch-name'), ih = box('#t-lh .rk-picture');
+  const r = {
+    icon: [Math.round(i.width), Math.round(i.left - t.left), Math.round(i.top - t.top)], count: Math.round(t.right - c.right), name: Math.round(t.bottom - n.bottom),
+    peekWide: box('#t-l2 .rk-launch-peek').height > 0, peekSmall: getComputedStyle(document.querySelector('#t-l1 .rk-launch-peek')).display,
+    w4: Math.round(box('#t-l4').width), unit: Rekta.tokens.px('--rk-tile-unit'), gap: Rekta.tokens.px('--rk-space-s'), large: Math.round(ih.width),
+  };
+  g.remove();
+  return r;
+});
+ok(launch.icon.join() === '48,12,12' && launch.count === 12 && launch.name === 12 && launch.peekWide && launch.peekSmall === 'none' && launch.large === 96, 'a launch tile: its icon at the tile icon size, the count and the name at its corners, peek only when wide', JSON.stringify(launch));
+ok(launch.w4 === Math.round(4 * launch.unit + 3 * launch.gap), 'a tile four units wide spans four units sideways', JSON.stringify(launch));
+// The title bar: window buttons touch-target wide, close quiet like the others; another window active, the name steps back.
+const tbar = await sp.evaluate(async () => {
+  const wait = (t) => new Promise((res) => setTimeout(res, t));
+  const bar = document.createElement('div'); bar.className = 'rk-titlebar rk-titlebar--inline'; bar.style.cssText = 'position:fixed;left:0;top:300px;width:600px;z-index:5';
+  bar.innerHTML = '<span class="rk-titlebar-name"><b>Rekta</b> Design</span><span class="rk-titlebar-place">today</span><span class="rk-titlebar-win">'
+    + ['minus', 'maximize', 'close'].map((n) => `<button class="rk-btn rk-btn--icon rk-btn--quiet" type="button" aria-label="${n}">${Rekta.icon(n).outerHTML}</button>`).join('') + '</span>';
+  document.body.append(bar);
+  const t = Rekta.titlebar(bar); await wait(50);
+  const btns = [...bar.querySelectorAll('.rk-titlebar-win > button')];
+  const r = { widths: btns.map((b) => Math.round(b.getBoundingClientRect().width)), end: Math.round(bar.getBoundingClientRect().right - btns[2].getBoundingClientRect().right), quiet: getComputedStyle(btns[2]).color === getComputedStyle(btns[0]).color, active: !bar.hasAttribute('data-rk-inactive') };
+  const name = bar.querySelector('.rk-titlebar-name'), place = bar.querySelector('.rk-titlebar-place'), had = document.hasFocus;
+  r.nameBefore = getComputedStyle(name).color;
+  document.hasFocus = () => false; dispatchEvent(new Event('blur')); await wait(50);
+  r.inactive = bar.hasAttribute('data-rk-inactive'); r.nameAfter = getComputedStyle(name).color; r.place = getComputedStyle(place).color;
+  document.hasFocus = had; dispatchEvent(new Event('focus')); await wait(50);
+  r.back = !bar.hasAttribute('data-rk-inactive');
+  t.destroy(); bar.remove();
+  return r;
+});
+ok(tbar.widths.join() === '44,44,44' && tbar.end === 0 && tbar.quiet, 'window buttons: touch-target wide at the bar\'s end, close as quiet as the others', JSON.stringify(tbar));
+ok(tbar.active && tbar.inactive && tbar.nameAfter === tbar.place && tbar.nameAfter !== tbar.nameBefore && tbar.back, 'another window active: the name steps back to the place\'s colour, and comes back', JSON.stringify(tbar));
+// Running things in an app bar without a live state: in order of start, the one in front marked, the commands at the
+// end; when the bar is full they move into "more" before any command, the one in front last.
+const run = await sp.evaluate(async () => {
+  const wait = (t) => new Promise((res) => setTimeout(res, t));
+  const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';
+  const el = document.createElement('div'); el.className = 'rk-appbar'; el.style.cssText = 'width:700px;left:0;right:auto;bottom:200px';
+  el.innerHTML = `<button class="rk-ab rk-ab-run" id="t-w1" type="button">${icon}<span>notes</span></button><button class="rk-ab rk-ab-run" id="t-w2" type="button" aria-current="true">${icon}<span>terminal</span></button>`
+    + `<button class="rk-ab rk-ab-run" id="t-w3" type="button">${icon}<span>files</span></button><button class="rk-ab" id="t-cmd" type="button">${icon}<span>search</span></button>`
+    + `<button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+  document.querySelector('.rk').append(el);
+  const a = Rekta.appbar(el); await wait(100);
+  const col = (s) => getComputedStyle(el.querySelector(s)).color, root = getComputedStyle(document.documentElement);
+  const toRgb = (v) => { const p = document.createElement('i'); p.style.color = v; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; };
+  const r = {
+    front: col('#t-w2') === toRgb(root.getPropertyValue('--rk-text-primary')), back: col('#t-w1') === toRgb(root.getPropertyValue('--rk-text-contrast-high')),
+    end: Math.round(el.getBoundingClientRect().right - el.querySelector('#t-cmd').getBoundingClientRect().right - parseFloat(getComputedStyle(el).paddingRight)),
+  };
+  el.style.width = '330px'; a.layout(); await wait(100);
+  r.moved = ['#t-w1', '#t-w2', '#t-w3', '#t-cmd'].map((s) => (el.querySelector(s).hasAttribute('data-rk-overflow') ? 1 : 0)).join('');
+  a.destroy(); el.remove();
+  return r;
+});
+ok(run.front && run.back && run.end === 0, 'running things: the one in front in the primary colour, the others stepped back; with no live state the commands still stand at the end', JSON.stringify(run));
+ok(run.moved === '1011' || run.moved === '1010' || run.moved === '0010', 'a full bar moves running things into "more" first, the latest started first, the one in front last', JSON.stringify(run));
+await sp.close();
 
 // Reduced motion: a place change is instant, never skipped.
 const r = await open({ reducedMotion: 'reduce' });
