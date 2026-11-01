@@ -49,7 +49,7 @@ export function tokenName(path) {
     case 'color': return rest.slice(1).join('-');                    // color.light.text.primary -> text-primary
     case 'typography': {
       const [kind, key] = rest;
-      return { 'font-family': `font-${key}`, weight: `font-weight-${key}`, size: `font-size-${key}`, 'line-height': `line-height-${key}` }[kind];
+      return { 'font-family': `font-${key}`, weight: `font-weight-${key}`, size: `font-size-${key}`, metrics: `font-${key}`, 'line-height': `line-height-${key}` }[kind];
     }
     case 'spacing': return `space-${rest.join('-')}`;
     case 'radius': return `radius-${rest.join('-')}`;

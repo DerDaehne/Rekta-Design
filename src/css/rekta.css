@@ -165,7 +165,11 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
   position: relative; padding: 0; border: 0; background: none; cursor: pointer;
   font: inherit; font-size: var(--rk-font-size-pivot-active); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-nav);
   color: var(--rk-text-contrast-medium); text-decoration: none;
-  transform: scale(var(--_rk-s)); transform-origin: left bottom;
+  /* Every title scales about its baseline, so all of them share it (docs/navigation.md). rekta.js measures the face and
+     writes the distance from the baseline to the line box's bottom to --_rk-base; until then the face's metrics
+     tokens give it. */
+  transform: scale(var(--_rk-s));
+  transform-origin: left calc(100% - var(--_rk-base, (var(--rk-line-height-nav) + var(--rk-font-descent) - var(--rk-font-ascent)) / 2 * 1em));
   /* A scaled title keeps its full layout width; rekta.js writes that width to --_rk-w, and the end margin takes
      back what the scale gives up, so every gap reads as space-l. */
   margin-inline-end: calc(var(--_rk-w, 0px) * (var(--_rk-s) - 1));

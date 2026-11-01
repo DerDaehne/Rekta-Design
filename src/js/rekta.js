@@ -977,7 +977,9 @@ function stripWheel(e) {
 // Pivot --------------------------------------------------------------------------------------------------------------
 // Inactive titles scale down from the active title's line box by the token ratio (pivot-inactive / pivot-active, or
 // nav-inactive / nav-active for rk-pivot--nav; the stylesheet names the inactive size in --_rk-inactive), measured in
-// the page so fluid sizes and window-size classes stay right.
+// the page so fluid sizes and window-size classes stay right. They scale about the baseline, so every title stands on
+// the active one's: the distance from the baseline to the line box's bottom (the face's descent and half the leading)
+// is measured too, in --_rk-base, the transform's origin.
 function pivotScale(strip) {
   if (!strip.getClientRects().length) return;
   // Measuring is not a change to show: from the stylesheet's measure-free sizes (font-size) to the scale the first time,
@@ -993,6 +995,20 @@ function pivotScale(strip) {
   const inactive = parseFloat(getComputedStyle(probe).fontSize), active = item ? parseFloat(getComputedStyle(item).fontSize) : inactive;
   probe.remove();
   if (inactive && active) strip.style.setProperty('--rk-pivot-scale', (inactive / active).toFixed(3));
+  if (item) {
+    // A line in the title's font with an empty inline block on its baseline: the block's foot is the baseline.
+    const line = document.createElement('span'), mark = document.createElement('span');
+    line.dataset.rkProbe = '';
+    line.style.cssText = 'position:absolute;visibility:hidden;display:block;white-space:nowrap';
+    line.style.font = getComputedStyle(item).font;
+    line.textContent = 'x';
+    mark.style.cssText = 'display:inline-block;width:0;height:0';
+    line.appendChild(mark);
+    strip.appendChild(line);
+    const base = line.getBoundingClientRect().bottom - mark.getBoundingClientRect().bottom;
+    line.remove();
+    if (base >= 0) strip.style.setProperty('--_rk-base', `${base.toFixed(2)}px`);
+  }
   for (const el of titles) if (el.offsetWidth) el.style.setProperty('--_rk-w', `${el.offsetWidth}px`);
   void strip.offsetWidth;
   for (const el of titles) el.style.transition = '';

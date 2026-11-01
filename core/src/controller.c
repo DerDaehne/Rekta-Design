@@ -580,7 +580,7 @@ static void strip_draw(rk_view *v, rk_canvas *c, void *st) {
   }
   rk_textfmt f = strip_fmt(v, s);
   float gap = rk_metric_of(RK_SPACE_L), x = strip_pad(s) - strip_glide(s, now), H = v->pframe.h;
-  float base = H - (f.size * f.line - rk__text_ascent(&f));      /* titles share the baseline, as transform-origin left bottom */
+  float base = H - (f.size * f.line - rk__text_ascent(&f));      /* every title scales about the active one's baseline */
   rk_canvas_push_clip(c, (rk_rect){ 0, 0, v->pframe.w, H + 8 });
   for (int i = 0; i < s->n; i++) {
     float k = strip_scale(s, i, now);

@@ -34,6 +34,7 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 | `typography.weight.<x>` | `font-weight-<x>` | `font-weight-semibold` |
 | `typography.size.<x>` | `font-size-<x>` | `font-size-title` |
 | `typography.line-height.<x>` | `line-height-<x>` | `line-height-compact` |
+| `typography.metrics.<x>` | `font-<x>` | `font-descent` |
 | `spacing.<x>` | `space-<x>` | `space-m` |
 | `radius.<x>` | `radius-<x>` | `radius-tile` |
 | `size.<x>` | `<x>` | `tile-unit`, `appbar-height`, `touch-target` |

@@ -26,7 +26,11 @@ the active title's size change uses a lighter, quicker ease-in-out.
 Only the previously active and newly active titles ever change size —
 every other title stays exactly as it was. The strip's height never
 depends on which title is active: a title is sized from a fixed line
-box (scaled from its own baseline), never by changing its `font-size`.
+box, scaled about its baseline, never by changing its `font-size`, so
+every title stands on one baseline, the active one's. (The baseline lies
+the face's descent and half the leading above the line box's foot:
+`rekta.js` measures it in the page; without the script the
+`typography.metrics` tokens give it.)
 
 This is deliberately *not* a tab bar with an underline, and deliberately
 *not* "MRU" reordering (most-recently-used first) — a fixed order means
