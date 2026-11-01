@@ -5,7 +5,8 @@
    classes, so a framework that owns className keeps working. Each controller returns { destroy() }.
 
    The parts:
-     prefs      theme, density, motion, contrast and transparency switches on the root element, remembered per user
+     prefs      theme, density, motion, contrast, transparency and accent switches on the root element, remembered per
+                user
      keys       one layered keyboard dispatcher: the innermost thing that owns a key gets it (Escape, Ctrl/Cmd+Z)
      press      tiles nudge back where they are pressed; dragging or selecting text never activates them
      turn       the place change (turnstile) as two primitives, leave() and enter(), any router can call
@@ -42,6 +43,7 @@
      reflow     FLIP: what a change moves or resizes glides there (a tile resized, a grid re-flowed)
      enter, leave, presence   things arrive in and leave a list or a grid; the rest close the gap
      tileUpdate a live tile has news: the new number peeks up, a new status flips the tile
+     nudge      a part whose gesture nobody can see (a swipe) hints at it when it is only tapped
      sparkTo    a live line moves to its new points
      crossfade  a change of the whole look fades instead of flipping
      combobox   a field with a list of choices that filters as you type
@@ -102,6 +104,7 @@ export const strings = {
   guardKeep: 'keep editing',
   discardTitle: 'Discard what you entered?',
   move: (item) => `move ${item}`,
+  inBack: (name) => `back · ${name}`,
   nothingToUndo: 'Nothing to undo.',
   undone: (what) => `Undone: ${what}`,
   justNow: 'just now',
@@ -127,6 +130,7 @@ export const strings = {
   loadFailed: 'Could not load the choices. Type to try again.',
   keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
   cannotAct: (label, reason) => `${label} (${reason})`,
+  back: 'back',
 };
 // rk-strings-end
 const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
@@ -221,9 +225,11 @@ function focusHeading(scope) {
 // Prefs --------------------------------------------------------------------------------------------------------------
 // theme: system | light | dark; density: auto | comfortable | compact; motion: system | on | off; contrast: system |
 // more | normal (more: every text pair at 7:1, a frame on status tiles); transparency: system | reduce | normal
-// (reduce: glass is the ground, nothing blurs). The default removes the attribute, so the system setting (or the
-// pointer, for density) decides. Set them before first paint.
-const PREF_DEFAULT = { theme: 'system', density: 'auto', motion: 'system', contrast: 'system', transparency: 'system' };
+// (reduce: glass is the ground, nothing blurs); accent: product | a named accent (ink, teal, steel, violet, mauve,
+// pink, magenta: tokens/rekta.accents.json, which rekta.tokens.css carries as [data-accent]). The default removes the
+// attribute, so the system setting (or the pointer, for density; the product's own --rk-accent, for the accent)
+// decides. Set them before first paint.
+const PREF_DEFAULT = { theme: 'system', density: 'auto', motion: 'system', contrast: 'system', transparency: 'system', accent: 'product' };
 export const prefs = {
   key: 'rekta-prefs',
   read() { try { return JSON.parse(localStorage.getItem(this.key) || '{}'); } catch { return {}; } },
@@ -236,9 +242,9 @@ export const prefs = {
       if (remember) { const all = this.read(); all[name] = this.get(name); this.write(all); }
       document.dispatchEvent(new CustomEvent('rk:prefs', { detail: { name, value: this.get(name) } }));
     };
-    // A theme or contrast chosen by the user cross-fades (view transitions); a restored one applies before the first
-    // paint.
-    if ((name === 'theme' || name === 'contrast') && remember && this.get(name) !== (value || PREF_DEFAULT[name])) crossfade(commit);
+    // A theme, contrast or accent chosen by the user cross-fades (view transitions); a restored one applies before the
+    // first paint.
+    if ((name === 'theme' || name === 'contrast' || name === 'accent') && remember && this.get(name) !== (value || PREF_DEFAULT[name])) crossfade(commit);
     else commit();
   },
   restore() { const all = this.read(); for (const name of Object.keys(PREF_DEFAULT)) if (all[name]) this.set(name, all[name], { remember: false }); },
@@ -404,9 +410,9 @@ function heftOf() {
 // Heft sets when a part starts as well as how long it takes: light parts first, heavy ones later, (heft - heft-min) ×
 // heft-spread × duration-stagger after the turn begins. Parts of one size (heft within 0.05) follow one another in
 // reading order, half a duration-stagger apart, six steps at most: the size leads, the order only sorts what weighs
-// the same.
-function turnStarts(list, at, held) {
-  const step = ms('--rk-duration-stagger'), seen = new Map(), heft = heftOf(), lo = num('--rk-heft-min'), spread = num('--rk-heft-spread');
+// the same. `pace` is 1, or 0.5 for a place that is called up (calledUp()): half the stagger as well as half the time.
+function turnStarts(list, at, held, pace = 1) {
+  const step = ms('--rk-duration-stagger') * pace, seen = new Map(), heft = heftOf(), lo = num('--rk-heft-min'), spread = num('--rk-heft-spread');
   return list.map((el) => {
     const h = heft(at.get(el));
     if (el === held) return { h, at: 0 };
@@ -472,19 +478,81 @@ function turnRows(u, place, held) {
 }
 // A row's perspective grows with its reach from the edge it turns about, so a wide row turns as flat as a narrow one.
 function perspective(far) { return Math.round((num('--rk-turnstile-perspective') || 800) + num('--rk-turnstile-reach') * Math.max(0, far)) + 'px'; }
+// A place that is called up and left again many times an hour (a launcher, a start surface; data-rk-called) turns at
+// half the pace, in and out: every duration and the stagger halve, the curves, angles and hand-over stay (motion.md).
+// A change takes that pace when either side is such a place, so the way in and the way out match.
+const calledUp = (...list) => list.some((p) => p && p.hasAttribute && p.hasAttribute('data-rk-called'));
 // arrive(el): a place (or the root) builds in: tiles rise and sparklines draw while data-rk-arriving is on, for the arrival
-// window. A framework router calls it for a place it opened by client navigation.
+// window: the last tile (three duration-greet steps, then its duration-long rise), a sparkline's duration-long after
+// it, and a frame to spare. A framework router calls it for a place it opened by client navigation.
 export function arrive(el) {
   el.setAttribute('data-rk-arriving', '');
-  const wait = ms('--rk-duration-moderate') + 10 * ms('--rk-duration-stagger') + ms('--rk-duration-long') + 50;
+  const wait = 3 * ms('--rk-duration-greet') + 2 * ms('--rk-duration-long') + 50;
   clearTimeout(el._rkArrive);
   el._rkArrive = setTimeout(() => el.removeAttribute('data-rk-arriving'), wait);
+}
+// The title a part carries into the place it opens (motion.md): it does not turn away with its part. Leaving, a copy
+// stands where it was (the title itself turns transparent, keeping its room, and can still take focus) while the rest
+// of the place turns away. Arriving, it travels over duration-moderate on ease-pivot-glide to where the new place
+// rests its title: a copy of that title
+// travels from the old one's place and size to its own, under the old copy, which fades over the first half, so the
+// same words never change and other words cross over. The new place's parts arrive from the middle of the travel on.
+// The copies stand in the body, fixed (a place is a container, which would hold a fixed box), with the look
+// they had where they stood. Back runs it the other way.
+let lifted = null;
+const COPIED = ['font-family', 'font-size', 'font-weight', 'font-style', 'font-variant-numeric', 'line-height', 'letter-spacing', 'text-transform', 'text-align', 'white-space', 'overflow-wrap', 'color', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left'];
+function copyOf(el, r) {
+  const s = getComputedStyle(el), c = el.cloneNode(true);
+  for (const x of [c, ...c.querySelectorAll('[id]')]) x.removeAttribute('id');
+  c.removeAttribute('data-rk-carry'); c.removeAttribute('class'); c.setAttribute('aria-hidden', 'true');
+  // An inline title keeps its one line: a block as wide as its box would round it onto two.
+  const w = s.display === 'inline' ? Math.ceil(r.width) + 1 : r.width;
+  c.style.cssText = `${COPIED.map((k) => `${k}:${s.getPropertyValue(k)}`).join(';')};position:fixed;left:${r.left}px;top:${r.top}px;width:${w}px;height:${r.height}px;margin:0;border:0;box-sizing:border-box;display:block;overflow:visible;visibility:visible;pointer-events:none;transform-origin:0 0;z-index:var(--rk-layer-sticky)`;
+  return c;
+}
+function liftTitle(el) {
+  const r = el.getBoundingClientRect(), copy = copyOf(el, r);
+  document.body.appendChild(copy);
+  lifted = { el, copy, r, size: parseFloat(getComputedStyle(el).fontSize) || 1, was: el.style.opacity };
+  el.style.opacity = '0';
+}
+function dropTitle() {
+  if (!lifted) return;
+  lifted.copy.remove(); lifted.el.style.opacity = lifted.was;
+  lifted = null;
+}
+function flyTitle(to, d) {
+  const from = lifted, r = to.getBoundingClientRect(), copy = copyOf(to, r), was = to.style.opacity;
+  lifted = null;
+  from.copy.before(copy);
+  to.style.opacity = '0';
+  const k = from.size / (parseFloat(getComputedStyle(to).fontSize) || from.size), dx = from.r.left - r.left, dy = from.r.top - r.top, ease = css('--rk-ease-pivot-glide');
+  const anims = [
+    copy.animate([{ transform: `translate(${dx}px, ${dy}px) scale(${k})` }, { transform: 'none' }], { duration: d, easing: ease, fill: 'forwards' }),
+    from.copy.animate([{ transform: 'none' }, { transform: `translate(${-dx}px, ${-dy}px) scale(${1 / k})` }], { duration: d, easing: ease, fill: 'forwards' }),
+    from.copy.animate([{ opacity: 1 }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], { duration: d, fill: 'forwards' }),
+  ];
+  let over = false;
+  const f = {
+    d, host: null, flown: false, held: false,
+    // The title shows itself when it has arrived and the part that holds it has come to rest, in the same frame.
+    end() {
+      if (over) return;
+      over = true;
+      anims.forEach((a) => a.cancel()); copy.remove(); from.copy.remove();
+      from.el.style.opacity = from.was; to.style.opacity = was;
+    },
+    landed() { f.held = false; if (f.flown) f.end(); },
+  };
+  f.finished = finished(anims).then(() => { f.flown = true; if (!f.held) f.end(); });
+  return f;
 }
 export const turn = {
   get running() { return !!turning; },
   finish() { if (turning) turning.finish(); },
-  leave(place, { pressed = null, back = false } = {}) {
+  leave(place, { pressed = null, back = false, called = calledUp(place), carry = null } = {}) {
     turn.finish();
+    dropTitle();
     // A place still building in leaves from its end state: the turn wins over the arrival.
     for (const el of [place, docEl()]) { clearTimeout(el._rkArrive); el.removeAttribute('data-rk-arriving'); }
     return new Promise((resolve) => {
@@ -500,16 +568,22 @@ export const turn = {
       }
       releasePress(true);
       if (held) held.setAttribute('data-rk-pressed', '');
-      const out = ms('--rk-duration-short'), overlap = num('--rk-turn-overlap');
+      const pace = called ? 0.5 : 1, out = ms('--rk-duration-short') * pace, overlap = num('--rk-turn-overlap');
       const u = turnUnits(place, held), kind = back ? 'back-out' : 'out';
+      // A title carried into the next place stands: it is lifted when the part that holds it starts to turn, at once
+      // when it is a part of its own.
+      const title = carry && ms('--rk-duration-moderate') && carry.getClientRects().length ? carry : null;
+      if (title && u.list.includes(title)) { u.list.splice(u.list.indexOf(title), 1); liftTitle(title); }
+      const titleHost = title && !lifted ? u.list.find((el) => el.contains(title)) : null;
       turnRows(u, place, held);
       // the pressed tile goes when the last of the others does, or later
-      const starts = turnStarts(u.list, u.at, held), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
+      const starts = turnStarts(u.list, u.at, held, pace), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
       let end = 0;
       u.list.forEach((el, i) => {
         const h = starts[i].h, d = out * h;
         let at = el === held ? lastStart : starts[i].at;
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
+        if (el === titleHost) timers.push(later(() => liftTitle(title), el === held ? Math.max(at, hold) : at));
         if (el === held) {
           at = Math.max(at, hold);
           timers.push(later(() => { if (el.matches(':hover')) el.style.setProperty('--_rk-tint', 'var(--rk-hover)'); el.setAttribute('data-rk-turn', 'pressed'); }, at));
@@ -532,21 +606,27 @@ export const turn = {
       timers.push(later(done, u.list.length ? end : 0));
     });
   },
-  enter(place, { back = false, focus = null, arriving = !back } = {}) {
+  enter(place, { back = false, focus = null, arriving = !back, called = calledUp(place), carry = null } = {}) {
     turn.finish();
     return new Promise((resolve) => {
       place.hidden = false;
       // A place you return to comes back as you left it: no second build-in, no redraw.
       if (arriving) arrive(place);
-      else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
+      else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-build-in-fade', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
       // Its units turn in from the other side, light ones first, each in its own time.
-      const d0 = ms('--rk-duration-moderate');
+      const pace = called ? 0.5 : 1, d0 = ms('--rk-duration-moderate') * pace;
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
+      // The carried title travels in; the part that holds it lands with it, the others arrive from its middle on.
+      const flight = lifted && carry && d0 && carry.getClientRects().length ? flyTitle(carry, d0) : null;
+      if (!flight) dropTitle();
+      else if (u.list.includes(carry)) u.list.splice(u.list.indexOf(carry), 1);
+      else if ((flight.host = u.list.find((el) => el.contains(carry)) || null)) flight.held = true;
       turnRows(u, place, null);
-      let end = 0;
-      const starts = turnStarts(u.list, u.at, null);
+      let end = flight ? d0 : 0;
+      const starts = turnStarts(u.list, u.at, null, pace);
       u.list.forEach((el, i) => {
-        const { h, at } = starts[i], d = d0 * h;
+        const { h } = starts[i], d = d0 * h;
+        const at = !flight ? starts[i].at : el === flight.host ? Math.max(0, flight.d - d) : starts[i].at + flight.d / 2;
         el.style.setProperty('--_rk-turn-delay', `${at}ms`);
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
         el.setAttribute('data-rk-turn', kind);
@@ -559,20 +639,21 @@ export const turn = {
       // one let go a frame early would jump, one held after it stopped would keep its layer and sharpen a moment
       // later. The parts fill backwards only, so motion, animation and layer all end in the same frame.
       let over = false;
-      const release = (el) => { el.removeAttribute('data-rk-turn'); TURN_PROPS.forEach((p) => el.style.removeProperty(p)); unalignLayer(el); };
+      const release = (el) => { el.removeAttribute('data-rk-turn'); TURN_PROPS.forEach((p) => el.style.removeProperty(p)); unalignLayer(el); if (flight && el === flight.host) flight.landed(); };
       const done = () => {
         if (over) return;
         over = true;
         clearTimeout(timer);
         u.list.forEach(release);
+        if (flight) flight.end();
         turning = null;
         resolve();
       };
       turning = { finish: done };
-      Promise.all(u.list.map((el) => {
+      Promise.all([...u.list.map((el) => {
         const own = el.getAnimations().filter((a) => /^rk-turn-(back-)?in$/.test(a.animationName));
         return Promise.all(own.map((a) => a.finished)).then(() => { if (!over) release(el); }, () => {});
-      })).then(done);
+      }), flight && flight.finished]).then(done);
       const timer = later(done, end + 250);                      // a part that never animates (hidden meanwhile)
     });
   },
@@ -658,6 +739,14 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     const w = watchers.get(current), named = w ? w.fn(item, { ...opts, params: new URLSearchParams(params) }) : null;
     document.title = typeof named === 'string' && named ? `${named} · ${titleOf(current)}` : titleOf(current);
   }
+  // The title that travels (motion.md): forward, the opened part's [data-rk-carry] to the new place's title; back, the
+  // place's title to the [data-rk-carry] of the part that opened it.
+  const carried = (el) => (el ? (el.matches('[data-rk-carry]') ? el : el.querySelector('[data-rk-carry]')) : null);
+  function carryOf(from, to, state, back, pressed) {
+    const opener = back && state && state.opener ? [...to.querySelectorAll('a[href]')].find((a) => a.getAttribute('href') === state.opener) : null;
+    const pair = back ? [from.querySelector('.rk-title'), carried(opener)] : [carried(pressed), to.querySelector('.rk-title')];
+    return pair[0] && pair[1] ? pair : [null, null];
+  }
   function show(name, state, { instant = false, back = false, pressed = null } = {}) {
     const prev = current, from = byName(prev), to = byName(name);
     current = name;
@@ -666,14 +755,15 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     params = (state && state.params) || '';
     showBack();
     const run = async () => {
+      const [lifts, lands] = from && from !== to && !instant ? carryOf(from, to, state, back, pressed) : [null, null];
       if (from && from !== to) {
-        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed });
+        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed, called: calledUp(from, to), carry: lifts });
       }
       to.hidden = false;
       setItem(state && state.item, { back, place: true });
       restore(to, state);
       const f = focusTarget(to, state, back);
-      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f });
+      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f, called: calledUp(from, to), carry: lands });
       if (onChange) onChange({ from: prev, to: name, back });
       document.dispatchEvent(new CustomEvent('rk:placechange', { detail: { from: prev, to: name, back } }));
     };
@@ -945,18 +1035,45 @@ export function panorama(el, { pivot = null } = {}) {
     e.preventDefault();
     goTo(sec);
   }
+  // A panorama that reaches past its window never ends flush on a section edge, so something always says there is more
+  // (layout.md): the window's edge falls inside a section, at least space-xl from either of its ends. The sections keep
+  // their size; the gap between them (space-xl) changes by as little as that takes, never below space-m; a last section
+  // cut by less than space-xl fits instead, when a smaller gap lets it. The edge is where it lies with the first section
+  // at the start, and with any section aligned there, when they are all as wide. Says whether everything fits; then
+  // nothing scrolls.
+  function spread(list) {
+    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => parseFloat(getComputedStyle(s).width) || 0);
+    const edge = el.clientWidth - (parseFloat(getComputedStyle(el).paddingLeft) || 0), n = sizes.length;
+    const before = (j) => sizes.slice(0, j).reduce((a, w) => a + w, 0);
+    const fitsWith = (g) => before(n) + (n - 1) * g <= edge + 1;
+    const inside = (g) => sizes.some((w, i) => before(i) + i * g + xl <= edge + 0.5 && edge - 0.5 <= before(i) + i * g + w - xl);
+    let gap = xl;
+    if (sideways() && !fitsWith(xl) && !inside(xl)) {
+      const ways = n > 1 ? [Math.floor((edge - before(n)) / (n - 1))] : [];      // everything fits
+      for (let j = 1; j <= n; j += 1) {
+        if (j < n) ways.push(Math.floor((edge - xl - before(j)) / j));            // section j shows space-xl
+        if (j > 1) ways.push(Math.ceil((edge + xl - before(j)) / (j - 1)));      // section j - 1 reaches space-xl past it
+      }
+      const best = ways.filter((g) => g >= least && (inside(g) || fitsWith(g))).sort((a, b) => Math.abs(a - xl) - Math.abs(b - xl))[0];
+      if (best !== undefined) gap = best;
+    }
+    if (gap === xl) el.style.removeProperty('--_rk-sec-gap'); else el.style.setProperty('--_rk-sec-gap', `${gap}px`);
+    return fitsWith(gap);
+  }
   function fit() {
     const list = sections();
     // A panorama in a place that is away keeps everything as it was; it is measured again when it shows.
     if (!list.length || !el.getClientRects().length) { stickyStrip(); return; }
-    const last = list[list.length - 1];
-    const contentRight = el.scrollLeft + last.getBoundingClientRect().right - el.getBoundingClientRect().left;
-    el.toggleAttribute('data-rk-fit', sideways() && contentRight <= el.clientWidth + 1);
+    const was = el.style.getPropertyValue('--_rk-sec-gap');
+    el.toggleAttribute('data-rk-fit', sideways() && spread(list.filter((s) => s.getClientRects().length)));
     if (pivot) { pivotScale(pivot); pivotFit(pivot); }
     stickyStrip();
-    // A change of window-size class keeps the reading position: the current section is state, not an offset.
+    // A change of window-size class keeps the reading position: the current section is state, not an offset. So does
+    // a new gap between the sections.
     const now = sideways();
-    if (now !== wasSideways) { wasSideways = now; if (current) goTo(current, { focus: false, instant: true }); clicked = false; }
+    if (now !== wasSideways || (now && el.scrollLeft > 0 && el.style.getPropertyValue('--_rk-sec-gap') !== was)) {
+      wasSideways = now; if (current) goTo(current, { focus: false, instant: true }); clicked = false;
+    }
   }
   // A section strip that sticks (compact, a direct child of the place) publishes its height, so focus and section
   // jumps land below it.
@@ -1153,7 +1270,7 @@ export function pivot(el, { onSelect, turn: placeTurn = null, gone = 'select' } 
       list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; const p = panel(t); if (p && p !== from) p.hidden = true; });
       pivotGlide(el, list[i]);
       if (focus) list[i].focus();
-      (from ? turn.leave(from, { back }) : Promise.resolve()).then(() => { if (mine === gen && to) turn.enter(to, { back }); });
+      (from ? turn.leave(from, { back, called: calledUp(from, to) }) : Promise.resolve()).then(() => { if (mine === gen && to) turn.enter(to, { back, called: calledUp(from, to) }); });
       told(i);
       return;
     }
@@ -1372,19 +1489,53 @@ export function toaster(region) {
     sr.textContent = tx('undoWindow', secs, again);
     msg.appendChild(sr);
   }
-  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null, status = '', windowMs = 0, onEnd = null } = {}) {
+  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null, status = '', windowMs = 0, onEnd = null, title = '', icon: pic = null, picture = '', open: run = null, edge = false } = {}, gauge = null) {
     if (open && open.key === key && open.undo && undo) { open.update(text, undo, { windowMs, onEnd }); return open; }
     if (open) open.leave(false, 'replaced');
     // The window runs against a deadline in wall-clock time, so a late or throttled timer (a busy page, a background
     // tab) never stretches it: each tick reads the clock. remaining is what is left while it stands still (held, or not
     // yet in); an undo toast steps its figure on whole seconds, a plain one goes when it runs out.
-    let total = undo ? windowMs || tokenWindow() : ms('--rk-duration-toast'), remaining = total;
+    let total = undo ? windowMs || tokenWindow() : ms(gauge ? '--rk-duration-level' : '--rk-duration-toast'), remaining = total;
     let timer = 0, deadline = 0, running = false, hover = false, focus = false, held = false, released = false, done = false, waiting = 0;
     const el = document.createElement('div');
     el.className = 'rk-toast';
     if (status) { el.dataset.status = status; if (status === 'error') el.setAttribute('role', 'alert'); }
-    const msg = el.appendChild(document.createElement('p'));
+    // A notification from another program enters whole from the window's edge: it came from outside (motion.md).
+    if (edge) el.setAttribute('data-rk-from', 'edge');
+    // A level indicator (toaster.level()): the value's icon, its word, a meter and the figure, no action.
+    let bar = null, figure = null;
+    if (gauge) {
+      el.className = 'rk-toast rk-toast--level';
+      if (gauge.icon) el.appendChild(icon(gauge.icon));
+    }
+    // Its text is pressable when it has a default action ("open what this is about"); a notification without one
+    // closes when its text is pressed. It may bring a title, and the sender's icon or its own picture at the start.
+    const pressable = !gauge && (!!run || edge);
+    const msg = el.appendChild(document.createElement(pressable ? 'button' : 'p'));
     msg.className = 'rk-toast-msg';
+    let words = msg;
+    if (pressable) {
+      msg.type = 'button';
+      msg.addEventListener('click', () => { if (run) { leave(false, 'opened'); run(); } else leave(false); });
+    }
+    if (gauge) {
+      bar = el.appendChild(document.createElement('span'));
+      bar.className = 'rk-meter'; bar.setAttribute('aria-hidden', 'true');
+      figure = el.appendChild(document.createElement('span'));
+      figure.className = 'rk-toast-level';
+    }
+    if (title || pic || picture) {
+      if (pic || picture) {
+        const field = msg.appendChild(document.createElement('span'));
+        field.className = 'rk-toast-pic'; field.setAttribute('aria-hidden', 'true');
+        if (picture) { const img = field.appendChild(document.createElement('img')); img.src = picture; img.alt = ''; } else field.appendChild(typeof pic === 'string' ? icon(pic) : pic);
+      }
+      const body = msg.appendChild(document.createElement('span'));
+      body.className = 'rk-toast-body';
+      if (title) { const b = body.appendChild(document.createElement('b')); b.className = 'rk-toast-title'; b.textContent = title; }
+      words = body.appendChild(document.createElement('span'));
+      words.className = 'rk-toast-text';
+    }
     let count = null;
     if (undo) {
       const btn = el.appendChild(document.createElement('button'));
@@ -1403,7 +1554,7 @@ export function toaster(region) {
     }
     const left = () => (running ? Math.max(0, deadline - Date.now()) : remaining);
     const secs = () => Math.max(0, Math.ceil(left() / 1000));
-    say(msg, text, !!undo, false, secs());
+    say(words, text, !!undo, false, secs());
     const paint = () => { if (count) { count.textContent = secs(); el.style.setProperty('--rk-toast-left', total ? left() / total : 0); } };
     function schedule() {
       clearTimeout(timer);
@@ -1416,13 +1567,13 @@ export function toaster(region) {
       if (deadline - Date.now() <= 0) { running = false; remaining = 0; paint(); leave(false, 'expired'); return; }
       paint(); schedule();
     }
-    function run() { if (running || done || waiting) return; running = true; deadline = Date.now() + remaining; schedule(); }
+    function go() { if (running || done || waiting) return; running = true; deadline = Date.now() + remaining; schedule(); }
     function stop() { if (!running) return; remaining = Math.max(0, deadline - Date.now()); running = false; clearTimeout(timer); timer = 0; }
     function hold() {
       if (done || waiting) return;
       const was = held;
       held = (hover || focus) && !released;
-      if (held) stop(); else run();
+      if (held) stop(); else go();
       if (held !== was) {
         el.toggleAttribute('data-rk-held', held);
         el.dispatchEvent(new CustomEvent('rk:toasthold', { bubbles: true, detail: { held, remaining: left() } }));
@@ -1435,7 +1586,7 @@ export function toaster(region) {
       if (waiting) { clearTimeout(waiting); waiting = 0; if (open === api) open = null; end(); return; }
       const hadFocus = el.contains(document.activeElement);
       el.setAttribute('data-rk-phase', 'leaving');
-      setTimeout(() => el.remove(), ms('--rk-duration-short'));
+      setTimeout(() => el.remove(), ms('--rk-duration-short') * (edge ? 0.6 : 1));
       if (open === api) open = null;
       end();
       if (hadFocus) returnFocus(from);
@@ -1448,10 +1599,14 @@ export function toaster(region) {
       remaining = Math.max(0, t); total = Math.max(total, remaining);
       if (!remaining) { paint(); leave(false, 'expired'); return; }
       paint();
-      if (was || !held) run();
+      if (was || !held) go();
     }
     const api = {
       key, el, action,
+      level: gauge ? gauge.key : null,
+      // A level indicator's new value: the meter glides to it, the figure changes, and its time starts again.
+      setLevel(v, t) { if (done || !bar) return; bar.style.setProperty('--rk-v', v); figure.textContent = t; setRemaining(ms('--rk-duration-level')); },
+      get done() { return done; },
       leave,
       setRemaining,
       // The server no longer extends: the window runs out from here although the pointer or focus rests on it.
@@ -1459,7 +1614,7 @@ export function toaster(region) {
       // A new text, the window left alone; announced once (without the window sentence) only when asked.
       setText(t, { announce = false } = {}) {
         if (done) return;
-        const node = msg.firstChild && msg.firstChild.nodeType === 3 ? msg.firstChild : msg.insertBefore(document.createTextNode(''), msg.firstChild);
+        const node = words.firstChild && words.firstChild.nodeType === 3 ? words.firstChild : words.insertBefore(document.createTextNode(''), words.firstChild);
         if (announce) node.nodeValue = t; else quietly(el, () => { node.nodeValue = t; });
       },
       get remaining() { return left(); },
@@ -1473,7 +1628,7 @@ export function toaster(region) {
         if (e) { const before = onEnd; onEnd = e; if (before && before !== e) before('merged'); }
         stop(); released = false;
         total = remaining = w || (undo ? windowMs || tokenWindow() : total);
-        say(msg, t, !!u, true, secs()); paint(); hold(); if (!held) run();
+        say(words, t, !!u, true, secs()); paint(); hold(); if (!held) go();
       },
       sync() { if (running) { clearTimeout(timer); tick(); } },
     };
@@ -1482,8 +1637,9 @@ export function toaster(region) {
     el.addEventListener('focusin', () => { focus = true; hold(); });
     el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) { focus = false; hold(); } });
     paint();
+    if (gauge) { bar.style.setProperty('--rk-v', gauge.value); figure.textContent = gauge.text; }
     open = api;
-    const insert = () => { waiting = 0; region.appendChild(el); hold(); if (!held) run(); };
+    const insert = () => { waiting = 0; region.appendChild(el); hold(); if (!held) go(); };
     if (region.querySelector('.rk-toast[data-rk-phase="leaving"]')) waiting = setTimeout(insert, ms('--rk-duration-short')); else insert();
     return api;
   }
@@ -1498,8 +1654,20 @@ export function toaster(region) {
     if (!open || !open.undo || open.action !== 'undo' || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || isEditable(e.target)) return false;
     open.undo(); return true;
   });
+  // level(word, value, { icon, text, key }): a level indicator for a value the user changed by a key (volume,
+  // brightness, zoom): a toast without an action, an icon, the word, a meter at value (0 to 1) and the figure (text,
+  // else the share in per cent). It takes the toast's place like any toast; again while it shows (the same key, the
+  // word by default) it stays where it is and only its value glides. It goes timing.level after the last change.
+  function level(word, value, { icon: name = '', text = '', key = word } = {}) {
+    const v = Math.max(0, Math.min(1, Number(value) || 0));
+    let t = text;
+    if (!t) { try { t = new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v); } catch { t = `${Math.round(v * 100)}%`; } }
+    if (open && open.level === key && !open.done) { open.setLevel(v, t); return open; }
+    return show(word, { key: `level:${key}` }, { key, value: v, text: t, icon: name });
+  }
   return {
     show,
+    level,
     get open() { return open; },
     dismiss() { if (open) open.leave(false); },
     destroy() { offEsc(); offUndo(); document.removeEventListener('visibilitychange', visible); },
@@ -1640,15 +1808,18 @@ export function sheet(dialog, opts = {}) {
   // The answer is given as the sheet starts to leave. A further close request while it leaves (a tap on the shading,
   // Escape, another button) changes no answer and asks nothing: it only ends the leaving at once.
   function leaveThen(value) {
-    const d = ms('--rk-duration-short') * 0.8;
+    const side = dialog.classList.contains('rk-sheet--side');
+    const d = ms(side ? '--rk-duration-moderate' : '--rk-duration-short') * 0.8;
     if (!dialog.open) return;
     if (leaving) { leaving.end(); return; }
     if (ask) unask(false);
     if (!d) { close.call(dialog, value); return; }
     dialog.setAttribute('data-rk-phase', 'leaving');
-    // The sheet and its shading leave together, as they came: 0.8 × duration-short, easing out.
-    const ease = css('--rk-ease-out');
-    const anims = [dialog.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: d, easing: ease, fill: 'forwards' })];
+    // The sheet and its shading leave together, as they came: 0.8 × duration-short, easing out; a side panel whole
+    // towards its trailing edge, over 0.8 × duration-moderate.
+    const ease = css('--rk-ease-out'), away = getComputedStyle(dialog).direction === 'rtl' ? '-100%' : '100%';
+    const frames = side ? [{ transform: 'none' }, { transform: `translateX(${away})` }] : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-16px)' }];
+    const anims = [dialog.animate(frames, { duration: d, easing: ease, fill: 'forwards' })];
     try { anims.push(dialog.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, easing: ease, fill: 'forwards', pseudoElement: '::backdrop' })); } catch { /* no pseudo-element animation */ }
     const run = leaving = {
       value,
@@ -1736,6 +1907,65 @@ export function sheet(dialog, opts = {}) {
   return api;
 }
 
+// inPlace(scope): choosing in place (docs/states.md). A control with data-rk-in="ID" opens the element with that id (a
+// list, hidden until then) in the place of the group that holds the control (its closest [data-rk-group], else its
+// parent): the group hides and the list shows, under a row "back · name" (.rk-in-back, made when the list has none;
+// name is the control's data-rk-in-name, else the list's aria-label), and focus goes to the list's first control.
+// That row, Escape and ← (outside a text field) go back one level: the list hides, the group shows, focus returns to
+// the control that opened it. Levels may nest. Each step slides in like the next item of a place, back from the other
+// side. Escape here goes back before it would close the sheet or panel around it.
+export function inPlace(scope) {
+  const open = [];                                     // { control, group, list }, innermost last
+  const slide = (el, dir) => {
+    const d = ms('--rk-duration-moderate') * 0.75;
+    if (d) el.animate([{ transform: `translateX(${dir * num('--rk-slide-distance')}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: d, easing: css('--rk-ease-out') });
+  };
+  const focusIn = (el) => { const f = el.querySelector('[aria-selected="true"], [aria-checked="true"], :checked, a[href], button:not(.rk-in-back), input, select, [tabindex]:not([tabindex="-1"])') || el.querySelector('.rk-in-back'); if (f) f.focus(); };
+  function go(control) {
+    const list = document.getElementById(control.dataset.rkIn);
+    if (!list) return;
+    const group = control.closest('[data-rk-group]') || control.parentElement;
+    let back = list.querySelector(':scope > .rk-in-back');
+    if (!back) {
+      back = document.createElement('button');
+      back.type = 'button'; back.className = 'rk-in-back';
+      back.append(icon('chevron-left'), tx('inBack', control.dataset.rkInName || list.getAttribute('aria-label') || control.textContent.replace(/\s+/g, ' ').trim()));
+      list.prepend(back);
+    }
+    open.push({ control, group, list });
+    group.hidden = true; list.hidden = false;
+    slide(list, 1); focusIn(list);
+  }
+  function out() {
+    const top = open.pop();
+    if (!top) return false;
+    top.list.hidden = true; top.group.hidden = false;
+    slide(top.group, -1);
+    if (top.control.isConnected) top.control.focus();
+    return true;
+  }
+  const click = (e) => {
+    const t = e.target.closest && e.target.closest('[data-rk-in], .rk-in-back');
+    if (!t || !scope.contains(t)) return;
+    if (t.matches('.rk-in-back')) { if (open.length && open[open.length - 1].list.contains(t)) out(); return; }
+    e.preventDefault(); go(t);
+  };
+  const key = (e) => {
+    if (!open.length || e.defaultPrevented || e.isComposing || isEditable(e.target)) return;
+    const top = open[open.length - 1];
+    if (!top.list.contains(e.target)) return;
+    if (e.key === 'Escape' || (e.key === 'ArrowLeft' && !e.target.closest('[role=slider], input[type=range], [role=tree], [role=tablist]'))) { e.preventDefault(); e.stopPropagation(); out(); }
+  };
+  scope.addEventListener('click', click);
+  scope.addEventListener('keydown', key);
+  return {
+    get depth() { return open.length; },
+    back: out,
+    reset() { while (open.length) out(); },
+    destroy() { scope.removeEventListener('click', click); scope.removeEventListener('keydown', key); },
+  };
+}
+
 // Data states ------------------------------------------------------------------------------------------------------
 // busy(region, work): the region is aria-busy while work (a promise or a function returning one) runs. The line shows
 // only after busy-delay (CSS), and once shown stays at least busy-min, so an answer never makes it flash. Resolves or
@@ -1808,6 +2038,9 @@ const isOpen = (el) => (canPopover ? el.matches(':popover-open') : !el.hidden);
 // closes and focus returns to the trigger after a choice or Escape. A checkbox item toggles and leaves the menu open,
 // so several can be ticked in a row. With summary ("status"), the trigger says what is ticked: "status: failed, done",
 // or "status: any" when nothing is (a filter button). align goes to place(): by default the trigger's data-rk-align.
+// A second level stands in place of the list (docs/states.md): an item with aria-haspopup="menu" and aria-controls
+// names a .rk-menu-level (role menu, hidden) inside the menu; → Enter or Space opens it under a "back" row with its
+// name, the surface keeping its width and place; ← or Escape goes back one level, focus to the item that opened it.
 export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   el.id = el.id || `rk-menu-${Math.random().toString(36).slice(2, 8)}`;
   el.setAttribute('role', 'menu');
@@ -1829,6 +2062,39 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   // never counts as a click outside. Placement and focus follow the toggle.
   let first = 0;
   if (canPopover && 'popoverTargetElement' in trigger) trigger.popoverTargetElement = el;
+  const levelOf = (item) => { const id = item && item.getAttribute('aria-haspopup') === 'menu' && item.getAttribute('aria-controls'); const l = id && document.getElementById(id); return l && el.contains(l) ? l : null; };
+  const openLevels = () => [...el.querySelectorAll('.rk-menu-level:not([hidden])')];
+  // The level in sight: its rows stand in place of the list, under a back row with the level's name. The surface
+  // keeps its width and place (moved back inside the window only when the level does not fit there); nothing moves.
+  function enter(item) {
+    const level = levelOf(item);
+    if (!level || item.getAttribute('aria-disabled') === 'true') return false;
+    let back = level.querySelector(':scope > .rk-menu-back');
+    if (!back) {
+      back = level.insertBefore(document.createElement('button'), level.firstChild);
+      back.type = 'button'; back.className = 'rk-menu-item rk-menu-back'; back.setAttribute('role', 'menuitem');
+      back.textContent = level.getAttribute('aria-label') || item.textContent.trim();
+      back.setAttribute('aria-label', `${tx('back')}: ${back.textContent}`);
+    }
+    el.style.minWidth = `${el.offsetWidth}px`;
+    level.hidden = false;
+    item.setAttribute('aria-expanded', 'true');
+    reflow();
+    const rows = items();
+    (rows[rows.indexOf(back) + 1] || back).focus();
+    return true;
+  }
+  function out() {
+    const level = openLevels().pop();
+    if (!level) return false;
+    const item = el.querySelector(`[aria-controls="${CSS.escape(level.id)}"]`);
+    level.hidden = true;
+    if (item) { item.setAttribute('aria-expanded', 'false'); item.focus(); }
+    if (!openLevels().length) el.style.minWidth = '';
+    reflow();
+    return true;
+  }
+  const reset = () => { openLevels().forEach((l) => { l.hidden = true; }); el.querySelectorAll('[aria-haspopup="menu"][aria-expanded]').forEach((i) => i.setAttribute('aria-expanded', 'false')); el.style.minWidth = ''; };
   const shown = () => { place(el, trigger, { align }); trigger.setAttribute('aria-expanded', 'true'); focusItem(first); first = 0; };
   function open(at = 0) {
     if (isOpen(el)) { focusItem(at); return; }
@@ -1839,10 +2105,11 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   function close(refocus = true) {
     if (!isOpen(el)) return;
     closeFloat(el);
+    reset();
     trigger.setAttribute('aria-expanded', 'false');
     if (refocus) trigger.focus();
   }
-  const toggle = (e) => { if (e.newState === 'open') shown(); else trigger.setAttribute('aria-expanded', 'false'); };
+  const toggle = (e) => { if (e.newState === 'open') shown(); else { trigger.setAttribute('aria-expanded', 'false'); reset(); } };
   const click = (e) => {
     if (canPopover && trigger.popoverTargetElement === el) return;                    // the browser toggles
     e.preventDefault(); if (isOpen(el)) close(); else open(0);
@@ -1856,13 +2123,17 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
     else if (e.key === 'ArrowUp') { e.preventDefault(); focusItem(i - 1); }
     else if (e.key === 'Home') { e.preventDefault(); focusItem(0); }
     else if (e.key === 'End') { e.preventDefault(); focusItem(-1); }
-    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'ArrowRight' && levelOf(list[i])) { e.preventDefault(); enter(list[i]); }
+    else if (e.key === 'ArrowLeft' && openLevels().length) { e.preventDefault(); out(); }
+    else if (e.key === 'Escape') { e.preventDefault(); if (!out()) close(); }
     else if (e.key === 'Tab') close(false);
     else { const hit = find(e, list, list[i]); if (hit) { e.preventDefault(); hit.focus(); } }
   };
   const choose = (e) => {
     const item = e.target.closest('.rk-menu-item');
     if (!item || item.getAttribute('aria-disabled') === 'true') { if (item) e.preventDefault(); return; }
+    if (item.classList.contains('rk-menu-back')) { out(); return; }
+    if (enter(item)) return;
     const checkbox = item.getAttribute('role') === 'menuitemcheckbox';
     if (checkbox) item.setAttribute('aria-checked', String(item.getAttribute('aria-checked') !== 'true'));
     if (item.getAttribute('role') === 'menuitemradio') el.querySelectorAll('[role=menuitemradio]').forEach((r) => r.setAttribute('aria-checked', String(r === item)));
@@ -1871,7 +2142,7 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
     if (onSelect) onSelect(item);
   };
   const outside = (e) => { if (!canPopover && isOpen(el) && !el.contains(e.target) && !trigger.contains(e.target)) close(false); };
-  const reflow = () => { if (isOpen(el)) place(el, trigger, { align }); };
+  function reflow() { if (isOpen(el)) place(el, trigger, { align }); }
   trigger.addEventListener('click', click);
   trigger.addEventListener('keydown', triggerKey);
   el.addEventListener('keydown', key);
@@ -2440,9 +2711,11 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
     return copy.textContent.replace(/\s+/g, ' ').trim();
   };
   const keyHint = (c) => shortcutText(c) || ((c.querySelector('.rk-key') || {}).textContent || '').trim();
-  const candidates = (pinned = false) => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back') && (pinned || c.dataset.rkPriority !== 'pinned'))
-    .map((c, i) => ({ c, i, p: Number(c.dataset.rkPriority || 0) }))
-    .sort((a, b) => a.p - b.p || b.i - a.i).map((x) => x.c);
+  // Running things (.rk-ab-run) give way before any command, the latest started first and the one in front last.
+  const runRank = (c) => (!c.classList.contains('rk-ab-run') ? 2 : /^(true|page)$/.test(c.getAttribute('aria-current') || '') ? 1 : 0);
+  const candidates = (pinned = false) => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back') && c.dataset.rkAlign !== 'center' && (pinned || c.dataset.rkPriority !== 'pinned'))
+    .map((c, i) => ({ c, i, r: runRank(c), p: Number(c.dataset.rkPriority || 0) }))
+    .sort((a, b) => a.r - b.r || a.p - b.p || b.i - a.i).map((x) => x.c);
   function build() {
     pop.replaceChildren(...[...el.querySelectorAll(':scope > .rk-ab[data-rk-overflow]')].map((c) => {
       const b = document.createElement('button');
@@ -2463,16 +2736,42 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
   }
   const fits = () => el.scrollWidth <= el.clientWidth + 1;
   const placesShown = () => { const p = el.querySelector(':scope > .rk-ab-places'); return !!p && getComputedStyle(p).display !== 'none'; };
+  // Two sides around a control in the middle (a clock, data-rk-align="center"; docs/navigation.md). Each side has half
+  // the bar less half that control. A side that does not fit gives its own controls away, least important first:
+  // giving away one of the other side's would not help. "more" ends the trailing side. The middle line cuts before
+  // the centred control, pinned (up to half the bar) or not, and is gone only while the leading side has given
+  // controls away (data-rk-full="start"). The centred control stands at the bar's centre (--_rk-shift).
+  function twoSides(c) {
+    const cs = getComputedStyle(el), gap = parseFloat(cs.columnGap) || 0;
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const room = (inner - c.offsetWidth) / 2 - gap;
+    const mid = el.querySelector(':scope > .rk-ab-mid');
+    const kidsOf = (lead) => [...el.children].filter((k) => k !== pop && k !== c && k !== mid && !!(k.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) === lead);
+    const width = (list) => { const v = list.filter((k) => k.getClientRects().length); return v.reduce((sum, k) => sum + k.getBoundingClientRect().width, 0) + Math.max(0, v.length - 1) * gap; };
+    const lead = kidsOf(true), trail = kidsOf(false), full = [];
+    el.style.removeProperty('--_rk-mid-max');
+    const pinned = mid && mid.dataset.rkPriority === 'pinned';
+    const midNeed = pinned ? Math.min(mid.scrollWidth, inner / 2) + gap : 0;
+    for (const x of candidates().filter((k) => lead.includes(k))) { if (width(lead) + midNeed <= room) break; x.setAttribute('data-rk-overflow', ''); full.push('start'); }
+    if (mid) el.style.setProperty('--_rk-mid-max', `${Math.max(0, Math.floor(room - width(lead) - (lead.some((k) => k.getClientRects().length) ? gap : 0)))}px`);
+    if (full.length || width(trail) > room) more.hidden = false;
+    for (const x of candidates().filter((k) => trail.includes(k))) { if (width(trail) <= room) break; x.setAttribute('data-rk-overflow', ''); full.push('end'); }
+    if (full.length) el.setAttribute('data-rk-full', [...new Set(full)].join(' ')); else el.removeAttribute('data-rk-full');
+    const b = el.getBoundingClientRect(), r = c.getBoundingClientRect(), was = parseFloat(el.style.getPropertyValue('--_rk-shift')) || 0;
+    el.style.setProperty('--_rk-shift', `${Math.round(b.left + b.width / 2 - (r.left - was + r.width / 2))}px`);
+  }
   function layout() {
     if (el.hasAttribute('data-rk-selecting')) return;
     el.querySelectorAll(':scope > [data-rk-overflow]').forEach((c) => c.removeAttribute('data-rk-overflow'));
+    el.removeAttribute('data-rk-full');
     more.hidden = true;
-    const withPlaces = placesShown();
+    const withPlaces = placesShown(), centred = el.querySelector(':scope > .rk-ab[data-rk-align="center"]');
     markPlaces(el, withPlaces);
     if (withPlaces) {                                 /* the places hold the bar: every command is in "more", pinned too */
       const all = candidates(true);
       if (all.length) { more.hidden = false; all.forEach((c) => c.setAttribute('data-rk-overflow', '')); }
-    } else if (!fits()) {
+    } else if (centred && centred.getClientRects().length) twoSides(centred);
+    else if (!fits()) {
       more.hidden = false;
       for (const c of candidates()) { if (fits()) break; c.setAttribute('data-rk-overflow', ''); }
     }
@@ -3172,6 +3471,93 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
   };
 }
 
+// Removable ----------------------------------------------------------------------------------------------------------
+// removable(list, { items, onRemove }): entries a person may remove, each removal reversible (docs/collections.md).
+// Three ways, all calling onRemove(item, { left }): a button marked data-rk-remove inside the entry; Delete (or ⌫,
+// outside a text field) on the entry focus is in, after which focus moves to the next entry, or the one before at the
+// end; and dragging the entry towards its trailing edge, a shortcut beside the other two. Dragged, the entry follows
+// the pointer sideways; let go past half its width it leaves that way (left: true: it has gone from sight, so remove it
+// at once, with no leave() of its own), else it glides back. A drag starts only sideways and never from the window's
+// edges, where a phone's back gesture begins; a click that ends one is cancelled, so dragging never activates.
+export function removable(list, { items = ':scope > li, :scope > tr', onRemove = () => {} } = {}) {
+  const entries = () => [...list.querySelectorAll(items)].filter((x) => !x.hidden);
+  const entryOf = (t) => { const x = t && t.closest && t.closest(items.split(',').map((s) => s.trim().replace(/^:scope > /, '')).join(', ')); return x && list.contains(x) && entries().includes(x) ? x : null; };
+  const away = () => (getComputedStyle(list).direction === 'rtl' ? -1 : 1);
+  const focusable = (x) => (x.matches('[tabindex], a[href], button') ? x : x.querySelector('[tabindex]:not([tabindex="-1"]), a[href], button:not([data-rk-remove])') || x);
+  function remove(item, left) {
+    const all = entries(), i = all.indexOf(item), next = all[i + 1] || all[i - 1] || null;
+    const hadFocus = item.contains(document.activeElement);
+    onRemove(item, { left });
+    if (hadFocus && next && next.isConnected) { const f = focusable(next); if (f.tabIndex < 0 && !f.hasAttribute('tabindex')) f.tabIndex = -1; f.focus(); }
+  }
+  const click = (e) => {
+    const b = e.target.closest && e.target.closest('[data-rk-remove]'), item = b && entryOf(b);
+    if (item) { e.preventDefault(); remove(item, false); }
+  };
+  const key = (e) => {
+    if ((e.key !== 'Delete' && e.key !== 'Backspace') || e.defaultPrevented || e.isComposing || e.altKey || e.ctrlKey || e.metaKey || isEditable(e.target)) return;
+    const item = entryOf(e.target);
+    if (!item) return;
+    e.preventDefault(); remove(item, false);
+  };
+  let drag = null, swallow = false;
+  const down = (e) => {
+    if (e.button !== 0 || drag) return;
+    const item = entryOf(e.target);
+    if (!item || e.target.closest('a, button, input, select, textarea, label, .rk-grip, [data-rk-remove]')) return;
+    const edge = px('--rk-space-l');
+    if (e.pointerType !== 'mouse' && (e.clientX < edge || e.clientX > innerWidth - edge)) return;
+    drag = { item, id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, on: false };
+  };
+  const move = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.on) {
+      if (Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx)) { drag = null; return; }      // a scroll, not a drag
+      if (dx * away() < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+      drag.on = true;
+      try { list.setPointerCapture(e.pointerId); } catch { /* the pointer has gone */ }
+      for (const a of drag.item.getAnimations()) a.cancel();
+    }
+    drag.dx = Math.max(0, dx * away()) * away();
+    drag.item.style.transform = `translateX(${drag.dx}px)`;
+  };
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { item, dx, on } = drag;
+    drag = null;
+    if (!on) return;
+    swallow = true; setTimeout(() => { swallow = false; });
+    const w = item.getBoundingClientRect().width, gone = e.type === 'pointerup' && Math.abs(dx) > w / 2;
+    item.style.transform = '';
+    const from = `translateX(${dx}px)`;
+    if (gone) {
+      const d = ms('--rk-duration-short') * 0.6;
+      if (d) item.animate([{ transform: from, opacity: 1 }, { transform: `translateX(${away() * w}px)`, opacity: 0 }], { duration: d, easing: css('--rk-ease-out'), fill: 'forwards' }).finished.then(() => remove(item, true), () => {});
+      else { item.style.opacity = '0'; remove(item, true); }
+    } else {
+      const d = ms('--rk-duration-short');
+      if (d) item.animate([{ transform: from }, { transform: 'none' }], { duration: d, easing: css('--rk-ease-base') });
+    }
+  };
+  const stopClick = (e) => { if (swallow) { e.preventDefault(); e.stopImmediatePropagation(); swallow = false; } };
+  list.setAttribute('data-rk-removable', '');
+  list.addEventListener('click', click); list.addEventListener('keydown', key);
+  list.addEventListener('pointerdown', down); list.addEventListener('pointermove', move);
+  list.addEventListener('pointerup', end); list.addEventListener('pointercancel', end);
+  list.addEventListener('click', stopClick, true);
+  return {
+    remove: (item) => remove(item, false),
+    destroy() {
+      list.removeAttribute('data-rk-removable');
+      list.removeEventListener('click', click); list.removeEventListener('keydown', key);
+      list.removeEventListener('pointerdown', down); list.removeEventListener('pointermove', move);
+      list.removeEventListener('pointerup', end); list.removeEventListener('pointercancel', end);
+      list.removeEventListener('click', stopClick, true);
+    },
+  };
+}
+
 // Virtual list -----------------------------------------------------------------------------------------------------
 // virtual(el, { count, render, onShow, onChange, appbar, label }): a list of any length in a .rk-virtual scroller
 // with a bounded height. Only the rows in view (and a few more) exist; render(i, row) fills a row. It is one tab stop
@@ -3584,10 +3970,19 @@ export function titlebar(el, { router = null } = {}) {
     place.textContent = p && p.dataset.rkParent && h ? h.textContent.trim() : '';
   };
   const geometry = () => docEl().toggleAttribute('data-rk-wco', !!(wco && wco.visible));
+  // Another window is the active one: the name steps back (data-rk-inactive). Read after the event, since focus
+  // moving into a frame of the page blurs the window first and still leaves the page active.
+  const active = () => setTimeout(() => el.toggleAttribute('data-rk-inactive', !document.hasFocus()));
   document.addEventListener('rk:placechange', paint);
   if (wco) wco.addEventListener('geometrychange', geometry);
-  paint(); geometry();
-  return { destroy() { document.removeEventListener('rk:placechange', paint); if (wco) wco.removeEventListener('geometrychange', geometry); } };
+  addEventListener('focus', active); addEventListener('blur', active);
+  paint(); geometry(); active();
+  return {
+    destroy() {
+      document.removeEventListener('rk:placechange', paint); if (wco) wco.removeEventListener('geometrychange', geometry);
+      removeEventListener('focus', active); removeEventListener('blur', active); el.removeAttribute('data-rk-inactive');
+    },
+  };
 }
 
 // pwa({ sw, toaster, onChange }): the page as an installable app. Registers the service worker (only where a web app
@@ -3749,9 +4144,39 @@ function greet(tile, anims) {
     }
   });
 }
+// indicate(control, content): a short indicator (a volume or a brightness being set) stands in place of a control:
+// the control turns away as a live tile does for a new status, and the indicator turns in; timing.level after the
+// last call it turns back. A call while it stands changes it in place: a reading that keeps changing is no news. The
+// control's own children are hidden meanwhile, and data-rk-indicating is on it. The words to hear go through a live
+// region, not through this.
+const indicating = new WeakMap();
+export function indicate(control, content) {
+  let s = indicating.get(control);
+  const back = () => {
+    const t = indicating.get(control);
+    if (!t) return;
+    indicating.delete(control);
+    tileUpdate(control, () => { t.node.remove(); t.hid.forEach((k) => { k.hidden = false; }); control.removeAttribute('data-rk-indicating'); }, { kind: 'flip' });
+  };
+  if (s) {
+    if (s.node !== content) { s.node.replaceWith(content); s.node = content; }
+  } else {
+    s = { node: content, hid: [], timer: 0 };
+    indicating.set(control, s);
+    tileUpdate(control, () => {
+      s.hid = [...control.children].filter((k) => !k.hidden);
+      s.hid.forEach((k) => { k.hidden = true; });
+      control.appendChild(s.node);
+      control.setAttribute('data-rk-indicating', '');
+    }, { kind: 'flip' });
+  }
+  clearTimeout(s.timer);
+  s.timer = setTimeout(back, ms('--rk-duration-level'));
+}
 // tileUpdate(tile, change, { kind }): a live tile has news. 'peek' (a new number or line): the new content rises
 // from peek-travel of its height below while the old one leaves upwards by as much, over duration-moderate. 'flip' (a
-// new status): the tile turns flip-angle away around its horizontal axis, changes, and turns back. A continuous reading
+// new status): the tile turns flip-angle away around its horizontal axis, changes, and turns back. What peeks is the
+// tile's .rk-stat, or the part a page marks data-rk-peek (a count in an app-bar control). A continuous reading
 // (frames a second) is no news: it updates in place. Inside a live region (live()) the change already waits while the
 // region is held. News on several tiles at once comes one after another (greet).
 export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
@@ -3767,7 +4192,7 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
       return tile.animate([{ transform: `perspective(${p}px) rotateX(${turn}deg)` }, { transform: `perspective(${p}px) rotateX(0deg)` }], { duration: d / 2, easing: css('--rk-ease-in') }).finished.catch(() => {});
     });
   }
-  const target = tile.querySelector('.rk-stat') || tile;
+  const target = tile.querySelector('.rk-stat, [data-rk-peek]') || tile;
   const was = target.textContent;
   const ghost = target.cloneNode(true);
   const tr = tile.getBoundingClientRect(), r = target.getBoundingClientRect();
@@ -3782,6 +4207,22 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
   const inn = target.animate([{ opacity: 0, transform: `translateY(${travel}%)` }, { opacity: 1, transform: 'none' }], { duration: d * 0.8, delay: d * 0.2, easing: css('--rk-ease-in'), fill: 'backwards' });
   greet(tile, [out, inn]);
   return finished([out, inn]).then(() => { ghost.remove(); if (!tile.querySelector('.rk-stat[aria-hidden]')) tile.style.overflow = ''; });
+}
+// nudge(el, direction): a part that answers a gesture nobody can see (a swipe) hints at it when it is only tapped: it
+// moves nudge-distance the gesture's way ('left', 'right', 'up', 'down') and back, duration-short each way on
+// ease-landing, and rests where it was. The movement adds to the part's own transform, so a press still shows under
+// it; a tap while it moves starts it again. Under reduced motion it stays still: the words that name the gesture say it.
+const nudges = new WeakMap();
+export function nudge(el, direction) {
+  const d = ms('--rk-duration-short'), n = num('--rk-nudge-distance');
+  const to = { left: [-n, 0], right: [n, 0], up: [0, -n], down: [0, n] }[direction];
+  if (!to) throw new Error(`unknown nudge direction ${direction}`);
+  if (nudges.has(el)) nudges.get(el).cancel();
+  if (!d || !shown(el)) return Promise.resolve();
+  const ease = css('--rk-ease-landing');
+  const a = el.animate([{ transform: 'none', easing: ease }, { transform: `translate(${to[0]}px, ${to[1]}px)`, easing: ease }, { transform: 'none' }], { duration: 2 * d, composite: 'add' });
+  nudges.set(el, a);
+  return a.finished.catch(() => {}).then(() => { if (nudges.get(el) === a) nudges.delete(el); });
 }
 // sparkTo(line, points): a live line moves to its new points over duration-long instead of jumping. Points are an
 // SVG points list; with the same number of points each one travels, otherwise the line is redrawn at once.

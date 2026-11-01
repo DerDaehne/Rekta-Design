@@ -185,6 +185,115 @@ static void test_bar_motion(void) {
   done(w);
 }
 
+/* A panorama never ends flush on a section edge: at every window width the edge falls inside a section, space-xl from
+   either of its ends, the gap changed as little as that takes and never below space-m; when everything fits, the gap
+   is space-xl. A new gap keeps the section in sight. */
+static void test_panorama_edge(void) {
+  rk_window *w = window(1000, 500);
+  rk_controller *pano = rk_panorama();
+  for (int i = 0; i < 4; i++) rk_panorama_add(pano, "section", col(16, 0), 0);
+  rk_window_show(w, pano);
+  rk_app_run_for(50);
+  panorama *p = pano->impl;
+  float xl = rk_metric_of(RK_SPACE_XL), m = rk_metric_of(RK_SPACE_M), sw = section_width(&p->secs[0]);
+  int bad = 0, changed = 0, fits = 0, worst = 0;
+  for (float width = 700; width <= 2500; width += 5) {
+    rk_window_set_size(w, width, 500);
+    rk_app_run_for(1);
+    float W = rk_controller_view(pano)->frame.w, edge = W - xl, gap = p->secs[1].x - p->secs[0].x - sw;
+    bool fit = p->secs[3].x + sw - xl <= edge + 1, inside = false;
+    for (int i = 0; i < 4; i++) { float x = p->secs[i].x - xl; if (x + xl <= edge + 0.5f && edge - 0.5f <= x + sw - xl) inside = true; }
+    if (fit) { fits++; if (gap < m || gap > xl) bad++; continue; }   /* a last section cut by less than space-xl may fit */
+    if (!inside || gap < m || p->secs[2].x - p->secs[1].x - sw != gap) bad++;
+    if (gap != xl) { changed++; worst = RK_MAX(worst, (int)fabsf(gap - xl)); }
+  }
+  CHECK(bad == 0 && changed > 0 && fits > 0, "the edge always falls inside a section, the gaps even (%d wrong, %d widths changed, by %d px at most)", bad, changed, worst);
+  CHECK(worst <= (int)(2 * xl), "the gap changes by little: %d px at most", worst);
+  /* the edge would fall in the gap after the second section: the gap grows until the second reaches space-xl past it */
+  rk_window_set_size(w, 1000, 500);
+  rk_app_run_for(1);
+  pano_select(p, 1);
+  rk_app_run_for(800);
+  float W0 = rk_controller_view(pano)->frame.w;
+  rk_window_set_size(w, (2 * sw + xl + 8) + xl + (1000 - W0), 500);   /* the edge 8 px into the gap after the second */
+  rk_app_run_for(1);
+  float W = rk_controller_view(pano)->frame.w, gap = p->secs[1].x - p->secs[0].x - sw;
+  CHECK(gap != xl && pano_inside(p, W - xl, gap), "flush, the gap changes (%g)", gap);
+  CHECK(CLOSE_TO(rk_controller_view(pano)->value, p->secs[1].x - xl, 0.5), "and the section in sight stays (%g, %g)", rk_controller_view(pano)->value, p->secs[1].x - xl);
+  done(w);
+}
+
+/* A carried title (motion.md): the opened part's title stands while its place turns away, travels into the new place's
+   title and lands on it, the rest of the new place arriving from the middle of the travel; back, the other way. */
+static void test_carry(void) {
+  rk_window *w = window(800, 600);
+  rk_view *home = col(16, 0), *part = rk_add(home, col(4, 8));
+  rk_view *name = rk_add(part, rk_label("Nightly import", RK_TEXT_GROUP));
+  rk_add(part, rk_label("failed twice this week", RK_TEXT_META));
+  for (int i = 0; i < 3; i++) rk_add(home, rk_label("A line of the home place.", RK_TEXT_BODY));
+  rk_view_set_carry(name, true);
+  part->focusable = true;
+  rk_controller *pc = rk_places(rk_controller_create_with_view(home, "home"));
+  rk_window_show(w, pc);
+  rk_app_run_for(50);
+  rk_view *there = col(16, 0), *title = rk_add(there, rk_label("Nightly import", RK_TEXT_TITLE));
+  rk_view *rows = rk_add(there, rk_rows());
+  rk_rows_add(rows, "Last run", "2:14", RK_STATUS_ERROR);
+  rk_window_focus(w, part);
+  w->activated = part;
+  rk_rect from = rk__window_rect(name);
+  rk_places_go(pc, rk_controller_create_with_view(there, "nightly"));
+  places *pl = pc->impl;
+  rk_app_run_for(30);
+  CHECK(pl->carry && name->popacity == 0 && !pl->carry->to, "leaving, the title stands as a picture while its place turns away");
+  double t0 = rk_app_now();
+  while (pl->carry && !pl->carry->to && rk_app_now() - t0 < 2000) rk_app_run_for(8);
+  CHECK(pl->carry && pl->carry->to == title && title->popacity == 0, "then it travels to the new place's title");
+  rk_app_run_for(100);
+  float t = pl->carry ? pl->carry->layer->pvalue : -1;
+  rk_view *row = rows->nkids ? rows->kids[0] : rows;              /* a unit: the rows turn one by one */
+  CHECK(t > 0.1f && t < 0.5f && fabsf(row->ptransform.rotate_y) > RK_TOK_TURNSTILE_IN_ANGLE - 1, "the rest wait for the middle of the travel (%g, %g)", t, row->ptransform.rotate_y);
+  rk_app_run_for(1500);
+  rk_rect to = rk__window_rect(title);
+  CHECK(!pl->carry && title->popacity == 1 && name->popacity == 1 && w->carries->nkids == 0, "it lands, and the title is the place's own; nothing is left");
+  CHECK(fabsf(to.y - from.y) > 0 || fabsf(to.x - from.x) > 0, "it went somewhere");
+  rk_places_back(pc);
+  rk_app_run_for(30);
+  CHECK(pl->carry && title->popacity == 0, "back, the place's title stands");
+  rk_app_run_for(1800);
+  CHECK(!pl->carry && name->popacity == 1 && w->carries->nkids == 0, "and travels into the part that opened it");   /* the place it left is gone, title and all */
+  rk_app_set_motion(RK_MOTION_PREF_OFF);
+  w->activated = part;
+  rk_places_go(pc, rk_controller_create_with_view(col(16, 0), "plain"));
+  CHECK(!pl->carry && name->popacity == 1, "reduced motion: nothing travels");
+  rk_app_set_motion(RK_MOTION_PREF_SYSTEM);
+  rk_app_run_for(100);
+  done(w);
+}
+
+/* A gesture hint: nudge-distance the gesture's way, then back to rest; nothing under reduced motion. */
+static void test_nudge(void) {
+  rk_window *w = window(600, 400);
+  rk_view *root = col(8, 16), *grid = rk_add(root, rk_tile_grid()), *t = rk_add(grid, rk_tile("3", "swipe to dismiss"));
+  show(w, root, "nudge");
+  rk_view_nudge(t, -1, 0);
+  rk_app_run_for(60);
+  CHECK(t->ptransform.translate_x < -RK_TOK_NUDGE_DISTANCE / 2 && t->ptransform.translate_y == 0, "quick away, the gesture's way (%g)", t->ptransform.translate_x);
+  rk_app_run_for(rk_duration_of(RK_DURATION_SHORT));
+  CHECK(t->ptransform.translate_x > -RK_TOK_NUDGE_DISTANCE && t->ptransform.translate_x < 0, "on its way back (%g)", t->ptransform.translate_x);
+  rk_app_run_for(rk_duration_of(RK_DURATION_SHORT));
+  CHECK(t->ptransform.translate_x == 0 && t->anims == 0, "and rests where it was, without a bounce (%g)", t->ptransform.translate_x);
+  float lo = 0;
+  rk_view_nudge(t, 0, 1);
+  for (int i = 0; i < 40; i++) { rk_app_run_for(16); lo = RK_MIN(lo, t->ptransform.translate_y); }
+  CHECK(lo >= 0 && t->ptransform.translate_y == 0, "down and back, never past its rest (%g)", lo);
+  rk_app_set_motion(RK_MOTION_PREF_OFF);
+  rk_view_nudge(t, 1, 0);
+  CHECK(t->ptransform.translate_x == 0 && t->anims == 0, "reduced motion: no hint");
+  rk_app_set_motion(RK_MOTION_PREF_SYSTEM);
+  done(w);
+}
+
 /* Input ----------------------------------------------------------------------------------------------------------- */
 
 static int activations;
@@ -810,6 +919,17 @@ static void test_menu(void) {
   CHECK(tm->active == 19 && tm->scroll > 0 && last >= 0 && last + rk_metric_of(RK_ROW_HEIGHT) <= tr.h + 0.5f, "End scrolls its rows to the last one (%g)", tm->scroll);
   key(w, RK_KEY_ESCAPE, 0);
   rk_view_set_menu(more, m);                                   /* takes m back, lets go of the tall one */
+  /* an icon per item: at the start, and once one has one, every row's words start at one edge */
+  rk_view *im = rk_menu();
+  rk_menu_add(im, "network", NULL, on_menu, NULL);
+  int sound_i = rk_menu_add(im, "sound and the devices that play it", NULL, on_menu, NULL);
+  float plain = menu_measure(im, (rk_size){ 1000, 1000 }, im->state).w;
+  rk_menu_set_icon(im, sound_i, "speaker");
+  float with = menu_measure(im, (rk_size){ 1000, 1000 }, im->state).w;
+  CHECK(((menu *)im->state)->items[sound_i].icon && plain > 192 && with >= plain + 20 + rk_metric_of(RK_SPACE_S) - 0.5f, "an icon makes room at the start (%g, was %g)", with, plain);
+  rk_menu_set_icon(im, sound_i, NULL);
+  CHECK(!((menu *)im->state)->items[sound_i].icon, "and goes again");
+  rk_release(im);
   done(w);
 }
 
@@ -872,6 +992,71 @@ static void test_list_keys(void) {
   rk_list_select(t, 0, true);
   click(w, (rk_point){ r.x + 60, r.y + 10 }, 10);
   CHECK(rk_list_selection_count(t) == 0, "without keys a sort lets the selection go instead of marking other items");
+  done(w);
+}
+
+/* Shell patterns: Delete removes a list's row (the next takes its place); a level indicator stays and glides when the
+   same key comes again, and goes timing.level after the last change; the title bar steps back when the window is not
+   the active one, and its middle button is named maximize (restore while maximized, from the app's words too). */
+static void remove_build(rk_view *t, int index, void *u) {
+  (void)u;
+  memmove(order + index, order + index + 1, (size_t)(norder - index - 1) * sizeof *order); norder--;
+  rk_list_set_count(t, norder);
+}
+
+static void test_shell(void) {
+  rk_window *w = window(400, 360);
+  rk_view *page = col(8, 16);
+  rk_view *t = rk_add(page, rk_table(0, build_cell, NULL));
+  rk_table_add_column(t, "build", 0, 0);
+  norder = 4;
+  for (int i = 0; i < norder; i++) order[i] = 20 + i;           /* #20 .. #23 */
+  rk_list_set_count(t, norder);
+  rk_list_set_key(t, build_key);
+  show(w, page, "shell");
+  rk_window_focus(w, t);
+  rk_list_scroll_to(t, 1);
+  key(w, RK_KEY_DELETE, 0);
+  CHECK(norder == 4, "without rk_list_on_remove, Delete removes nothing");
+  rk_list_on_remove(t, remove_build, NULL);
+  key(w, RK_KEY_DELETE, 0);
+  CHECK(norder == 3 && order[1] == 22 && rk_list_active(t) == 1, "Delete removes the active row, the next takes its place (#%d)", order[rk_list_active(t)]);
+  rk_list_scroll_to(t, 2);
+  key(w, RK_KEY_BACKSPACE, 0);
+  CHECK(norder == 2 && rk_list_active(t) == 1 && order[1] == 22, "at the end the one before takes it (row %d)", rk_list_active(t));
+  /* a level indicator */
+  rk_window_level(w, "theme", "brightness", 0.4f, "40%");
+  rk_app_run_for(300);
+  CHECK(w->toasts->nkids == 1, "a level indicator shows as a toast");
+  rk_view *lv = w->toasts->kids[0];
+  toast *ts = lv->state;
+  CHECK(ts->meter && CLOSE_TO(ts->meter->pvalue, 0.4, 0.001) && !strcmp(((label *)ts->figure->state)->text, "40%"), "its meter and figure");
+  rk_app_run_for(RK_TOK_TIMING_LEVEL - 500);
+  rk_window_level(w, "theme", "brightness", 0.6f, "60%");
+  rk_app_run_for(rk_duration_of(RK_DURATION_MODERATE) / 2);
+  CHECK(w->toasts->nkids == 1 && w->toasts->kids[0] == lv && ts->meter->pvalue > 0.4f && ts->meter->pvalue < 0.6f, "the same word again: it stays and the value glides (%.2f)", ts->meter->pvalue);
+  rk_app_run_for(RK_TOK_TIMING_LEVEL - 500);
+  CHECK(lv->parent && !lv->leaving && !strcmp(((label *)ts->figure->state)->text, "60%"), "its time starts again with the change");
+  rk_app_run_for(1500);
+  CHECK(w->toasts->nkids == 0, "and it goes timing.level after the last change");
+  rk_window_level(w, NULL, "volume", 0.2f, "20%");
+  rk_app_run_for(300);
+  rk_window_level(w, NULL, "zoom", 0.5f, "50%");
+  rk_app_run_for(400);
+  CHECK(w->toasts->nkids == 1 && strcmp(((toast *)w->toasts->kids[0]->state)->word, "zoom") == 0, "another word takes the place, as any toast");
+  /* the title bar */
+  rk_view *bar = w->titlebar;
+  CHECK(bar->nkids == 3 && !strcmp(bar->kids[1]->access_label, "maximize") && !strcmp(((button *)bar->kids[1]->state)->icon, "maximize"), "the middle button maximizes, with the maximize icon");
+  CHECK(CLOSE_TO(bar->kids[0]->frame.w, rk_metric_of(RK_TOUCH_TARGET), 0.01), "each window button is touch-target wide (%.0f)", bar->kids[0]->frame.w);
+  rk__window_set_active(w, false);
+  CHECK(w->inactive, "another window active: the title steps back");
+  rk__window_set_active(w, true);
+  CHECK(!w->inactive, "active again");
+  CHECK(!strcmp(rk__words()->restore, "restore"), "restore is an English word until the app's");
+  rk_app_set_strings(&(rk_strings){ .size = sizeof(rk_strings), .restore = "wiederherstellen" });
+  CHECK(!strcmp(rk__words()->restore, "wiederherstellen") && !strcmp(rk__words()->maximize, "maximize"), "a word added after plural is the app's too");
+  rk_app_set_strings(NULL);
+  CHECK(!strcmp(rk__words()->restore, "restore"), "and English again");
   done(w);
 }
 
@@ -1300,6 +1485,18 @@ static const char *comp_commit(rk_view *t, int row, int col, const char *value, 
   snprintf(col == 0 ? comp_name[row] : comp_group[row], 32, "%s", value);
   commits++;
   return NULL;
+}
+
+/* A month to look at: the picker's month without its edge, choosing nothing, named for a screen reader. */
+static void test_month(void) {
+  rk_view *m = rk_month(2026, 10);
+  rk_size sz = month_measure(m, (rk_size){ 1000, 1000 }, m->state);
+  CHECK(fabsf(sz.w - sheet_size().w) < 0.5f && fabsf(sz.w - (7 * RK_TOK_DAY_CELL + 2 * rk_metric_of(RK_SPACE_S))) < 0.5f, "a month is seven day cells wide (%g)", sz.w);
+  CHECK(!m->focusable && m->access_label && !strcmp(m->access_label, "October 2026"), "it takes no focus and is named by its month (%s)", m->access_label ? m->access_label : "(none)");
+  rk_month_set(m, 0, 0);
+  int now = today();
+  CHECK(((month_view *)m->state)->cur == ymd(now / 10000, now / 100 % 100, 1), "0, 0: this month");
+  rk_release(m);
 }
 
 static void test_cell_edit(void) {
@@ -2209,6 +2406,37 @@ static void test_navigation(void) {
   rk_app_run_for(5400);
   CHECK(w->toasts->nkids == 0, "gone after its time");
   done(w);
+}
+
+/* A place that is called up (a launcher) turns at half the pace, to it and back from it; the rest at full pace. */
+static double turn_takes(bool called, bool back) {
+  rk_window *w = window(600, 400);
+  rk_view *h = col(16, 0);
+  rk_add(h, rk_label("Home", RK_TEXT_TITLE));
+  rk_view *grid = rk_add(h, rk_tile_grid());
+  for (int i = 0; i < 3; i++) rk_add(grid, rk_tile("12", "builds"));
+  rk_controller *pl = rk_places(rk_controller_create_with_view(h, "home"));
+  rk_window_show(w, pl);
+  rk_app_run_for(1500);
+  rk_view *p = col(16, 0);
+  rk_add(p, rk_label("Launcher", RK_TEXT_TITLE));
+  rk_view *apps = rk_add(p, rk_tile_grid());
+  for (int i = 0; i < 3; i++) rk_add(apps, rk_tile("", "an app"));
+  rk_controller *c = rk_controller_create_with_view(p, "launcher");
+  rk_controller_set_called(c, called);
+  rk_places_go(pl, c);
+  if (back) { rk_app_run_for(1500); rk_places_back(pl); }
+  double t0 = rk_app_now();
+  while (rk__anim_running() && rk_app_now() - t0 < 3000) rk_app_run_for(1000.0 / 60);
+  double took = rk_app_now() - t0;
+  done(w);
+  return took;
+}
+
+static void test_called_place(void) {
+  double full = turn_takes(false, false), half = turn_takes(true, false), away = turn_takes(true, true);
+  CHECK(full > 400 && half > 0.4 * full && half < 0.6 * full, "a called place turns in at half the pace (%.0f ms, %.0f in full)", half, full);
+  CHECK(away > 0.4 * full && away < 0.6 * full, "and back from it too (%.0f ms)", away);
 }
 
 /* Scenes for the reference images --------------------------------------------------------------------------------- */
@@ -3403,6 +3631,68 @@ static void test_contrast(void) {
   done(w);
 }
 
+/* The accent's rules and the named accents (docs/colour.md), and content fills in a tile grid (docs/tiles.md). */
+static void test_accents(void) {
+  double chroma;
+  CHECK(CLOSE_TO(rk__hue(0x2762ecffu, &chroma), 263.393, 1e-2) && CLOSE_TO(chroma, 0.217, 1e-3), "OKLCH hue and chroma, as color.mjs (%f, %f)", rk__hue(0x2762ecffu, NULL), chroma);
+  int was = logged;
+  rk_app_set_accent(0x7a2a8cffu, 0xd39be0ffu);
+  CHECK(logged == was, "the docs' plum holds every rule (%s)", logged == was ? "" : logged_last);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x7a2a8cffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0xffffffffu, "the text on a dark accent is the ground");
+  rk_app_set_accent(0x2762ecffu, 0);
+  CHECK(logged > was && strstr(logged_last, "hue") && strstr(logged_last, "info"), "an accent in a status's hue is said: %s", logged_last);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x2762ecffu, "and still set");
+  was = logged;
+  CHECK(rk_app_set_accent_named("teal") && logged == was, "a named accent");
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x049896ffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0x010205ffu, "teal with ink on it in light");
+  rk_app_set_theme(RK_THEME_DARK);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x00aba9ffu, "its dark value in dark");
+  rk_app_set_contrast(true);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x0daeacffu && rk__contrast(rk_color_of(RK_ROLE_ACCENT), rk_color_of(RK_ROLE_ON_ACCENT)) >= 7, "its own pair at 7:1 under more contrast");
+  rk_app_set_contrast(false);
+  rk_app_set_theme(RK_THEME_SYSTEM);
+  was = logged;
+  CHECK(!rk_app_set_accent_named("plum") && logged == was + 1 && rk_color_of(RK_ROLE_ACCENT) == 0x049896ffu, "a name that is not one: said, the accent stays");
+  rk_app_set_accent(0, 0);
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == rk_color_of(RK_ROLE_TEXT), "0, 0: ink again");
+
+  /* content fills: only in a grid that opts in, never beside a status, plain under more contrast */
+  rk_window *w = window(700, 300);
+  rk_view *page = col(16, 16);
+  rk_view *grid = rk_add(page, rk_tile_grid());
+  rk_view *mail = rk_add(grid, rk_tile("mail", NULL)), *notes = rk_add(grid, rk_tile("notes", NULL)), *plain = rk_add(grid, rk_tile("files", NULL));
+  rk_tile_set_content(mail, RK_ROLE_CONTENT_TEAL);
+  rk_tile_set_content(notes, RK_ROLE_CONTENT_VIOLET);
+  show(w, page, "content");
+  rk_app_run_for(100);
+  rk_color teal = rk_color_of(RK_ROLE_CONTENT_TEAL), violet = rk_color_of(RK_ROLE_CONTENT_VIOLET), surface = rk_color_of(RK_ROLE_SURFACE);
+  CHECK(pixels_of(w, rk__window_rect(mail), teal) == 0, "without the grid's opt-in a tile stays plain");
+  rk_tile_grid_set_content(grid, true);
+  rk_app_run_for(100);
+  CHECK(pixels_of(w, rk__window_rect(mail), teal) > 1000 && pixels_of(w, rk__window_rect(notes), violet) > 1000 && pixels_of(w, rk__window_rect(plain), surface) > 1000, "opted in: each tile its content fill, one without stays surface");
+  CHECK(rk__contrast(rk_color_of(RK_ROLE_TEXT), teal) >= 4.5 && rk__contrast(rk_color_of(RK_ROLE_TEXT), violet) >= 4.5, "ink at AA on them");
+  shot(w, "content");
+  was = logged;
+  rk_tile_set_status(plain, RK_STATUS_ERROR, NULL);
+  rk_app_run_for(400);
+  CHECK(logged == was + 1 && pixels_of(w, rk__window_rect(mail), teal) == 0 && pixels_of(w, rk__window_rect(mail), surface) > 1000, "a status tile in the grid: said, and every tile plain");
+  rk_tile_set_status(plain, RK_STATUS_NONE, NULL);
+  rk_app_run_for(400);
+  CHECK(pixels_of(w, rk__window_rect(mail), teal) > 1000, "the status gone, the fills come back");
+  rk_app_set_contrast(true);
+  rk_app_run_for(400);
+  CHECK(rk_color_of(RK_ROLE_CONTENT_TEAL) == rk_color_of(RK_ROLE_SURFACE) && pixels_of(w, rk__window_rect(mail), teal) == 0, "more contrast: the set is plain");
+  rk_app_set_contrast(false);
+  rk_tile_grid_set_content(grid, false);
+  rk_app_run_for(400);
+  CHECK(pixels_of(w, rk__window_rect(mail), teal) == 0, "one switch off: the whole set plain");
+  was = logged;
+  rk_tile_set_content(mail, RK_ROLE_ERROR_TILE);
+  rk_tile_grid_set_content(page, true);
+  CHECK(logged == was + 2, "a status's role as content, a grid that is not one: said");
+  done(w);
+}
+
 /* Facets side by side: from the pivot's wide width up, every facet shows; the strip is a jump list that follows. */
 static void test_wide_pivot(void) {
   rk_window *w = window(1500, 700);
@@ -3612,6 +3902,8 @@ static void launch(void *user) {
   test_undo();
   test_focus();
   test_navigation();
+  test_called_place();
+  test_month();
   test_side_pivot();
   test_tree();
   test_split();
@@ -3623,6 +3915,7 @@ static void launch(void *user) {
   test_limits();
   test_damage();
   test_list_keys();
+  test_shell();
   test_collections();
   test_embed();
   test_confirm_secret();
@@ -3631,6 +3924,9 @@ static void launch(void *user) {
   test_spring();
   test_news_order();
   test_bar_motion();
+  test_nudge();
+  test_panorama_edge();
+  test_carry();
   { int lv = rk__live_views; test_declare(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declare_same_pixels(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare_same_pixels: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }
@@ -3646,6 +3942,7 @@ static void launch(void *user) {
   test_product_overrides();
   test_product_codes();
   test_contrast();
+  test_accents();
   test_type_ahead();
   test_wide_pivot();
   { int lv = rk__live_views; test_declared_product(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_product: %d views more\n", rk__live_views - lv); }

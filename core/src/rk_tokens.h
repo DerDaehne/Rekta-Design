@@ -6,14 +6,26 @@
 
 /* [theme: light, dark][rk_role], 0xRRGGBBAA */
 static const rk_color rk_tok_colors[2][RK__ROLE_COUNT] = {
-  { 0x00000000u, 0xffffffffu, 0xeeeff2ffu, 0xe4e5e9ffu, 0x010205ffu, 0xd8d8dbffu, 0x6b6d70ffu, 0x535457ffu, 0x010205ffu, 0xffffffffu, 0x2762ecffu, 0xd3e1ffffu, 0x7da1f4ffu, 0x007b5dffu, 0xe1fff2ffu, 0x61caa6ffu, 0xa37e00ffu, 0xfff4d2ffu, 0xf8d866ffu, 0xaa0013ffu, 0xffe2e4ffu, 0xc86065ffu, 0x1a44eaffu, 0x9495982eu, 0x949598ffu, 0x010205abu, 0xffffffd1u },
-  { 0x00000000u, 0x0e0e12ffu, 0x212225ffu, 0x2a2b2fffu, 0xfbfcffffu, 0x404044ffu, 0x88898cffu, 0xafb0b3ffu, 0xfbfcffffu, 0x0e0e12ffu, 0x178bffffu, 0x04294effu, 0x244592ffu, 0x00ce9dffu, 0x003324ffu, 0x337a62ffu, 0xf7cb47ffu, 0x362b0affu, 0x6e5900ffu, 0xfc4040ffu, 0x3a0f0fffu, 0x76171fffu, 0x178bffffu, 0x9495982eu, 0x7e7f82ffu, 0x262629abu, 0x0e0e12d1u }
+  { 0x00000000u, 0xffffffffu, 0xeeeff2ffu, 0xe4e5e9ffu, 0x010205ffu, 0xd8d8dbffu, 0x6b6d70ffu, 0x535457ffu, 0x010205ffu, 0xffffffffu, 0x2762ecffu, 0xd3e1ffffu, 0x7da1f4ffu, 0x007b5dffu, 0xe1fff2ffu, 0x61caa6ffu, 0xa37e00ffu, 0xfff4d2ffu, 0xf8d866ffu, 0xaa0013ffu, 0xffe2e4ffu, 0xc86065ffu, 0x1a44eaffu, 0x9495982eu, 0x949598ffu, 0x010205abu, 0xffffffd1u, 0x56a8a7ffu, 0x89a2b5ffu, 0x9177b8ffu, 0xc897caffu, 0xefb8d1ffu },
+  { 0x00000000u, 0x0e0e12ffu, 0x212225ffu, 0x2a2b2fffu, 0xfbfcffffu, 0x404044ffu, 0x88898cffu, 0xafb0b3ffu, 0xfbfcffffu, 0x0e0e12ffu, 0x178bffffu, 0x04294effu, 0x244592ffu, 0x00ce9dffu, 0x003324ffu, 0x337a62ffu, 0xf7cb47ffu, 0x362b0affu, 0x6e5900ffu, 0xfc4040ffu, 0x3a0f0fffu, 0x76171fffu, 0x178bffffu, 0x9495982eu, 0x7e7f82ffu, 0x262629abu, 0x0e0e12d1u, 0x055959ffu, 0x425565ffu, 0x665283ffu, 0x633d65ffu, 0x7d415fffu }
 };
 
 /* The same for more contrast (rk_app_set_contrast): every text pair at 7:1, opaque glass */
 static const rk_color rk_tok_colors_contrast[2][RK__ROLE_COUNT] = {
-  { 0x00000000u, 0xffffffffu, 0xeeeff2ffu, 0xe4e5e9ffu, 0x010205ffu, 0xd8d8dbffu, 0x4d4e51ffu, 0x424346ffu, 0x010205ffu, 0xffffffffu, 0x2762ecffu, 0xd3e1ffffu, 0x7da1f4ffu, 0x007b5dffu, 0xe1fff2ffu, 0x74d8b0ffu, 0xa37e00ffu, 0xfff4d2ffu, 0xf8d866ffu, 0xaa0013ffu, 0xffe2e4ffu, 0xdd7b7bffu, 0x1a44eaffu, 0x9495982eu, 0x949598ffu, 0x010205abu, 0xffffffffu },
-  { 0x00000000u, 0x0e0e12ffu, 0x212225ffu, 0x2a2b2fffu, 0xfbfcffffu, 0x404044ffu, 0xaeafb1ffu, 0xc2c3c5ffu, 0xfbfcffffu, 0x0e0e12ffu, 0x178bffffu, 0x04294effu, 0x244592ffu, 0x00ce9dffu, 0x003324ffu, 0x245f5bffu, 0xf7cb47ffu, 0x362b0affu, 0x6c5310ffu, 0xfc4040ffu, 0x3a0f0fffu, 0x690615ffu, 0x178bffffu, 0x9495982eu, 0x7e7f82ffu, 0x262629abu, 0x0e0e12ffu }
+  { 0x00000000u, 0xffffffffu, 0xeeeff2ffu, 0xe4e5e9ffu, 0x010205ffu, 0xd8d8dbffu, 0x4d4e51ffu, 0x424346ffu, 0x010205ffu, 0xffffffffu, 0x2762ecffu, 0xd3e1ffffu, 0x7da1f4ffu, 0x007b5dffu, 0xe1fff2ffu, 0x74d8b0ffu, 0xa37e00ffu, 0xfff4d2ffu, 0xf8d866ffu, 0xaa0013ffu, 0xffe2e4ffu, 0xdd7b7bffu, 0x1a44eaffu, 0x9495982eu, 0x949598ffu, 0x010205abu, 0xffffffffu, 0xeeeff2ffu, 0xeeeff2ffu, 0xeeeff2ffu, 0xeeeff2ffu, 0xeeeff2ffu },
+  { 0x00000000u, 0x0e0e12ffu, 0x212225ffu, 0x2a2b2fffu, 0xfbfcffffu, 0x404044ffu, 0xaeafb1ffu, 0xc2c3c5ffu, 0xfbfcffffu, 0x0e0e12ffu, 0x178bffffu, 0x04294effu, 0x244592ffu, 0x00ce9dffu, 0x003324ffu, 0x245f5bffu, 0xf7cb47ffu, 0x362b0affu, 0x6c5310ffu, 0xfc4040ffu, 0x3a0f0fffu, 0x690615ffu, 0x178bffffu, 0x9495982eu, 0x7e7f82ffu, 0x262629abu, 0x0e0e12ffu, 0x212225ffu, 0x212225ffu, 0x212225ffu, 0x212225ffu, 0x212225ffu }
+};
+
+/* The named accents: [light, dark, light-contrast, dark-contrast][accent, on-accent] */
+#define RK_TOK_ACCENT_COUNT 7
+static const struct { const char *name; rk_color c[4][2]; } rk_tok_accents[RK_TOK_ACCENT_COUNT] = {
+  { "ink", { { 0x010205ffu, 0xffffffffu }, { 0xfbfcffffu, 0x0e0e12ffu }, { 0x010205ffu, 0xffffffffu }, { 0xfbfcffffu, 0x0e0e12ffu } } },
+  { "teal", { { 0x049896ffu, 0x010205ffu }, { 0x00aba9ffu, 0x0e0e12ffu }, { 0x005f5effu, 0xffffffffu }, { 0x0daeacffu, 0x0e0e12ffu } } },
+  { "steel", { { 0x637586ffu, 0xffffffffu }, { 0x6c7e8fffu, 0x0e0e12ffu }, { 0x495a6affu, 0xffffffffu }, { 0x8d9fb1ffu, 0x0e0e12ffu } } },
+  { "violet", { { 0x65389fffu, 0xffffffffu }, { 0xc2a7f4ffu, 0x0e0e12ffu }, { 0x65389fffu, 0xffffffffu }, { 0xc2a7f4ffu, 0x0e0e12ffu } } },
+  { "mauve", { { 0x756089ffu, 0xffffffffu }, { 0x7a648effu, 0xfbfcffffu }, { 0x655078ffu, 0xffffffffu }, { 0xaa93c0ffu, 0x0e0e12ffu } } },
+  { "pink", { { 0xd858b6ffu, 0x010205ffu }, { 0xf472d0ffu, 0x0e0e12ffu }, { 0x9e1c81ffu, 0xffffffffu }, { 0xf472d0ffu, 0x0e0e12ffu } } },
+  { "magenta", { { 0xd70473ffu, 0xffffffffu }, { 0xd70473ffu, 0xfbfcffffu }, { 0x95004effu, 0xffffffffu }, { 0xff9bbbffu, 0x0e0e12ffu } } }
 };
 
 /* [density: comfortable, compact][rk_metric], logical px */
@@ -59,6 +71,9 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_SIZE_NAV_INACTIVE 22.0f
 #define RK_TOK_SIZE_NAV_INACTIVE_MAX 32.0f
 #define RK_TOK_SIZE_NAV_INACTIVE_VW 0.019f
+#define RK_TOK_SIZE_DISPLAY 80.0f
+#define RK_TOK_SIZE_DISPLAY_MAX 144.0f
+#define RK_TOK_SIZE_DISPLAY_VW 0.084f
 #define RK_TOK_SIZE_PIVOT_ACTIVE 28.0f
 #define RK_TOK_SIZE_PIVOT_ACTIVE_MAX 42.0f
 #define RK_TOK_SIZE_PIVOT_ACTIVE_VW 0.026f
@@ -88,6 +103,7 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_EASE_PIVOT_GLIDE { 0.65f, 0.0f, 0.35f, 1.0f }
 #define RK_TOK_EASE_TURN_OUT { 0.35f, 0.0f, 0.65f, 0.6f }
 #define RK_TOK_EASE_TURN_IN { 0.22f, 0.9f, 0.6f, 0.98f }
+#define RK_TOK_EASE_LANDING { 0.1f, 0.9f, 0.2f, 1.0f }
 #define RK_TOK_TURNSTILE_OUT_ANGLE 60.0f
 #define RK_TOK_TURNSTILE_IN_ANGLE 70.0f
 #define RK_TOK_TURNSTILE_ANGLE 60.0f
@@ -96,12 +112,16 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_TURNSTILE_ROW 8.0f
 #define RK_TOK_TURNSTILE_FLUSH 2.0f
 #define RK_TOK_SLIDE_DISTANCE 24.0f
+#define RK_TOK_ARRIVE_DISTANCE 32.0f
+#define RK_TOK_NUDGE_DISTANCE 16.0f
 #define RK_TOK_TILE_TILT 8.0f
 #define RK_TOK_TILE_PRESS_SCALE 0.97f
 #define RK_TOK_ROW_TILT 2.0f
 #define RK_TOK_ROW_PRESS_SCALE 0.99f
 #define RK_TOK_PEEK_TRAVEL 0.4f
 #define RK_TOK_FLIP_ANGLE 90.0f
+#define RK_TOK_STEP_BACK_SCALE 0.86f
+#define RK_TOK_STEP_BACK_BRIGHTNESS 0.78f
 #define RK_TOK_TURN_OUT_WHOLE 0.4f
 #define RK_TOK_TURN_IN_WHOLE 0.35f
 #define RK_TOK_TURN_OVERLAP 0.75f
@@ -138,6 +158,7 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_TIMING_STALE 30000.0f
 #define RK_TOK_TIMING_RESTORE 5000.0f
 #define RK_TOK_TIMING_TYPE_AHEAD 1000.0f
+#define RK_TOK_TIMING_LEVEL 1500.0f
 #define RK_TOK_BP_MOBILE 375.0f
 #define RK_TOK_BP_SIDEWAYS_SCROLL_MIN 760.0f
 #define RK_TOK_BP_SHORT_HEIGHT 480.0f
@@ -146,5 +167,6 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_BP_ULTRAWIDE 2560.0f
 #define RK_TOK_TILE_UNIT_ULTRAWIDE 170.0f
 #define RK_TOK_TIP_GAP 6.0f
+#define RK_TOK_DAY_CELL 36.0f
 
 #endif

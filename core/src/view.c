@@ -251,7 +251,7 @@ rk_point rk_view_to_window(rk_view *v, rk_point p) {
 /* Look ------------------------------------------------------------------------------------------------------------ */
 
 rk_color rk__resolve_fill(rk_view *v) {
-  if (v->fill_role) return rk_color_of(v->fill_role);
+  if (v->fill_role) return rk_color_of(rk__is_tile(v) ? rk__tile_fill(v) : v->fill_role);
   return v->fill[rk__dark() ? 1 : 0];
 }
 
@@ -272,6 +272,7 @@ void rk_view_set_fill_color(rk_view *v, rk_color light, rk_color dark) { v->fill
 void rk_view_set_radius(rk_view *v, float r) { v->radius = r; rk__view_dirty(v); }
 void rk_view_set_rules(rk_view *v, uint32_t rules) { v->rule_top = (rules & RK_RULE_TOP) != 0; v->rule_bottom = (rules & RK_RULE_BOTTOM) != 0; rk__view_dirty(v); }
 void rk_view_set_clip(rk_view *v, bool clip) { v->clip = clip; rk__view_dirty(v); }
+void rk_view_set_carry(rk_view *v, bool carry) { if (v) v->carry = carry; }
 float rk_view_opacity(rk_view *v) { return v->opacity; }
 rk_transform rk_view_transform(rk_view *v) { return v->transform; }
 bool rk_view_is_hidden(rk_view *v) { return v->hidden; }

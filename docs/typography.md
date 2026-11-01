@@ -91,10 +91,43 @@ values. Two kinds of size token exist:
   `nav-inactive` (22–72px) for the two navigation levels described
   above.
 
+One fluid step stands above them: **`display`** (80–144px), exactly
+twice `nav-active` at every width (`--check` holds the two together).
+It is for a time or a number read from across a room: the clock of a
+lock screen, a wall display, a kiosk, an always-on clock. Light, in
+tabular figures (`.rk-display`; `RK_TEXT_DISPLAY` in rekta-core), so a
+clock's digits do not shift as they change. It takes the place of the
+screen's navigation title, not a fourth level; nothing read up close
+takes it, and a screen has one at most.
+
 A platform without CSS `clamp()` (see [platforms.md](platforms.md))
 should interpolate the same min/preferred/max triple against its own
 window-width signal — the fluid token's three numbers are the contract,
 `clamp()` is just the web's way of expressing it.
+
+## The family
+
+Rekta is drawn in Barlow (`font-sans`), which the build ships with
+`rekta.fonts.css`. A product may set a family of its own: it is a product
+slot ([platforms.md](platforms.md#product-overrides)), like the accent,
+with four conditions:
+
+- **The four weights of the roles:** light (300), regular (400), medium
+  (500) and semibold (600). A family without one does not take the slot.
+- **Tabular figures,** so numbers line up in a column.
+- **A licence that allows shipping it** with the app (the OFL does).
+- **Shipped with the app,** never loaded from a font CDN: the app works
+  offline and shows its text at once. `build.mjs --check-product` fails a
+  font loaded from another server.
+
+The type scale stays the design's: the sizes, line heights and weights
+are the same in any family. What depends on the family's width is
+measured again: the text budgets (a message tile's about 60 and 140
+characters, a pivot strip that fits, a label that must not wrap). The
+baseline of a pivot's titles is measured in the page by `rekta.js`; the
+`typography.metrics` tokens are Barlow's, so a page without the script,
+and a native implementation, read the family's own metrics instead.
+rekta-core draws Barlow for now ([platforms.md](platforms.md#what-rekta-core-does-not-draw-yet)).
 
 ## Weight and case
 

@@ -94,6 +94,8 @@ typedef enum rk_role {
   RK_ROLE_WARNING_FULL, RK_ROLE_WARNING_SOFT, RK_ROLE_WARNING_TILE,
   RK_ROLE_ERROR_FULL, RK_ROLE_ERROR_SOFT, RK_ROLE_ERROR_TILE,
   RK_ROLE_FOCUS, RK_ROLE_HOVER, RK_ROLE_DISABLED, RK_ROLE_SHADING, RK_ROLE_GLASS,
+  /* added later, at its end: the content fills, a tile's fill in a set without a status (rk_tile_set_content) */
+  RK_ROLE_CONTENT_TEAL, RK_ROLE_CONTENT_STEEL, RK_ROLE_CONTENT_VIOLET, RK_ROLE_CONTENT_PLUM, RK_ROLE_CONTENT_ROSE,
   RK_ROLE_FORCE32 = 0x7fffffff
 } rk_role;
 
@@ -149,7 +151,12 @@ RK_API bool rk_app_is_dark(void);
 RK_API void rk_app_set_motion(rk_motion_pref motion);
 RK_API bool rk_app_is_reduced_motion(void);
 RK_API void rk_app_set_density(rk_density density);
-RK_API void rk_app_set_accent(rk_color light, rk_color dark);    /* 0, 0: the ink of the theme */
+/* The product's accent, per theme (docs/colour.md): the text on it is the theme's ground or ink, whichever stands out
+   more, and under more contrast the same accent. Each value should hold 3:1 on bg and surface, its text 4.5:1 (7:1 under
+   more contrast), and stay apart from status - 0.09 (OKLab) from every status colour, 0.05 under protanopia and
+   deuteranopia, its hue 20 degrees from each status hue unless its chroma is below 0.05; one that does not is still
+   set, and said through rk_app_set_log. Dark 0 takes light; 0, 0: the ink of the theme. */
+RK_API void rk_app_set_accent(rk_color light, rk_color dark);
 /* More contrast (docs/colour.md): the contrast colours, every text pair at 7:1, and a 2px frame in its full colour on
    each status tile. Off until set: an app that reads the system's high-contrast setting passes it on. */
 RK_API void rk_app_set_contrast(bool more);
@@ -159,6 +166,9 @@ RK_API void rk_app_set_contrast(bool more);
    Each value should hold 3:1 on bg and surface and stand 0.09 apart (OKLab) under protanopia and deuteranopia from
    every other code set; one that does not is still set, and said through rk_app_set_log. */
 RK_API void rk_app_set_series(int code, rk_color light, rk_color dark);   /* code 1 to 8 */
+/* A named accent (tokens/rekta.accents.json): "ink", "teal", "steel", "violet", "mauve", "pink" or "magenta", a checked
+   pair for each theme and for more contrast. False, and said, for a name that is not one; the accent stays. */
+RK_API bool rk_app_set_accent_named(const char *name);
 RK_API rk_color rk_series_of(int code);            /* in the current theme; ink while it has no value */
 /* What a product may change (docs/platforms.md, Product overrides); motion, colours and the type scale stay the
    design's. A metric: RK_TILE_UNIT, RK_PIVOT_WIDE (0: no pivot goes wide). A timing: RK_TIMING_TOAST (how long a
@@ -199,6 +209,7 @@ typedef struct rk_strings {
                                                       (1234, but 12.345) */
   int (*plural)(long n);                           /* n's rk_plural, for the counting words; NULL: English (1 one, the
                                                       rest other); one outside rk_plural is other */
+  const char *restore;                             /* the window's maximize button while it is maximized, read aloud */
 } rk_strings;
 RK_API void rk_app_set_strings(const rk_strings *strings);
 /* A figure in the app's words, as the web's number(): up to two decimals, the decimal sign and digit groups of
@@ -261,6 +272,10 @@ RK_API bool rk_window_redo(rk_window *window);
 /* A toast: a short message from the top edge, with an optional action (undo, retry) that keeps it for the toast
    timing and shows the time running out. */
 RK_API void rk_window_toast(rk_window *window, const char *message, const char *action, void (*on_action)(void *user), void *user);
+/* A level indicator, for a value the user changed by a key (volume, brightness, zoom): a toast without an action, an
+   icon from the set (NULL: none), the word, a meter at value (0 to 1) and the figure ("60%"). Again with the same word
+   while it shows, it stays and only its value glides; it goes timing.level after the last change. */
+RK_API void rk_window_level(rk_window *window, const char *icon, const char *word, float value, const char *figure);
 
 /* Views ----------------------------------------------------------------------------------------------------------- */
 
@@ -321,6 +336,9 @@ RK_API rk_transform rk_view_transform(rk_view *view);
 RK_API void rk_view_set_hidden(rk_view *view, bool hidden);
 RK_API bool rk_view_is_hidden(rk_view *view);
 RK_API void rk_view_set_clip(rk_view *view, bool clip);
+/* The title of the part it is in: when the part opens a place (rk_places_go), the title travels into the place's
+   title (its first RK_TEXT_TITLE label) instead of turning away, and back into the part. */
+RK_API void rk_view_set_carry(rk_view *view, bool carry);
 
 /* layout: the view's own, then what its parent's layout reads from it */
 RK_API void rk_view_set_layout(rk_view *view, rk_layout layout);
@@ -429,6 +447,7 @@ typedef enum rk_text_style {
   RK_TEXT_STAT,                                    /* size-xxl, medium, tabular figures: a tile's number */
   RK_TEXT_PIVOT,                                   /* size-pivot-active, light: a pivot title */
   RK_TEXT_NAV,                                     /* size-nav-active, light: a place's strip */
+  RK_TEXT_DISPLAY,                                 /* size-display, light, tabular figures: read from across a room */
   RK_TEXT_FORCE32 = 0x7fffffff
 } rk_text_style;
 
@@ -462,6 +481,12 @@ RK_API void rk_tile_set_message(rk_view *tile, const char *message);     /* NULL
 RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);   /* a sparkline (one value: flat); 0 removes it */
 RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1; < 0 removes it */
 RK_API void rk_tile_set_code(rk_view *tile, int code);   /* its sparkline in a domain colour (rk_app_set_series); 0: ink */
+/* Content fills (docs/tiles.md): in a tile grid that opts in, a tile without a status takes the main colour of what it
+   opens, RK_ROLE_CONTENT_TEAL to RK_ROLE_CONTENT_ROSE (RK_ROLE_NONE: plain). A grid with a status tile in it shows
+   none: every tile is plain, and the status keeps its fill. Off again with false: the whole grid plain. Under more
+   contrast the content fills are the surface. */
+RK_API void rk_tile_grid_set_content(rk_view *grid, bool on);
+RK_API void rk_tile_set_content(rk_view *tile, rk_role fill);
 
 /* Hairline rows: a title on the left, a meta or a status tag on the right. */
 RK_API rk_view *rk_rows(void);
@@ -496,6 +521,7 @@ RK_API void rk_menu_open_at(rk_view *menu, rk_view *from, rk_point point);   /* 
 RK_API void rk_menu_close(rk_view *menu);
 RK_API rk_view *rk_menu_opener(rk_view *menu);                    /* what opened it, while open and in a handler */
 RK_API void rk_menu_set_align(rk_view *menu, rk_align align);      /* RK_ALIGN_CENTER: centred on a centred opener */
+RK_API void rk_menu_set_icon(rk_view *menu, int item, const char *icon);   /* from the icon set, at the start; NULL removes it */
 
 /* A view that scrolls its content up and down: the wheel, the keys a focused view inside leaves, and focus landing
    inside move it, on the panorama's spring; a thin bar shows while it moves. Takes content. */
@@ -524,6 +550,10 @@ RK_API rk_view *rk_select(const char *const *options, int count, int chosen);   
 RK_API rk_view *rk_date(int year, int month, int day);    /* 0, 0, 0: none yet */
 RK_API bool rk_date_value(rk_view *date, int *year, int *month, int *day);   /* false: none yet */
 RK_API void rk_date_set_value(rk_view *date, int year, int month, int day);   /* 0, 0, 0 clears it */
+/* A month to look at (a calendar at a clock): the picker's month on the ground, Monday first, today framed; it
+   chooses nothing and takes no focus. 0, 0: this month. */
+RK_API rk_view *rk_month(int year, int month);
+RK_API void rk_month_set(rk_view *view, int year, int month);
 RK_API double rk_control_value(rk_view *control);
 RK_API void rk_control_set_value(rk_view *control, double value);   /* a number snaps to the range and step; an index it lacks is ignored */
 RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, void *user), void *user);
@@ -560,6 +590,9 @@ RK_API void rk_list_set_count(rk_view *list, int count);   /* the items changed:
 RK_API void rk_list_set_key(rk_view *list, uint64_t (*key)(int index, void *user));
 RK_API void rk_list_on_show(rk_view *list, void (*fn)(rk_view *list, int index, void *user), void *user);
 RK_API void rk_list_on_change(rk_view *list, void (*fn)(rk_view *list, void *user), void *user);   /* the user changed the selection */
+/* Delete (or Backspace) on the active row asks fn to remove it, reversibly (rk_window_do, with undo in its toast); the
+   next row takes its place, the one before at the end. NULL: the keys do nothing here. */
+RK_API void rk_list_on_remove(rk_view *list, void (*fn)(rk_view *list, int index, void *user), void *user);
 RK_API bool rk_list_is_selected(rk_view *list, int index);
 RK_API int rk_list_selection_count(rk_view *list);
 RK_API int rk_list_selection(rk_view *list, int *indices, int max);   /* fills up to max, in order; returns how many there are */
@@ -672,6 +705,9 @@ RK_API void rk_places_go(rk_controller *places, rk_controller *place);   /* take
 RK_API void rk_places_back(rk_controller *places);
 RK_API int rk_places_depth(rk_controller *places);
 RK_API void rk_places_on_back(rk_controller *places, void (*fn)(rk_controller *places, void *user), void *user);   /* the user went back (Escape, the back key) */
+/* A place that is called up and left again many times an hour (a launcher, a start surface): a change to or from it,
+   by places or a pivot that picks the place, turns at half the pace, every duration and the stagger halved. */
+RK_API void rk_controller_set_called(rk_controller *place, bool called);
 
 /* Panorama: one place laid out sideways in sections under a strip of their titles that glides by place. */
 RK_API rk_controller *rk_panorama(void);
@@ -733,6 +769,9 @@ RK_API void rk_animate_begin(rk_motion motion);    /* blocks nest; the innermost
 RK_API void rk_animate_on_done(void (*fn)(void *user), void *user);
 RK_API void rk_animate_commit(void);
 RK_API void rk_view_transition(rk_view *view, rk_transition transition);   /* call before changing the view */
+/* A view that answers a gesture nobody can see (a swipe) hints at it when it is only tapped: it moves nudge-distance
+   the gesture's way (dx, dy: (1, 0) right, (0, -1) up) and back, duration-short each way. Call it from the tap. */
+RK_API void rk_view_nudge(rk_view *view, float dx, float dy);
 
 /* Declared UI -----------------------------------------------------------------------------------------------------
  *
@@ -904,6 +943,8 @@ typedef struct rk_ui {
   int reveal;                                      /* a split's: a new .pulse is its detail's next item (rk_split_reveal),
                                                       from the trailing side (0 or 1) or the leading side (-1); the same
                                                       .pulse, the same item: no slide */
+  rk_role content;                                 /* a tile's content fill (rk_tile_set_content), RK_ROLE_CONTENT_* */
+  bool content_fills;                              /* a tile grid's: its tiles without a status take their content fill */
 } rk_ui;
 
 /* A window built from a declaration is made by rk_window_create (rk_window_desc.build). Elsewhere, a declared view

@@ -14,6 +14,7 @@ static void root_layout(rk_view *v, void *state) {
   float top = 0;
   if (w->titlebar) { top = 36; rk__set_frame(w->titlebar, (rk_rect){ 0, 0, v->frame.w, top }); }
   rk__set_frame(w->content, (rk_rect){ 0, top, v->frame.w, v->frame.h - top });
+  rk__set_frame(w->carries, (rk_rect){ 0, 0, v->frame.w, v->frame.h });
   rk__set_frame(w->sheets, (rk_rect){ 0, 0, v->frame.w, v->frame.h });
   rk__set_frame(w->toasts, (rk_rect){ 0, top, v->frame.w, v->frame.h - top });
   rk__set_frame(w->floats, (rk_rect){ 0, 0, v->frame.w, v->frame.h });
@@ -61,6 +62,7 @@ rk_window *rk_window_create(const rk_window_desc *desc) {
   w->content = rk_view_create(); rk_view_set_layout(w->content, RK_LAYOUT_OVERLAY);
   if (!d.system_frame) { w->titlebar = rk__titlebar_create(w); rk__view_add(w->root, w->titlebar); rk_release(w->titlebar); }
   rk__view_add(w->root, w->content); rk_release(w->content);
+  w->carries = rk_view_create(); w->carries->passthrough = true; rk__view_add(w->root, w->carries); rk_release(w->carries);
   /* a toast says something happened; a sheet asks, above everything (the web's dialogs are in the top layer) */
   w->toasts = rk__view_create(&toasts_class, NULL); w->toasts->passthrough = true; rk__view_add(w->root, w->toasts); rk_release(w->toasts);
   w->sheets = rk__view_create(&rk__sheets_class, NULL); w->sheets->passthrough = true; rk__view_add(w->root, w->sheets); rk_release(w->sheets);
@@ -187,7 +189,14 @@ void rk__window_resized(rk_window *w, float width, float height, float scale) {
   w->scale = scale > 0 ? scale : 1;
   w->needs_layout = true;
   rk__view_relayout_up(w->root);
+  if (w->titlebar) rk_view_relayout(w->titlebar);         /* maximized or not: its middle button says which */
   rk__window_invalidate(w);
+}
+
+void rk__window_set_active(rk_window *w, bool active) {
+  if (!w || w->inactive == !active) return;
+  w->inactive = !active;
+  if (w->titlebar) rk__titlebar_update(w->titlebar);
 }
 
 void rk__toast_leaving(rk_view *t) {
@@ -204,6 +213,19 @@ void rk_window_toast(rk_window *w, const char *message, const char *action, void
     rk_animate_begin(RK_MOTION_LEAVE); rk_view_remove(w->toasts->kids[i]); rk_animate_commit();
   }
   rk_view *t = rk__toast_create(message, action, on_action, user);
+  rk_animate_begin(RK_MOTION_ENTER);
+  rk__view_add(w->toasts, t);
+  rk_animate_commit();
+  rk_release(t);
+}
+
+void rk_window_level(rk_window *w, const char *icon, const char *word, float value, const char *figure) {
+  for (int i = w->toasts->nkids - 1; i >= 0; i--) if (rk__toast_level_update(w->toasts->kids[i], word, value, figure)) return;
+  for (int i = w->toasts->nkids - 1; i >= 0; i--) {             /* it takes the toast's place, as any toast does */
+    rk__toast_leaving(w->toasts->kids[i]);
+    rk_animate_begin(RK_MOTION_LEAVE); rk_view_remove(w->toasts->kids[i]); rk_animate_commit();
+  }
+  rk_view *t = rk__toast_level_create(icon, word, value, figure);
   rk_animate_begin(RK_MOTION_ENTER);
   rk__view_add(w->toasts, t);
   rk_animate_commit();

@@ -16,7 +16,7 @@ import { copyFileSync, cpSync, createReadStream, mkdirSync, readFileSync, readdi
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildDist, cssValue, loadIcons, loadTokens, tokenName, walk } from './build.mjs';
+import { buildDist, buildTokensJson, cssValue, loadIcons, loadTokens, tokenName, walk } from './build.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, '_site');
@@ -61,6 +61,8 @@ const blocks = {
   ].map(([fg, bg, min]) => `<tr><th scope="row"><code>${fg}</code> on <code>${bg}</code></th><td class="rk-num">${min} : 1</td><td class="rk-num"><b data-ratio="${fg} ${bg}" data-min="${min}">–</b></td></tr>`).join('')}</tbody></table>`,
   typescale: () => `<ul class="rk-rows scale">${data.filter((t) => t.group === 'type' && t.name.startsWith('font-size-')).map((t) => `<li><span class="scale-sample" style="font-size:var(--rk-${t.name})">Rekta</span><span><code>${t.name.slice(10)}</code> <span class="rk-meta">${esc(t.value)}</span></span></li>`).join('')}</ul>`,
   'tokens-data': () => `<script type="application/json" id="tokens-data">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`,
+  // Every theme and the named accents, resolved as rekta.tokens.json has them: what rekta.color.js measures against.
+  'themes-data': () => { const j = buildTokensJson(tokens, version); return `<script type="application/json" id="themes-data">${JSON.stringify({ themes: j.themes, accents: j.accents })}</script>`; },
   // The icon sprite inline, so <use href="#rk-i-NAME"> works in the page and in the single-file build alike.
   icons: () => readFileSync(join(dist, 'rekta.icons.svg'), 'utf8').trim().replace('<svg ', '<svg aria-hidden="true" '),
   'icon-gallery': () => `<ul class="icon-gallery">${Object.keys(loadIcons()).map((n) => `<li><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-${n}"/></svg><code>${n}</code></li>`).join('')}</ul>`,

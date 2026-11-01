@@ -35,7 +35,6 @@
   }
   const lum = ([r, g, b]) => [r, g, b].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
   const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
-  const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   function measure() {
     for (const b of $$('[data-ratio]')) {
       const [fg, bg] = b.dataset.ratio.split(' '), r = ratio(rgb(fg), rgb(bg));
@@ -58,28 +57,21 @@
   addEventListener('resize', env);
 
   /* ---------- look: theme, density, motion, contrast, transparency (Rekta prefs) and the accent slot ---------- */
-  const PREFS = ['theme', 'density', 'motion', 'contrast', 'transparency'];
+  const PREFS = ['theme', 'density', 'motion', 'contrast', 'transparency', 'accent'];
   function paintPrefs() {
     for (const name of PREFS) { const r = $(`input[name=${name}][value="${prefs.get(name)}"]`); if (r) r.checked = true; }
     $('#theme-word').textContent = prefs.get('theme');
     const m = prefs.get('motion');
     $('#motion-word').textContent = m === 'system' ? (reduced.matches ? 'reduced' : 'on') : m;
     $('#m-off').checked = m === 'off' || (m === 'system' && reduced.matches);
-    const a = root.dataset.accent === 'plum' ? 'plum' : root.dataset.accent === 'custom' ? 'custom' : 'ink';
-    $(`input[name=accent][value="${a}"]`).checked = true;
     measure(); env();
   }
   document.addEventListener('rk:prefs', paintPrefs);
   reduced.addEventListener('change', paintPrefs);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintPrefs);
   matchMedia('(prefers-contrast: more)').addEventListener('change', paintPrefs);
+  // The accent is a pref too: a named accent of Rekta's, or "custom", the visitor's own, styled by site-head.js.
   for (const name of PREFS) $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => prefs.set(name, r.value)));
-  $$('input[name=accent]').forEach((r) => r.addEventListener('change', () => Rekta.crossfade(() => {
-    if (r.value === 'plum') { root.dataset.accent = 'plum'; store.set('rekta-site-accent', 'plum'); }
-    else if (r.value === 'custom' && customAccent) { window.siteAccent(customAccent); store.set('rekta-site-accent', 'custom'); }
-    else { delete root.dataset.accent; store.set('rekta-site-accent', null); }
-    paintPrefs();
-  })));
   const THEMES = ['system', 'light', 'dark'];
   $('#ab-theme').addEventListener('click', () => prefs.set('theme', THEMES[(THEMES.indexOf(prefs.get('theme')) + 1) % 3]));
   $('#ab-motion').addEventListener('click', () => prefs.set('motion', prefs.get('motion') === 'off' ? 'system' : 'off'));
@@ -218,7 +210,7 @@
     const place = $('[data-rk-place=home]');
     place.removeAttribute('data-rk-arriving'); void place.offsetWidth;
     place.setAttribute('data-rk-arriving', '');
-    setTimeout(() => place.removeAttribute('data-rk-arriving'), tok.ms('--rk-duration-moderate') + 10 * tok.ms('--rk-duration-stagger') + tok.ms('--rk-duration-long') + 50);
+    setTimeout(() => place.removeAttribute('data-rk-arriving'), 3 * tok.ms('--rk-duration-greet') + 2 * tok.ms('--rk-duration-long') + 50);
   });
 
   /* ---------- feedback ---------- */
@@ -424,31 +416,53 @@
     router.navigate('home').then(() => home.goTo(a.dataset.goto));
   });
 
+  /* ---------- colour: content fills, one switch for the whole set ---------- */
+  $('#launcher-fills').addEventListener('change', (e) => { $('#launcher').dataset.rkFills = e.target.checked ? 'content' : 'plain'; });
+
   /* ---------- forms: make an accent, checked late, guarded ---------- */
+  // Checked as a product lets its users choose (docs/colour.md, Letting users choose): with rekta.color.js against
+  // every theme's colours, and refused with the reason and a colour that would hold.
   let customAccent = store.get('rekta-site-accent-def');
-  const HEX = /^#[0-9a-f]{6}$/i;
-  const onFor = (hex) => (ratio(hexRgb(hex), [255, 255, 255]) >= ratio(hexRgb(hex), [1, 2, 5]) ? '#ffffff' : '#010205');
-  function hexCheck(v, ground, need, groundName) {
-    const t = v.trim();
-    if (!HEX.test(t)) return 'Write a hex colour with six digits, like #1f6f5c.';
-    const r = ratio(hexRgb(t), ground);
-    if (r < need) return `${t} holds only ${r.toFixed(1)}:1 on the ${groundName} ground; an accent needs ${need}:1. Try a ${groundName === 'light' ? 'darker' : 'lighter'} one.`;
-    return null;
+  if (customAccent && !customAccent.pairs) customAccent = null;   /* one made before accents had a pair per contrast set */
+  const HEX = /^#[0-9a-f]{6}$/i, C = window.RektaColor, { themes: THEMES_DATA, accents: RektaAccents } = JSON.parse($('#themes-data').textContent);
+  const STATUS_WORD = { info: 'active', success: 'done', warning: 'waiting', error: 'failed' };
+  const onFor = (hex, t) => (C.contrast(hex, t.bg) >= C.contrast(hex, t['text-primary']) ? t.bg : t['text-primary']);
+  function accentHint(v, theme) {
+    const t = v.trim(), th = THEMES_DATA[theme];
+    if (!HEX.test(t)) return 'Write a hex colour with six digits, like #1a6680.';
+    const check = C.accentCheck(t, onFor(t, th), th, C.TEXT[theme]);
+    if (check.ok) return null;
+    const derived = C.deriveAccent(t, { [theme]: th }), better = derived.ok ? ` Try ${derived.themes[theme].accent}: the nearest that holds.` : '';
+    const r = C.contrast(t, th.bg);
+    if (r < 3) return `${t} holds only ${r.toFixed(1)}:1 on the ${theme} ground; an accent needs 3:1.${better || ` Try a ${theme === 'light' ? 'darker' : 'lighter'} one.`}`;
+    if (check.apart.problems.length) {
+      const n = check.apart.hue.degrees < C.APART.hue && check.apart.chroma >= C.APART.grey ? check.apart.hue : check.apart.nearest.normal;
+      return `${t} is too close to the status colour for “${STATUS_WORD[n.status]}”: it would read as a status.${better || ' Its hue is a status hue: try one between green and blue, or from blue through violet to pink.'}`;
+    }
+    return `No text reads on ${t} at ${C.TEXT[theme]}:1.${better}`;
   }
   const accentForm = Rekta.form($('#accent-form'), {
     validators: {
       'a-name': (v) => (!v.trim() ? 'Give the accent a name.' : /^[a-z][a-z0-9-]*$/.test(v.trim()) ? null : 'Use lowercase letters, digits and dashes, like "sea-green".'),
-      'a-light': (v) => hexCheck(v, hexRgb('#ffffff'), 3, 'light'),
-      'a-dark': (v) => (v.trim() ? hexCheck(v, hexRgb('#0e0e12'), 3, 'dark') : null),
+      'a-light': (v) => accentHint(v, 'light'),
+      'a-dark': (v) => (v.trim() ? accentHint(v, 'dark') : null),
     },
     async onSubmit(values) {
       await wait(800);
       if (banner.is('readonly')) throw { message: 'Could not apply: maintenance holds every change until 15:00. Your accent is still here.' };
-      if (values['a-name'].trim() === 'plum') throw { fields: { 'a-name': 'An accent called "plum" already exists. Choose another name.' } };
+      if (values['a-name'].trim() in RektaAccents) throw { fields: { 'a-name': `An accent called "${values['a-name'].trim()}" already exists. Choose another name.` } };
+      // The light value as given; dark as given, or derived from the light one; under more contrast each derived.
       const light = values['a-light'].trim(), dark = values['a-dark'].trim();
-      customAccent = { name: values['a-name'].trim(), light, onLight: onFor(light), dark: dark || null, onDark: dark ? onFor(dark) : null };
+      const from = (seed, theme) => (C.deriveAccent(seed, { [theme]: THEMES_DATA[theme] }).themes[theme] || RektaAccents.ink[theme]);
+      const pairs = {
+        light: { accent: light, 'on-accent': onFor(light, THEMES_DATA.light) },
+        dark: dark ? { accent: dark, 'on-accent': onFor(dark, THEMES_DATA.dark) } : from(light, 'dark'),
+        'light-contrast': from(light, 'light-contrast'),
+      };
+      pairs['dark-contrast'] = from(pairs.dark.accent, 'dark-contrast');
+      customAccent = { name: values['a-name'].trim(), pairs };
       window.siteAccent(customAccent);
-      store.set('rekta-site-accent-def', customAccent); store.set('rekta-site-accent', 'custom');
+      store.set('rekta-site-accent-def', customAccent); prefs.set('accent', 'custom');
       accentGuard.clean();
       paintAccent();
       toasts.show(`Accent “${customAccent.name}” applied: the primary buttons and selected rows take it.`, { key: 'accent', from: $('#a-save') });
@@ -462,7 +476,7 @@
   }
   $('#a-remove').addEventListener('click', async () => {
     if (!(await Rekta.confirm({ kicker: 'accent', title: `Remove “${customAccent.name}”?`, text: 'The primary buttons and selected rows go back to ink. You can make it again.', ok: 'remove accent', cancel: 'keep it', safe: 'cancel' }))) return;
-    customAccent = null; window.siteAccent(null); store.set('rekta-site-accent-def', null); store.set('rekta-site-accent', null); paintAccent();
+    customAccent = null; window.siteAccent(null); store.set('rekta-site-accent-def', null); prefs.set('accent', 'product'); paintAccent();
     toasts.show('Accent removed.', { key: 'accent' });
   });
   // A form in a sheet: a close request asks while the name has been typed in.
@@ -472,7 +486,7 @@
   viewSheet.addEventListener('close', () => {
     if (viewSheet.returnValue === 'save' && $('#view-name').value.trim()) toasts.show(`View “${$('#view-name').value.trim()}” saved.`, { key: 'view', from: $('#view-open') });
   });
-  if (customAccent) { $('#a-name').value = customAccent.name; $('#a-light').value = customAccent.light; $('#a-dark').value = customAccent.dark || ''; accentGuard.clean(); }
+  if (customAccent) { $('#a-name').value = customAccent.name; $('#a-light').value = customAccent.pairs.light.accent; $('#a-dark').value = customAccent.pairs.dark.accent; accentGuard.clean(); }
 
   /* ---------- desktop: a tree, tooltips, context menus, a sortable list, ten thousand lines ---------- */
   const rowText = (li) => li.querySelector(':scope > .rk-tree-row').textContent.trim();
@@ -751,9 +765,9 @@
     const order = new Map(STEP_ORDER.map((n, i) => [n, i])); $$('#steps > li').sort((a, b) => order.get(a.querySelector('b').textContent) - order.get(b.querySelector('b').textContent)).forEach((li) => $('#steps').appendChild(li));
     hist.clear(); $('#lv-feed').checked = true; $('#lv-online').checked = true; feed.offline(false);
     tokTable.clear(); $('#tok-q').value = ''; tokGroup.set(() => false); tokFilter({ write: false });
-    customAccent = null; window.siteAccent(null); store.set('rekta-site-accent-def', null); store.set('rekta-site-accent', null);
+    customAccent = null; window.siteAccent(null); store.set('rekta-site-accent-def', null); prefs.set('accent', 'product');
+    $('#launcher-fills').checked = true; $('#launcher').dataset.rkFills = 'content';
     $('#a-name').value = ''; $('#a-light').value = ''; $('#a-dark').value = ''; accentForm.clear(); accentGuard.clean();
-    if (root.dataset.accent === 'plum') { delete root.dataset.accent; }
     presses = 0; $('#presses').textContent = '0'; seen.clear(); seen.add(home.current ? home.current.id : 'overview'); paintSeen(); $$('[data-pinned]', liveTiles).forEach((t) => t.remove()); pins = 0; paintPins();
     facets.select(0);
     $('#text-size').value = 100; $('#text-size').dispatchEvent(new Event('input', { bubbles: true }));

@@ -64,6 +64,46 @@ chat-like timeline) reads in time order and keeps the live contract.
   from the last row or heartbeat; a stopped trace says it has stopped
   ("finished at 14:20") rather than turning stale.
 
+## A notification centre
+
+A product that shows notifications from many senders (a desktop shell, a
+messaging hub, an admin console) keeps them in a centre: a list of
+current things, newest on top (above), not a log. Where it lives is the
+product's choice; a side panel is one place for it
+([states.md](states.md#side-panel)). Nothing here is tied to a
+notification protocol.
+
+- **Order:** by time alone, newest on top; no groups by sender, so the
+  order never jumps.
+- **A row:** the sender's picture or icon ([shell.md](shell.md#picture-icons)),
+  its title, the time in tabular figures at the end, one line of text cut
+  with an ellipsis; its actions as buttons with verbs. An entry with
+  progress (a file transfer, a job) carries its progress bar and its
+  status word, and updates in place.
+- **Arriving:** a new notification enters the centre at the top and shows
+  once as a toast; the toast region still holds one at a time, so the
+  others wait in the centre, not in a queue of toasts.
+- **Urgency:** low goes to the centre only, without a toast; normal shows
+  its toast for `timing.toast`; critical keeps its toast until it is
+  pressed or dismissed, and the next ones wait in the centre meanwhile.
+  None of them takes a status fill: urgency is not a status. A failure
+  the product itself reports keeps its status word and square, as
+  anywhere.
+- **Do not disturb** is a state of the whole app: a banner state
+  ("quiet", neutral: a choice, not a problem, so no status fill), with
+  "end" as its remedy. Toasts stop, the centre keeps collecting, and
+  critical ones still show.
+- **Removing:** each row has a quiet icon button (`close`, named
+  "dismiss"); Delete removes the focused row and focus moves to the next;
+  a row may also be dragged away towards its trailing edge
+  ([collections.md](collections.md#removing-entries)). Every removal is
+  followed by the undo toast. "dismiss all" is a quiet button at the end
+  of the list, and its toast undoes it too.
+- **Empty:** the empty state, said plainly ("No notifications.").
+
+How a product merges bursts, which screen shows the toast, and what it
+keeps for how long are its own decisions.
+
 ## Undo
 
 Anything a person does to data can be taken back: archive, edit, move,

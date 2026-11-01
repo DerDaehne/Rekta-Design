@@ -33,6 +33,7 @@ typedef struct list {
   void (*item)(int index, rk_list_item *out, void *user); void *user;
   void (*show)(rk_view *list, int index, void *user); void *show_user;
   void (*change)(rk_view *list, void *user); void *change_user;
+  void (*remove)(rk_view *list, int index, void *user); void *remove_user;
   /* a table */
   struct column { char *title; float width, x, w, set; unsigned flags; } *cols; int ncols, ccap;   /* set: a width given since */
   int head;                                                /* -1, or the column the keyboard is on in the head */
@@ -499,6 +500,11 @@ static bool list_input(rk_view *v, const rk_event *e, void *st) {
         case RK_KEY_PAGE_UP: set_active(v, l, l->active - page); return true;
         case RK_KEY_PAGE_DOWN: set_active(v, l, l->active + page); return true;
         case RK_KEY_SPACE: case RK_KEY_ENTER: list_click(v, l, l->active, e->mods); return true;
+        case RK_KEY_DELETE: case RK_KEY_BACKSPACE:              /* the app removes it, reversibly; the next row takes its place */
+          if (!l->remove || !l->count || ctrl) return false;
+          l->remove(v, l->active, l->remove_user);
+          if (l->count) set_active(v, l, l->active);
+          return true;
         case 'A':
           if (!ctrl) return false;
           for (int i = 0; i < l->count; i++) set_selected(l, i, true);
@@ -579,6 +585,7 @@ rk_view *rk_list(int count, void (*item)(int index, rk_list_item *out, void *use
 
 void rk_list_on_show(rk_view *v, void (*fn)(rk_view *, int, void *), void *user) { list *l = list_of(v); if (l) { l->show = fn; l->show_user = user; } }
 void rk_list_on_change(rk_view *v, void (*fn)(rk_view *, void *), void *user) { list *l = list_of(v); if (l) { l->change = fn; l->change_user = user; } }
+void rk_list_on_remove(rk_view *v, void (*fn)(rk_view *, int, void *), void *user) { list *l = list_of(v); if (l) { l->remove = fn; l->remove_user = user; } }
 bool rk_list_is_selected(rk_view *v, int index) { list *l = RK__EXPECT(list_of, v, "a list or a table"); return l && is_selected(l, index); }
 int rk_list_selection_count(rk_view *v) { list *l = RK__EXPECT(list_of, v, "a list or a table"); return l ? l->sel.n : 0; }
 

@@ -160,10 +160,59 @@ void rk_app_set_contrast(bool more) {
 void rk_app_set_motion(rk_motion_pref m) { rk__prefs.motion = m; changed(false); }
 bool rk_app_is_reduced_motion(void) { return rk__reduced(); }
 void rk_app_set_density(rk_density d) { rk__prefs.density = d; changed(false); }
+/* The accent's rules (docs/colour.md), as build.mjs --check-product holds a product's CSS to them: 3:1 on bg and
+   surface, its text 4.5:1 (7:1 under more contrast), apart from status. What breaks one is said, not refused. */
+static void accent_check(const char *from) {
+  static const char *const theme[4] = { "light", "dark", "light more-contrast", "dark more-contrast" }, *const kind[3] = { "", " under protanopia", " under deuteranopia" };
+  static const char *const status[4] = { "info", "success", "warning", "error" };
+  static const rk_role full[4] = { RK_ROLE_INFO_FULL, RK_ROLE_SUCCESS_FULL, RK_ROLE_WARNING_FULL, RK_ROLE_ERROR_FULL };
+  static const rk_role tile[4] = { RK_ROLE_INFO_TILE, RK_ROLE_SUCCESS_TILE, RK_ROLE_WARNING_TILE, RK_ROLE_ERROR_TILE };
+  for (int k = 0; k < 4; k++) {
+    rk_color a = rk__prefs.accent[k][0], on = rk__prefs.accent[k][1];
+    if (!a) continue;
+    const rk_color *c = (k >= 2 ? rk_tok_colors_contrast : rk_tok_colors)[k & 1];
+    double text = k >= 2 ? 7 : 4.5, r;
+    if ((r = rk__contrast(a, c[RK_ROLE_BG])) < 3 || (r = rk__contrast(a, c[RK_ROLE_SURFACE])) < 3) rk__warn("%s: #%06x is %.2f:1 on the ground in the %s theme, needs 3:1", from, (unsigned)(a >> 8), r, theme[k]);
+    if ((r = rk__contrast(on, a)) < text) rk__warn("%s: the text on #%06x is %.2f:1 in the %s theme, needs %.1f:1", from, (unsigned)(a >> 8), r, theme[k], text);
+    for (int v = 0; v < 3; v++) {
+      double need = v ? 0.05 : 0.09;
+      for (int s = 0; s < 4; s++) for (int f = 0; f < 2; f++) {
+        double d = rk__distance(a, c[f ? tile[s] : full[s]], v);
+        if (d < need) { rk__warn("%s: #%06x is %.3f from status-%s-%s%s in the %s theme, needs %.2f", from, (unsigned)(a >> 8), d, status[s], f ? "tile" : "full", kind[v], theme[k], need); goto next; }
+      }
+    next:;
+    }
+    double chroma, h = rk__hue(a, &chroma);
+    for (int s = 0; chroma >= 0.05 && s < 4; s++) {
+      double d = fabs(h - rk__hue(c[full[s]], NULL));
+      if (d > 180) d = 360 - d;
+      if (d < 20) rk__warn("%s: the hue of #%06x is %.0f degrees from %s's in the %s theme, needs 20", from, (unsigned)(a >> 8), d, status[s], theme[k]);
+    }
+  }
+}
 void rk_app_set_accent(rk_color light, rk_color dark) {
   look_changes();
-  rk__prefs.accent[0] = light; rk__prefs.accent[1] = dark ? dark : light;
+  rk_color c[2] = { light, dark ? dark : light };
+  for (int k = 0; k < 4; k++) {
+    /* the text on it: the theme's ground or ink, whichever stands out more */
+    const rk_color *t = (k >= 2 ? rk_tok_colors_contrast : rk_tok_colors)[k & 1];
+    rk_color a = c[k & 1];
+    rk__prefs.accent[k][0] = a;
+    rk__prefs.accent[k][1] = !a ? 0 : rk__contrast(a, t[RK_ROLE_BG]) >= rk__contrast(a, t[RK_ROLE_TEXT]) ? t[RK_ROLE_BG] : t[RK_ROLE_TEXT];
+  }
+  accent_check("rk_app_set_accent");
   changed(true);
+}
+bool rk_app_set_accent_named(const char *name) {
+  for (int i = 0; name && i < RK_TOK_ACCENT_COUNT; i++) {
+    if (strcmp(rk_tok_accents[i].name, name)) continue;
+    look_changes();
+    memcpy(rk__prefs.accent, rk_tok_accents[i].c, sizeof rk__prefs.accent);
+    changed(true);
+    return true;
+  }
+  rk__error("rk_app_set_accent_named: \"%s\" is not a named accent", name ? name : "(null)");
+  return false;
 }
 
 /* A domain's colour code: set as asked, and held to the rules the web's build.mjs --check-product holds a product's
@@ -220,12 +269,16 @@ static const rk_strings english = {
   { "idle", "active", "done", "waiting", "failed" },
   { NULL, "%s item", NULL, NULL, NULL, "%s items" },
   "minimize", "maximize", "close", "files", ".", ",", "%sK", "%sM", "%sB", "%sT", 1, english_plural,
+  "restore",
 };
 /* rk-strings-end */
 static rk_strings words;                                   /* the app's, copied; NULL fields: the English word */
 /* the words are every field from undo to group_min (a word added after plural, as rk_strings grows, is a second run) */
 #define WORD_COUNT ((offsetof(rk_strings, group_min) - offsetof(rk_strings, undo)) / sizeof(const char *))
 static const char **word_at(rk_strings *s, size_t i) { return (const char **)((char *)s + offsetof(rk_strings, undo)) + i; }
+/* the second run: the words added after plural, to the end of rk_strings */
+#define WORD2_COUNT ((sizeof(rk_strings) - offsetof(rk_strings, restore)) / sizeof(const char *))
+static const char **word2_at(rk_strings *s, size_t i) { return (const char **)((char *)s + offsetof(rk_strings, restore)) + i; }
 #define RK__PLURAL_COUNT (RK_PLURAL_OTHER + 1)
 
 /* A format takes exactly one %s and no other conversion ("%%" is a percent sign). */
@@ -239,6 +292,7 @@ const rk_strings *rk__words(void) {
   static rk_strings now;
   now = english;
   for (size_t i = 0; i < WORD_COUNT; i++) if (*word_at(&words, i)) *word_at(&now, i) = *word_at(&words, i);
+  for (size_t i = 0; i < WORD2_COUNT; i++) if (*word2_at(&words, i)) *word2_at(&now, i) = *word2_at(&words, i);
   bool forms = false;                                      /* a counting word the app gives is its own in every form */
   for (int f = 0; f < RK__PLURAL_COUNT; f++) forms |= words.items[f] != NULL;
   if (forms) memcpy(now.items, words.items, sizeof now.items);
@@ -317,6 +371,7 @@ void rk__count(char *out, size_t size, const char *const *forms, long n) {
 
 void rk_app_set_strings(const rk_strings *strings) {
   for (size_t i = 0; i < WORD_COUNT; i++) free((void *)*word_at(&words, i));
+  for (size_t i = 0; i < WORD2_COUNT; i++) free((void *)*word2_at(&words, i));
   memset(&words, 0, sizeof words);
   if (strings && RK__SIZED(strings, "rk_app_set_strings", "rk_strings")) {
     rk_strings in;
@@ -329,6 +384,7 @@ void rk_app_set_strings(const rk_strings *strings) {
       if (w && format && !one_s(w)) { rk__error("rk_app_set_strings: \"%s\" needs exactly one %%s: the English word stays", w); continue; }
       *word_at(&words, i) = w ? rk__strdup(w) : NULL;
     }
+    for (size_t i = 0; i < WORD2_COUNT; i++) { const char *w = *word2_at(&in, i); *word2_at(&words, i) = w ? rk__strdup(w) : NULL; }
     words.group_min = in.group_min; words.plural = in.plural;
   }
   changed(false);

@@ -52,6 +52,60 @@ the ink still shows; the neutral square keeps 3:1 on the ink (`--check`
 holds it), and under more contrast it takes the toast's words' colour. In a toast with a status, the tag reads on the fill as on a
 tile.
 
+### A level indicator
+
+A value the user changes with a key (volume, brightness, a keyboard
+layout, zoom in an app) shows its new level briefly: a toast without an
+action, its icon, the word, a meter and the value in tabular figures
+("volume ▬▬▬── 60%"). `toaster.level(word, value, { icon, text })` on
+the web, `rk_window_level()` in rekta-core.
+
+- **Once.** It arrives like a toast; pressed again while it shows, it
+  stays where it is and only its value glides, as progress does. Its own
+  time, `timing.level` (1.5s), starts again with each change: it confirms
+  what the key did, so it goes sooner than a toast.
+- **One at a time,** like any toast: it takes the open toast's place,
+  and a toast takes its. An undo that goes with a replaced toast stays in
+  the history (Ctrl/Cmd+Z).
+- **No status, no action.** The meter is in the toast's own colour, never
+  a status fill: a loud volume is not a warning.
+- **Where:** in the toast region, also over full-screen content. A
+  product whose app bar is always in view (a desktop shell) may show it
+  in the bar's middle instead, pinned while it shows (`indicate()`,
+  [behaviour.md](behaviour.md)): the same parts in one line. One form
+  per product, never both.
+
+## A notification from another program
+
+A product that shows what other programs report (a desktop shell, a
+hub, a messenger's web client) shows each notification as a toast, with
+the same layer, place and window, and these differences:
+
+- **It enters from the edge.** It came from outside, so it glides in
+  whole from the window's edge, without a fade, to where toasts stand,
+  and leaves back out the way it came (sideways the top edge; compact,
+  where toasts rise from the app bar, the bottom edge). The motion is
+  the toast's ([motion.md](motion.md)).
+- **Title and text.** The sender's title in semibold, the text under it
+  in at most two lines, then an ellipsis. All of it is read out; the cut
+  is only visual. Without a title it is one sentence, as any toast.
+- **The sender's icon, or a picture.** At the start, in the icon's 20px
+  field: the sender's icon in the toast's text colour (a single-colour,
+  symbolic one: in an ink strip a brand's colours mean nothing, and
+  colour in Rekta carries meaning), or, when the notification brings a
+  picture of its own (an avatar, an album cover), that picture, cropped
+  square. A picture is content and keeps its colours. Neither stands
+  without the sender's name in the title or the text.
+- **The text is pressable.** Pressing it runs the notification's default
+  action ("open what this is about"); without one, it closes the toast.
+  It tints on press and carries the focus ring, as the action does. The
+  rule of one action stays: a further action of the notification is the
+  toast's `act`, and the rest wait in the place the notification opens.
+
+```js
+toasts.show('Are we still on for 3?', { edge: true, title: 'Ana Ruiz', picture: '/avatars/ana.png', open: () => openChat('ana') });
+```
+
 ## Floating surfaces
 
 Menus, the command palette, the places list and a combobox's list float
@@ -81,12 +135,84 @@ next to the control that opened them.
   carries a tick without a box instead: it is the field's value, not a
   setting. A key hint sits at the end in `rk-meta`. A hairline
   separates groups.
+- **An icon per item** stands at the start, 20px like `.rk-icon`,
+  `space-s` before the words (after a chosen option's square, which is
+  the menu's own state). Once one item of a list has an icon, every row
+  starts its words at the same edge. An icon stands beside its word,
+  never instead of it.
+- **Words another program supplies** (a status area's menu, a plug-in's
+  context menu) are content: they stand as the supplier writes them, in
+  its case. The menu's own words (the back row's "back", its labels) stay lowercase.
+- **A second level** stands in place of the list, in the same surface,
+  never as a second surface beside it: one form for every width and for
+  touch, where a cascade has no room. The item that has one ends in a
+  chevron pointing on, in place of a key hint; it opens with →, Enter,
+  Space or a press. The level's rows replace the list under a back row
+  (a chevron pointing back and the level's name, a hairline below it);
+  the surface keeps its width and its place (moved back inside the
+  window only when the level does not fit there). ← and Escape go back
+  one level, to the item that opened it; Tab or a click outside close
+  every level. Levels may nest, each the same way. The change has no
+  motion: the surface stays put, and the back row says where you are.
+  A side panel that chooses in place (a setting's choices replacing its
+  list) follows the same rule.
 - **Keys:** ↑ ↓ (wrapping), Home End, letters jump to the next item
   starting with it, Enter or Space chooses, Escape closes and returns
-  focus to the control, Tab closes and moves on. A click outside closes.
+  focus to the control (in a second level, goes back one level), Tab
+  closes and moves on. A click outside closes.
 - A disabled item stays in the list, greyed, and says why in its label
   when it is not obvious ("print (needs a printer)"). The app bar's
   "more" does this for a disabled control it holds.
+
+## Side panel
+
+A surface that slides in from the trailing edge, full height, for
+switches, sliders and lists that belong to the whole app or system: quick
+settings, notifications ([live.md](live.md#a-notification-centre)).
+It is a sheet from the side: `<dialog class="rk-sheet rk-sheet--side">`,
+opened with `showModal()` and run by `sheet()` like any sheet.
+
+- **Look:** `bg`, like a sheet, with a hairline on its leading edge; no
+  status fill. Two tile units wide plus its padding
+  (`2 × tile-unit + space-s + 2 × space-m`), never under `pane-min` and
+  never wider than the window (a phone: the whole width). The width is
+  the same on every facet, so the panel never jumps; a longer text is cut
+  with an ellipsis (`data-rk-tip="overflow"` shows it whole).
+- **Motion:** whole from the trailing edge over `duration-moderate`, and
+  back the same way ([motion.md](motion.md)).
+- **Behaves as a sheet:** it shades the rest (`shading` and the blur), a
+  tap on the shading closes it, it holds focus, Escape closes it, it sits
+  in the top layer and has a visible way out (its close button).
+- **Content:** groups, each a heading over rows with a toggle
+  (`rk-toggle`) or a slider (`rk-range`); never tiles as switches (a tile
+  never toggles). It may carry a pivot for its facets (settings and
+  notifications), in the facet level.
+- **Input it cannot hold** (a password for a new network) is asked in a
+  sheet over it.
+
+### Choosing in place
+
+Picking one of several values in a group (a network, a device, an
+output) does not open anything over the panel: the group gives its place
+to the list of values, under a row "back · name" (`.rk-in-back`), and the
+list slides in like the next item of a place. The back row, Escape and
+← go back up to the group, with focus on the control that opened the
+list; levels may nest. It is the tree's ← (up to the parent) and the
+compact split's crumb, in one surface. `inPlace(scope)` does it on the
+web: a control with `data-rk-in="ID"` opens the list with that id in the
+place of its group (`[data-rk-group]`). The second level of a menu can
+work the same way.
+
+```html
+<section class="rk-region" data-rk-group aria-labelledby="g-net">
+  <h2 class="rk-kicker" id="g-net">network</h2>
+  <ul class="rk-rows"><li><button class="rk-btn rk-btn--quiet" data-rk-in="nets" data-rk-in-name="wi-fi">wi-fi · home</button></li></ul>
+</section>
+<section class="rk-region" id="nets" aria-label="wi-fi" hidden>…the networks…</section>
+```
+
+rekta-core has no side panel yet: its sheets come from the top
+([platforms.md](platforms.md#what-rekta-core-does-not-draw-yet)).
 
 ## Layers
 
@@ -100,7 +226,7 @@ From bottom to top:
 | `layer.banner` | The status banner |
 | `layer.toast` | The toast region |
 | `layer.float` | Floating surfaces (menus, lists) where the browser has no popover top layer |
-| Top layer | Sheets (modal dialogs), floating surfaces (popovers, where the browser has them), in the order they opened |
+| Top layer | Sheets (modal dialogs) and side panels, floating surfaces (popovers, where the browser has them), in the order they opened |
 
 - One modal at a time. A floating surface may open from inside a sheet;
   it sits above it.

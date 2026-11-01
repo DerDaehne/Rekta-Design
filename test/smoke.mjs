@@ -192,6 +192,37 @@ ok((await focused(p)) === 'notes-title', 'focus on the place title', await focus
 await p.click('[data-rk-place=notes] .rk-crumb'); await p.waitForTimeout(TURN);
 ok(await visible(p, 'home') && (await p.evaluate(() => location.hash)) === '', 'the crumb goes back home');
 ok((await focused(p)) === 'tile-notes', 'focus back on the opening tile', await focused(p));
+// The tapped part carries its title into the place it opens (#145): the title stands while the rest turns away, then
+// travels on ease-pivot-glide over duration-moderate to the new place's title and lands on its pixels; the new place's
+// parts arrive from the middle of the travel on. Back runs it the other way. Nothing is left behind, and focus lands.
+{
+  const copies = () => p.evaluate(() => [...document.body.children].filter((c) => c.getAttribute('aria-hidden') === 'true' && c.style.position === 'fixed').map((c) => c.textContent.trim()));
+  await p.click('#tile-notes');
+  let leaving = null;
+  await until(p, async () => (leaving = await p.evaluate(() => ({ source: getComputedStyle(document.querySelector('#tile-notes [data-rk-carry]')).opacity }))) && leaving.source === '0', 800);
+  const standing = await copies();
+  let flight = null;
+  await until(p, async () => (flight = await p.evaluate(() => {
+    const t = document.querySelector('#notes-title'), copy = [...document.body.children].find((c) => c.style.position === 'fixed' && c.textContent.trim() === 'Rekta 0.2');
+    if (!copy) return null;
+    const a = copy.getAnimations()[0], r = t.getBoundingClientRect(), delays = [...document.querySelectorAll('[data-rk-place=notes] [data-rk-turn]')].map((u) => parseFloat(u.style.getPropertyValue('--_rk-turn-delay')));
+    return { at: [Math.round(parseFloat(copy.style.left) - r.left), Math.round(parseFloat(copy.style.top) - r.top)].join(), lands: a.effect.getKeyframes().at(-1).transform, d: a.effect.getTiming().duration, ease: a.effect.getTiming().easing, title: getComputedStyle(t).opacity, first: Math.min(...delays) };
+  })), 2000);
+  const settled = () => p.evaluate(() => ({ title: getComputedStyle(document.querySelector('#notes-title')).opacity, source: document.querySelector('#tile-notes [data-rk-carry]').style.opacity, left: [...document.body.children].filter((c) => c.style.position === 'fixed' && c.getAttribute('aria-hidden') === 'true').length }));
+  let after = null;
+  await until(p, async () => (after = await settled()) && after.title === '1' && !after.left, 3000);
+  ok(leaving.source === '0' && standing.includes('0.2'), 'leaving, the tapped tile\'s title stands while its tile turns away', JSON.stringify({ leaving, standing }));
+  ok(flight && flight.at === '0,0' && flight.lands === 'none' && flight.d === 400 && flight.ease === 'cubic-bezier(0.65, 0, 0.35, 1)' && flight.title === '0' && flight.first >= 200, 'the title travels to the new place\'s title on ease-pivot-glide and lands on its pixels; the rest arrive from the middle', JSON.stringify(flight));
+  ok(after.title === '1' && after.source === '' && !after.left && (await focused(p)) === 'notes-title', 'once landed the title is the place\'s own and has focus; nothing is left behind', JSON.stringify(after));
+  await p.waitForTimeout(TURN);
+  await p.click('[data-rk-place=notes] .rk-crumb');
+  let back = [];
+  await until(p, async () => (back = await copies()).includes('Rekta 0.2'), 1500);
+  let home = null;
+  await until(p, async () => (home = await p.evaluate(() => ({ tile: getComputedStyle(document.querySelector('#tile-notes [data-rk-carry]')).opacity, title: document.querySelector('#notes-title').style.opacity, left: [...document.body.children].filter((c) => c.style.position === 'fixed' && c.getAttribute('aria-hidden') === 'true').length }))) && home.tile === '1' && !home.left, 3000);
+  ok(back.includes('Rekta 0.2') && home.tile === '1' && home.title === '' && !home.left && (await visible(p, 'home')) && (await focused(p)) === 'tile-notes', 'back, the place\'s title travels into the tile that opened it, and focus returns to the tile', JSON.stringify({ back, home }));
+  await p.waitForTimeout(TURN);
+}
 
 // Browser back and forward; Escape; a navigation during a turn.
 await p.click('#tile-tokens'); await p.waitForTimeout(TURN);
@@ -514,6 +545,61 @@ const inline = await p.evaluate(async () => {
 });
 ok(inline.waits === '0' && inline.glides && !inline.path && inline.after === '1' && !inline.leavePath, 'a bar control fades in after its neighbours make room, and leaves by a fade, without a path', JSON.stringify(inline));
 ok(stripped.arrive, 'arrive() is exported for framework routers', JSON.stringify(stripped));
+// Tiles building in (#144): each rises arrive-distance over duration-long on ease-landing and is whole after
+// duration-short on the same curve; they follow one another duration-greet apart, four steps at most.
+const built = await p.evaluate(() => {
+  const place = document.createElement('div'); place.style.cssText = 'position:fixed;left:0;top:0;width:1000px;z-index:-1';
+  place.innerHTML = `<div class="rk-tiles">${[0, 1, 2, 3, 4, 5].map((i) => `<div class="rk-tile" style="--rk-i:${i}"><span class="rk-stat">${i}</span></div>`).join('')}</div>`;
+  document.querySelector('.rk').append(place);
+  Rekta.arrive(place);
+  const tiles = [...place.querySelectorAll('.rk-tile')], anim = (t, name) => t.getAnimations().find((a) => a.animationName === name);
+  const rise = anim(tiles[0], 'rk-build-in'), fade = anim(tiles[0], 'rk-build-in-fade');
+  const out = { rise: Math.round(rise.effect.getTiming().duration), fade: Math.round(fade.effect.getTiming().duration), ease: [rise, fade].map((a) => a.effect.getKeyframes()[0].easing).join(' '), delays: tiles.map((t) => Math.round(anim(t, 'rk-build-in').effect.getTiming().delay)).join() };
+  rise.pause(); fade.pause(); rise.currentTime = 0; fade.currentTime = 0;
+  out.from = getComputedStyle(tiles[0]).transform; out.hidden = getComputedStyle(tiles[0]).opacity;
+  rise.currentTime = fade.currentTime = out.fade;
+  out.wholeAt = getComputedStyle(tiles[0]).opacity; out.still = new DOMMatrix(getComputedStyle(tiles[0]).transform).f;
+  place.remove();
+  return out;
+});
+ok(built.rise === 600 && built.fade === 250 && built.ease === 'cubic-bezier(0.1, 0.9, 0.2, 1) cubic-bezier(0.1, 0.9, 0.2, 1)' && built.delays === '0,75,150,225,225,225', 'tiles build in over duration-long on ease-landing, whole after duration-short, duration-greet apart, four steps', JSON.stringify(built));
+ok(built.from === 'matrix(1, 0, 0, 1, 0, 32)' && built.hidden === '0' && built.wholeAt === '1' && built.still > 0 && built.still < 3, 'a tile rises arrive-distance; it is whole while it still settles', JSON.stringify(built));
+// A panorama never ends flush on a section edge (#147): at every width the window's edge falls inside a section,
+// space-xl from either of its ends, the gaps even and never below space-m; when everything fits, nothing scrolls.
+const edges = await p.evaluate(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const place = document.createElement('div'); place.className = 'rk-place'; place.style.cssText = 'position:fixed;left:0;top:0;height:400px;z-index:-1';
+  place.innerHTML = `<div class="rk-panorama" aria-label="edges" style="--rk-sec-w:500px;height:300px">${'<section class="rk-sec"><p>a</p></section>'.repeat(4)}<div class="rk-panorama-end"></div></div>`;
+  document.querySelector('.rk').append(place);
+  const pan = place.firstChild, api = Rekta.panorama(pan), out = { bad: [], changed: 0, fits: 0, worst: 0 };
+  for (let w = 800; w <= 2400; w += 10) {
+    place.style.width = `${w}px`; await frame();
+    const r = [...pan.querySelectorAll('.rk-sec')].map((s) => s.getBoundingClientRect()), edge = pan.getBoundingClientRect().left + pan.clientWidth;
+    const gaps = r.slice(1).map((s, i) => Math.round(s.left - r[i].right)), gap = gaps[0];
+    const even = gaps.every((g) => g === gap), inside = r.some((s) => s.left + 48 <= edge + 0.5 && edge - 0.5 <= s.right - 48);
+    if (pan.hasAttribute('data-rk-fit')) { out.fits += 1; if (r[3].right > edge + 1 || gap < 16 || gap > 48 || !even) out.bad.push(`${w}: fit, gap ${gap}`); continue; }
+    if (!inside || gap < 16 || !even) out.bad.push(`${w}: edge ${Math.round(edge - r[0].left)}, gaps ${gaps}`);
+    if (gap !== 48) { out.changed += 1; out.worst = Math.max(out.worst, Math.abs(gap - 48)); }
+  }
+  api.destroy(); place.remove();
+  return out;
+});
+ok(!edges.bad.length && edges.changed > 0 && edges.fits > 0 && edges.worst <= 96, 'a panorama never ends flush on a section edge: a piece of the next section shows, the gaps even and at least space-m', JSON.stringify(edges));
+// The gesture hint (#149): nudge-distance the gesture's way and back, duration-short each way on ease-landing, added
+// to the part's own transform; it rests where it was.
+const nudged = await p.evaluate(async () => {
+  const t = document.createElement('div'); t.className = 'rk-tile'; t.style.cssText = 'position:fixed;left:200px;top:200px;width:150px;height:150px;z-index:-1';
+  document.querySelector('.rk').append(t);
+  const run = Rekta.nudge(t, 'left'), a = t.getAnimations()[0], k = a.effect.getKeyframes();
+  const out = { to: k[1].transform, at: k[1].computedOffset, ease: k[0].easing, back: k[1].easing, composite: a.effect.composite, d: a.effect.getTiming().duration };
+  await run;
+  out.after = t.getAnimations().length; out.rest = getComputedStyle(t).transform;
+  try { Rekta.nudge(t, 'sideways'); out.unknown = 'accepted'; } catch { out.unknown = 'refused'; }
+  t.remove();
+  return out;
+});
+ok(nudged.to === 'translate(-16px, 0px)' && nudged.at === 0.5 && nudged.ease === 'cubic-bezier(0.1, 0.9, 0.2, 1)' && nudged.back === nudged.ease && nudged.composite === 'add' && nudged.d === 500, 'a gesture hint moves nudge-distance the gesture\'s way and back on ease-landing, added to the part\'s own transform', JSON.stringify(nudged));
+ok(nudged.after === 0 && nudged.rest === 'none' && nudged.unknown === 'refused', 'a gesture hint rests where the part was; an unknown direction is refused', JSON.stringify(nudged));
 
 // A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.
 const codes = await p.evaluate(() => {
@@ -763,6 +849,183 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
   const back = await p.evaluate(() => { const b = document.querySelector('#t-print'); Rekta.disable(b, null); return { tip: b.dataset.rkTip, off: b.getAttribute('aria-disabled'), desc: b.getAttribute('aria-describedby'), why: !!document.querySelector('#t-bar .rk-why') }; });
   ok(back.tip === 'print it' && back.off === null && back.desc === null && !back.why, 'enabled again: its own tooltip comes back', JSON.stringify(back));
   await p.evaluate(() => { window.tBar.destroy(); document.querySelector('#t-bar').remove(); });
+}
+// Shell patterns (#120 #121 #128 #133 #142): an app bar with a centred control, a short indicator, a count that peeks,
+// giving way to full screen; a notification from another program; a menu's second level and icons; a called place;
+// the display step.
+{
+  const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';
+  const two = await p.evaluate(async (icon) => {
+    const wait = (t) => new Promise((r) => setTimeout(r, t));
+    const el = document.createElement('div'); el.className = 'rk-appbar'; el.id = 't-two'; el.style.cssText = 'width:900px;left:0;right:auto;bottom:200px';
+    el.innerHTML = `<span class="rk-ab-status"><i class="rk-pulse"></i><span class="rk-ab-k">live</span></span><span class="rk-ab-mid" id="t2-mid">a mode that says a little more</span>`
+      + `<button class="rk-ab" id="t2-a" type="button">${icon}<span>alpha</span></button><button class="rk-ab" id="t2-b" type="button" data-rk-priority="2">${icon}<span>beta</span></button>`
+      + `<button class="rk-ab" id="t2-clock" type="button" data-rk-align="center"><span>12:45<br>1 November</span></button>`
+      + `<button class="rk-ab" id="t2-c" type="button">${icon}<span>gamma</span></button><button class="rk-ab" id="t2-d" type="button" data-rk-priority="3"><span data-rk-peek>3</span><span>notifications</span></button>`
+      + `<button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+    document.querySelector('.rk').append(el);
+    const bar = Rekta.appbar(el); await wait(100);
+    const centre = (id) => { const r = el.querySelector(id).getBoundingClientRect(); return r.left + r.width / 2; };
+    const b = el.getBoundingClientRect(), c = el.querySelector('#t2-clock').getBoundingClientRect();
+    const r = { wide: Math.abs(centre('#t2-clock') - (b.left + b.width / 2)), moved: el.querySelectorAll('[data-rk-overflow]').length, mid: el.querySelector('#t2-mid').getBoundingClientRect().right <= c.left + 0.5 };
+    el.style.width = '470px'; bar.layout(); await wait(50);
+    const c2 = el.querySelector('#t2-clock').getBoundingClientRect(), b2 = el.getBoundingClientRect();
+    const lead = [...el.querySelectorAll('#t2-a, #t2-b, .rk-ab-status')].filter((x) => x.getClientRects().length).every((x) => x.getBoundingClientRect().right <= c2.left + 0.5);
+    const trail = [...el.querySelectorAll('#t2-c, #t2-d, .rk-ab-more')].filter((x) => x.getClientRects().length).every((x) => x.getBoundingClientRect().left >= c2.right - 0.5);
+    r.narrow = { centre: Math.abs(c2.left + c2.width / 2 - (b2.left + b2.width / 2)), lead, trail, full: el.getAttribute('data-rk-full'), clock: el.querySelector('#t2-clock').hasAttribute('data-rk-overflow'),
+      more: !el.querySelector('.rk-ab-more').hidden, lastIsMore: [...el.children].filter((x) => x.getClientRects().length && !x.matches('.rk-ab-menu')).pop().matches('.rk-ab-more'),
+      midShown: getComputedStyle(el.querySelector('#t2-mid')).display !== 'none', midBefore: el.querySelector('#t2-mid').getBoundingClientRect().right <= c2.left + 0.5 };
+    // A count peeks; an indicator stands in place of the clock and turns back; the bar gives way to full screen.
+    const d = el.querySelector('#t2-d'); d.removeAttribute('data-rk-overflow');
+    const peek = Rekta.tileUpdate(d, () => { d.querySelector('[data-rk-peek]').textContent = '4'; });
+    await wait(30); r.peeks = d.querySelector('[data-rk-peek]').getAnimations().length > 0 || !!d.querySelector('[aria-hidden="true"][data-rk-peek]'); await peek;
+    const meter = document.createElement('span'); meter.className = 'rk-meter'; meter.style.setProperty('--rk-v', 0.4);
+    const clock = el.querySelector('#t2-clock');
+    Rekta.indicate(clock, meter); await wait(30);
+    r.flips = clock.getAnimations().length > 0; await wait(400);
+    r.stands = clock.hasAttribute('data-rk-indicating') && clock.contains(meter) && clock.querySelector(':scope > span').hidden && meter.getBoundingClientRect().width > 100;
+    await wait(Rekta.tokens.ms('--rk-duration-level') + 700);
+    r.back = !clock.hasAttribute('data-rk-indicating') && !clock.contains(meter) && !clock.querySelector(':scope > span').hidden;
+    el.setAttribute('data-rk-away', ''); await wait(Rekta.tokens.ms('--rk-duration-short') + 100);
+    r.away = el.getBoundingClientRect().top >= b2.bottom - 1 && getComputedStyle(el).visibility === 'hidden';
+    bar.destroy(); el.remove();
+    return r;
+  }, icon);
+  ok(two.wide < 1 && two.moved === 0 && two.mid, 'a centred control stands at the bar\'s centre; the middle line ends before it', JSON.stringify(two));
+  ok(two.narrow.centre < 1 && two.narrow.lead && two.narrow.trail && !two.narrow.clock, 'narrower: each side keeps to its half, the centred control stays', JSON.stringify(two.narrow));
+  ok(two.narrow.more && two.narrow.lastIsMore && /start|end/.test(two.narrow.full || ''), 'a side that does not fit gives its own controls away; more ends the trailing side', JSON.stringify(two.narrow));
+  ok(two.narrow.full === 'end' ? two.narrow.midShown && two.narrow.midBefore : !two.narrow.midShown, 'the middle line goes only when the leading side is full, and cuts before the centred control', JSON.stringify(two.narrow));
+  ok(two.peeks, 'a count in a control (data-rk-peek) peeks');
+  ok(two.flips && two.stands && two.back, 'indicate(): the indicator turns in, stands in place, and turns back after timing.level', JSON.stringify(two));
+  ok(two.away, 'data-rk-away: the bar glides out over its edge and takes no focus');
+
+  // A notification from another program: from the edge, title over two lines at most, a picture, a pressable text.
+  const note = await p.evaluate(async () => {
+    const wait = (t) => new Promise((r) => setTimeout(r, t));
+    const region = document.createElement('div'); region.className = 'rk-toasts'; region.setAttribute('role', 'status'); region.id = 't-toasts';
+    document.querySelector('.rk').append(region);
+    const t = Rekta.toaster(region); let opened = 0, ended = '';
+    const pic = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#c33"/></svg>');
+    const long = 'Are we still on for three? I booked the room by the window, and the projector is there too. Bring the drafts and the numbers from last week, please.';
+    const n = t.show(long, { edge: true, title: 'Ana Ruiz', picture: pic, open: () => { opened += 1; }, onEnd: (why) => { ended = why; } });
+    await wait(20);
+    const el = n.el, msg = el.querySelector('.rk-toast-msg'), text = el.querySelector('.rk-toast-text'), img = el.querySelector('.rk-toast-pic img');
+    const anim = el.getAnimations()[0], kf = anim && anim.effect.getKeyframes();
+    const r = { from: el.dataset.rkFrom, button: msg.tagName, opacity: kf ? kf.every((k) => k.opacity === undefined) : false, edge: kf ? kf[0].transform : '',
+      title: getComputedStyle(el.querySelector('.rk-toast-title')).fontWeight, lines: Math.round(text.getBoundingClientRect().height / parseFloat(getComputedStyle(text).lineHeight)), whole: msg.textContent.includes('last week'),
+      pic: img ? [img.getBoundingClientRect().width, img.getBoundingClientRect().height, getComputedStyle(img).objectFit] : null };
+    await Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {})));
+    r.inPlace = Math.abs(el.getBoundingClientRect().top - region.getBoundingClientRect().top) < 1;
+    msg.click(); await wait(10);
+    r.opened = opened === 1 && ended === 'opened' && el.dataset.rkPhase === 'leaving';
+    const anim2 = el.getAnimations()[0]; r.out = anim2 ? anim2.animationName : '';
+    await wait(300);
+    const plain = t.show('A plain one.'); r.plain = plain.el.querySelector('.rk-toast-msg').tagName === 'P' && !plain.el.hasAttribute('data-rk-from');
+    const quiet = t.show('No default action', { edge: true, icon: 'bell', onEnd: (why) => { ended = why; } }); await wait(300);
+    r.icon = !!quiet.el.querySelector('.rk-toast-pic svg.rk-icon'); quiet.el.querySelector('.rk-toast-msg').click(); await wait(10);
+    r.closes = ended === 'dismissed';
+    t.destroy(); await wait(300); region.remove();
+    return r;
+  });
+  ok(note.from === 'edge' && note.opacity && /translateY\(calc\(-100%/.test(note.edge) && note.inPlace, 'a notification enters whole from the edge, without a fade, to where toasts stand', JSON.stringify(note));
+  ok(note.title === '600' && note.lines === 2 && note.whole, 'its title is semibold, its text cut after two lines and still all there', JSON.stringify(note));
+  ok(note.pic && note.pic[0] === 20 && note.pic[1] === 20 && note.pic[2] === 'cover' && note.icon, 'the sender\'s icon or its own picture in the 20px field, cropped square', JSON.stringify(note));
+  ok(note.button === 'BUTTON' && note.opened && note.out === 'rk-toast-edge-out' && note.closes && note.plain, 'pressing the text runs the default action (opened), else closes; it leaves the way it came; a plain toast is unchanged', JSON.stringify(note));
+
+  // A menu's second level in place; an icon per item.
+  await p.evaluate((icon) => {
+    const wrap = document.createElement('div'); wrap.id = 't-menu'; wrap.style.cssText = 'position:fixed;left:40px;top:120px';
+    wrap.innerHTML = `<button class="rk-btn" id="t-menu-btn" type="button">tray</button><div id="t-tray"><button class="rk-menu-item" role="menuitem" id="t-m-net" aria-haspopup="menu" aria-controls="t-lvl">${icon.replace('<svg', '<svg class="rk-icon"')}network</button>`
+      + `<button class="rk-menu-item" role="menuitem" id="t-m-sound">sound</button><div class="rk-menu-level" id="t-lvl" role="menu" aria-label="network" hidden>`
+      + '<button class="rk-menu-item" role="menuitemradio" aria-checked="true" id="t-m-home">Home</button><button class="rk-menu-item" role="menuitemradio" aria-checked="false" id="t-m-office">Office 5G</button></div></div>';
+    document.querySelector('.rk').append(wrap);
+    window.tMenuChosen = ''; window.tMenu = Rekta.menu(wrap.querySelector('#t-menu-btn'), wrap.querySelector('#t-tray'), { onSelect: (i) => { window.tMenuChosen = i.id; } });
+  }, icon);
+  await p.focus('#t-menu-btn'); await p.keyboard.press('Enter'); await p.waitForTimeout(250);
+  const lv0 = await p.evaluate(() => {
+    const m = document.querySelector('#t-tray'), net = m.querySelector('#t-m-net'), snd = m.querySelector('#t-m-sound'), words = (b) => { const t = document.createRange(); t.selectNodeContents(b.lastChild); return t.getBoundingClientRect().left; };
+    return { focus: document.activeElement.id, chevron: getComputedStyle(net, '::after').content !== 'none', aligned: Math.abs(words(net) - words(snd)) < 1, w: m.getBoundingClientRect().width, l: m.getBoundingClientRect().left, t: m.getBoundingClientRect().top };
+  });
+  await p.keyboard.press('ArrowRight'); await p.waitForTimeout(100);
+  const lv1 = await p.evaluate(() => {
+    const m = document.querySelector('#t-tray'), back = m.querySelector('.rk-menu-back'), shown = (id) => m.querySelector(id).getClientRects().length > 0;
+    return { focus: document.activeElement.id, back: back ? [back.textContent, back.getAttribute('aria-label'), shown('.rk-menu-back')] : null, list: shown('#t-m-net') || shown('#t-m-sound'), expanded: m.querySelector('#t-m-net').getAttribute('aria-expanded'),
+      w: m.getBoundingClientRect().width, l: m.getBoundingClientRect().left, t: m.getBoundingClientRect().top, anims: m.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length };
+  });
+  ok(lv0.focus === 't-m-net' && lv0.chevron && lv0.aligned, 'an item with a level ends in a chevron; once one item has an icon, every row\'s words start at one edge', JSON.stringify(lv0));
+  ok(lv1.focus === 't-m-home' && lv1.back && lv1.back[0] === 'network' && lv1.back[1] === 'back: network' && lv1.back[2] && !lv1.list && lv1.expanded === 'true', '→ opens the level in place, under a back row with its name', JSON.stringify(lv1));
+  ok(Math.abs(lv1.w - lv0.w) < 1 && Math.abs(lv1.l - lv0.l) < 1 && Math.abs(lv1.t - lv0.t) < 1 && lv1.anims === 0, 'the surface keeps its width and place; nothing moves', JSON.stringify([lv0, lv1]));
+  await p.keyboard.press('Escape'); await p.waitForTimeout(50);
+  const lv2 = await p.evaluate(() => ({ focus: document.activeElement.id, open: document.querySelector('#t-tray').matches(':popover-open'), level: document.querySelector('#t-lvl').hidden }));
+  ok(lv2.focus === 't-m-net' && lv2.open && lv2.level, 'Escape goes back one level, to the item that opened it', JSON.stringify(lv2));
+  await p.keyboard.press('Enter'); await p.waitForTimeout(50); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await p.waitForTimeout(50);
+  const lv3 = await p.evaluate(() => ({ chosen: window.tMenuChosen, open: document.querySelector('#t-tray').matches(':popover-open'), level: document.querySelector('#t-lvl').hidden, focus: document.activeElement.id }));
+  ok(lv3.chosen === 't-m-office' && !lv3.open && lv3.level && lv3.focus === 't-menu-btn', 'a choice in the level closes every level, focus back to the control', JSON.stringify(lv3));
+  await p.evaluate(() => { window.tMenu.destroy(); document.querySelector('#t-menu').remove(); });
+
+  // A place called up turns at half the pace; the display step is twice nav-active, light, tabular.
+  const called = await p.evaluate(async () => {
+    const make = (name) => { const m = document.createElement('main'); m.className = 'rk-place'; m.dataset.rkPlace = name; m.style.cssText = 'position:fixed;inset:0;background:var(--rk-bg);z-index:5'; m.innerHTML = '<h1 class="rk-title">A place</h1><div class="rk-tiles"><a class="rk-tile" href="#">one</a><a class="rk-tile" href="#">two</a></div>'; document.body.append(m); return m; };
+    // The pace is read from the durations the turn gives its parts, which a busy runner does not stretch; a wall-clock
+    // ratio would carry the fixed cost of a frame or two in every turn.
+    const dur = (place) => parseFloat(place.querySelector('.rk-tile').style.getPropertyValue('--_rk-turn-duration'));
+    const time = async (opts) => {
+      const a = make('t-a'), b = make('t-b'); b.hidden = true;
+      const out = Rekta.turn.leave(a, opts), dOut = dur(a); await out;
+      const into = Rekta.turn.enter(b, opts), dIn = dur(b); await into;
+      a.remove(); b.remove(); return dOut + dIn;
+    };
+    const full = await time({}), half = await time({ called: true });
+    const a = make('t-c'); a.setAttribute('data-rk-called', ''); a.hidden = true;
+    const plain = make('t-d'); plain.hidden = true;
+    const p1 = Rekta.turn.enter(plain), dPlain = dur(plain); await p1; plain.remove();
+    const p2 = Rekta.turn.enter(a), byAttr = dur(a) / dPlain; await p2; a.remove();
+    const d = document.createElement('p'); d.className = 'rk-display'; d.textContent = '12:45'; document.querySelector('.rk-place:not([hidden])').append(d);
+    const s = getComputedStyle(d), r = { full, half, byAttr, size: parseFloat(s.fontSize), weight: s.fontWeight, nums: s.fontVariantNumeric, nav: 2 * Rekta.tokens.px('--rk-font-size-nav-active') };
+    d.remove();
+    return r;
+  });
+  ok(Math.abs(called.half / called.full - 0.5) < 0.02 && Math.abs(called.byAttr - 0.5) < 0.02, 'a place called up (data-rk-called) turns at half the pace', JSON.stringify(called));
+  ok(Math.abs(called.size - called.nav) < 1 && called.weight === '300' && called.nums === 'tabular-nums', '.rk-display: twice nav-active, light, tabular figures', JSON.stringify(called));
+  // A month to look at (#127): day-cell squares, seven wide, today framed 2px inside its cell.
+  const month = await p.evaluate(() => {
+    const t = document.createElement('table'); t.className = 'rk-month';
+    t.innerHTML = '<caption>October 2026</caption><thead><tr>' + ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => `<th scope="col">${d}</th>`).join('') + '</tr></thead>'
+      + '<tbody><tr><td></td><td></td><td></td><td>1</td><td>2</td><td>3</td><td aria-current="date">4</td></tr></tbody>';
+    document.querySelector('.rk-place:not([hidden])').append(t);
+    const cell = t.querySelector('td').getBoundingClientRect(), today = getComputedStyle(t.querySelector('[aria-current]'));
+    const r = { cell: [cell.width, cell.height], width: t.getBoundingClientRect().width, unit: Rekta.tokens.px('--rk-day-cell'), frame: [today.outlineWidth, today.outlineOffset, today.outlineStyle] };
+    t.remove();
+    return r;
+  });
+  // A preview tile (#123): two units wide, the app's picture fills the top, the title one line and cut at the foot.
+  const prev = await p.evaluate(() => {
+    const g = document.createElement('div'); g.className = 'rk-tiles'; g.style.cssText = 'width:800px';
+    const pic = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#36c"/></svg>');
+    g.innerHTML = `<button class="rk-tile rk-tile--preview" type="button"><span class="rk-tile-preview"><img src="${pic}" alt=""></span><span class="rk-tile-foot"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-file"/></svg><span>A very long title of an open document that does not fit on one line at all.odt</span></span></button>`;
+    document.querySelector('.rk-place:not([hidden])').append(g);
+    const t = g.firstChild, tr = t.getBoundingClientRect(), pr = t.querySelector('.rk-tile-preview').getBoundingClientRect(), title = t.querySelector('.rk-tile-foot > span');
+    const unit = Rekta.tokens.px('--rk-tile-unit'), gap = Rekta.tokens.px('--rk-space-s');
+    const r = { w: tr.width, want: 2 * unit + gap, top: pr.top - tr.top, fills: Math.abs(pr.width - tr.width) < 1 && pr.height > tr.height / 2, cut: title.scrollWidth > title.clientWidth && getComputedStyle(title).textOverflow === 'ellipsis' && title.getBoundingClientRect().height < 30 };
+    g.remove();
+    return r;
+  });
+  ok(Math.abs(prev.w - prev.want) < 1 && prev.top < 1 && prev.fills && prev.cut, 'a preview tile: two units wide, the preview fills its top, the title one line and cut', JSON.stringify(prev));
+  // The session's actions (#132): a sheet across the full width at the top, on surface, in the banner's geometry.
+  const sess = await p.evaluate(async () => {
+    const d = document.createElement('dialog'); d.className = 'rk-sheet rk-session'; d.setAttribute('aria-labelledby', 't-s-word');
+    d.innerHTML = '<form method="dialog"><span class="rk-banner-head"><span class="rk-banner-word" id="t-s-word">session</span></span><p class="rk-actions"><button class="rk-btn rk-btn--primary" value="lock">lock</button><button class="rk-btn rk-btn--quiet" value="off">power off</button></p>'
+      + '<button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close">×</button></form>';
+    document.querySelector('.rk').append(d);
+    const s = Rekta.sheet(d); d.showModal(); await new Promise((r) => setTimeout(r, 400));
+    const r = d.getBoundingClientRect(), word = d.querySelector('.rk-banner-word').getBoundingClientRect(), acts = d.querySelector('.rk-actions').getBoundingClientRect();
+    const probe = document.createElement('i'); probe.style.color = 'var(--rk-surface)'; document.body.append(probe); const surface = getComputedStyle(probe).color; probe.remove();
+    const out = { top: r.top, width: Math.abs(r.width - document.documentElement.clientWidth), bg: getComputedStyle(d).backgroundColor === surface, row: acts.left > word.right && Math.abs(acts.top - word.top) < 40, anim: d.getAnimations().map((a) => a.animationName) };
+    d.close(); await new Promise((res) => setTimeout(res, 400)); s.destroy(); d.remove();
+    return out;
+  });
+  ok(sess.top < 1 && sess.width < 2 && sess.bg && sess.row && sess.anim.includes('rk-banner-in'), 'the session bar: full width at the top, on surface, the word then the actions, in as the banner comes', JSON.stringify(sess));
+  ok(month.unit === 36 && Math.abs(month.cell[0] - 36) < 0.5 && Math.abs(month.cell[1] - 36) < 0.5 && Math.abs(month.width - 7 * 36) < 0.5 && month.frame.join() === '1px,-3px,solid', '.rk-month: day-cell squares, seven wide, today framed inside its cell', JSON.stringify(month));
 }
 await p.mouse.move(5, 5);
 await p.click('#tree > li:nth-child(1) > .rk-tree-row'); await p.waitForTimeout(100);
@@ -1022,13 +1285,19 @@ ok((await focused(p)) === 'a-light', 'a summary link focuses its field');
 await p.fill('#a-light', '#f7cb47'); await p.waitForTimeout(100);
 const hint = (id) => p.evaluate((i) => document.querySelector(`#${i}`).closest('.rk-field').querySelector('.rk-hint').textContent, id);
 ok((await hint('a-light')).includes(':1 on the light ground'), 'the contrast is checked for real', await hint('a-light'));
-await p.fill('#a-light', '#1f6f5c'); await p.waitForTimeout(100);
+// A colour that reads as a status is refused with the status and a colour that holds (docs/colour.md, #97 #152).
+await p.fill('#a-light', '#1d6b80'); await p.waitForTimeout(100);
+ok(/too close to the status colour for “done”.*Try #[0-9a-f]{6}/.test(await hint('a-light')), 'a colour too close to a status is refused, with the status and a derived one', await hint('a-light'));
+await p.fill('#a-light', '#2762ec'); await p.waitForTimeout(100);
+ok((await hint('a-light')).includes('“active”') && (await hint('a-light')).includes('Its hue is a status hue'), 'a status hue cannot be derived away', await hint('a-light'));
+await p.fill('#a-light', '#1a6680'); await p.waitForTimeout(100);
 ok(!(await p.evaluate(() => document.querySelector('#a-light').closest('.rk-field').dataset.status)), 'corrected as you type');
-await p.fill('#a-name', 'plum'); await p.click('#a-save'); await p.waitForTimeout(1200);
+await p.fill('#a-name', 'teal'); await p.click('#a-save'); await p.waitForTimeout(1200);
 ok((await hint('a-name')).includes('already exists'), 'the server says no at the field', await hint('a-name'));
 await p.fill('#a-name', 'sea'); await p.click('#a-save');
 await p.waitForFunction(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase]) .rk-toast-msg'); return t && t.textContent.startsWith('Accent'); }, null, { timeout: 4000 }).catch(() => {});
-ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#1f6f5c', 'the accent applies', `${await toast(p)} / ${await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim() + ' ' + document.documentElement.dataset.accent + ' ' + localStorage.getItem('rekta-prefs'))}`);
+await until(p, () => p.evaluate(() => document.documentElement.dataset.accent === 'custom'), 2000);   /* the accent pref cross-fades in */
+ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#1a6680', 'the accent applies', `${await toast(p)} / ${await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim() + ' ' + document.documentElement.dataset.accent + ' ' + localStorage.getItem('rekta-prefs'))}`);
 ok(!(await p.getAttribute('#a-remove', 'aria-disabled')), 'remove can act now');
 await p.click('#a-remove'); await p.waitForTimeout(400);
 ok((await sheetTitle(p)) === 'Remove “sea”?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep it', 'confirm: the safe answer first');
@@ -1278,9 +1547,85 @@ ok(/^calc\(30%\)$|^30%/.test(waits.size) && waits.dots === '0.168s cubic-bezier(
 
 // Look: prefs, density, motion, the accent slot.
 await go(p, 'look');
-await p.check('input[name=theme][value=dark]'); await p.check('input[name=accent][value=plum]'); await p.waitForTimeout(300);
-ok((await p.evaluate(() => document.documentElement.dataset.theme)) === 'dark' && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#c38aed', 'theme dark, the plum accent in dark', await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim()));
-await p.screenshot({ path: join(shots, 'dark-plum.png') });
+await p.check('input[name=theme][value=dark]'); await p.check('input[name=accent][value=teal]'); await p.waitForTimeout(300);
+ok((await p.evaluate(() => document.documentElement.dataset.theme)) === 'dark' && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#00aba9', 'theme dark, the named accent teal in dark', await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim()));
+await p.screenshot({ path: join(shots, 'dark-teal.png') });
+// Named accents (#151): each pair as tokens/rekta.accents.json has it, in each theme and contrast set, over a
+// product's own accent; product goes back to it.
+const named = await p.evaluate(async () => {
+  const root = document.documentElement, { accents } = JSON.parse(document.querySelector('#themes-data').textContent), out = { bad: [] };
+  const was = { theme: root.dataset.theme, contrast: root.dataset.contrast, accent: root.dataset.accent };
+  const own = document.createElement('style'); own.textContent = ':root { --rk-accent: #7a2a8c; --rk-on-accent: #ffffff; }'; document.head.append(own);
+  const read = (n) => getComputedStyle(root).getPropertyValue(`--rk-${n}`).trim();
+  for (const [name, a] of Object.entries(accents)) for (const theme of ['light', 'dark', 'light-contrast', 'dark-contrast']) {
+    root.dataset.theme = theme.startsWith('dark') ? 'dark' : 'light';
+    if (theme.endsWith('contrast')) root.dataset.contrast = 'more'; else delete root.dataset.contrast;
+    Rekta.prefs.set('accent', name, { remember: false });
+    if (read('accent') !== a[theme].accent || read('on-accent') !== a[theme]['on-accent']) out.bad.push(`${name} ${theme}: ${read('accent')} ${read('on-accent')}`);
+  }
+  root.dataset.theme = 'light'; delete root.dataset.contrast;
+  Rekta.prefs.set('accent', 'product', { remember: false });
+  out.product = read('accent'); out.attr = root.hasAttribute('data-accent');
+  own.remove();
+  Object.entries(was).forEach(([k, v]) => { if (v === undefined) delete root.dataset[k]; else root.dataset[k] = v; });
+  return out;
+});
+ok(!named.bad.length && named.product === '#7a2a8c' && !named.attr, 'a named accent sets its pair in every theme and contrast set, over the product\'s own; product goes back to it', JSON.stringify(named));
+// Content fills (#157): an opted-in set without a status takes them, ink and secondary text at AA on each; a status
+// tile in the set, the switch off, or more contrast make the whole set plain.
+const fills = await p.evaluate(() => {
+  const root = document.documentElement, was = root.dataset.contrast;
+  const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const names = ['teal', 'steel', 'violet', 'plum', 'rose'];
+  const set = document.createElement('div'); set.className = 'rk-tiles'; set.dataset.rkFills = 'content';
+  set.innerHTML = names.map((n) => `<div class="rk-tile" data-rk-fill="${n}"><span class="rk-stat"><b>1</b><span>app</span></span><span class="rk-meta">m</span></div>`).join('') + '<div class="rk-tile"><b>plain</b></div>';
+  document.querySelector('#colour').append(set);
+  const tiles = [...set.children], bg = (t) => getComputedStyle(t).backgroundColor, surface = rgb('var(--rk-surface)');
+  tiles.forEach((t) => { t.style.transition = 'none'; });   /* the fill as it is, not on its way */
+  const out = {
+    on: names.every((n, i) => bg(tiles[i]) === rgb(`var(--rk-content-${n})`) && bg(tiles[i]) !== surface) && bg(tiles[5]) === surface,
+    low: Math.min(...tiles.slice(0, 5).flatMap((t) => [...t.querySelectorAll('b, .rk-stat span, .rk-meta')].map((e) => ratio(getComputedStyle(e).color, bg(t))))),
+  };
+  set.dataset.rkFills = 'plain'; out.plain = tiles.every((t) => bg(t) === surface);
+  set.dataset.rkFills = 'content'; tiles[5].dataset.status = 'error';
+  out.withStatus = tiles.slice(0, 5).every((t) => bg(t) === surface) && bg(tiles[5]) === rgb('var(--rk-status-error-tile)');
+  delete tiles[5].dataset.status; root.dataset.contrast = 'more';
+  out.contrast = tiles.slice(0, 5).every((t) => bg(t) === rgb('var(--rk-surface)'));
+  if (was === undefined) delete root.dataset.contrast; else root.dataset.contrast = was;
+  set.remove();
+  return out;
+});
+ok(fills.on && fills.low >= 4.5, 'content fills: an opted-in set without a status takes them, every text on them at AA', JSON.stringify(fills));
+ok(fills.plain && fills.withStatus && fills.contrast, 'one switch, a status tile in the set, or more contrast: the whole set is plain', JSON.stringify(fills));
+ok(await p.evaluate(() => { const s = document.querySelector('#launcher'); return s.dataset.rkFills === 'content' && getComputedStyle(s.firstElementChild).backgroundColor !== getComputedStyle(s.lastElementChild).backgroundColor; }), 'the showcase\'s launcher shows content fills');
+// An accent surface (#154): the accent with on-accent words; secondary text, a primary button turned over and a
+// focus ring all read on it, in light and under more contrast with a named accent.
+const surf = await p.evaluate(() => {
+  const root = document.documentElement, was = { contrast: root.dataset.contrast, accent: root.dataset.accent };
+  const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const s = document.createElement('header'); s.className = 'rk-accent-surface';
+  s.innerHTML = '<h2 class="rk-title">welcome</h2><p class="rk-meta">since 9:00</p><p class="rk-facts">3 new</p><button class="rk-btn rk-btn--primary" type="button">start</button><button class="rk-btn" type="button">later</button>';
+  document.querySelector('#colour').append(s);
+  s.querySelectorAll('.rk-btn').forEach((b) => { b.style.transition = 'none'; });
+  const measure = () => {
+    const fill = getComputedStyle(s).backgroundColor, [, meta, facts, primary, plain] = s.children, ps = getComputedStyle(primary);
+    return {
+      fill: fill === rgb('var(--rk-accent)'), words: getComputedStyle(s).color === rgb('var(--rk-on-accent)'),
+      low: Math.min(...[s.firstElementChild, meta, facts, plain].map((e) => ratio(getComputedStyle(e).color, fill))),
+      turned: ps.backgroundColor === rgb('var(--rk-on-accent)') && ps.color === rgb('var(--rk-accent)'),
+    };
+  };
+  const out = { now: measure() };
+  root.dataset.accent = 'magenta'; root.dataset.contrast = 'more'; out.more = measure();
+  Object.entries(was).forEach(([k, v]) => { if (v === undefined) delete root.dataset[k]; else root.dataset[k] = v; });
+  s.remove();
+  return out;
+});
+ok(surf.now.fill && surf.now.words && surf.now.turned && surf.now.low >= 4.5 && surf.more.turned && surf.more.low >= 7, 'an accent surface: on-accent words at 4.5:1 (7:1 under more contrast), a primary button turned over', JSON.stringify(surf));
 const btnH = () => p.evaluate(() => Math.round(document.querySelector('#reset').getBoundingClientRect().height));
 ok((await btnH()) === 32, 'fine pointer: compact controls', await btnH());
 await p.check('input[name=density][value=comfortable]'); await p.waitForTimeout(200);
@@ -1291,7 +1636,7 @@ const fade = await p.evaluate(async () => {           /* Rekta's view-transition
   return { during, after: root.hasAttribute('data-rk-crossfade'), vt: typeof document.startViewTransition === 'function' };
 });
 ok(!fade.vt || (fade.during && !fade.after), 'the root carries data-rk-crossfade only while Rekta cross-fades', JSON.stringify(fade));
-await p.check('input[name=density][value=auto]'); await p.check('input[name=theme][value=system]'); await p.check('input[name=accent][value=ink]');
+await p.check('input[name=density][value=auto]'); await p.check('input[name=theme][value=system]'); await p.check('input[name=accent][value=product]');
 ok((await p.evaluate(() => JSON.parse(localStorage.getItem('rekta-prefs')).theme)) === 'system', 'prefs remembered');
 
 // Sheet: the shading cancels; reset.
@@ -1380,7 +1725,7 @@ await d2.close();
 
 // Icons and the app shell: the sprite, the gallery, the title bar, installable, offline.
 const sh = await open();
-ok((await sh.evaluate(() => document.querySelectorAll('symbol[id^="rk-i-"]').length)) === 51 && (await sh.evaluate(() => document.querySelectorAll('.icon-gallery li').length)) === 51, 'fifty-one icons in the sprite and the gallery');
+ok((await sh.evaluate(() => document.querySelectorAll('symbol[id^="rk-i-"]').length)) === 63 && (await sh.evaluate(() => document.querySelectorAll('.icon-gallery li').length)) === 63, 'sixty-three icons in the sprite and the gallery');
 ok(await sh.evaluate(() => { const u = document.querySelector('.icon-gallery use'); const b = u.closest('svg').getBBox(); return b.width > 4 && b.height > 4; }), 'an icon draws from the sprite');
 ok((await sh.evaluate(() => getComputedStyle(document.querySelector('#titlebar')).display)) === 'none', 'the title bar hides in a browser tab');
 await sh.evaluate(() => document.documentElement.setAttribute('data-rk-titlebar', '')); await sh.waitForTimeout(100);
@@ -1569,6 +1914,154 @@ await q.evaluate(() => window.site.files.expandAll(false)); await q.waitForTimeo
 ok(await q.evaluate(() => { window.site.files.expandAll(true); return [...document.querySelectorAll('#tree [role=group]')].some((u) => u.getAnimations().length); }), 'a tree branch opens to its height');
 await q.close();
 
+// Shell patterns (#89 to #98): a side panel from the trailing edge with a list chosen in place, a level indicator,
+// entries removed by Delete, a button or a drag, a launch tile, the title bar's window buttons and inactive name, and
+// running things in an app bar without a live state.
+const sp = await open();
+const panel = await sp.evaluate(async () => {
+  const wait = (t) => new Promise((res) => setTimeout(res, t));
+  const d = document.createElement('dialog'); d.className = 'rk-sheet rk-sheet--side'; d.id = 't-panel';
+  d.innerHTML = '<form method="dialog"><button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close">×</button>'
+    + '<section class="rk-region" data-rk-group id="t-group"><p class="rk-kicker">network</p><button class="rk-btn" type="button" id="t-wifi" data-rk-in="t-nets" data-rk-in-name="wi-fi">wi-fi · home</button></section>'
+    + '<section class="rk-region" id="t-nets" aria-label="wi-fi" hidden><button class="rk-btn" type="button" id="t-net1">home</button><button class="rk-btn" type="button">office</button></section></form>';
+  document.querySelector('.rk').append(d);
+  Rekta.sheet(d); window.tIn = Rekta.inPlace(d);
+  d.showModal();
+  const moving = d.getAnimations().length > 0;
+  await wait(600);
+  const r = d.getBoundingClientRect();
+  return { moving, right: Math.round(r.right), vw: innerWidth, h: Math.round(r.height), vh: innerHeight, w: Math.round(r.width), want: Math.round(2 * Rekta.tokens.px('--rk-tile-unit') + Rekta.tokens.px('--rk-space-s') + 2 * Rekta.tokens.px('--rk-space-m')) };
+});
+ok(panel.moving && panel.right === panel.vw && panel.h === panel.vh && panel.w === panel.want, 'a side panel slides in at the trailing edge, full height, two tile units wide with its padding', JSON.stringify(panel));
+await sp.click('#t-wifi'); await sp.waitForTimeout(400);
+const chose = await sp.evaluate(() => ({ group: document.querySelector('#t-group').hidden, list: !document.querySelector('#t-nets').hidden, back: (document.querySelector('#t-nets > .rk-in-back') || {}).textContent, focus: document.activeElement.id, depth: window.tIn.depth }));
+ok(chose.group && chose.list && chose.back === 'back · wi-fi' && chose.focus === 't-net1' && chose.depth === 1, 'choosing in place: the list takes the group\'s place under "back · name", focus in it', JSON.stringify(chose));
+await sp.keyboard.press('Escape'); await sp.waitForTimeout(400);
+const back1 = await sp.evaluate(() => ({ open: document.querySelector('#t-panel').open, group: !document.querySelector('#t-group').hidden, list: document.querySelector('#t-nets').hidden, focus: document.activeElement.id }));
+ok(back1.open && back1.group && back1.list && back1.focus === 't-wifi', 'Escape goes back to the group first; the panel stays open', JSON.stringify(back1));
+await sp.click('#t-wifi'); await sp.waitForTimeout(400); await sp.keyboard.press('ArrowLeft'); await sp.waitForTimeout(300);
+ok(await sp.evaluate(() => !document.querySelector('#t-group').hidden && document.activeElement.id === 't-wifi'), '← goes back too');
+const leaving = await sp.evaluate(async () => {
+  const d = document.querySelector('#t-panel'); d.close();
+  // What it does is read from its own leaving animation, not sampled at a moment a busy runner may not have reached.
+  const own = d.getAnimations().find((a) => !(a instanceof CSSAnimation) && !a.effect.pseudoElement), frames = own ? own.effect.getKeyframes() : [];
+  return { phase: d.dataset.rkPhase, to: frames.length ? frames.at(-1).transform : '', fades: frames.some((f) => 'opacity' in f), d: own ? own.effect.getTiming().duration : 0 };
+});
+ok(leaving.phase === 'leaving' && leaving.to === 'translateX(100%)' && !leaving.fades && leaving.d > 0, 'it leaves whole towards its trailing edge', JSON.stringify(leaving));
+ok(await until(sp, async () => !(await sp.evaluate(() => document.querySelector('#t-panel').open))), 'then it is closed');
+await sp.evaluate(() => document.querySelector('#t-panel').remove());
+// The level indicator: one toast, again with the same word it stays and its value changes; it goes timing.level after.
+await sp.evaluate(() => {
+  const reg = document.createElement('div'); reg.className = 'rk-toasts'; reg.setAttribute('role', 'status'); reg.id = 't-toasts';
+  document.querySelector('.rk').append(reg); window.tToasts = Rekta.toaster(reg);
+  window.tToasts.level('volume', 0.4, { icon: 'theme' });
+});
+await sp.waitForTimeout(300);
+const lv1 = await sp.evaluate(() => { const t = document.querySelector('#t-toasts .rk-toast'); window.tLevelEl = t; return { level: t.classList.contains('rk-toast--level'), word: t.querySelector('.rk-toast-msg').textContent, fig: t.querySelector('.rk-toast-level').textContent, v: t.querySelector('.rk-meter').style.getPropertyValue('--rk-v'), icon: !!t.querySelector('svg.rk-icon'), act: !!t.querySelector('button') }; });
+ok(lv1.level && lv1.word === 'volume' && lv1.fig === '40%' && lv1.v === '0.4' && lv1.icon && !lv1.act, 'a level indicator: icon, word, meter and figure, no action', JSON.stringify(lv1));
+await sp.waitForTimeout(1000);
+await sp.evaluate(() => window.tToasts.level('volume', 0.6));
+await sp.waitForTimeout(800);
+const lv2 = await sp.evaluate(() => { const all = document.querySelectorAll('#t-toasts .rk-toast'); return { n: all.length, same: all[0] === window.tLevelEl, fig: all[0].querySelector('.rk-toast-level').textContent, leaving: all[0].hasAttribute('data-rk-phase') }; });
+ok(lv2.n === 1 && lv2.same && lv2.fig === '60%' && !lv2.leaving, 'pressed again, it stays and only its value changes; its time starts again', JSON.stringify(lv2));
+ok(await until(sp, async () => (await sp.evaluate(() => document.querySelectorAll('#t-toasts .rk-toast').length)) === 0, 2500), 'it goes timing.level after the last change');
+await sp.evaluate(() => { window.tToasts.destroy(); document.querySelector('#t-toasts').remove(); });
+// Removing entries: Delete moves focus on, a button, a drag past half; a short drag glides back and clicks nothing.
+await sp.evaluate(() => {
+  const ul = document.createElement('ul'); ul.className = 'rk-rows'; ul.id = 't-rem'; ul.style.cssText = 'position:fixed;left:200px;top:200px;width:300px;background:var(--rk-bg);z-index:5;margin:0';
+  ul.innerHTML = ['a', 'b', 'c', 'd'].map((x) => `<li id="t-r-${x}" tabindex="0"><span>${x}</span><button class="rk-btn rk-btn--icon rk-btn--quiet" type="button" data-rk-remove aria-label="dismiss">×</button></li>`).join('');
+  document.body.append(ul);
+  window.tRemoved = []; window.tClicks = 0;
+  ul.addEventListener('click', () => { window.tClicks += 1; });
+  Rekta.removable(ul, { onRemove: (li, { left }) => { window.tRemoved.push(`${li.id.slice(4)}:${left}`); li.remove(); } });
+  document.querySelector('#t-r-b').focus();
+});
+await sp.keyboard.press('Delete');
+const del = await sp.evaluate(() => ({ removed: window.tRemoved.join(), focus: document.activeElement.id, attr: document.querySelector('#t-rem').hasAttribute('data-rk-removable'), ta: getComputedStyle(document.querySelector('#t-r-a')).touchAction }));
+ok(del.removed === 'b:false' && del.focus === 't-r-c' && del.attr && del.ta === 'pan-y', 'Delete removes the focused entry, focus moves to the next', JSON.stringify(del));
+await sp.click('#t-r-a [data-rk-remove]');
+ok((await sp.evaluate(() => window.tRemoved.join())) === 'b:false,a:false', 'its remove button removes it');
+const dragRow = async (sel, dx) => {
+  const b = await sp.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; }, sel);
+  await sp.mouse.move(b.x, b.y); await sp.mouse.down();
+  for (let i = 1; i <= 8; i += 1) { await sp.mouse.move(b.x + (dx * i) / 8, b.y); await sp.waitForTimeout(16); }
+  const mid = await sp.evaluate((s) => new DOMMatrixReadOnly(getComputedStyle(document.querySelector(s)).transform).m41, sel);
+  await sp.mouse.up();
+  return mid;
+};
+const followed = await dragRow('#t-r-c', 60);
+await sp.waitForTimeout(400);
+const short = await sp.evaluate(() => ({ removed: window.tRemoved.length, there: !!document.querySelector('#t-r-c'), x: new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#t-r-c')).transform).m41, clicks: window.tClicks }));
+ok(Math.round(followed) === 60 && short.removed === 2 && short.there && short.x === 0 && short.clicks === 1, 'dragged a little, the entry follows and glides back; the drag clicks nothing', JSON.stringify({ followed, ...short }));
+await dragRow('#t-r-d', 200);
+ok(await until(sp, async () => (await sp.evaluate(() => window.tRemoved.join())) === 'b:false,a:false,d:true'), 'dragged past half its width, it leaves that way and is removed', await sp.evaluate(() => window.tRemoved.join()));
+await sp.evaluate(() => document.querySelector('#t-rem').remove());
+// A launch tile: icon at the top leading corner, the count at the trailing one, the name at the foot; peek only when wide.
+const launch = await sp.evaluate(() => {
+  const g = document.createElement('div'); g.className = 'rk-tiles'; g.style.cssText = 'width:700px';
+  const pic = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="%23c33"/></svg>');
+  const tile = (cls, id) => `<a class="rk-tile rk-launch ${cls}" id="${id}" href="#"><img class="rk-picture" src="${pic}" alt=""><span class="rk-launch-count">12</span><span class="rk-launch-peek">Ana: the build is green again</span><span class="rk-launch-name">Mail</span></a>`;
+  g.innerHTML = tile('rk-w2', 't-l2') + tile('', 't-l1') + tile('rk-w4', 't-l4') + tile('rk-h2', 't-lh');
+  document.querySelector('[data-rk-place="home"] .rk-sec').append(g);
+  const box = (s) => document.querySelector(s).getBoundingClientRect();
+  const t = box('#t-l2'), i = box('#t-l2 .rk-picture'), c = box('#t-l2 .rk-launch-count'), n = box('#t-l2 .rk-launch-name'), ih = box('#t-lh .rk-picture');
+  const r = {
+    icon: [Math.round(i.width), Math.round(i.left - t.left), Math.round(i.top - t.top)], count: Math.round(t.right - c.right), name: Math.round(t.bottom - n.bottom),
+    peekWide: box('#t-l2 .rk-launch-peek').height > 0, peekSmall: getComputedStyle(document.querySelector('#t-l1 .rk-launch-peek')).display,
+    w4: Math.round(box('#t-l4').width), unit: Rekta.tokens.px('--rk-tile-unit'), gap: Rekta.tokens.px('--rk-space-s'), large: Math.round(ih.width),
+  };
+  g.remove();
+  return r;
+});
+ok(launch.icon.join() === '48,12,12' && launch.count === 12 && launch.name === 12 && launch.peekWide && launch.peekSmall === 'none' && launch.large === 96, 'a launch tile: its icon at the tile icon size, the count and the name at its corners, peek only when wide', JSON.stringify(launch));
+ok(launch.w4 === Math.round(4 * launch.unit + 3 * launch.gap), 'a tile four units wide spans four units sideways', JSON.stringify(launch));
+// The title bar: window buttons touch-target wide, close quiet like the others; another window active, the name steps back.
+const tbar = await sp.evaluate(async () => {
+  const wait = (t) => new Promise((res) => setTimeout(res, t));
+  const bar = document.createElement('div'); bar.className = 'rk-titlebar rk-titlebar--inline'; bar.style.cssText = 'position:fixed;left:0;top:300px;width:600px;z-index:5';
+  bar.innerHTML = '<span class="rk-titlebar-name"><b>Rekta</b> Design</span><span class="rk-titlebar-place">today</span><span class="rk-titlebar-win">'
+    + ['minus', 'maximize', 'close'].map((n) => `<button class="rk-btn rk-btn--icon rk-btn--quiet" type="button" aria-label="${n}">${Rekta.icon(n).outerHTML}</button>`).join('') + '</span>';
+  document.body.append(bar);
+  const t = Rekta.titlebar(bar); await wait(50);
+  const btns = [...bar.querySelectorAll('.rk-titlebar-win > button')];
+  const r = { widths: btns.map((b) => Math.round(b.getBoundingClientRect().width)), end: Math.round(bar.getBoundingClientRect().right - btns[2].getBoundingClientRect().right), quiet: getComputedStyle(btns[2]).color === getComputedStyle(btns[0]).color, active: !bar.hasAttribute('data-rk-inactive') };
+  const name = bar.querySelector('.rk-titlebar-name'), place = bar.querySelector('.rk-titlebar-place'), had = document.hasFocus;
+  r.nameBefore = getComputedStyle(name).color;
+  document.hasFocus = () => false; dispatchEvent(new Event('blur')); await wait(50);
+  r.inactive = bar.hasAttribute('data-rk-inactive'); r.nameAfter = getComputedStyle(name).color; r.place = getComputedStyle(place).color;
+  document.hasFocus = had; dispatchEvent(new Event('focus')); await wait(50);
+  r.back = !bar.hasAttribute('data-rk-inactive');
+  t.destroy(); bar.remove();
+  return r;
+});
+ok(tbar.widths.join() === '44,44,44' && tbar.end === 0 && tbar.quiet, 'window buttons: touch-target wide at the bar\'s end, close as quiet as the others', JSON.stringify(tbar));
+ok(tbar.active && tbar.inactive && tbar.nameAfter === tbar.place && tbar.nameAfter !== tbar.nameBefore && tbar.back, 'another window active: the name steps back to the place\'s colour, and comes back', JSON.stringify(tbar));
+// Running things in an app bar without a live state: in order of start, the one in front marked, the commands at the
+// end; when the bar is full they move into "more" before any command, the one in front last.
+const run = await sp.evaluate(async () => {
+  const wait = (t) => new Promise((res) => setTimeout(res, t));
+  const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';
+  const el = document.createElement('div'); el.className = 'rk-appbar'; el.style.cssText = 'width:700px;left:0;right:auto;bottom:200px';
+  el.innerHTML = `<button class="rk-ab rk-ab-run" id="t-w1" type="button">${icon}<span>notes</span></button><button class="rk-ab rk-ab-run" id="t-w2" type="button" aria-current="true">${icon}<span>terminal</span></button>`
+    + `<button class="rk-ab rk-ab-run" id="t-w3" type="button">${icon}<span>files</span></button><button class="rk-ab" id="t-cmd" type="button">${icon}<span>search</span></button>`
+    + `<button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+  document.querySelector('.rk').append(el);
+  const a = Rekta.appbar(el); await wait(100);
+  const col = (s) => getComputedStyle(el.querySelector(s)).color, root = getComputedStyle(document.documentElement);
+  const toRgb = (v) => { const p = document.createElement('i'); p.style.color = v; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; };
+  const r = {
+    front: col('#t-w2') === toRgb(root.getPropertyValue('--rk-text-primary')), back: col('#t-w1') === toRgb(root.getPropertyValue('--rk-text-contrast-high')),
+    end: Math.round(el.getBoundingClientRect().right - el.querySelector('#t-cmd').getBoundingClientRect().right - parseFloat(getComputedStyle(el).paddingRight)),
+  };
+  el.style.width = '330px'; a.layout(); await wait(100);
+  r.moved = ['#t-w1', '#t-w2', '#t-w3', '#t-cmd'].map((s) => (el.querySelector(s).hasAttribute('data-rk-overflow') ? 1 : 0)).join('');
+  a.destroy(); el.remove();
+  return r;
+});
+ok(run.front && run.back && run.end === 0, 'running things: the one in front in the primary colour, the others stepped back; with no live state the commands still stand at the end', JSON.stringify(run));
+ok(run.moved === '1011' || run.moved === '1010' || run.moved === '0010', 'a full bar moves running things into "more" first, the latest started first, the one in front last', JSON.stringify(run));
+await sp.close();
+
 // Reduced motion: a place change is instant, never skipped.
 const r = await open({ reducedMotion: 'reduce' });
 await r.click('#tile-notes'); await r.waitForTimeout(150);
@@ -1582,6 +2075,14 @@ ok(await r.evaluate(() => {
   box.remove();
   return still && lefts.join() === '235,247,259';
 }), 'reduced motion: the beads stand still in the middle');
+ok(await r.evaluate(async () => {
+  const t = document.createElement('div'); t.className = 'rk-tile'; t.style.cssText = 'position:fixed;left:0;top:0;width:150px;height:150px';
+  document.querySelector('.rk').append(t);
+  await Rekta.nudge(t, 'right');
+  const still = !t.getAnimations().length;
+  t.remove();
+  return still;
+}), 'reduced motion: no gesture hint');
 await r.close();
 
 await browser.close();

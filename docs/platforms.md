@@ -15,6 +15,8 @@ line of CSS. This page is the guide for doing that.
 | `tokens/rekta.tokens.json` | The source, in [DTCG](https://tr.designtokens.org/format/) format, with aliases and a `$description` on every token. | Token tools (Style Dictionary, Tokens Studio, Figma plugins), and anyone generating code. |
 | `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme (`light`, `dark`, and `light-contrast`, `dark-contrast` for more contrast, each complete) and density. | Native implementations. Start here. |
 | `dist/rekta.tokens.css` | The resolved values as `--rk-` custom properties, with theme, density and reduced-motion switching. | Web projects. |
+| `tokens/rekta.accents.json` | The named accents: an accent and the text on it per theme and contrast set, checked ([colour.md](colour.md#named-accents)). Resolved as `accents` in `dist/rekta.tokens.json`. | Anyone offering an accent by name. |
+| `dist/rekta.color.js` | The colour rules as a module without dependencies: contrast, OKLab distance and colour blindness, apart from status, an accent's check and derivation. | A product that checks or derives colours at run time; the reference for porting them. |
 | `docs/*.md` | Rules: what each part means, how it behaves, what it must never do. | Everyone. |
 
 `npm run build` (or `node scripts/build.mjs`) writes `dist/`. The build
@@ -64,7 +66,8 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 ## Switching
 
 Six inputs pick values. Each has a system source and an in-app
-override; the override wins.
+override; the override wins. A seventh, the accent, has no system
+source (below).
 
 | Input | System source | Override | Effect |
 |---|---|---|---|
@@ -74,6 +77,7 @@ override; the override wins.
 | Contrast | The OS "increase contrast" setting (`NSWorkspace.accessibilityDisplayShouldIncreaseContrast` on macOS, `UIAccessibility.isDarkerSystemColorsEnabled` on iOS, GNOME's `high-contrast`). Not Windows' contrast themes: those are forced colours, the system's own. | `system`, `more`, `normal` | More: picks `themes.light-contrast` or `themes.dark-contrast` (the theme with its contrast set over it): every text pair at 7:1, opaque glass. Each status tile gets a 2px frame in its `status-*-full` colour. |
 | Transparency | The OS "reduce transparency" setting (`accessibilityDisplayShouldReduceTransparency` on macOS, `isReduceTransparencyEnabled` on iOS). | `system`, `reduce`, `normal` | Reduce: `glass` takes the value of `bg`, and nothing blurs behind it or behind a sheet's `shading`. |
 | Window-size class | The size of the place (pane) and of the window. | none | See below. |
+| Accent | None: the product's own accent, ink when it sets none. | `product`, or a named accent | Picks `accents.<name>` for the theme and contrast set in use. |
 
 Every transition must still reach its end state with zero duration:
 instant, never skipped.
@@ -95,13 +99,14 @@ not set.
 
 | Token | Property | What a product decides | rekta-core |
 |---|---|---|---|
-| `color.*.accent`, `on-accent` | `--rk-accent`, `--rk-on-accent` | Its one hue: primary button, checked controls, a selected item. Per theme. | `rk_app_set_accent(light, dark)` |
+| `color.*.accent`, `on-accent` | `--rk-accent`, `--rk-on-accent` | Its one hue: primary button, checked controls, a selected item, one accent surface per place. Per theme and contrast set; or a named accent (`data-accent`, `prefs` `accent`). Checked with `build.mjs --check-product`; `build.mjs --accent COLOUR` derives the pairs from one colour. | `rk_app_set_accent(light, dark)`, held to the same rules (said through the log); `rk_app_set_accent_named(name)` |
 | `timing.toast` | `--rk-duration-toast` | How long a toast stays, and so the undo window (say 10s instead of 5s). Read when a toast opens. | `rk_app_set_timing(RK_TIMING_TOAST, ms)` |
 | `timing.stale` | `--rk-duration-stale` | When live data without an update counts as stale. A live region's own `stale` option wins. | `rk_app_set_timing(RK_TIMING_STALE, ms)`; `rk_duration_of` reads it |
 | `size.tile-unit`, `size.tile-unit-ultrawide` | `--rk-tile-unit`, `--rk-tile-unit-ultrawide` | The tile grid's cell, below and from 2560px. Set both: from 2560px the stylesheet sets the first from the second. | `rk_app_set_metric(RK_TILE_UNIT, px)` (the ultrawide cell stays the token's) |
 | `size.pivot-wide` | `--rk-pivot-wide` | From what width a pivot shows its facets side by side; 0 never. May differ per pivot. | `rk_app_set_metric(RK_PIVOT_WIDE, px)`; per pivot `rk_pivot_set_wide` |
 | a domain colour code (no token: a product slot) | `--rk-series-1` to `-8` | Colours its users already read, such as heart-rate zones, for small data marks; per theme, as the accent. Checked with `build.mjs --check-product`. | `rk_app_set_series(code, light, dark)`, held to the same rules (said through the log); `rk_tile_set_code`, `rk_row_set_code` |
 | density | `data-density` on the root | Not a token to override but a setting for the user: `Rekta.prefs` writes it (`auto`, `comfortable`, `compact`). | `rk_app_set_density` |
+| `typography.font-family.sans` | `--rk-font-sans` | Its typeface, under the conditions below ([typography.md](typography.md#the-family)). | not yet: rekta-core draws Barlow, built in; `rk_app_add_font` adds a face only for the characters Barlow lacks |
 
 A length may be written in any form, `px`, `rem` or a `calc()` of
 other tokens: `rekta.js` resolves it as the browser lays it out.
@@ -119,9 +124,30 @@ in-app theme:
 :root[data-theme="dark"] { --rk-accent: #d39be0; --rk-on-accent: #2a0f31; }
 ```
 
-An accent must hold 3:1 against `bg` in its theme, `on-accent` 4.5:1 on
-it, and stay clearly apart from every status hue ([colour.md](colour.md));
-the showcase measures a candidate live.
+An accent must hold 3:1 against `bg` and `surface` in its theme,
+`on-accent` 4.5:1 on it (7:1 under more contrast, in the contrast
+selectors), and stay apart from status: 0.09 (OKLab) from every status
+colour, 0.05 under protanopia and deuteranopia, its hue 20° from each
+status hue unless it is nearly grey ([colour.md](colour.md#apart-from-status)).
+The showcase measures a candidate live and says why it refuses one.
+
+rekta-core has the named accents and checks a product's accent, but it
+does not derive one from a colour yet (derive it with `build.mjs
+--accent` and pass the pairs), and it has no accent surface: a view
+filled with `RK_ROLE_ACCENT` keeps its text in ink, so draw `on-accent`
+text on it yourself.
+
+A family of its own is a product's too, under four conditions: it has
+the four weights the roles use (300, 400, 500, 600), tabular figures,
+a licence that allows shipping it with the app, and it ships with the
+app (its files beside `rekta.fonts.css`, never from a font CDN). The
+type scale stays the design's; the text budgets that depend on the
+family's width are measured again ([typography.md](typography.md#the-family)).
+
+```css
+/* after rekta.tokens.css and rekta.css; the @font-face rules for its four weights in the product's own CSS */
+:root { --rk-font-sans: 'Atkinson Hyperlegible Next', 'Arial', sans-serif; }
+```
 
 Everything else is the design, not a setting. In particular, do not
 override:
@@ -136,7 +162,8 @@ override:
   (The `timing.*` values above are wall time and stay under reduced
   motion; that is why they may change.)
 - **Spacing, radius and the type scale.** The tile grid, the hairlines and
-  the title hierarchy are built from them.
+  the title hierarchy are built from them. (The family is a product's;
+  its sizes are not.)
 
 ## Window-size classes
 
@@ -198,6 +225,17 @@ implementation needs the same:
 - **Toast and banner**: one toast at a time, the undo window held while
   hovered or focused; one banner at a time, the most severe state first,
   its end reported as a toast.
+- **Desktop patterns**: a place called up (a launcher) turns at half the
+  pace; a month to look at; the display step; an icon per menu item.
+  rekta-core has these (`rk_controller_set_called`, `rk_month`,
+  `RK_TEXT_DISPLAY`, `rk_menu_set_icon`). It does not have yet: an app
+  bar (so no centred control, indicator or giving way to full screen),
+  a notification's title, picture and pressable text in its toast
+  (`rk_window_toast` is a message and one action), a menu's second
+  level, the preview tile and the recent stack, and the session bar. An
+  app on rekta-core builds those from its views by these pages
+  ([navigation.md](navigation.md), [states.md](states.md),
+  [tiles.md](tiles.md), [shell.md](shell.md)).
 
 ## What stays identical
 
@@ -223,3 +261,34 @@ implementation.
   shell gets the same by setting `data-rk-titlebar` on the root.
 - **Installed web apps:** see [shell.md](shell.md): the window-controls
   overlay, offline, and updates that wait to be asked.
+- **Window buttons:** minimise, maximise (restore while maximised) and
+  close, quiet, close never red, the name stepping back while the window
+  is not the active one ([shell.md](shell.md#window-buttons)). rekta-core
+  draws them so on Windows, X11 and Wayland; macOS keeps its own.
+- **Picture icons** (an app's icon, a favicon, a logo): a single-colour
+  variant in the text colour where the source has one, else the picture
+  at the fixed sizes, only on a neutral ground
+  ([shell.md](shell.md#picture-icons)).
+
+## What rekta-core does not draw yet
+
+Some patterns are the web's alone for now. Each is in the docs as the
+design; rekta-core follows when an app needs it, and until then an app
+builds it from views or does without:
+
+- **The app bar** (with the live state, the places and running things):
+  rekta-core has none; a native app uses its window's own chrome.
+- **A side panel and choosing in place:** rekta-core's sheets come from
+  the top.
+- **A launch tile:** rekta-core's tiles carry a stat, a message, a
+  sparkline and progress, not an icon and a count; a tile spans any
+  number of units (`rk_view_set_span`).
+- **Dragging a row away:** rekta-core's lists take Delete
+  (`rk_list_on_remove`), not the drag; its declared lists (`RK_LIST`)
+  do not offer the removal yet.
+- **A family of the product's:** rekta-core draws Barlow, built in.
+- **The inactive title on macOS:** the system draws that title bar's
+  buttons; the name does not step back there yet.
+- **Other programs' windows** ([motion.md](motion.md#other-programs-windows)):
+  neither the web build nor rekta-core shows them; the tokens are there
+  for a surface that does.

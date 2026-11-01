@@ -20,6 +20,7 @@
 <!-- Prefs go on the root before first paint, so a remembered theme never flashes. -->
 <script src="rekta.global.js"></script>
 <script src="rekta.strings.de.global.js"></script>
+<script src="rekta.color.global.js"></script>
 <script src="site-head.js"></script>
 </head>
 <body>
@@ -58,7 +59,7 @@
           </a>
           <a class="rk-tile" href="#notes" data-status="success" id="tile-notes" style="--rk-i:1">
             <span class="rk-tile-word">done</span>
-            <span class="rk-stat"><b>0.2</b><span>what is new</span></span>
+            <span class="rk-stat"><b data-rk-carry>0.2</b><span>what is new</span></span>
           </a>
           <div class="rk-tile" data-status="success" style="--rk-i:2">
             <span class="rk-tile-word">done</span>
@@ -120,7 +121,18 @@
         <!--@swatches-->
         <p class="rk-kicker group-label">contrast on neutral ground</p>
         <!--@pairs-->
-        <p class="note">One slot is a product's own: the <b>accent</b>, ink until a product sets it. It fills the primary button, checked controls and a selected row; never a tile or a status. Try another in <a href="#look" data-goto="look">look</a>, or make your own in <a href="#forms" data-goto="forms">forms</a>.</p>
+        <p class="note">One slot is a product's own: the <b>accent</b>, ink until a product sets it. It fills the primary button, checked controls, a selected row and one accent surface per place; never a tile or a status, and it keeps apart from every status colour. Try another in <a href="#look" data-goto="look">look</a>, or make your own in <a href="#forms" data-goto="forms">forms</a>.</p>
+        <p class="rk-kicker group-label">content fills · a set without a status</p>
+        <div class="rk-tiles small-tiles" id="launcher" data-rk-fills="content">
+          <div class="rk-tile" data-rk-fill="teal"><span class="rk-stat"><b>mail</b></span></div>
+          <div class="rk-tile" data-rk-fill="steel"><span class="rk-stat"><b>files</b></span></div>
+          <div class="rk-tile" data-rk-fill="violet"><span class="rk-stat"><b>notes</b></span></div>
+          <div class="rk-tile" data-rk-fill="plum"><span class="rk-stat"><b>music</b></span></div>
+          <div class="rk-tile" data-rk-fill="rose"><span class="rk-stat"><b>photos</b></span></div>
+          <div class="rk-tile"><span class="rk-stat"><b>terminal</b></span></div>
+        </div>
+        <label class="rk-toggle"><span class="rk-toggle-label">content fills</span><input type="checkbox" id="launcher-fills" checked><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+        <p class="note">Programs, documents, bookmarks: a set of tiles with no status may take the colour of what each opens, muted so ink reads on it and kept apart from the status colours. One switch makes the set plain; more contrast does too, and a status tile in the set turns every fill off.</p>
       </section>
 
       <section class="rk-sec" id="typography" aria-labelledby="typography-title">
@@ -203,7 +215,7 @@
             <tr><th scope="row">place change</th><td>{{duration-moderate}}, turnstile {{turnstile-out-angle}}</td><td>you are somewhere else</td></tr>
             <tr><th scope="row">press</th><td>{{duration-press}} in, tilt {{tile-tilt}}</td><td>this heard you</td></tr>
             <tr><th scope="row">facet change</th><td>0.75 × {{duration-moderate}}, {{slide-distance}} slide</td><td>same place, other facet</td></tr>
-            <tr><th scope="row">tiles build in</th><td>{{duration-moderate}}, {{duration-stagger}} apart</td><td>assembling from live data</td></tr>
+            <tr><th scope="row">tiles build in</th><td>{{arrive-distance}} over {{duration-long}}, {{duration-greet}} apart</td><td>assembling from live data</td></tr>
             <tr><th scope="row">reorder</th><td>{{duration-moderate}}</td><td>this moved because of you</td></tr>
             <tr><th scope="row">resize, re-flow</th><td>{{duration-moderate}}</td><td>this grew; the rest made room</td></tr>
             <tr><th scope="row">arrive, leave</th><td>{{duration-short}}, leaving faster</td><td>this one is new; that one is gone</td></tr>
@@ -421,7 +433,7 @@
 
       <section class="rk-sec" id="forms" aria-labelledby="forms-title">
         <h2 class="rk-group" id="forms-title">Checked late, corrected early.</h2>
-        <p>Make a product accent. A field is checked when you leave it and corrected as you type; sent with errors, a summary comes first. Name it “plum” and the server says no at the field; send it during maintenance and it says no to the form. Change something and leave: it asks first.</p>
+        <p>Make a product accent. A field is checked when you leave it and corrected as you type; sent with errors, a summary comes first. Name it “teal” and the server says no at the field; send it during maintenance and it says no to the form. Change something and leave: it asks first.</p>
         <form class="fields" id="accent-form">
           <div class="rk-field">
             <label class="rk-label" for="a-name">name</label>
@@ -430,13 +442,13 @@
           </div>
           <div class="rk-field">
             <label class="rk-label" for="a-light">accent in light</label>
-            <input class="rk-input" id="a-light" placeholder="#1f6f5c" aria-describedby="h-a-light">
-            <span class="rk-hint" id="h-a-light">A hex colour that holds 3:1 on the light ground.</span>
+            <input class="rk-input" id="a-light" placeholder="#1a6680" aria-describedby="h-a-light">
+            <span class="rk-hint" id="h-a-light">A hex colour that holds 3:1 on the light ground and stays apart from the status colours.</span>
           </div>
           <div class="rk-field">
             <label class="rk-label" for="a-dark">accent in dark <span class="rk-optional">(optional)</span></label>
-            <input class="rk-input" id="a-dark" placeholder="#7fd1b9" aria-describedby="h-a-dark">
-            <span class="rk-hint" id="h-a-dark">Left empty, dark keeps ink.</span>
+            <input class="rk-input" id="a-dark" placeholder="#73c2dc" aria-describedby="h-a-dark">
+            <span class="rk-hint" id="h-a-dark">Left empty, dark is derived from the light one.</span>
           </div>
           <p class="rk-actions"><button class="rk-btn rk-btn--primary" type="submit" id="a-save" data-rk-pending-label="applying…">apply accent</button><button class="rk-btn" type="button" id="a-remove" data-status="error">remove accent</button></p>
         </form>
@@ -578,10 +590,16 @@
           </fieldset>
           <span class="rk-hint">More contrast holds every text at 7:1 and frames each status tile in its colour. Reduced transparency makes the app bar solid.</span>
           <fieldset class="rk-choices"><legend class="rk-label">accent</legend>
-            <label class="rk-switch"><input type="radio" name="accent" value="ink"> ink</label>
-            <label class="rk-switch"><input type="radio" name="accent" value="plum"> plum</label>
+            <label class="rk-switch"><input type="radio" name="accent" value="product"> ink</label>
+            <label class="rk-switch"><input type="radio" name="accent" value="teal"> teal</label>
+            <label class="rk-switch"><input type="radio" name="accent" value="steel"> steel</label>
+            <label class="rk-switch"><input type="radio" name="accent" value="violet"> violet</label>
+            <label class="rk-switch"><input type="radio" name="accent" value="mauve"> mauve</label>
+            <label class="rk-switch"><input type="radio" name="accent" value="pink"> pink</label>
+            <label class="rk-switch"><input type="radio" name="accent" value="magenta"> magenta</label>
             <label class="rk-switch"><input type="radio" name="accent" value="custom" id="accent-custom" disabled> yours</label>
           </fieldset>
+          <span class="rk-hint">Rekta's named accents: each holds 3:1 on the ground and stays apart from every status colour, in both themes and under more contrast.</span>
           <p class="rk-actions"><button class="rk-btn" type="button" id="reset">reset the demo</button></p>
         </div>
       </section>
@@ -605,7 +623,7 @@
       </section>
 
       <section class="rk-sec sec-wide" id="icons" aria-labelledby="icons-title">
-        <h2 class="rk-group" id="icons-title">Fifty-one icons on one grid.</h2>
+        <h2 class="rk-group" id="icons-title">Sixty-three icons on one grid.</h2>
         <p>20 × 20, a 1.6 stroke, square ends, in the text colour, so they follow every theme. An icon goes beside a word; alone, it has a name and a tooltip. The web takes <code>rekta.icons.svg</code> (a sprite: <code>&lt;use href="#rk-i-search"&gt;</code>); other platforms take <code>rekta.icons.json</code>, the same shapes as data.</p>
         <!--@icon-gallery-->
         <p class="note">Rest the pointer on one of the toolbar buttons in “desktop”: an icon alone gets its name as a tooltip, and its accessible name stays.</p>
@@ -732,7 +750,7 @@
         <li><b>desktop</b><span>Tooltips, context menus, a tree, ordering by a grip, ten thousand lines, columns that size and hide, editing in place.</span></li>
         <li><b>live and undo</b><span>Live regions that say how fresh they are and hold still while you look; an undo history behind Ctrl+Z.</span></li>
         <li><b>data</b><span>Line and bar charts in ink and grey, meters, progress, Metro's flying dots.</span></li>
-        <li><b>app shell</b><span>Fifty-one icons, the title bar of an installed app, installable and offline.</span></li>
+        <li><b>app shell</b><span>Sixty-three icons, the title bar of an installed app, installable and offline.</span></li>
       </ul>
       <p class="rk-actions"><a class="rk-btn" href="#tokens">open the tokens</a></p>
     </div>
@@ -819,6 +837,7 @@
   </dialog>
 </div>
 <!--@tokens-data-->
+<!--@themes-data-->
 <script src="site.js"></script>
 </body>
 </html>

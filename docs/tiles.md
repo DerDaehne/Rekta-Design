@@ -15,7 +15,8 @@ allowed on a tile (always the dampened `status.<name>.tile` form, never
 A tile's background communicates its status before the user reads a
 single word on it. Fills come only from the status token set (see
 [colour.md](colour.md)); a tile with no particular status uses the plain
-neutral `surface` fill. Text on a tile is always the theme's primary
+neutral `surface` fill. The one exception is a set of tiles that has no
+status at all, which may opt in to content fills (below). Text on a tile is always the theme's primary
 text colour (checked for AA against every status fill — see
 [colour.md](colour.md)), never a status-matching text colour.
 
@@ -24,6 +25,58 @@ a uniform grid cell: something that needs the user's attention (an open
 question, something failed) is given a larger tile than something
 merely informative. A grid of tiles therefore reads as a priority map at
 a glance, before any individual value is read.
+
+Tiles span 1 to 4 units across (`.rk-w2`, `.rk-w3`, `.rk-w4`) and 1 or 2
+down (`.rk-h2`); in rekta-core `rk_view_set_span()`. Sideways a tile
+three or four units wide spans them, in a section at least that wide
+(`--rk-sec-w`); in a compact grid, which may have only two columns, it
+takes the whole row.
+
+## Content fills
+
+A set of objects without a status, such as a launcher's programs,
+documents or bookmarks, may give each tile the main colour of what it
+opens: the Metro way of a tile carrying its app's colour. The tile's
+colour then says "this program", not a status, and that is why it has
+limits ([colour.md](colour.md#content-fills)):
+
+```html
+<div class="rk-tiles" data-rk-fills="content">
+  <a class="rk-tile" href="/mail" data-rk-fill="teal"><span class="rk-stat"><b>mail</b></span></a>
+  <a class="rk-tile" href="/notes" data-rk-fill="violet"><span class="rk-stat"><b>notes</b></span></a>
+  <a class="rk-tile" href="/files"><span class="rk-stat"><b>files</b></span></a>
+</div>
+```
+
+- **Opt-in on the set:** `data-rk-fills="content"` on the `.rk-tiles`.
+  Without it, or with `plain`, every tile of the set is `surface`: one
+  switch, and a product hands that switch to its users.
+- **Five fills:** `teal`, `steel`, `violet`, `plum`, `rose`, as
+  `data-rk-fill` on a tile (`content-*` tokens). Each is muted so ink
+  holds 4.5:1 on it, and stands apart from every status colour (0.09
+  OKLab seen, 0.05 under red-green colour blindness, its hue 20° from
+  each status hue): `--check` holds both. No secondary text colour on
+  them: as on a status tile, secondary text takes ink.
+- **Never with a status.** A set that has a status tile in it shows no
+  content fill at all: the status tile keeps its fill and every other
+  tile is plain. Do not build such a set: a colourful grid hides the one
+  tile that failed. Put status tiles in a set of their own.
+- **Off under more contrast and forced colours:** the set is plain, the
+  tiles' words and icons stay.
+- **Picking a tile's fill:** from the main colour of the icon of what it
+  opens, the same way every time. Take the icon's opaque pixels with a
+  chroma (OKLCH) of 0.05 or more; their most common hue, in 10° bins, is
+  its main hue. Without such pixels (a grey icon, one drawn in the text
+  colour), or with a main hue more than 30° from every fill's hue, the
+  tile stays plain: a red, yellow or green icon does not become a
+  colour that is not its own. Otherwise the fill whose hue is nearest.
+  The same icon gives the same fill.
+- **The icon on it** keeps its own colours, as the product draws it;
+  Rekta's own icons on a tile are drawn in ink.
+
+rekta-core: `rk_tile_grid_set_content(grid, true)` and
+`rk_tile_set_content(tile, RK_ROLE_CONTENT_TEAL)`, declared `.content`
+and `.content_fills`.
 
 ## Radius 0–2
 
@@ -66,6 +119,50 @@ rather than ad-hoc layout per tile type:
   ([typography.md](typography.md#statement-block)). A message tile is
   neutral (`surface`) unless what it says is a status, then it takes that
   fill and status word like any other tile.
+
+- **Preview** — a running item seen live (a window, an open document,
+  a session), two units wide (`.rk-tile--preview`). The top part is the
+  preview: a picture or an element the app supplies (a capture, a
+  video, a canvas), cropped to fill (`.rk-tile-preview`). It never
+  carries text, status or a fill of its own: those are the tile's. The
+  foot, on the tile's surface, holds the program's icon and the item's
+  title in one line, cut with an ellipsis (`.rk-tile-foot`). Without a
+  preview the top part is the surface. A press brings the item to the
+  front. How the preview is captured, and how often it is refreshed, is
+  the app's; Rekta sets its frame.
+
+  ```html
+  <button class="rk-tile rk-tile--preview" type="button">
+    <span class="rk-tile-preview"><img src="capture.png" alt=""></span>
+    <span class="rk-tile-foot"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-file"/></svg><span>Quarterly report.odt</span></span>
+  </button>
+  ```
+
+- **Launch** — a tile that opens something launchable (an app, a tool,
+  an integration): its icon at the top leading corner, a count at the
+  top trailing corner in tabular figures (unread, waiting; none at
+  zero), and its name at the foot, written as the thing writes it. On a
+  tile two units or more wide, the newest line (the latest notification:
+  peek) stands between them, two lines at most. The order is the same at
+  every size. The icon is `size.tile-icon` (48) on a tile one unit high
+  and `size.tile-icon-large` (96) on one two units high: about a third
+  of the tile's height, at its padding. A picture icon is drawn at that
+  size from its source ([shell.md](shell.md#picture-icons)); a Rekta icon
+  scales to it. The tile stays neutral (`surface`) while the thing has
+  unread items: a count is not a status. It takes a status fill and word
+  only for a real status (the tool's job failed). A live launch tile shows
+  news as any live tile does (peek for a new count or line). Its name is
+  read first: give the link an `aria-label` that says it in that order
+  ("Mail, 12 unread").
+
+  ```html
+  <a class="rk-tile rk-launch rk-w2" href="#mail">
+    <img class="rk-picture" src="mail.svg" alt="">
+    <span class="rk-launch-count">12</span>
+    <span class="rk-launch-peek">Ana: the build is green again</span>
+    <span class="rk-launch-name">Mail</span>
+  </a>
+  ```
 
 A tile combines at most two or three of these — a tile that tries to
 show a stat pair, a sparkline, a progress meter and a long status

@@ -399,6 +399,7 @@ static void x_move(void *n) {
 
 static void x_minimize(void *n) { xwin *x = n; if (x) { XIconifyWindow(dpy, x->win, screen); XFlush(dpy); } }
 static void x_zoom(void *n) { xwin *x = n; if (x) { x->maximized = !x->maximized; net_state(x, x->maximized); } }
+static bool x_maximized(void *n) { xwin *x = n; return x && x->maximized; }
 
 static uint32_t key_of(KeySym k) {
   switch (k) {
@@ -618,8 +619,8 @@ static void handle(XEvent *ev) {
     case SelectionNotify:
       if (ev->xselection.selection == A_XDND_SELECTION) xdnd_selection(x, &ev->xselection);
       break;
-    case FocusIn: if (x->ic) XSetICFocus(x->ic); break;
-    case FocusOut: if (x->ic) XUnsetICFocus(x->ic); break;
+    case FocusIn: if (x->ic) XSetICFocus(x->ic); rk__window_set_active(w, true); break;
+    case FocusOut: if (x->ic) XUnsetICFocus(x->ic); rk__window_set_active(w, false); break;
     case MotionNotify:
       e.type = RK_EVENT_POINTER_MOVE; e.position = (rk_point){ ev->xmotion.x / k, ev->xmotion.y / k }; e.mods = mods_of(ev->xmotion.state);
       rk__window_event(w, &e);
@@ -737,5 +738,6 @@ static void x_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "x11", x_init, x_shutdown, x_open, x_close, x_show, x_title, x_present, x_move, x_minimize, x_zoom,
-  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, x_text_input, x_cursor, rk__desktop_choose_files, rk__desktop_notify
+  x_wait, x_wake, x_now, x_settings, x_resize, NULL, NULL, NULL, x_clip_set, x_clip_get, x_text_input, x_cursor, rk__desktop_choose_files, rk__desktop_notify,
+  x_maximized
 };

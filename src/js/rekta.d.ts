@@ -36,7 +36,9 @@ export declare const tokens: {
   px(name: string, el?: Element): number;
 };
 
-type PrefName = 'theme' | 'density' | 'motion' | 'contrast' | 'transparency';
+type PrefName = 'theme' | 'density' | 'motion' | 'contrast' | 'transparency' | 'accent';
+/** A named accent of tokens/rekta.accents.json, or `product`: the product's own `--rk-accent` (ink when it sets none). */
+type AccentName = 'product' | 'ink' | 'teal' | 'steel' | 'violet' | 'mauve' | 'pink' | 'magenta';
 export declare const prefs: {
   key: string;
   read(): Partial<Record<PrefName, string>>;
@@ -46,6 +48,7 @@ export declare const prefs: {
   get(name: 'motion'): 'system' | 'on' | 'off';
   get(name: 'contrast'): 'system' | 'more' | 'normal';
   get(name: 'transparency'): 'system' | 'reduce' | 'normal';
+  get(name: 'accent'): AccentName | (string & {});
   set(name: 'theme', value: 'system' | 'light' | 'dark', options?: { remember?: boolean }): void;
   set(name: 'density', value: 'auto' | 'comfortable' | 'compact', options?: { remember?: boolean }): void;
   set(name: 'motion', value: 'system' | 'on' | 'off', options?: { remember?: boolean }): void;
@@ -53,6 +56,9 @@ export declare const prefs: {
   set(name: 'contrast', value: 'system' | 'more' | 'normal', options?: { remember?: boolean }): void;
   /** reduce: glass is the ground and nothing blurs; normal: glass, whatever the system asks. */
   set(name: 'transparency', value: 'system' | 'reduce' | 'normal', options?: { remember?: boolean }): void;
+  /** A named accent wins over the product's own; `product` goes back to it. A product's own names work as well when it
+      styles `:root[data-accent="NAME"]` itself. */
+  set(name: 'accent', value: AccentName | (string & {}), options?: { remember?: boolean }): void;
   restore(): void;
 };
 
@@ -80,8 +86,9 @@ export declare function press(scope?: Document | Element): Destroyable;
 
 export declare function arrive(el: Element): void;
 export declare const turn: {
-  leave(place: Element, options?: { pressed?: Element | null; back?: boolean }): Promise<void>;
-  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean }): Promise<void>;
+  /** `called`: a change to or from a place that is called up (`data-rk-called`) turns at half the pace; by default, whether `place` is one. `carry`: a title that does not turn away but stands for the next enter(), which takes it to its own `carry`. */
+  leave(place: Element, options?: { pressed?: Element | null; back?: boolean; called?: boolean; carry?: Element | null }): Promise<void>;
+  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean; called?: boolean; carry?: Element | null }): Promise<void>;
   finish(): void;
   readonly running: boolean;
 };
@@ -134,7 +141,7 @@ export declare function strip(el: HTMLElement): Destroyable & { layout(): void }
 
 // Feedback ------------------------------------------------------------------------------------------------------------
 
-export type ToastEnd = 'expired' | 'undone' | 'replaced' | 'acted' | 'dismissed' | 'merged';
+export type ToastEnd = 'expired' | 'undone' | 'replaced' | 'acted' | 'opened' | 'dismissed' | 'merged';
 export interface ToastOptions {
   key?: string;
   undo?: (() => void) | null;
@@ -145,6 +152,16 @@ export interface ToastOptions {
   /** The undo window in ms (default: duration-toast). */
   windowMs?: number;
   onEnd?: ((reason: ToastEnd) => void) | null;
+  /** A notification's title, in semibold over its text (which is then cut after two lines). */
+  title?: string;
+  /** The sender's icon at the start: a name from the icon set, or an element drawn in the text colour. */
+  icon?: string | Element | null;
+  /** The notification's own picture (an avatar, a cover) in place of the icon, cropped square. */
+  picture?: string;
+  /** The default action: pressing the text runs it and the toast ends `opened`. */
+  open?: (() => void) | null;
+  /** From another program: it enters whole from the window's edge, and pressing its text closes it when it has no `open`. */
+  edge?: boolean;
 }
 export interface Toast {
   readonly key: string;
@@ -164,9 +181,24 @@ export interface Toast {
   /** Catches the window up with the clock (rekta.js calls it when the page comes back into view). */
   sync(): void;
   update(text: string, undo: (() => void) | null, options?: { windowMs?: number; onEnd?: ((reason: ToastEnd) => void) | null }): void;
+  /** A level indicator's key (`level()`), else null. */
+  readonly level: string | null;
+  /** A level indicator's new value (0 to 1) and figure: the meter glides, and its time starts again. */
+  setLevel(value: number, text: string): void;
+  readonly done: boolean;
+}
+export interface LevelOptions {
+  /** An icon from the set, beside the word. */
+  icon?: string;
+  /** The figure; by default the value in per cent, in the locale's way. */
+  text?: string;
+  /** Calls with the same key update the one open (default: the word). */
+  key?: string;
 }
 export interface Toaster extends Destroyable {
   show(text: string, options?: ToastOptions): Toast;
+  /** A level indicator for a value changed by a key (volume, brightness): word, meter (value 0 to 1) and figure. */
+  level(word: string, value: number, options?: LevelOptions): Toast;
   readonly open: Toast | null;
   dismiss(): void;
 }
@@ -205,6 +237,9 @@ export declare function banner(el: HTMLElement, options: {
 /** With `dirty`, a close request asks in the sheet before unsaved input goes. Called again for an attached sheet, it
  * updates the options and returns the same handle. */
 export declare function sheet(dialog: HTMLDialogElement, options?: { dirty?: (() => boolean) | null }): Destroyable & { readonly asking: boolean };
+/** Choosing in place: a control with `data-rk-in="ID"` opens that list in the place of its group; the back row, Escape
+ * and ← go back one level. */
+export declare function inPlace(scope: HTMLElement): Destroyable & { readonly depth: number; back(): boolean; reset(): void };
 export declare function busy<T>(region: HTMLElement, work: Promise<T> | (() => Promise<T>)): Promise<T>;
 export declare function pending<T>(button: HTMLElement, work: Promise<T> | (() => Promise<T>), options?: { label?: string }): Promise<T | undefined>;
 
@@ -351,6 +386,13 @@ export declare function sortable(list: HTMLElement, options?: {
   onMove?: ((from: number, to: number, item: HTMLElement) => void) | null;
 }): Destroyable & { move(item: HTMLElement, to: number): boolean; refresh(): void };
 
+/** Entries a person may remove: a `data-rk-remove` button, Delete, or a drag towards the trailing edge. `left`: the
+ * entry has already gone from sight (a drag), so remove it at once. */
+export declare function removable(list: HTMLElement, options?: {
+  items?: string;
+  onRemove?: (item: HTMLElement, how: { left: boolean }) => void;
+}): Destroyable & { remove(item: HTMLElement): void };
+
 export declare function virtual(el: HTMLElement, options: {
   count?: number;
   render: (i: number, row: HTMLElement) => void;
@@ -431,6 +473,10 @@ export declare function enter(el: Element): Promise<void>;
 export declare function leave(el: Element): Promise<Animation | null>;
 export declare function presence(scope: Element, options: { items?: (() => Element[]) | Iterable<Element>; show: (item: Element) => boolean }): Promise<void>;
 export declare function tileUpdate(tile: HTMLElement, change: () => void, options?: { kind?: 'peek' | 'flip' }): Promise<void>;
+/** A short indicator stands in place of an app-bar control and turns back `timing.level` after the last call. */
+export declare function indicate(control: HTMLElement, content: Element): void;
+/** A part that answers a gesture nobody can see hints at it when tapped: the gesture's way and back. */
+export declare function nudge(el: Element, direction: 'left' | 'right' | 'up' | 'down'): Promise<void>;
 /** `points` as in the polyline's attribute ("0,4 10,2 20,6"). */
 export declare function sparkTo(line: SVGPolylineElement, points: string): void;
 export declare function crossfade(change: () => void): Promise<void>;

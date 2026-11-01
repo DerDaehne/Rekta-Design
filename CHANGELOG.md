@@ -7,9 +7,13 @@ it; each entry says how.
 
 ## Unreleased
 
-The first 38 of the reports #87–#157 on 0.5.0 (motion, controls, layout
-and parity, accessibility), and rekta-core: what was left after #35
-(#84).
+The reports #87–#157 on 0.5.0: motion, controls, layout and parity,
+accessibility, colour and the patterns of a whole system's surfaces (a
+launcher, a lock screen, notifications, windows). Rekta is one language
+for every surface; a pattern describes its main case, and a product may
+deviate where it keeps Rekta's rules (principles.md). Declined: #146,
+#150, #153; deferred: #155. Open points: #159. And rekta-core: what was
+left after #35 (#84).
 
 ### Changed (may need a change in an app)
 
@@ -54,6 +58,34 @@ and parity, accessibility), and rekta-core: what was left after #35
   `turnstile-out-angle`; app-bar controls only fade; reflow moves
   without scaling; a live tile's news is staggered by `duration-greet`
   (#88 #111 #113 #117 #118 #107 #122 #148 #143).
+- **The accent has a rule with numbers** (#97): 3:1 on bg and surface,
+  on-accent 4.5:1 (7:1 under more contrast), and apart from status: 0.09
+  OKLab from every status colour, 0.05 under protanopia and deuteranopia,
+  its hue 20° from each status hue unless its chroma is below 0.05.
+  `--check-product` checks a product's accent and fails one that breaks
+  it. rekta-core's text on a custom accent is the ground or the ink,
+  whichever holds more contrast.
+- **`data-accent` on the root is Rekta's** (prefs `accent`, the named
+  accents). A page that used it for its own purpose renames it.
+- **Tiles arrive** (#144): a tile building in rises `arrive-distance`
+  (32px) over `duration-long` on `ease-landing` and is whole after
+  `duration-short`; tiles follow one another `duration-greet` apart, four
+  steps at most (`--rk-i` 0–3). The arrival window is 3 × greet + 2 ×
+  long + 50ms.
+- **A panorama never ends flush on a section's edge** (#147): the gap
+  between sections changes a little, never below `space-m`, so at least
+  `space-xl` of the next section shows.
+- **An app bar with a centred control** (`data-rk-align="center"`) has
+  two sides, each giving away only its own controls (#120); running
+  things (`.rk-ab-run`) go into "more" before any command (#98).
+- **rekta-core's title bar** (#95): window buttons `touch-target` wide (44,
+  was 46), maximize and restore glyphs, the name in `text-contrast-high`
+  while another window is active; `rk_strings.restore` is a new word
+  after `plural`.
+- Tiles three and four units wide (`.rk-w3`, `.rk-w4`) take a compact
+  grid's whole row (#94). `tileUpdate()` also peeks a part marked
+  `data-rk-peek` (#120). rekta-core's date cell is `size.day-cell`
+  (36px, unchanged) (#127).
 
 ### Added
 
@@ -90,6 +122,39 @@ and parity, accessibility), and rekta-core: what was left after #35
 - `--check` measures text on glass against all white and all black, a
   tag in an ink toast, and rejects `any` in the declarations (#130 #139
   #104).
+- **Colour:** named accents (`tokens/rekta.accents.json`: ink, teal,
+  steel, violet, mauve, pink, magenta; `data-accent`, prefs `accent`,
+  `rk_app_set_accent_named()`) (#151); an accent derived from one colour,
+  `build.mjs --accent COLOUR` (#152); `dist/rekta.color.js` with the
+  colour rules (#97); `.rk-accent-surface` (#154); content fills for a set
+  of tiles without a status (`data-rk-fills="content"`, `data-rk-fill`,
+  tokens `content-*`, off under more contrast, never beside a status;
+  `rk_tile_grid_set_content`, `rk_tile_set_content`) (#157).
+- **Shell patterns:** the side panel (`.rk-sheet--side`) and choosing in
+  place (`inPlace()`) (#90); a notification centre and `removable()`,
+  `rk_list_on_remove` (#91); the level indicator, `toaster().level()`,
+  `rk_window_level`, `indicate()` in the app bar's middle, both on
+  `timing.level` (1.5s) (#92, #120); picture icons, `.rk-picture` (#93);
+  the launch tile (`.rk-launch`), `size.tile-icon`, `size.tile-icon-large`
+  (#94); notifications from other programs in toasts (`edge`, `title`,
+  `icon`, `picture`, `open`) (#121); the preview tile and the recent stack
+  (`.rk-tile--preview`, `dialog.rk-recent`) (#123); a month to look at
+  (`.rk-month`, `rk_month()`) (#127); a menu's second level in place and
+  an icon per item (`.rk-menu-level`, `rk_menu_set_icon()`) (#128); the
+  session's actions (`.rk-sheet.rk-session`) (#132); the display type
+  step (`typography.size.display`, `.rk-display`, `RK_TEXT_DISPLAY`) and
+  the lock screen (#142).
+- **Icons:** maximize, restore, speaker, speaker-muted, microphone,
+  microphone-muted, wireless, bluetooth, battery, music, previous, next:
+  63 in all (#95, #138).
+- **Motion:** places called up turn at half the pace (`data-rk-called`,
+  `rk_controller_set_called()`) (#133); the carried title
+  (`data-rk-carry`, `rk_view_set_carry()`, `turn` `carry`) (#145); the
+  gesture hint, `nudge()` and `rk_view_nudge()` (#149); tokens
+  `easing.landing`, `arrive-distance`, `nudge-distance`,
+  `step-back-scale`, `step-back-brightness` (#89, #144, #149).
+- `--check-product` fails a font loaded from another server: the family
+  is a product slot (#96).
 
 ### Fixed
 
@@ -105,6 +170,10 @@ and parity, accessibility), and rekta-core: what was left after #35
 - The arriving item of a turnstile is whole at 35% as documented; core's
   busy line follows the web's path and stays still under reduced motion
   (#88 #113).
+- The showcase's sample accent read as "done" (0.038 from success); it
+  is now `#1a6680`, and the accent form says why it refuses a colour.
+- rekta-core: a tap that ends a leaving sheet no longer reads a freed
+  view (found by ASan).
 
 ### Documented
 
@@ -120,6 +189,19 @@ and parity, accessibility), and rekta-core: what was left after #35
   platforms.md); a grid of tiles and typing to filter or jump
   (navigation.md); the tooltip exception for disabled controls
   (forms.md).
+- principles.md: one language for every surface, and what a product may
+  deviate from.
+- colour.md: the accent (apart from status, named, derived, chosen by
+  users, the accent surface) and content fills; tiles.md: content fills,
+  the launch tile, the preview tile, sizes up to 4 × 2.
+- motion.md: other programs' windows, the windows stepping back, the
+  side panel, choosing in place, the level indicator, a place called up,
+  the carried title, the gesture hint; layout.md: never flush at the
+  edge.
+- shell.md: window buttons, picture icons, the ground of a workspace,
+  the session, the lock screen; live.md: a notification centre;
+  states.md, navigation.md, forms.md and typography.md for the patterns
+  above; platforms.md: what rekta-core does not draw yet.
 
 Still English in core: the date box's empty "yyyy-mm-dd" and its field
 order.

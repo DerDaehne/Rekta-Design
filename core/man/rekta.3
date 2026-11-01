@@ -136,7 +136,13 @@ draws a domain colour
 a pivot's
 .Fa .wide
 is the width from which its pages stand side by side
-.Pq see Fn rk_pivot_set_wide .
+.Pq see Fn rk_pivot_set_wide ;
+a tile grid's
+.Fa .content_fills
+and a tile's
+.Fa .content
+give a set without a status its content fills
+.Pq see Fn rk_tile_grid_set_content .
 .It A split's next item
 A new
 .Fa .pulse
@@ -251,6 +257,13 @@ the person once, and only for an app in a bundle.
 .It Fn rk_app_set_theme , Fn rk_app_set_density , Fn rk_app_set_motion , Fn rk_app_set_accent
 Each follows the system until set.
 A change of theme or accent cross-fades the windows.
+The text on an accent is the theme's ground or ink, whichever stands out more;
+each value should hold 3:1 on bg and surface, its text 4.5:1 (7:1 under more
+contrast) and stay apart from status \(em 0.09 in OKLab from every status
+colour, 0.05 under protanopia and deuteranopia, its hue 20 degrees from each
+status hue unless its chroma is below 0.05 \(em as
+.Li build.mjs --check-product
+holds the web's; one that does not is still set, and said through the log.
 .Fn rk_app_on_change
 tells you when any of them changed and returns an id for
 .Fn rk_app_cancel ;
@@ -287,6 +300,19 @@ Each value should hold 3:1 on bg and surface and stand 0.09 apart in OKLab
 under protanopia and deuteranopia from every other code set, as
 .Li build.mjs --check-product
 holds the web's; one that does not is still set, and said through the log.
+.It Fn rk_app_set_accent_named "const char *name"
+A named accent of
+.Pa tokens/rekta.accents.json :
+.Qq ink ,
+.Qq teal ,
+.Qq steel ,
+.Qq violet ,
+.Qq mauve ,
+.Qq pink
+or
+.Qq magenta ,
+a checked pair for each theme and for more contrast.
+False, and said through the log, for a name that is not one; the accent stays.
 .It Fn rk_app_set_metric "rk_metric metric" "float px" , Fn rk_app_set_timing "rk_duration timing" "double ms"
 What a product may change of the design
 .Pq docs/platforms.md, Product overrides :
@@ -346,9 +372,10 @@ a list's count read aloud
 .Fa items ,
 the window's buttons
 .Fa minimize ,
-.Fa maximize
-and
-.Fa close ,
+.Fa maximize ,
+.Fa close
+and, while it is maximized,
+.Fa restore ,
 and a drop without a title,
 .Fa files .
 A counting word has a form for each
@@ -452,6 +479,23 @@ A short message from the top edge; with an
 (undo, retry) it stays a little longer.
 While focus or the pointer is on it, it stays; Escape dismisses it, and
 focus goes back to where it came from.
+.It Fn rk_window_level "rk_window *window" "const char *icon" "const char *word" "float value" "const char *figure"
+A level indicator, for a value the user changed by a key (volume,
+brightness, zoom): a toast without an action, with an
+.Fa icon
+from the set
+.Pq Dv NULL : none ,
+the
+.Fa word ,
+a meter at
+.Fa value
+(0 to 1) and the
+.Fa figure .
+Called again with the same word while it shows, it stays and only its
+value glides; it goes
+.Li timing.level
+after the last change.
+Another word takes its place, as any toast does.
 .It Fn rk_window_do "rk_window *window" "const rk_action *action"
 Runs
 .Fa action->run
@@ -521,7 +565,9 @@ Text that wraps at its width, in one of the type roles
 .Pf ( Dv RK_TEXT_BODY ,
 .Dv RK_TEXT_GROUP ,
 .Dv RK_TEXT_TITLE ,
-\&...).
+\&...;
+.Dv RK_TEXT_DISPLAY
+for a time or a number read from across a room, twice the nav size).
 .It Fn rk_button "const char *label" "void (*on_press)(rk_view *, void *)" "void *user"
 A button.
 .Fn rk_button_set_kind
@@ -556,6 +602,19 @@ change what it shows
 .Fn rk_tile_set_code
 draws its sparkline in a domain colour.
 A tile with an activate handler presses and opens something.
+.It Fn rk_tile_grid_set_content "rk_view *grid" "bool on" , Fn rk_tile_set_content "rk_view *tile" "rk_role fill"
+Content fills: in a tile grid that opts in, a tile without a status takes the
+main colour of what it opens,
+.Dv RK_ROLE_CONTENT_TEAL ,
+.Dv RK_ROLE_CONTENT_STEEL ,
+.Dv RK_ROLE_CONTENT_VIOLET ,
+.Dv RK_ROLE_CONTENT_PLUM
+or
+.Dv RK_ROLE_CONTENT_ROSE
+.Pq Dv RK_ROLE_NONE : plain .
+A grid with a status tile in it shows none, and says so through the log when
+one is set; false makes the whole grid plain again.
+Under more contrast the content fills are the surface.
 .It Fn rk_rows , Fn rk_rows_add
 Hairline rows: a title on the left, a meta or a status on the right.
 A row is a view:
@@ -598,7 +657,10 @@ gives an item a square
 .Dv RK_CHECKMARK_ON )
 that a choice toggles while the menu stays open;
 .Fn rk_menu_set_enabled
-greys one out, and
+greys one out,
+.Fn rk_menu_set_icon
+puts an icon from the set at an item's start (once one item has one, every
+row's words start at one edge), and
 .Fn rk_menu_clear
 empties the menu to build it again.
 .Fn rk_view_set_menu
@@ -680,6 +742,12 @@ The calendar, Alt+Down or Enter opens the month below it, Monday first:
 the arrows go by day and week, Page Up and Page Down by month (with
 Shift, by year), Home and End to the month's ends, Enter takes a day,
 Escape closes.
+.It Fn rk_month "int year" "int month" , Fn rk_month_set
+A month to look at, such as a calendar at a clock: the picker's month on
+the ground, its name over the weekdays, Monday first, today framed.
+It chooses nothing and takes no focus;
+.Fn rk_month 0 0
+shows this month.
 .It Fn rk_control_value , Fn rk_control_set_value , Fn rk_control_on_change
 Every control holds a number: 0 or 1, the chosen index, the number, or
 the date as yyyymmdd
@@ -755,6 +823,12 @@ them; typed less than
 apart they are one prefix, and the same letter again moves on.
 .Fn rk_list_on_change
 hears what the user changes.
+With
+.Fn rk_list_on_remove ,
+Delete (or Backspace) on the active row asks the app to remove it,
+reversibly
+.Pq Fn rk_window_do ;
+the next row takes its place, the one before at the end.
 .Fn rk_list_is_selected ,
 .Fn rk_list_selection_count ,
 .Fn rk_list_selection
@@ -970,6 +1044,17 @@ turns the current place away and the new one in;
 Escape or the back button turn back, and
 .Fn rk_places_on_back
 hears it.
+.Fn rk_controller_set_called
+marks a place that is called up and left again many times an hour (a
+launcher): a change to or from it turns at half the pace, every duration and
+the stagger halved, the curves and angles as they are.
+.Pp
+A view marked with
+.Fn rk_view_set_carry
+is the title of the part it is in: when that part opens a place, the title
+does not turn away but travels into the new place's title (its first
+.Dv RK_TEXT_TITLE
+label), and back into the part.
 .It Fn rk_panorama , Fn rk_panorama_add
 One place laid out sideways in sections under a strip of their titles.
 .Fn rk_panorama_insert ,
@@ -1070,6 +1155,17 @@ Called before a change:
 .Dv RK_TRANSITION_CROSSFADE .
 Tiles of one window that peek or flip within duration-moderate go one after
 another in reading order, duration-greet apart, four steps at most.
+.It Fn rk_view_nudge "rk_view *view" "float dx" "float dy"
+A view that answers a gesture nobody can see (a swipe) hints at it when it
+is only tapped: it moves nudge-distance the gesture's way
+.Po
+.Fa dx
+and
+.Fa dy :
+1, 0 is right; 0, \-1 is up
+.Pc
+and back, duration-short each way.
+Call it from the tap; the words that name the gesture stay.
 .El
 .Pp
 Under reduced motion every change is instant, never skipped.

@@ -1,5 +1,22 @@
 # Principles
 
+## One language for every surface
+
+Rekta is one design language for every surface a product has: a web
+app, a desktop program, a phone, a shell around other programs (a
+launcher, a lock screen, a notification centre). The same tokens,
+patterns and motion apply on each; a new kind of surface gets new
+patterns in the same language, not a second system.
+
+A pattern describes its main case, with tokens, not every variant: what
+most products need, said once and exactly. A product that implements
+Rekta may deviate where its case is not the main one, and decides that
+itself. A deviation keeps Rekta's promises, which are not patterns but
+rules: text holds its contrast, a colour in a status position means that
+status and nothing else, every control is reached and used by keyboard,
+and motion follows reduced motion. Where a page says what a product may
+decide for itself, that is a choice, not a deviation.
+
 ## Content over chrome
 
 No cards, no panels, no boxed backgrounds for ordinary content. Tiles are
