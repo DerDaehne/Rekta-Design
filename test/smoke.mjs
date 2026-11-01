@@ -983,8 +983,10 @@ const bar = await m.evaluate(async () => {
     + `<button class="rk-ab" id="t-search" type="button" data-rk-priority="pinned">${icon}<span>search</span></button>`
     + `<button class="rk-ab" id="t-goto" type="button" aria-keyshortcuts="Control+K Meta+K">${icon}<span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl K</span></button>`
     + `<button class="rk-ab" type="button" data-rk-priority="5">${icon}<span>other</span></button><button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+  // The place name as navigation.md gives it: a direct child of the place, right after the strip.
   const name = document.createElement('h1'); name.className = 'rk-place-name'; name.textContent = 'overview';
-  document.querySelector('[data-rk-place="home"]').prepend(name);
+  const strip = document.querySelector('#nav'); strip.after(name);
+  const titleLeft = strip.getBoundingClientRect().left + parseFloat(getComputedStyle(strip).paddingLeft);
   document.querySelector('.rk').append(el);
   const a = Rekta.appbar(el); await wait(100);
   const item = [...el.querySelectorAll('.rk-ab-menu .rk-menu-item')].find((b) => b._rkFor && b._rkFor.id === 't-goto');
@@ -999,6 +1001,7 @@ const bar = await m.evaluate(async () => {
   r.places = el.hasAttribute('data-rk-places') && document.documentElement.hasAttribute('data-rk-places') && getComputedStyle(document.querySelector('#nav')).display === 'none'
     && el.querySelector('#t-search').hasAttribute('data-rk-overflow');
   r.nameShown = name.getBoundingClientRect().height > 20;
+  { const t = document.createRange(); t.selectNodeContents(name); r.flush = Math.abs(t.getBoundingClientRect().left - titleLeft); }
   a.destroy(); el.remove(); await wait(50);
   r.after = !document.documentElement.hasAttribute('data-rk-places') && getComputedStyle(document.querySelector('#nav')).display !== 'none';
   name.remove();
@@ -1008,6 +1011,9 @@ ok(bar.pinned, 'a pinned control stays in the bar; one without a priority moves 
 ok(bar.words === 'go to' && bar.key && bar.ks === 'Control+K Meta+K', 'a moved control\'s menu item keeps its key hint apart', JSON.stringify(bar));
 ok(bar.places && bar.after, 'places in the bar: data-rk-places on the bar and the root, the strip steps aside, back when it goes');
 ok(bar.nameHidden && bar.nameShown, '.rk-place-name shows only while the places are in the bar');
+ok(bar.flush < 1, 'right after the strip, the place name stands where the strip\'s title stood', bar.flush);
+ok(await m.evaluate(() => { const n = document.querySelectorAll('.rk-place-name'), s = n[0] && getComputedStyle(n[0]);
+  return n.length === 1 && n[0].closest('.phone') && n[0].getBoundingClientRect().height > 20 && Math.abs(parseFloat(s.fontSize) - Rekta.tokens.px('--rk-font-size-pivot-active')) < 0.5; }), 'the showcase\'s phone shows a place without a title of its own, named by .rk-place-name');
 const grow = await m.evaluate(async () => {
   const wait = (t) => new Promise((r) => setTimeout(r, t));
   const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';

@@ -229,7 +229,23 @@ with an icon over a lowercase word.
   `<h1 class="rk-place-name">`, which `rekta.css` keeps for screen
   readers only while the strip shows and shows, at the strip's active
   size, while the places are in the bar. Never a kicker repeating the
-  bar's word.
+  bar's word. It is a direct child of `.rk-place`, right after the
+  strip, so it takes the strip's side padding and stands where the
+  strip stood:
+
+  ```html
+  <main class="rk-place" data-rk-place="history">
+    <nav class="rk-pivot rk-pivot--nav" aria-label="places">…</nav>
+    <h1 class="rk-place-name">history</h1>
+    <div class="rk-panorama">…</div>
+  </main>
+  ```
+
+  With a framework router the `h1` goes where the strip goes (in the
+  layout that holds the place and its strip), not into the page
+  component inside the content area: there its own padding would add
+  to the place name's. When the place changes, it turns with the place
+  ([motion.md](motion.md)).
 
 ### Go to
 
