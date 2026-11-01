@@ -254,6 +254,32 @@ const fp = await p.evaluate(async () => {
 });
 ok(fp[900].before.split(',').length === 1 && !fp[900].wide && fp[900].after === fp[900].before, 'in a narrow container the first paint and pivot() both show one facet', JSON.stringify(fp[900]));
 ok(fp[1400].before.split(',').length === 3 && fp[1400].wide && fp[1400].after === fp[1400].before, 'in a wide container the first paint lays the facets out where pivot() does', JSON.stringify(fp[1400]));
+// Geometry the docs fix: inactive pivot titles stand on the active one's baseline; a sparkline's line is 2px at any
+// tile width; a status region spaces its kicker, figures and actions.
+const geo = await p.evaluate(async () => {
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const host = document.createElement('div'); host.style.cssText = 'position:absolute;left:0;top:0;width:900px;z-index:-1';
+  host.innerHTML = '<div class="rk-pivot" role="tablist" aria-label="g">' + ['all', 'questions', 'drafts'].map((n, i) => `<button role="tab" id="gt-${n}" aria-controls="gp-${n}" aria-selected="${i === 1}">${n}</button>`).join('') + '</div>'
+    + '<div>' + ['all', 'questions', 'drafts'].map((n) => `<div role="tabpanel" id="gp-${n}">${n}</div>`).join('') + '</div>'
+    + '<div class="rk-tiles" style="width:600px">' + ['', 'rk-w2'].map((w) => `<div class="rk-tile ${w}"><span class="rk-stat"><b>1</b><span>x</span></span><svg class="rk-spark rk-spark--static" viewBox="0 0 200 28"><polyline points="1,14 199,14"/></svg></div>`).join('') + '</div>'
+    + '<section class="rk-region rk-status-region" aria-label="job"><p class="rk-kicker">nightly build</p><div class="rk-figures"><span class="rk-stat"><b>412</b><span>tests run</span></span></div><p class="rk-actions"><button class="rk-btn">pause</button></p></section>';
+  document.querySelector('.rk').append(host);
+  const pv = Rekta.pivot(host.querySelector('.rk-pivot')); await frames(); await frames();
+  const feet = [...host.querySelectorAll('[role=tab]')].map((t) => { const m = document.createElement('span'); m.style.cssText = 'display:inline-block;width:0;height:0'; t.append(m); const b = m.getBoundingClientRect().bottom; m.remove(); return b; });
+  const strokes = [...host.querySelectorAll('.rk-spark')].map((svg) => {
+    const l = svg.querySelector('polyline'), k = svg.getScreenCTM().a, pt = svg.createSVGPoint(); pt.x = 100; let half = 0;
+    for (let d = 0; d < 4; d += 0.05) { pt.y = 14 + d / k; if (l.isPointInStroke(pt)) half = d; }
+    return { width: Math.round(svg.getBoundingClientRect().width), stroke: +(2 * half).toFixed(2) };
+  });
+  const region = host.querySelector('.rk-status-region'), mt = (s) => parseFloat(getComputedStyle(region.querySelector(s)).marginTop);
+  const out = { feet, scaled: host.querySelector('#gt-all').getBoundingClientRect().height < host.querySelector('#gt-questions').getBoundingClientRect().height, strokes,
+    region: { figures: mt('.rk-figures'), actions: mt('.rk-actions'), s: Rekta.tokens.px('--rk-space-s'), m: Rekta.tokens.px('--rk-space-m') } };
+  pv.destroy(); host.remove();
+  return out;
+});
+ok(geo.scaled && Math.max(...geo.feet) - Math.min(...geo.feet) <= 0.5, 'inactive pivot titles scale about the baseline: one baseline for all', JSON.stringify(geo.feet));
+ok(geo.strokes[1].width > geo.strokes[0].width * 1.8 && geo.strokes.every((s) => Math.abs(s.stroke - 2) <= 0.2), 'a sparkline\'s line is 2px on a 1 × 1 and a 2 × 1 tile', JSON.stringify(geo.strokes));
+ok(geo.region.figures === geo.region.s && geo.region.actions === geo.region.m, 'a status region: space-s from kicker to figures, space-m to the actions', JSON.stringify(geo.region));
 // Data that renders after the navigation: restore() waits for the boxes to appear and grow; a user scroll first wins.
 const late = await p.evaluate(async () => {
   const wait = (t) => new Promise((r) => setTimeout(r, t));
