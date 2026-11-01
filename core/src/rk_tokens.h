@@ -73,6 +73,7 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_EASE_BASE { 0.25f, 0.1f, 0.25f, 1.0f }
 #define RK_TOK_EASE_IN { 0.0f, 0.0f, 0.2f, 1.0f }
 #define RK_TOK_EASE_OUT { 0.4f, 0.0f, 0.5f, 1.0f }
+#define RK_TOK_EASE_IN_OUT { 0.42f, 0.0f, 0.58f, 1.0f }
 #define RK_TOK_EASE_PIVOT_GLIDE { 0.65f, 0.0f, 0.35f, 1.0f }
 #define RK_TOK_EASE_TURN_OUT { 0.35f, 0.0f, 0.65f, 0.6f }
 #define RK_TOK_EASE_TURN_IN { 0.22f, 0.9f, 0.6f, 0.98f }

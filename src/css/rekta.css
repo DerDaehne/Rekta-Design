@@ -163,7 +163,7 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
   /* A scaled title keeps its full layout width; rekta.js writes that width to --_rk-w, and the end margin takes
      back what the scale gives up, so every gap reads as space-l. */
   margin-inline-end: calc(var(--_rk-w, 0px) * (var(--_rk-s) - 1));
-  transition: transform var(--rk-duration-pivot-size) ease-in-out, margin-inline-end var(--rk-duration-pivot-size) ease-in-out, color var(--rk-duration-short) var(--rk-ease-base);
+  transition: transform var(--rk-duration-pivot-size) var(--rk-ease-in-out), margin-inline-end var(--rk-duration-pivot-size) var(--rk-ease-in-out), color var(--rk-duration-short) var(--rk-ease-base);
 }
 .rk-pivot > a::after, .rk-pivot > button::after {
   content: ''; position: absolute; inset: auto 0 0; height: max(100%, calc(var(--rk-touch-target) / var(--_rk-s)));
@@ -185,7 +185,7 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-pivot--side { flex-direction: column; align-items: flex-start; gap: var(--rk-space-xs); overflow: visible; padding-inline-end: var(--rk-space-m); }
 .rk-pivot--side > :is(a, button) {
   --_rk-s: 1; --_rk-step: 0px; font-size: var(--rk-font-size-pivot-active); margin: 0; transform: translateX(var(--_rk-step));
-  transition: transform var(--rk-duration-pivot-size) ease-in-out, color var(--rk-duration-pivot-size) ease-in-out;
+  transition: transform var(--rk-duration-pivot-size) var(--rk-ease-in-out), color var(--rk-duration-pivot-size) var(--rk-ease-in-out);
 }
 .rk-pivot--side > :is([aria-current], [aria-selected='true']) { --_rk-step: var(--rk-space-m); }
 .rk-pivot--side > :is([aria-current], [aria-selected='true']):dir(rtl) { --_rk-step: calc(-1 * var(--rk-space-m)); }
@@ -652,7 +652,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-ab-more { anchor-name: --rk-ab-more; }
   .rk-float.rk-ab-menu { position-anchor: --rk-ab-more; inset: auto anchor(right) calc(anchor(top) + var(--rk-space-xs)) auto; }
 }
-.rk-pulse { width: 8px; height: 8px; flex: none; background: var(--rk-status-success-full); animation: rk-pulse var(--rk-duration-pulse) ease-in-out infinite; }
+.rk-pulse { width: 8px; height: 8px; flex: none; background: var(--rk-status-success-full); animation: rk-pulse var(--rk-duration-pulse) var(--rk-ease-in-out) infinite; }
 .rk-appbar[data-rk-state='paused'] .rk-pulse { background: var(--rk-status-warning-full); animation: none; }
 .rk-appbar[data-rk-state='halted'] .rk-pulse { background: var(--rk-status-error-full); animation: none; }
 .rk-ab-k { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -1083,7 +1083,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-pivot--side { flex-direction: row; align-items: baseline; gap: var(--rk-space-l); overflow-x: auto; padding-inline-end: 0; }
   .rk-pivot--side > :is(a, button) {
     --_rk-s: var(--rk-pivot-scale, 0.6); transform: scale(var(--_rk-s)); margin-inline-end: calc(var(--_rk-w, 0px) * (var(--_rk-s) - 1));
-    transition: transform var(--rk-duration-pivot-size) ease-in-out, margin-inline-end var(--rk-duration-pivot-size) ease-in-out, color var(--rk-duration-short) var(--rk-ease-base);
+    transition: transform var(--rk-duration-pivot-size) var(--rk-ease-in-out), margin-inline-end var(--rk-duration-pivot-size) var(--rk-ease-in-out), color var(--rk-duration-short) var(--rk-ease-base);
   }
   .rk-pivot--side > :is([aria-current], [aria-selected='true']) { --_rk-s: 1; }
   /* The banner on a phone: the state's word (with its time under it) and the sentence share a line, the action goes

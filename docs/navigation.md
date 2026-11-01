@@ -21,8 +21,9 @@ Selecting a title (including a nested pivot's) moves the content it
 names flush left, never centred or right-aligned.
 
 Two motions play at once, not one after the other: the strip's glide
-uses a pronounced ease-in-out with clear acceleration and deceleration;
-the active title's size change uses a lighter, quicker ease-in-out.
+uses a pronounced ease-in-out with clear acceleration and deceleration
+(`ease-pivot-glide`); the active title's size change uses a lighter,
+quicker one (`ease-in-out`, over `duration-pivot-size`).
 Only the previously active and newly active titles ever change size —
 every other title stays exactly as it was. The strip's height never
 depends on which title is active: a title is sized from a fixed line

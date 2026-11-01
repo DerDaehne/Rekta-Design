@@ -809,6 +809,16 @@
         ],
         "$description": "Things leaving and the facet change (pivot slide): leaving rows and tiles, the old content of a tile's news. The place change has its own curves (turn-out, turn-in)."
       },
+      "in-out": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.42,
+          0.0,
+          0.58,
+          1.0
+        ],
+        "$description": "Even ease-in-out for a change that starts and ends at rest in place: the pivot title's size change, a title stepping in down the side, the live pulse. The curve CSS calls ease-in-out."
+      },
       "pivot-glide": {
         "$type": "cubicBezier",
         "$value": [

@@ -98,6 +98,11 @@ const count = await p.evaluate(() => JSON.parse(document.querySelector('#tokens-
 ok((await text(p, '#token-count')) === String(count), 'the tokens tile counts the tokens');
 ok(await p.evaluate(() => [...document.querySelectorAll('[data-contrast]')].every((b) => /^\d+\.\d : 1$/.test(b.textContent))), 'contrast is measured live');
 ok(!(await p.evaluate(() => /\{\{|<!--@/.test(document.body.innerHTML))), 'every placeholder was filled at build time');
+// The pivot's size change and the live pulse take the in-out curve from its token, not from the CSS keyword.
+{
+  const c = await p.evaluate(() => ({ pivot: getComputedStyle(document.querySelector('.rk-pivot > a')).transitionTimingFunction.split(', cubic')[0], pulse: getComputedStyle(document.querySelector('.rk-pulse')).animationTimingFunction }));
+  ok(c.pivot === 'cubic-bezier(0.42, 0, 0.58, 1)' && c.pulse === 'cubic-bezier(0.42, 0, 0.58, 1)', 'the pivot size change and the pulse use ease-in-out from its token', JSON.stringify(c));
+}
 ok((await p.evaluate(() => { const seen = new Set(), twice = []; document.querySelectorAll('[id]').forEach((e) => { if (seen.has(e.id)) twice.push(e.id); seen.add(e.id); }); return twice.join(); })) === '', 'every id is unique');
 
 // Tile → place: the turnstile, the address, the title, focus; the crumb back.

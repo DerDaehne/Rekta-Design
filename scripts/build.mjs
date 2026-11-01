@@ -286,6 +286,9 @@ function check(tokens) {
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
   }
+  // Every curve is a token: a CSS keyword curve (ease, ease-in, ease-out, ease-in-out) has no value a native
+  // implementation could read.
+  for (const m of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/[\s:,](ease(?:-in-out|-in|-out)?)(?=[\s;,)])/g)) problems.push(`rekta.css uses the keyword curve ${m[1]}: read a --rk-ease-* token`);
   // A keyframe's offset cannot read a property: where one stands for a token, it must say the token's value.
   {
     const frames = (name) => (new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`).exec(css) || [])[1] || '';
