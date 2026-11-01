@@ -96,6 +96,10 @@ a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit
 /* Figures outside a tile (a status region, docs/tiles.md): side by side, each its number over its words. */
 .rk-figures { display: flex; flex-wrap: wrap; gap: var(--rk-space-m) var(--rk-space-xl); margin: 0; }
 .rk-figures > .rk-stat > span { display: block; margin-top: var(--rk-space-xs); font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
+/* A status region (docs/tiles.md): kicker, figures, actions, with the rhythm of a section; the kicker stands over the
+   figures as in a tile (space-s), not as over a sentence. Only this class sets it: lists and tables are regions too. */
+.rk-status-region > * + * { margin-top: var(--rk-space-m); }
+.rk-status-region > .rk-kicker + * { margin-top: var(--rk-space-s); }
 /* A title from user data (docs/typography.md): long words break, and past three lines an ellipsis; the whole title is
    still read, and data-rk-tip="overflow" shows it to the mouse. */
 .rk-title { overflow-wrap: anywhere; }

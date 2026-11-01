@@ -106,7 +106,7 @@ a plain region on the ground with the figures as a tile shows them and
 its controls below.
 
 ```html
-<section class="rk-region" aria-labelledby="job">
+<section class="rk-region rk-status-region" aria-labelledby="job">
   <p class="rk-kicker" id="job">nightly build · <span class="rk-tag" data-status="info">running</span></p>
   <div class="rk-figures">
     <span class="rk-stat"><b>412</b><span>tests run</span></span>
@@ -117,6 +117,11 @@ its controls below.
 </section>
 ```
 
+- **Spacing:** `.rk-status-region` gives it a section's rhythm:
+  `space-m` between the parts (figures and actions, as in a sheet or a
+  section) and `space-s` between the kicker and the figures (as in a
+  tile, where the kicker stands over its figures). `.rk-region` alone
+  adds no space: lists and tables are regions too.
 - **Not a tile:** no fill (its status is a tag in the kicker, never the
   ground), no press, no focus on the region, no link around it.
 - **Figures** in `.rk-figures` (`.rk-stat` each: the number over its
