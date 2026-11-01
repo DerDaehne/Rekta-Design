@@ -234,7 +234,10 @@
     ['Icons', 'assets', 'success', '0.3'], ['Title bar', 'shell', 'success', '0.3'], ['App shell', 'shell', 'info', '0.3'],
     ['Share bar', 'data', 'success', '0.4'], ['Icon button', 'actions', 'success', '0.4'], ['Status region', 'layout', 'success', '0.4'],
     ['Scroll state', 'navigation', 'success', '0.5'],
-    ['Date range', 'forms', 'warning', 'next'], ['Notification centre', 'feedback', 'warning', 'next'], ['Rich text', 'forms', 'warning', 'next'],
+    ['Toggle button', 'actions', 'success', 'next'], ['Side panel', 'overlays', 'success', 'next'], ['Notification centre', 'feedback', 'success', 'next'], ['Level indicator', 'feedback', 'success', 'next'],
+    ['Launch tile', 'tiles', 'success', 'next'], ['Preview tile', 'tiles', 'success', 'next'], ['Recent stack', 'navigation', 'success', 'next'], ['Month', 'forms', 'success', 'next'],
+    ['Session', 'shell', 'success', 'next'], ['Accent surface', 'layout', 'success', 'next'], ['Beads', 'data', 'success', 'next'],
+    ['Date range', 'forms', 'warning', 'next'], ['Rich text', 'forms', 'warning', 'next'], ['More grounds', 'colour', 'warning', 'next'],
   ];
   const compHtml = COMPONENTS.map(([name, group, status, since]) => `<tr data-name="${name}" data-status-v="${status}"><td class="rk-check"></td><th scope="row">${name}</th><td data-rk-edit data-rk-tip="double-click or F2 to edit">${group}</td><td><span class="rk-tag" data-status="${status}">${WORD[status]}</span></td><td class="rk-num" data-sort="${since === 'next' ? 9 : since}">${since}</td></tr>`).join('');
   $('#comp-body').innerHTML = compHtml;
@@ -261,6 +264,8 @@
     $('#comp-clear').hidden = !(q || st.length);
     const archived = $$('#comp-body tr[data-archived]').length;
     $('#comp-facts').textContent = `${COMPONENTS.length} components${shown < COMPONENTS.length ? ` · showing ${shown}` : ''}${archived ? ` · ${archived} archived` : ''} · ${COMPONENTS.filter((c) => c[2] === 'warning').length} waiting`;
+    // The statuses shown stand as tags in a row: each fades in and out in place, as a control in a bar does.
+    Rekta.presence($('#comp-tags'), { items: $$('#comp-tags > .rk-tag'), show: (t) => st.includes(t.dataset.v) });
     // Rows that go leave, the rest close up, rows that come back slide in (Rekta.presence).
     return Rekta.presence($('#comp-body'), { items: rows, show: keep }).then(() => compTable.refresh());
   }
@@ -392,6 +397,7 @@
       { group: 'places', label: 'Rekta Design', href: '#', keywords: 'home overview' },
       { group: 'places', label: 'Tokens', href: '#tokens', keywords: 'values table split' },
       { group: 'places', label: 'Release notes', href: '#notes', keywords: 'new 0.2' },
+      { group: 'places', label: 'All apps', href: '#apps', keywords: 'start launcher programs' },
       ...$$('#nav a').map((a) => ({ group: 'sections', label: a.textContent, keywords: a.hash.slice(1), run: () => router.navigate('home').then(() => home.goTo(a.hash.slice(1))) })),
       ...TOKENS.map((t) => ({ group: 'tokens', label: `--rk-${t.name}`, keywords: `${t.group} ${t.name}`, href: `#tokens/${t.name}` })),
       { group: 'commands', label: banner.is('paused') ? 'resume the live data' : 'pause the live data', run: () => $('#ab-pause').click() },
@@ -754,6 +760,335 @@
     },
   });
 
+  /* ---------- tiles: a status region, figures with their own controls ---------- */
+  // A job's figures beside the controls that act on it are not a tile (a tile never changes data): no fill, no press,
+  // its status a tag in the kicker. Its figures are a continuous reading, so they change in place.
+  const JOB = { tests: 412, pace: 9 };
+  const JOB_WORD = { running: ['info', 'active'], paused: ['warning', 'waiting'], done: ['success', 'done'], cancelled: ['', 'idle'] };
+  let job = { run: 0, state: 'running' };
+  function paintJob() {
+    const [st, word] = JOB_WORD[job.state], tag = $('#job-tag'), ended = job.state === 'done' || job.state === 'cancelled';
+    if (st) tag.dataset.status = st; else delete tag.dataset.status;
+    tag.textContent = word;
+    $('#job-run').textContent = job.run;
+    $('#job-failed').textContent = 0;
+    $('#job-left').textContent = ended ? '–' : `${Math.ceil((JOB.tests - job.run) / JOB.pace)} s`;
+    $('#job-pause').textContent = job.state === 'paused' ? 'resume' : 'pause';
+    $('#job-pause').hidden = ended; $('#job-cancel').hidden = ended;
+    Rekta.disable($('#job-again'), ended ? null : 'It is still running: cancel it first.');
+  }
+  setInterval(() => {
+    if (job.state !== 'running' || !live()) return;
+    job.run = Math.min(JOB.tests, job.run + JOB.pace);
+    if (job.run >= JOB.tests) job.state = 'done';
+    paintJob();
+  }, 1000);
+  $('#job-pause').addEventListener('click', () => { job.state = job.state === 'paused' ? 'running' : 'paused'; paintJob(); });
+  $('#job-cancel').addEventListener('click', async () => {
+    if (!(await Rekta.confirm({ kicker: 'nightly build', title: 'Cancel the build?', text: `${JOB.tests - job.run} tests have not run yet. Its results so far stay.`, ok: 'cancel the build', cancel: 'keep it running', safe: 'cancel' }))) return;
+    job.state = 'cancelled'; paintJob(); $('#job-again').focus();
+    toasts.show('The nightly build is cancelled.', { key: 'job' });
+  });
+  $('#job-again').addEventListener('click', () => { job = { run: 0, state: 'running' }; paintJob(); $('#job-pause').focus(); });
+  paintJob();
+
+  /* ---------- inputs: a field that cannot change now, and says why ---------- */
+  Rekta.disable($('#keep-days'), 'Your organisation sets this: logs are kept 30 days.');
+  $('#keep-days').readOnly = true;
+
+  /* ---------- data: the beads, for a long wait that holds the whole screen ---------- */
+  $('#startup').addEventListener('click', (e) => {
+    const b = e.currentTarget;
+    if (b.getAttribute('aria-disabled') === 'true') return;
+    b.setAttribute('aria-disabled', 'true'); b.textContent = 'starting up…';
+    $('#beads').hidden = false; $('#startup-msg').textContent = 'Starting up. This takes a while; nothing else can happen meanwhile.';
+    setTimeout(() => { $('#beads').hidden = true; b.removeAttribute('aria-disabled'); b.textContent = 'start up'; $('#startup-msg').textContent = 'Started.'; toasts.show('Started up.', { key: 'startup', from: b }); }, 4000);
+  });
+
+  /* ---------- a whole system: a desktop, its bar, notifications, quick settings, the session, the lock screen ---------- */
+  // Picture icons stand for what Rekta did not draw: another program's icon, a sender's photo. Coloured and off the
+  // grid, they keep their own colours, on a neutral ground only. Here they are drawn from the content colours, so the
+  // page needs no image files; the letters are set in the ink of the theme the page opened in.
+  const PICS = { chat: ['content-teal', 'C'], ana: ['content-rose', 'AR'] };
+  function pictureOf(name) {
+    const [fill, letters] = PICS[name];
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="${tok.value(`--rk-${fill}`)}"/>`
+      + `<text x="24" y="31" font-family="sans-serif" font-size="${letters.length > 1 ? 18 : 24}" font-weight="600" text-anchor="middle" fill="${tok.value('--rk-text-primary')}">${letters}</text></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  }
+  const pictures = (scope) => $$('img[data-pic]', scope).forEach((img) => { img.src = pictureOf(img.dataset.pic); });
+  pictures(document);
+  const APPS = {
+    chat: { name: 'Chat', pic: 'chat', title: 'Ana Ruiz', facts: 'The build is green again. Shall we tag it after lunch?' },
+    notes: { name: 'Notes', icon: 'edit', title: 'Shopping', facts: 'coffee beans · oat milk · a new notebook' },
+    files: { name: 'Files', icon: 'folder', title: 'Shared album', facts: '128 photos · 3 uploading' },
+    music: { name: 'Music', icon: 'music', title: 'Calm, side B', facts: 'track 2 of 6 · 3 min 12 s left' },
+    terminal: { name: 'Terminal', icon: 'window', title: 'make test', facts: '412 passed · none failed · 38 s' },
+    calendar: { name: 'Calendar', icon: 'calendar', title: 'Review with Ana', facts: 'today, 15:00 to 15:30 · small room' },
+  };
+  const appIcon = (id) => { if (APPS[id].pic) { const i = document.createElement('img'); i.className = 'rk-picture'; i.alt = ''; i.src = pictureOf(APPS[id].pic); return i; } return Rekta.icon(APPS[id].icon); };
+  const deskStart = () => ({ running: ['notes', 'chat'], used: ['notes', 'chat'], front: 'notes', min: [], max: false, active: true });
+  let desk = deskStart();
+  const bar = $('#screen-bar'), win = $('#win');
+  const runOf = (id) => $(`.rk-ab-run[data-app="${id}"]`, bar);
+  // The window shows the program in front; the bar marks it; the desktop says so when nothing is open.
+  function paintDesk() {
+    const shown = desk.front && !desk.min.includes(desk.front) ? desk.front : null, a = shown && APPS[shown];
+    win.hidden = !shown;
+    $('#desk-empty').hidden = !!desk.running.length;
+    for (const b of $$('.rk-ab-run', bar)) { if (b.dataset.app === shown && desk.active) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current'); }
+    $('#win-bar').toggleAttribute('data-rk-inactive', !desk.active);
+    if (a) {
+      $('#win-name').replaceChildren(Object.assign(document.createElement('b'), { textContent: a.name })); $('#win-place').textContent = a.title;
+      const [k, t, f] = $('#win-body').children; k.textContent = a.name.toLowerCase(); t.textContent = a.title; f.textContent = a.facts;
+    }
+    win.toggleAttribute('data-max', desk.max);
+    const word = desk.max ? 'restore' : 'maximize', mx = $('#win-max');
+    mx.setAttribute('aria-label', word); mx.dataset.rkTip = word; $('use', mx).setAttribute('href', `#rk-i-${word}`);
+    $('#apps-facts').textContent = `${Object.keys(APPS).length} programs · ${desk.running.length} running`;
+    paintRunning($('#apps-running'), desk.running);
+  }
+  // A preview tile: what the program shows, small, with its icon and name at the foot.
+  function previewTile(id) {
+    const a = APPS[id], t = document.createElement('button');
+    t.type = 'button'; t.className = 'rk-tile rk-tile--preview'; t.dataset.app = id;
+    t.setAttribute('aria-label', `${a.name}, ${a.title}`);
+    t.innerHTML = '<span class="rk-tile-preview"><span class="mock" aria-hidden="true"><span></span><span></span></span></span><span class="rk-tile-foot"><span></span></span>';
+    const [title, facts] = $('.mock', t).children; title.textContent = a.title; facts.textContent = a.facts;
+    const foot = $('.rk-tile-foot', t); foot.prepend(appIcon(id)); foot.lastChild.textContent = a.name;
+    return t;
+  }
+  const grids = new Map();
+  function paintRunning(el, ids) {
+    el.replaceChildren(...ids.map(previewTile));
+    if (!grids.has(el)) grids.set(el, Rekta.grid(el)); else grids.get(el).refresh();
+  }
+  function toFront(id) {
+    if (!desk.running.includes(id)) {
+      desk.running.push(id);
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'rk-ab rk-ab-run'; b.dataset.app = id;
+      b.append(appIcon(id), Object.assign(document.createElement('span'), { textContent: APPS[id].name }));
+      const runs = $$('.rk-ab-run', bar);
+      if (runs.length) runs[runs.length - 1].after(b); else bar.prepend(b);
+      Rekta.enter(b);
+    }
+    desk.min = desk.min.filter((x) => x !== id);
+    desk.used = [id, ...desk.used.filter((x) => x !== id)];
+    desk.front = id; desk.active = true;
+    paintDesk();
+  }
+  const nextFront = () => desk.used.find((x) => desk.running.includes(x) && !desk.min.includes(x)) || null;
+  // Choosing the program in front minimises it; choosing another brings it to the front.
+  bar.addEventListener('click', (e) => {
+    const b = e.target.closest('.rk-ab-run');
+    if (!b) return;
+    if (b.getAttribute('aria-current') === 'true') $('#win-min').click(); else toFront(b.dataset.app);
+  });
+  $('#win-min').addEventListener('click', () => { desk.min.push(desk.front); desk.front = nextFront(); desk.active = !!desk.front; paintDesk(); });
+  // Maximising and restoring re-arrange: the window grows or shrinks and its content fades back in (resize, re-flow).
+  $('#win-max').addEventListener('click', () => Rekta.reflow($('#desk'), () => { desk.max = !desk.max; desk.active = true; paintDesk(); }, { items: [win] }));
+  $('#win-close').addEventListener('click', async () => {
+    const id = desk.front, b = runOf(id);
+    desk.running = desk.running.filter((x) => x !== id); desk.used = desk.used.filter((x) => x !== id);
+    desk.front = nextFront(); desk.active = !!desk.front;
+    paintDesk();
+    if (b) { const a = await Rekta.leave(b); b.remove(); if (a) a.cancel(); }
+  });
+  // A press on the desktop makes the window inactive: its name steps back; a press on the window makes it active.
+  $('#desk').addEventListener('pointerdown', (e) => {
+    const on = !!e.target.closest('#win');
+    if (on !== desk.active) { desk.active = on; paintDesk(); }
+  });
+  Rekta.disable($('#sb-cast'), 'no screen to cast to nearby');
+  const screenBar = Rekta.appbar(bar);
+  // The clock: the time over the date; it opens this month, to read.
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const DAYS = [['Mo', 'Monday'], ['Tu', 'Tuesday'], ['We', 'Wednesday'], ['Th', 'Thursday'], ['Fr', 'Friday'], ['Sa', 'Saturday'], ['Su', 'Sunday']];
+  const hhmm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  function paintClock() {
+    const d = new Date(), day = DAYS[(d.getDay() + 6) % 7][1];
+    $('#clock-time').textContent = hhmm(d); $('#clock-date').textContent = `${day.slice(0, 3)} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
+    $('#clock').setAttribute('aria-label', `${hhmm(d)}, ${day} ${d.getDate()} ${MONTHS[d.getMonth()]}: this month`);
+    $('#lock-time').textContent = hhmm(d); $('#lock-date').textContent = `${day}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+    const first = (new Date(d.getFullYear(), d.getMonth(), 1).getDay() + 6) % 7, days = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const cells = [...Array(first).fill('<td></td>'), ...Array.from({ length: days }, (_, i) => (i + 1 === d.getDate() ? `<td aria-current="date">${i + 1}</td>` : `<td>${i + 1}</td>`))];
+    while (cells.length % 7) cells.push('<td></td>');
+    const rows = Array.from({ length: cells.length / 7 }, (_, r) => `<tr>${cells.slice(r * 7, r * 7 + 7).join('')}</tr>`).join('');
+    $('#month').innerHTML = `<caption>${MONTHS[d.getMonth()]} ${d.getFullYear()}</caption><thead><tr>${DAYS.map(([s, l]) => `<th scope="col" abbr="${l}">${s}</th>`).join('')}</tr></thead><tbody>${rows}</tbody>`;
+  }
+  paintClock(); setInterval(paintClock, 15000);
+  $('#clock-cal').addEventListener('toggle', (e) => { if (e.newState === 'open') Rekta.place($('#clock-cal'), $('#clock')); });
+  // The volume keys: the level in a toast, or for a moment in place of the clock (indicate()); one form at a time.
+  let volume = 0.6, levelIn = 'toast';
+  const level = document.createElement('span');
+  level.className = 'level';
+  level.innerHTML = '<span class="level-icon"></span><span class="rk-meter"></span><b></b>';
+  function setVolume(v, { show = true } = {}) {
+    volume = Math.round(Math.max(0, Math.min(1, v)) * 10) / 10;
+    $('#qs-vol').value = volume * 100;
+    $('#qs-vol').dispatchEvent(new Event('input', { bubbles: true }));
+    if (!show) return;
+    const pct = `${Math.round(volume * 100)}%`, glyph = volume ? 'speaker' : 'speaker-muted';
+    if (levelIn === 'toast') { toasts.level('volume', volume, { icon: glyph }); return; }
+    level.firstChild.replaceChildren(Rekta.icon(glyph));
+    level.children[1].style.setProperty('--rk-v', volume);
+    level.lastChild.textContent = pct;
+    Rekta.indicate($('#clock'), level);
+    $('#level-said').textContent = `volume ${pct}`;
+  }
+  $('#vol-down').addEventListener('click', () => setVolume(volume - 0.1));
+  $('#vol-up').addEventListener('click', () => setVolume(volume + 0.1));
+  $$('input[name=level-in]').forEach((r) => r.addEventListener('change', () => { levelIn = r.value; }));
+  $('#qs-vol').addEventListener('input', (e) => { if (e.isTrusted) volume = +e.target.value / 100; });
+  // In the background: one control for the programs without a window, each with its own menu as a second level.
+  let playing = true;
+  Rekta.menu($('#sb-bg'), $('#bg-menu'), {
+    onSelect(item) {
+      const act = item.dataset.act;
+      if (act === 'pause') { playing = !playing; item.lastChild.textContent = playing ? 'pause' : 'play'; $('use', item).setAttribute('href', `#rk-i-${playing ? 'pause' : 'play'}`); $('#bg-menu .rk-menu-key').textContent = playing ? 'playing' : 'paused'; }
+      const said = { previous: 'Music: the track before.', next: 'Music: the next track.', pause: playing ? 'Music plays again.' : 'Music paused.', sync: 'Sync: everything is up to date.', folder: 'Sync: the folder opens in Files.' }[act];
+      if (said) toasts.show(said, { key: 'background' });
+      if (act === 'folder') toFront('files');
+    },
+  });
+  // The notification centre: newest on top, each removable by its button, Delete or a swipe, every removal undone.
+  const centre = $('#centre'), CENTRE = centre.innerHTML;
+  let upload = 20;
+  function paintCentre() {
+    const n = $$(':scope > li', centre).length;
+    $('#centre-none').hidden = n > 0; $('#centre-all').hidden = !n;
+    const count = $('#sb-count');
+    if (count.textContent !== String(n)) Rekta.tileUpdate($('#sb-notes'), () => { count.textContent = n; });
+  }
+  function dismiss(items, left) {
+    const where = items.map((li) => [li, li.nextElementSibling]);
+    const label = items.length === 1 ? `Dismissed “${$('b', items[0]).textContent}”` : `Dismissed ${items.length} notifications`;
+    let first = true;
+    hist.do({
+      label,
+      run: async () => {
+        const gone = first && left;
+        first = false;
+        const anims = gone ? [] : await Promise.all(items.map((li) => Rekta.leave(li)));
+        Rekta.reflow(centre, () => { items.forEach((li) => li.remove()); anims.forEach((a) => a && a.cancel()); paintCentre(); }, { size: false, items: $$(':scope > li', centre).filter((li) => !items.includes(li)) });
+      },
+      undo: () => {
+        Rekta.reflow(centre, () => {
+          for (const [li, next] of where.slice().reverse()) { li.removeAttribute('style'); if (next && next.isConnected) next.before(li); else centre.append(li); }
+          paintCentre();
+        }, { size: false });
+        items.forEach(Rekta.enter);
+      },
+    });
+  }
+  const centreRemove = Rekta.removable(centre, { onRemove: (li, { left }) => dismiss([li], left) });
+  $('#centre-all').addEventListener('click', () => dismiss($$(':scope > li', centre), false));
+  // A tap on a row, not on its button, hints at the swipe nobody can see: the row moves the way it would go.
+  centre.addEventListener('click', (e) => {
+    const li = e.target.closest('#centre > li');
+    if (li && !e.target.closest('button, a')) Rekta.nudge(li, getComputedStyle(centre).direction === 'rtl' ? 'left' : 'right');
+  });
+  function arrive({ pic = '', icon: glyph = '', title, text }) {
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="centre-text"><b></b><span></span></span><span class="rk-meta centre-time"></span><button class="rk-btn rk-btn--icon rk-btn--quiet" type="button" data-rk-remove aria-label="dismiss" data-rk-tip="dismiss"></button>';
+    li.prepend(pic ? Object.assign(document.createElement('img'), { className: 'rk-picture', alt: '', src: pictureOf(pic) }) : Rekta.icon(glyph));
+    $('b', li).textContent = title; $('.centre-text > span', li).textContent = text; $('.centre-time', li).textContent = hhmm(new Date());
+    $('[data-rk-remove]', li).append(Rekta.icon('close'));
+    Rekta.reflow(centre, () => centre.prepend(li), { size: false });
+    Rekta.enter(li);
+    paintCentre();
+    return li;
+  }
+  const MESSAGES = ['Are we still on for 3?', 'I moved the review to the small room.', 'Tagged. Thank you!'];
+  let said = 0;
+  $('#n-message').addEventListener('click', () => {
+    const text = MESSAGES[said++ % MESSAGES.length];
+    arrive({ pic: 'ana', title: 'Ana Ruiz', text });
+    toasts.show(text, { key: `message-${said}`, edge: true, title: 'Ana Ruiz', picture: pictureOf('ana'), open: () => { toFront('chat'); home.goTo('system'); } });
+  });
+  $('#n-backup').addEventListener('click', () => {
+    const li = arrive({ icon: 'download', title: 'Backup', text: 'The backup is complete: 412 files saved.' });
+    toasts.show('The backup is complete: 412 files saved.', { key: 'backup', edge: true, title: 'Backup', icon: 'download', open: () => $('[data-rk-remove]', li).focus() });
+  });
+  $('#sb-notes').addEventListener('click', () => { const b = $('#centre [data-rk-remove]'); if (b) b.focus(); else $('#centre-none').scrollIntoView({ block: 'nearest' }); });
+  setInterval(() => {
+    const bar2 = $('#upload-bar');
+    if (!bar2 || !live() || upload >= 100) return;
+    upload = Math.min(100, upload + 10); bar2.value = upload;
+    if (upload >= 100) { const t = $('#upload-tag'); t.dataset.status = 'success'; t.textContent = 'done'; bar2.remove(); }
+  }, 1500);
+  paintCentre();
+  // Quick settings: a side panel from the trailing edge; a group gives its place to the list it opens.
+  const quick = $('#quick-panel'), quickIn = Rekta.inPlace(quick);
+  $('#sb-quick').addEventListener('click', () => quick.showModal());
+  quick.addEventListener('close', () => quickIn.reset());
+  for (const [name, out] of [['qs-net', '#qs-net-v'], ['qs-out', '#qs-out-v']]) {
+    $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => { $(out).textContent = r.value; quickIn.back(); }));
+  }
+  // The session: lock, switch, sign out, restart, power off; a choice, not a question.
+  $('#session-open').addEventListener('click', () => $('#session').showModal());
+  $('#session').addEventListener('close', () => {
+    const v = $('#session').returnValue;
+    if (v === 'lock' || v === 'switch' || v === 'out') lockScreen();
+    else if (v === 'restart' || v === 'off') toasts.show('Nothing restarts here: this desktop only shows how.', { key: 'session' });
+  });
+  // Locking: the windows step back, then the lock screen comes from above, whole, as a sheet does.
+  const behind = () => [$('#desk'), bar];
+  async function lockScreen() {
+    const d = tok.ms('--rk-duration-moderate'), to = { transform: `scale(${tok.number('--rk-step-back-scale')})`, filter: `brightness(${tok.number('--rk-step-back-brightness')})` };
+    const back = behind().map((el) => el.animate([{ transform: 'none', filter: 'none' }, to], { duration: d, easing: tok.value('--rk-ease-out'), fill: 'forwards' }));
+    await Promise.all(back.map((a) => a.finished.catch(() => {})));
+    behind().forEach((el) => { el.inert = true; });
+    $('#lock').hidden = false;
+    $('#lock').animate([{ opacity: 0, transform: `translateY(-16px)` }, { opacity: 1, transform: 'none' }], { duration: tok.ms('--rk-duration-short'), easing: tok.value('--rk-ease-in') });
+    back.forEach((a) => a.cancel());
+    lockForm.clear(); $('#lock-pw').value = ''; $('#lock-pw').focus({ preventScroll: true });
+  }
+  const lockForm = Rekta.form($('#lock-form'), {
+    validators: { 'lock-pw': (v) => (v ? null : 'Type the password. Any will do here.') },
+    async onSubmit() {
+      $('#lock-dots').hidden = false;
+      await wait(1500);
+      $('#lock-dots').hidden = true;
+      // Signed in: the lock screen fades to the ground and the desktop is there again.
+      await $('#lock').animate([{ opacity: 1 }, { opacity: 0 }], { duration: tok.ms('--rk-duration-moderate'), easing: tok.value('--rk-ease-in') }).finished.catch(() => {});
+      $('#lock').hidden = true;
+      behind().forEach((el) => { el.inert = false; });
+      $('#session-open').focus({ preventScroll: true });
+      toasts.show('Welcome back, Ada.', { key: 'session' });
+    },
+  });
+  $('#lock-switch').addEventListener('click', () => toasts.show('Ada is the only account on this desktop.', { key: 'session' }));
+  // The recent stack: the running programs, the last used first; the one before the current one has focus, so one
+  // press switches back. A press or Enter brings it to the front; Escape closes and nothing changes.
+  const recent = $('#recent');
+  $('#recent-open').addEventListener('click', () => {
+    if (!desk.used.length) { toasts.show('Nothing is running.', { key: 'recent' }); return; }
+    paintRunning($('#recent-tiles'), desk.used);
+    recent.showModal();
+    const tiles = $$('#recent-tiles > .rk-tile');
+    (tiles[1] || tiles[0]).focus();
+  });
+  recent.addEventListener('click', (e) => {
+    const t = e.target.closest('.rk-tile');
+    if (t) { recent.close(); toFront(t.dataset.app); } else if (e.target === recent) recent.close();
+  });
+  // All apps: a launch tile opens its program on the desktop; a preview tile brings it to the front.
+  const openApp = (id) => { toFront(id); router.navigate('home').then(() => home.goTo('system')); };
+  $('#apps-grid').addEventListener('click', (e) => { const t = e.target.closest('[data-app]'); if (t) openApp(t.dataset.app); });
+  $('#apps-running').addEventListener('click', (e) => { const t = e.target.closest('[data-app]'); if (t) openApp(t.dataset.app); });
+  $('#apps-fills').addEventListener('change', (e) => { $('#apps-grid').dataset.rkFills = e.target.checked ? 'content' : 'plain'; });
+  paintDesk();
+  function resetSystem() {
+    for (const b of $$('.rk-ab-run', bar)) if (!['notes', 'chat'].includes(b.dataset.app)) b.remove();
+    desk = deskStart(); paintDesk();
+    centre.innerHTML = CENTRE; pictures(centre); upload = 20; paintCentre();
+    job = { run: 0, state: 'running' }; paintJob();
+    $('#apps-fills').checked = true; $('#apps-grid').dataset.rkFills = 'content';
+    if (!$('#lock').hidden) { $('#lock').hidden = true; behind().forEach((el) => { el.inert = false; }); }
+  }
+
   /* ---------- sheet and reset ---------- */
   const sheet = $('#sheet');
   $('#reset').addEventListener('click', () => sheet.showModal());
@@ -772,7 +1107,7 @@
     facets.select(0);
     $('#text-size').value = 100; $('#text-size').dispatchEvent(new Event('input', { bubbles: true }));
     $('#builder').reset(); build(); tokenFind.set(null); $('#files').replaceChildren(); $('#files').hidden = true;
-    paintAccent();
+    paintAccent(); resetSystem();
     toasts.show('Demo reset. Everything is back at the start.', { key: 'reset' });
   });
 
@@ -780,5 +1115,5 @@
   paintAccent();
   paintSeen();
   requestAnimationFrame(() => { measure(); env(); });
-  window.site = { app, router, home, facets, toasts, banner, hist, pwa: app2, lineChart, barChart, compTable, pick, files, steps, logList, feed, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard };
+  window.site = { app, router, home, facets, toasts, banner, hist, pwa: app2, lineChart, barChart, compTable, pick, files, steps, logList, feed, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard, screenBar, quickIn, centreRemove, lockForm, desk: () => desk };
 })();
