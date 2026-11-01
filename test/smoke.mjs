@@ -553,6 +553,44 @@ await p.hover('#tree-close'); await p.waitForTimeout(60);
 ok((await p.evaluate(() => document.querySelector('.rk-tip').textContent)) === 'close every folder', 'the next tooltip comes at once');
 await p.keyboard.press('Escape'); await p.waitForTimeout(100);
 ok(!(await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open'))) && await visible(p, 'home'), 'Escape hides the tooltip, nothing more');
+// A disabled app-bar control (#126): glyph and word in disabled, no tint, still focusable; its reason is its tooltip,
+// linked with aria-describedby, after a rest and at once on keyboard focus; in "more" the item names it.
+{
+  const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';
+  const d = await p.evaluate((icon) => {
+    const el = document.createElement('div'); el.className = 'rk-appbar'; el.id = 't-bar'; el.style.cssText = 'width:700px;left:0;right:auto;bottom:120px';
+    el.innerHTML = `<span class="rk-ab-status"><i class="rk-pulse"></i><span class="rk-ab-k">live</span></span><button class="rk-ab" id="t-first" type="button">${icon}<span>first</span></button>`
+      + `<button class="rk-ab" id="t-print" type="button" data-rk-tip="print it">${icon}<span>print</span></button><button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+    document.querySelector('.rk').append(el);
+    window.tBar = Rekta.appbar(el);
+    const b = el.querySelector('#t-print');
+    window.tPrinted = 0; b.addEventListener('click', () => { window.tPrinted += 1; });
+    Rekta.disable(b, 'needs a printer');
+    const probe = document.createElement('i'); probe.style.color = 'var(--rk-disabled)'; el.append(probe);
+    const grey = getComputedStyle(probe).color; probe.remove();
+    const why = document.getElementById(b.getAttribute('aria-describedby'));
+    return { grey: getComputedStyle(b).color === grey && getComputedStyle(b.querySelector('svg')).stroke === grey, tip: b.dataset.rkTip, why: why && why.hidden ? why.textContent : '(none)', focusable: b.tabIndex === 0 && !b.disabled, hint: !!el.querySelector('.rk-hint') };
+  }, icon);
+  ok(d.grey && d.focusable && d.tip === 'needs a printer' && d.why === 'needs a printer' && !d.hint, 'disable() in the app bar: disabled colour, focusable, the reason in its tooltip and a hidden description, no hint beside it', JSON.stringify(d));
+  await p.hover('#t-print'); await p.waitForTimeout(700);
+  const rest = await p.evaluate(() => ({ tip: document.querySelector('.rk-tip').matches(':popover-open') && document.querySelector('.rk-tip').textContent, tint: getComputedStyle(document.querySelector('#t-print')).backgroundColor, said: document.querySelector('#t-print').getAttribute('aria-describedby') }));
+  ok(rest.tip === 'needs a printer' && /rgba\(0, 0, 0, 0\)|transparent/.test(rest.tint) && !/rk-tip/.test(rest.said), 'under a resting pointer the reason shows, no hover tint, described once', JSON.stringify(rest));
+  await p.click('#t-print', { force: true }); await p.waitForTimeout(100);
+  ok((await p.evaluate(() => window.tPrinted)) === 0, 'a click does nothing');
+  await p.mouse.move(5, 5); await p.waitForTimeout(100);
+  await p.focus('#t-first'); await p.keyboard.press('Tab'); await p.waitForTimeout(100);
+  ok((await focused(p)) === 't-print' && (await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open') && document.querySelector('.rk-tip').textContent)) === 'needs a printer', 'Tab reaches it and its reason shows at once', await focused(p));
+  await p.keyboard.press('Escape');
+  const more = await p.evaluate(async () => {
+    const el = document.querySelector('#t-bar'); el.style.width = '150px'; window.tBar.layout();
+    const item = [...el.querySelectorAll('.rk-ab-menu .rk-menu-item')].find((x) => x._rkFor && x._rkFor.id === 't-print');
+    return { moved: el.querySelector('#t-print').hasAttribute('data-rk-overflow'), label: item ? item.textContent : '(none)', off: item ? item.getAttribute('aria-disabled') : '' };
+  });
+  ok(more.moved && more.label === 'print (needs a printer)' && more.off === 'true', 'moved into "more", the reason goes with it: a disabled item that names it', JSON.stringify(more));
+  const back = await p.evaluate(() => { const b = document.querySelector('#t-print'); Rekta.disable(b, null); return { tip: b.dataset.rkTip, off: b.getAttribute('aria-disabled'), desc: b.getAttribute('aria-describedby'), why: !!document.querySelector('#t-bar .rk-why') }; });
+  ok(back.tip === 'print it' && back.off === null && back.desc === null && !back.why, 'enabled again: its own tooltip comes back', JSON.stringify(back));
+  await p.evaluate(() => { window.tBar.destroy(); document.querySelector('#t-bar').remove(); });
+}
 await p.mouse.move(5, 5);
 await p.click('#tree > li:nth-child(1) > .rk-tree-row'); await p.waitForTimeout(100);
 await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.waitForTimeout(100);
@@ -1054,6 +1092,18 @@ const grow = await m.evaluate(async () => {
 ok(grow.fitsFirst && /flex/.test(grow.row), 'the middle lays its parts out in a row', JSON.stringify(grow));
 ok(grow.grown && grow.midGone, 'a live word that grows moves a control into more, by itself', JSON.stringify(grow));
 ok(grow.midPinned, 'a pinned middle (a key waiting for its second) stays while more shows', JSON.stringify(grow));
+// On touch a tap on a disabled app-bar control shows its reason (#126); a tap on one that can act shows nothing.
+await m.evaluate(() => {
+  const el = document.createElement('div'); el.className = 'rk-appbar'; el.id = 't-bar'; el.style.cssText = 'width:390px;left:0;right:auto;bottom:120px';
+  el.innerHTML = '<button class="rk-ab" id="t-print" type="button"><span>print</span></button><button class="rk-ab" id="t-ok" type="button" data-rk-tip="share it"><span>share</span></button>';
+  document.querySelector('.rk').append(el);
+  Rekta.disable(el.querySelector('#t-print'), 'needs a printer');
+});
+const tipNow = () => m.evaluate(() => { const t = document.querySelector('.rk-tip'); return t && t.matches(':popover-open') ? t.textContent : ''; });
+await m.tap('#t-ok'); await m.waitForTimeout(150); const okTip = await tipNow();
+await m.tap('#t-print', { force: true }); await m.waitForTimeout(150); const why = await tipNow();
+ok(okTip === '' && why === 'needs a printer', 'touch: a tap shows a disabled control\'s reason, and no other tip', `${okTip} / ${why}`);
+await m.evaluate(() => document.querySelector('#t-bar').remove());
 await m.evaluate(() => scrollTo(0, 0)); await m.waitForTimeout(200);
 await m.tap('#tile-notes'); await m.waitForTimeout(TURN);
 ok(await visible(m, 'notes') && !(await m.evaluate(() => document.querySelector('#back').hidden)), 'phone: a tile opens the place, back shows');

@@ -138,6 +138,7 @@ state's `word`) are the caller's, in its own language.
 | `putBack` | `sortable()` | ("Build") → “Build put back.” |
 | `position` | `sortable()` | ("Build", 3, 4) → “Build: position 3 of 4.” |
 | `loadFailed` | `combobox()` | “Could not load the choices. Type to try again.” |
+| `cannotAct` | `appbar()` | ("print", "needs a printer") → “print (needs a printer)”: a disabled control's item in "more" |
 
 ## The contract
 
@@ -806,7 +807,10 @@ Moves the app bar's controls that do not fit into the menu of `more` (a
   its text without `aria-hidden` parts and `.rk-key` hints. A key hint
   shows apart, at the item's end, as in the palette (`.rk-menu-key`,
   from the control's `aria-keyshortcuts` or its `.rk-key`), and the item
-  carries the same `aria-keyshortcuts`.
+  carries the same `aria-keyshortcuts`. A control that cannot act
+  (`aria-disabled`, or `disabled`) is a disabled item, its label naming
+  the reason `disable()` gave: "print (needs a printer)" (the
+  `cannotAct` string).
 - **Places.** While `.rk-ab-places` shows (compact), every command is
   in "more", and `data-rk-places` is on the bar and the
   root (`docs/navigation.md`).
@@ -842,7 +846,9 @@ button and takes focus. Escape and the shading answer cancel.
 ### `disable(control, reason)`
 
 The control cannot act now and says why in a `.rk-hint` beside it
-(`aria-describedby`); it stays focusable (`aria-disabled`) and clicks do
+(`aria-describedby`); on an app-bar control (`.rk-ab`) the reason is its
+tooltip (`data-rk-tip`, the one it had comes back when it is enabled)
+and a hidden `.rk-why` describes it. It stays focusable (`aria-disabled`) and clicks do
 nothing. `disable(control, null)` enables it again.
 
 ### `combobox(input, { options, source, onSelect, free })`
@@ -878,11 +884,13 @@ are not opened by the browser. Returns `{ destroy }`.
 
 Started by `start()`. Any element with `data-rk-tip="text"` gets an ink
 tooltip (`.rk-tip`, `role=tooltip`) after a rest of `timing.tip-delay`
-under a mouse or pen, at once on keyboard focus or after another tip,
-never on touch; its `aria-keyshortcuts` adds the keys. `data-rk-tip="overflow"`
+under a mouse or pen, at once on keyboard focus or after another tip; on
+touch only a tap on a control with `aria-disabled="true"` shows its tip
+(the reason it cannot act); its `aria-keyshortcuts` adds the keys. `data-rk-tip="overflow"`
 shows the element's own text, only while its box cuts it off. Escape
 (key layer 45), a press, scrolling or leaving hide it. While shown, it
-describes its control (`aria-describedby`) unless it repeats its name.
+describes its control (`aria-describedby`) unless it repeats its name or
+a description the control already has.
 
 ### `contextMenu(scope, el, { target, onOpen, onSelect })`
 

@@ -265,6 +265,18 @@ controls.
 <span class="rk-ab-mid" data-rk-priority="pinned"><span>go to</span><kbd class="rk-key">g</kbd><span>then a place</span></span>
 ```
 
+### A control that cannot act now
+
+A command that cannot run now ("print" with no printer) stays in the
+bar, in place: glyph and word in `disabled`, no hover or press tint,
+still focusable, so its reason can be heard. The reason is its tooltip,
+not a hint beside it, which the bar has no room for: after
+`timing.tip-delay` under a resting pointer, at once on keyboard focus,
+on touch when it is tapped. `disable(control, reason)` does it on a
+`.rk-ab`. When the control moves into "more", the reason moves with it:
+its item is disabled and says it in the label, "print (needs a
+printer)".
+
 ### When the bar is full
 
 Controls that do not fit move into "more", the least important first
@@ -280,8 +292,9 @@ those of every floating surface ([states.md](states.md#floating-surfaces)).
 A tooltip is a small ink strip, like a toast, above its control (below
 when there is no room). It shows after the pointer has rested for
 `timing.tip-delay`, at once when focus arrives by keyboard, and at once
-when moving on from another tip; never on touch. Escape, a press,
-scrolling or leaving hide it. It names an icon-only control, completes a
+when moving on from another tip. On touch it shows only when a disabled
+control is tapped (its reason, [forms.md](forms.md#disabled-controls-say-why));
+otherwise never. Escape, a press, scrolling or leaving hide it. It names an icon-only control, completes a
 label with its shortcut, or shows the whole of a text its box cuts off
 (`data-rk-tip="overflow"`). It never holds the only way to learn what a
 control does: an icon-only control still has its accessible name.

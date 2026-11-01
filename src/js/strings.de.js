@@ -42,4 +42,5 @@ export const de = {
   putDown: (item, at, of) => `${item} abgelegt auf Position ${at} von ${of}.`,
   putBack: (item) => `${item} zurückgelegt.`,
   position: (item, at, of) => (item ? `${item}: Position ${at} von ${of}.` : `Position ${at} von ${of}`),
+  cannotAct: (label, reason) => `${label} (${reason})`,
 };

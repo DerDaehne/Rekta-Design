@@ -125,6 +125,7 @@ export const strings = {
   putBack: (item) => `${item} put back.`,
   position: (item, at, of) => (item ? `${item}: position ${at} of ${of}.` : `position ${at} of ${of}`),
   loadFailed: 'Could not load the choices. Type to try again.',
+  cannotAct: (label, reason) => `${label} (${reason})`,
 };
 // rk-strings-end
 const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
@@ -2311,7 +2312,7 @@ export function palette(el, { items = () => [], trigger = null, router = null, s
 // appbar(el, { more }): controls that do not fit move into a "more" menu, the least important first (data-rk-priority,
 // higher stays longer, none is 0; then from the end). more is a .rk-ab button shown only while something has moved;
 // its menu repeats each moved control's words (its key hint apart, as the palette shows it), and choosing one clicks
-// the control. Back, the live state, a selection's controls and data-rk-priority="pinned" never move (pinned ones do
+// the control; a control that cannot act (disable()) is a disabled item whose label names the reason. Back, the live state, a selection's controls and data-rk-priority="pinned" never move (pinned ones do
 // while the bar holds the places, which come first). While the bar holds the places, data-rk-places is on the bar and the root, and rekta.css leaves the places' top strip out.
 const placesBars = new Set();                                         // bars holding the places: the root says so while any does
 const markPlaces = (bar, on) => { if (on) placesBars.add(bar); else placesBars.delete(bar); bar.toggleAttribute('data-rk-places', on); docEl().toggleAttribute('data-rk-places', placesBars.size > 0); };
@@ -2334,6 +2335,11 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
     pop.replaceChildren(...[...el.querySelectorAll(':scope > .rk-ab[data-rk-overflow]')].map((c) => {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'rk-menu-item'; b.setAttribute('role', 'menuitem'); b.textContent = words(c);
+      if (c.getAttribute('aria-disabled') === 'true' || c.disabled) {
+        const why = document.getElementById(c.dataset.rkWhy || '');
+        b.setAttribute('aria-disabled', 'true');
+        if (why && why.textContent.trim()) b.textContent = tx('cannotAct', words(c), why.textContent.trim());
+      }
       const k = keyHint(c);
       if (k) {
         const kk = b.appendChild(document.createElement('span')); kk.className = 'rk-menu-key'; kk.setAttribute('aria-hidden', 'true'); kk.textContent = k;
@@ -2399,23 +2405,38 @@ const labelOf = (c) => { const l = c.id && document.querySelector(`label[for="${
 
 // disable(control, reason): a control that cannot act now, and says why next to it (a .rk-hint linked by
 // aria-describedby). It stays focusable (aria-disabled), so the reason is read with it; clicks do nothing.
+// An app-bar control (.rk-ab) has no room beside it: its reason is its tooltip (data-rk-tip, shown on a resting
+// pointer, keyboard focus or a tap), read from a hidden element linked the same way; in "more" its item says it.
 // disable(control, null) enables it again.
 export function disable(control, reason) {
   const id = control.dataset.rkWhy || uid('rk-why');
   control.dataset.rkWhy = id;
   let hint = document.getElementById(id);
   const ids = (control.getAttribute('aria-describedby') || '').split(/\s+/).filter((x) => x && x !== id);
+  const bar = control.matches('.rk-ab');
   if (!control._rkBlock) control._rkBlock = (e) => { if (control.getAttribute('aria-disabled') === 'true') { e.preventDefault(); e.stopImmediatePropagation(); } };
   if (reason) {
     control.disabled = false;
     control.setAttribute('aria-disabled', 'true');
-    if (!hint) { hint = document.createElement('span'); hint.className = 'rk-hint rk-why'; hint.id = id; control.after(hint); }
+    if (!hint) {
+      hint = document.createElement('span'); hint.className = bar ? 'rk-why' : 'rk-hint rk-why'; hint.id = id; hint.hidden = bar;
+      control.after(hint);
+    }
     hint.textContent = reason;
+    if (bar) {
+      if (!('_rkTipWas' in control)) control._rkTipWas = control.getAttribute('data-rk-tip');
+      control.setAttribute('data-rk-tip', reason);
+    }
     control.setAttribute('aria-describedby', [...ids, id].join(' '));
     control.addEventListener('click', control._rkBlock, true);
   } else {
     control.removeAttribute('aria-disabled');
     if (hint) hint.remove();
+    if ('_rkTipWas' in control) {
+      if (control._rkTipWas === null) control.removeAttribute('data-rk-tip'); else control.setAttribute('data-rk-tip', control._rkTipWas);
+      delete control._rkTipWas;
+      if (tip.for === control) hideTip(false);
+    }
     if (ids.length) control.setAttribute('aria-describedby', ids.join(' ')); else control.removeAttribute('aria-describedby');
     control.removeEventListener('click', control._rkBlock, true);
   }
@@ -2553,7 +2574,8 @@ export function guard(el, { router = null, what = tx('guardWhat') } = {}) {
 // Tooltip ----------------------------------------------------------------------------------------------------------
 // tips(): a short ink label for a control that has one (data-rk-tip="text"; the control's aria-keyshortcuts adds
 // its keys), or for text its box cuts off (data-rk-tip="overflow": the element's own text, only while it is cut). It
-// shows after tip-delay under a mouse or pen, at once after another tip or on keyboard focus, never on touch;
+// shows after tip-delay under a mouse or pen, at once after another tip or on keyboard focus; on touch only a tap on
+// a disabled control (aria-disabled) shows its tip, the reason it cannot act (disable() in the app bar).
 // Escape, a press, scrolling or leaving hide it. It repeats or completes what the control says: never the only way to
 // learn what it does. start() turns it on.
 const tip = { el: null, for: null, timer: 0, hid: 0, described: null, on: false };
@@ -2592,8 +2614,11 @@ function showTip(el, given = null) {
   tip.el.replaceChildren(text);
   if (keysText) { const k = document.createElement('span'); k.className = 'rk-key'; k.textContent = keysText; tip.el.append(' ', k); }
   openFloat(tip.el); placeTip(tip.el, el);
+  // It describes its control while it shows, unless it repeats the control's name or a description it already has
+  // (a disabled app-bar control's reason).
   const name = (el.getAttribute('aria-label') || el.textContent || '').trim();
-  if (text !== name) { tip.described = el.getAttribute('aria-describedby'); el.setAttribute('aria-describedby', `${tip.described ? `${tip.described} ` : ''}rk-tip`); }
+  const said = (el.getAttribute('aria-describedby') || '').split(/\s+/).some((d) => { const x = d && document.getElementById(d); return x && x.textContent.trim() === text; });
+  if (text !== name && !said) { tip.described = el.getAttribute('aria-describedby'); el.setAttribute('aria-describedby', `${tip.described ? `${tip.described} ` : ''}rk-tip`); }
   else tip.described = undefined;
   tip.for = el;
 }
@@ -2617,6 +2642,7 @@ function tips() {
     if (tip.for || Date.now() - tip.hid < wait) showTip(el); else tip.timer = setTimeout(() => showTip(el), wait);
   };
   const out = (e) => {
+    if (e.pointerType === 'touch') return;                           // a lifted finger leaves: a tapped tip stays
     const el = e.target.closest && e.target.closest('[data-rk-tip]');
     if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;
     if (tip.for === el || tip.timer) hideTip();
@@ -2624,13 +2650,20 @@ function tips() {
   const focus = (e) => { const el = e.target.closest && e.target.closest('[data-rk-tip]'); if (el && e.target.matches(':focus-visible')) showTip(el); };
   const blur = (e) => { if (tip.for && tip.for.contains(e.target)) hideTip(); };
   const away = () => hideTip();
+  // A tap cannot rest: on a control that cannot act anyway it shows the reason, until the next press or a scroll.
+  const tap = (e) => {
+    const el = e.pointerType === 'touch' && e.target.closest && e.target.closest('[aria-disabled="true"][data-rk-tip]');
+    if (el) showTip(el);
+  };
   const offEsc = keys.on(45, (e) => { if (e.key !== 'Escape' || !tip.for) return false; hideTip(); return true; });
+  document.addEventListener('pointerup', tap);
   document.addEventListener('pointerover', over); document.addEventListener('pointerout', out);
   document.addEventListener('focusin', focus); document.addEventListener('focusout', blur);
   document.addEventListener('pointerdown', away, true); addEventListener('scroll', away, true); addEventListener('blur', away);
   return {
     destroy() {
       tip.on = false; hideTip(); offEsc();
+      document.removeEventListener('pointerup', tap);
       document.removeEventListener('pointerover', over); document.removeEventListener('pointerout', out);
       document.removeEventListener('focusin', focus); document.removeEventListener('focusout', blur);
       document.removeEventListener('pointerdown', away, true); removeEventListener('scroll', away, true); removeEventListener('blur', away);

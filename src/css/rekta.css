@@ -625,7 +625,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   font: inherit; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold);
   transition: background-color var(--rk-duration-short) var(--rk-ease-base);
 }
-.rk-ab:active { background-color: var(--rk-hover); }
+.rk-ab:active:not([aria-disabled='true'], :disabled) { background-color: var(--rk-hover); }
+/* A control that cannot act now (disable()): glyph and word in disabled, no hover or press tint, still focusable. Its
+   reason is its tooltip, as there is no room beside it in the bar (docs/forms.md). */
+.rk-ab:is([aria-disabled='true'], :disabled) { color: var(--rk-disabled); cursor: not-allowed; }
 .rk-ab b { font-weight: inherit; }
 .rk-ab svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .rk-ab-back { order: -1; }
@@ -1023,7 +1026,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-btn--primary:hover { background-color: var(--rk-accent); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
   .rk-btn:disabled:hover, .rk-btn[aria-disabled='true']:not([data-rk-pending]):hover { background: none; }
   .rk-input:hover:not(:disabled) { border-color: var(--rk-text-primary); }
-  .rk-ab:hover { background-color: var(--rk-hover); }
+  .rk-ab:hover:not([aria-disabled='true'], :disabled) { background-color: var(--rk-hover); }
   .rk-crumb:hover { color: var(--rk-text-primary); }
   .rk-menu-item:hover:not([aria-disabled='true']) { background-color: var(--rk-hover); }
   .rk-table tbody tr:has(a, input, button):hover, [data-rk-select] > :hover { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }

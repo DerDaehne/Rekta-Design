@@ -59,7 +59,8 @@ next to the control that opened them.
   starting with it, Enter or Space chooses, Escape closes and returns
   focus to the control, Tab closes and moves on. A click outside closes.
 - A disabled item stays in the list, greyed, and says why in its label
-  when it is not obvious ("print (needs a printer)").
+  when it is not obvious ("print (needs a printer)"). The app bar's
+  "more" does this for a disabled control it holds.
 
 ## Layers
 

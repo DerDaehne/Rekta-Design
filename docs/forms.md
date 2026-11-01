@@ -212,11 +212,26 @@ A control that cannot act now stays visible and says why in a hint next
 to it ("Archive needs at least one done job."), linked to it, so the
 reason is read with it. It stays focusable (`aria-disabled`), unlike a
 native `disabled` control, which a keyboard user could not reach to
-hear the reason. No tooltips: they do not exist on touch.
+hear the reason. No tooltips: a pointer rests, a finger does not, so on
+touch a tooltip never shows.
+
+One exception: **the app bar.** There is no room beside a control in
+it, and a reason there would push the middle out and the controls into
+"more". A disabled app-bar control shows its glyph and word in
+`disabled`, takes no hover or press tint and stays focusable; its
+reason is its tooltip, read with it (`aria-describedby`), shown after
+`timing.tip-delay` under a resting pointer, at once on keyboard focus,
+and on touch when the control is tapped: it cannot act anyway, so the
+tap takes nothing away. Moved into "more", the reason goes with it: the
+menu names it in the label, "print (needs a printer)", like every
+disabled item ([states.md](states.md#floating-surfaces)).
 
 `disable(control, reason)` does this: it writes the reason into a
 `.rk-hint.rk-why` placed right after the control and linked by
 `aria-describedby` (the control's `data-rk-why` names it, so a page can
-place the hint itself), and `disable(control, false)` takes it away. In
+place the hint itself), and `disable(control, false)` takes it away. On
+an app-bar control (`.rk-ab`) the reason goes into its tooltip
+(`data-rk-tip`) and a hidden element the control is described by,
+instead of a hint beside it. In
 a `.rk-actions` row the hint takes the rest of the row beside the
 buttons (`.rk-actions > .rk-why`).
