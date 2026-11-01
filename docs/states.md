@@ -60,8 +60,18 @@ next to the control that opened them.
 - **Look:** `rk-bg`, a 1px `rk-text-contrast-medium` edge, `rk-radius-s`,
   no shadow. The edge parts them from what is below in both themes and in
   forced colours; a shadow would be the only one in the system.
-- **Place:** below the control, aligned to its leading edge; above it
-  when there is no room below; never outside the window.
+- **Place:** `space-xs` from the control, at least `space-m` from the
+  window's edges (the same margin limits its width). Below the control
+  when it fits there; else above it when it fits there; else on the side
+  with more room, moved back inside the window: it may then cover the
+  control, and its content scrolls. Never outside the window.
+- **Alignment:** to the control's leading edge (to its trailing edge
+  when the window's edge is too near for that). A control that stands
+  in the middle of its container (a clock in the middle of an app bar)
+  says so with `data-rk-align="center"` (in rekta-core
+  `rk_menu_set_align(menu, RK_ALIGN_CENTER)`): its surface is centred on
+  it instead, still inside the window. `place()` and `menu()` on the web
+  and rekta-core's menus follow this one rule.
 - **Motion:** a fade and a 4px shift away from the control over
   `motion.duration.float` (150ms); it leaves at once.
 - **Rows:** one item per row at the density's row height, a lowercase
@@ -95,8 +105,13 @@ From bottom to top:
   it sits above it.
 - Escape closes the topmost thing first (see the key layers in
   [navigation.md](navigation.md#who-gets-a-key)).
-- A sheet holds focus. Report the result of an action taken in a sheet
-  after the sheet has closed, not as a toast beneath its shading.
+- A sheet holds focus. Focus goes back to what had it once the sheet
+  has gone, not as it starts to leave. Report the result of an action
+  taken in a sheet after the sheet has closed, not as a toast beneath
+  its shading.
+- A sheet's answer is given as it starts to leave. A close request
+  while it leaves (the shading, Escape, another button) changes no
+  answer and asks nothing: it only ends the leaving at once.
 - **Every sheet has a visible way out**: its safe answer, or a close
   button (`.rk-btn--icon.rk-btn--quiet.rk-sheet-close`, `value="cancel"`,
   `aria-label="close"`) at its top corner. Escape and the shading are not

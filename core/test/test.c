@@ -778,6 +778,38 @@ static void test_menu(void) {
   cr = rk__window_rect(ctx);
   CHECK(cr.y + cr.h <= 420 - 15, "never outside the window (%g)", cr.y + cr.h);
   rk_menu_close(ctx);
+  /* states.md's one rule: it fits on neither side, so it takes the side with more room, moved back inside the window */
+  rk_menu_open_at(m, tile, (rk_point){ 10, 200 - t.y });
+  mr = rk__window_rect(m);
+  float edge = rk_metric_of(RK_SPACE_M);
+  CHECK(mr.h > 200 && mr.y >= edge - 0.5f && mr.y + mr.h <= 420 - edge + 0.5f, "a menu that fits on neither side stays inside the window (%g to %g)", mr.y, mr.y + mr.h);
+  rk_menu_close(m);
+  /* centred on a centred control, still inside the window */
+  rk_menu_set_align(m, RK_ALIGN_CENTER);
+  rk_menu_open_at(m, tile, (rk_point){ 280 - t.x, 40 - t.y });
+  mr = rk__window_rect(m);
+  CHECK(fabsf(mr.x + mr.w / 2 - 280) <= 0.5f, "RK_ALIGN_CENTER centres it on its opener (%g)", mr.x + mr.w / 2);
+  rk_menu_close(m);
+  rk_menu_open_at(m, tile, (rk_point){ 540 - t.x, 40 - t.y });
+  mr = rk__window_rect(m);
+  CHECK(mr.x + mr.w <= 560 - edge + 0.5f, "centred near the window's edge, it stays inside (%g)", mr.x + mr.w);
+  rk_menu_close(m);
+  rk_menu_set_align(m, RK_ALIGN_START);
+  /* taller than the window: it keeps to it and its rows scroll to the active one */
+  rk_view *tall = rk_menu();
+  for (int i = 0; i < 20; i++) rk_menu_add(tall, i == 19 ? "zebra" : "item", NULL, on_menu, NULL);
+  rk_retain(m);                                                /* the button lets go of its menu for the tall one */
+  rk_view_set_menu(more, tall);
+  rk_view_tap(more);
+  rk_app_run_for(200);
+  rk_rect tr = rk__window_rect(tall);
+  CHECK(tr.y >= edge - 0.5f && tr.y + tr.h <= 420 - edge + 0.5f, "a menu taller than the window keeps to it (%g to %g)", tr.y, tr.y + tr.h);
+  key(w, RK_KEY_END, 0);
+  menu *tm = tall->state;
+  float last = row_top(tm, 19) - tm->scroll;
+  CHECK(tm->active == 19 && tm->scroll > 0 && last >= 0 && last + rk_metric_of(RK_ROW_HEIGHT) <= tr.h + 0.5f, "End scrolls its rows to the last one (%g)", tm->scroll);
+  key(w, RK_KEY_ESCAPE, 0);
+  rk_view_set_menu(more, m);                                   /* takes m back, lets go of the tall one */
   done(w);
 }
 
@@ -1635,6 +1667,23 @@ static void test_confirm_secret(void) {
   rk_window_key(w, RK_KEY_ESCAPE);
   rk_app_run_for(600);
   CHECK(answers == 3 && !answer_ok, "Escape answers cancel");
+  /* an answer is given as the sheet starts to leave; a close request while it leaves changes none and asks nothing, it
+     only ends the leaving at once; focus comes back once the sheet has gone */
+  rk_window_focus(w, pw);
+  rk_confirm(home, &d, answered, NULL);
+  rk_app_run_for(500);
+  rk_view_tap(rk_view_find(w->sheets, "delete"));
+  rk_app_run_for(30);
+  bool leaving = w->sheets->nkids > 0, held = !rk_window_focused(w);
+  click(w, (rk_point){ 350, 420 }, 10);
+  CHECK(leaving && held && answers == 4 && answer_ok && !w->sheets->nkids, "delete, then a tap on the shading while it leaves: still yes, gone at once (%d %d)", answers, answer_ok);
+  CHECK(rk_window_focused(w) == pw, "focus is back once the sheet has gone");
+  rk_confirm(home, &d, answered, NULL);
+  rk_app_run_for(500);
+  rk_view_tap(rk_view_find(w->sheets, "delete"));
+  rk_app_run_for(30);
+  key(w, RK_KEY_ESCAPE, 0);
+  CHECK(answers == 5 && answer_ok && !w->sheets->nkids, "Escape while it leaves: still yes, gone at once");
   done(w);
 }
 

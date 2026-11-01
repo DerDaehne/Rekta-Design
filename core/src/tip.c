@@ -5,9 +5,9 @@
    The label floats in the window's top layer, centred above its view (below where there is no room), and comes in
    with a fade and a 4px shift over duration-float, as a menu does. */
 #include "rk_internal.h"
+#include "rk_tokens.h"
 
 #define TIP_MAX_W 320                                      /* 20rem */
-#define TIP_GAP 6
 
 static rk_textfmt tip_fmt(void) {
   rk_textfmt f = rk__textfmt(RK_TEXT_LABEL, 0);           /* xs, semibold, line-height compact */
@@ -59,10 +59,10 @@ static void tip_show(rk_window *w, rk_view *owner) {
   rk__setstr(&t->access_label, owner->tooltip);
   rk_size s = tip_measure(t, (rk_size){ INFINITY, INFINITY }, t->state);
   rk_rect a = rk__window_rect(owner);
-  float edge = rk_metric_of(RK_SPACE_S);
-  bool above = a.y - TIP_GAP - s.h >= edge;
+  float edge = rk_metric_of(RK_SPACE_M), gap = RK_TOK_TIP_GAP;   /* the window's margin for every floating surface */
+  bool above = a.y - gap - s.h >= edge;
   float x = RK_CLAMP(roundf(a.x + a.w / 2 - s.w / 2), edge, RK_MAX(edge, w->size.w - s.w - edge));
-  float y = roundf(above ? a.y - TIP_GAP - s.h : a.y + a.h + TIP_GAP);
+  float y = roundf(above ? a.y - gap - s.h : a.y + a.h + gap);
   rk__view_add(w->floats, t);
   rk_view_set_frame(t, (rk_rect){ x, y, s.w, s.h });
   w->tip = t;                                              /* the floats layer holds it too; this reference is ours */

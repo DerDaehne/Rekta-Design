@@ -455,7 +455,7 @@ RK_API rk_view *rk_tile(const char *value, const char *label);   /* no status un
 RK_API void rk_tile_set_status(rk_view *tile, rk_status status, const char *word);
 RK_API void rk_tile_set_stat(rk_view *tile, const char *value, const char *label);
 RK_API void rk_tile_set_message(rk_view *tile, const char *message);     /* NULL removes it */
-RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);   /* a sparkline; 0 removes it */
+RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);   /* a sparkline (one value: flat); 0 removes it */
 RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1; < 0 removes it */
 RK_API void rk_tile_set_code(rk_view *tile, int code);   /* its sparkline in a domain colour (rk_app_set_series); 0: ink */
 
@@ -473,7 +473,9 @@ RK_API void rk_row_set_code(rk_view *row, int code);
 RK_API void rk_rows_set_sortable(rk_view *rows, void (*moved)(rk_view *rows, int from, int to, void *user), void *user);
 RK_API bool rk_rows_move(rk_view *rows, int from, int to);   /* false when out of range, the same place or not sortable */
 
-/* A menu floats by what opened it: below it, above where there is no room. One item a row - a lowercase verb or
+/* A menu floats by what opened it: below it when it fits, else above when it fits, else on the side with more room,
+   inside the window (its rows scroll when it is taller); at the opener's leading edge, or centred (rk_menu_set_align).
+   One item a row - a lowercase verb or
    option, a key hint at the end; an item with a check (rk_menu_set_check) toggles and stays open, any other closes
    the menu and then runs its handler. Up, Down, Home, End, a letter, Enter or Space, Escape. */
 RK_API rk_view *rk_menu(void);
@@ -489,6 +491,7 @@ RK_API void rk_menu_open(rk_view *menu, rk_view *from);            /* below from
 RK_API void rk_menu_open_at(rk_view *menu, rk_view *from, rk_point point);   /* at a point in from: a context menu */
 RK_API void rk_menu_close(rk_view *menu);
 RK_API rk_view *rk_menu_opener(rk_view *menu);                    /* what opened it, while open and in a handler */
+RK_API void rk_menu_set_align(rk_view *menu, rk_align align);      /* RK_ALIGN_CENTER: centred on a centred opener */
 
 /* A view that scrolls its content up and down: the wheel, the keys a focused view inside leaves, and focus landing
    inside move it, on the panorama's spring; a thin bar shows while it moves. Takes content. */

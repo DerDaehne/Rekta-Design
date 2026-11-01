@@ -27,7 +27,11 @@ quicker one (`ease-in-out`, over `duration-pivot-size`).
 Only the previously active and newly active titles ever change size —
 every other title stays exactly as it was. The strip's height never
 depends on which title is active: a title is sized from a fixed line
-box (scaled from its own baseline), never by changing its `font-size`.
+box, scaled about its baseline, never by changing its `font-size`, so
+every title stands on one baseline, the active one's. (The baseline lies
+the face's descent and half the leading above the line box's foot:
+`rekta.js` measures it in the page; without the script the
+`typography.metrics` tokens give it.)
 
 This is deliberately *not* a tab bar with an underline, and deliberately
 *not* "MRU" reordering (most-recently-used first) — a fixed order means
@@ -136,7 +140,11 @@ places its tiles and links open, each with one parent.
   server (or the framework's render) marks its tab `aria-selected="true"`
   and leaves the other panels `hidden`; `pivot()` starts on the tab
   marked selected and keeps it, so nothing jumps when the script arrives.
-  An unknown facet falls back to the first, without an error.
+  An unknown facet falls back to the first, without an error. Where the
+  facets may show side by side, `.rk-facets` around the panels' parent
+  and `data-rk-reveal` on the hidden panels let the first paint lay them
+  out wide from the same width `pivot()` measures
+  ([behaviour.md](behaviour.md), `pivot()`).
 
 ### Back with a router of your own
 
@@ -160,6 +168,19 @@ entry before leaving (`history.replaceState({ ...history.state, rk: s }, '')`)
 and call `restore(history.state.rk)` after the place has rendered on
 `popstate`. Give the boxes ids (or `data-rk-scroll`) when their number
 can change between visits.
+
+**Data that comes after mount.** A place that loads its data once it is
+mounted (a `fetch` on mount, `{#await}`, streamed data, a list that
+loads more) has no sections yet, or short ones, when the router
+restores. Call `restore()` as early as above anyway: it sets what it
+can and waits for the rest, setting each box as it appears and grows,
+for up to `timing.restore` (5s). If the user scrolls first, their
+position stays. Keep the handle when the place can go before then:
+
+```js
+const run = scrollState(place).restore(s);   // run.pending: still waiting
+onDestroy(() => run.cancel());
+```
 
 ### Crumb
 
@@ -226,7 +247,23 @@ with an icon over a lowercase word.
   `<h1 class="rk-place-name">`, which `rekta.css` keeps for screen
   readers only while the strip shows and shows, at the strip's active
   size, while the places are in the bar. Never a kicker repeating the
-  bar's word.
+  bar's word. It is a direct child of `.rk-place`, right after the
+  strip, so it takes the strip's side padding and stands where the
+  strip stood:
+
+  ```html
+  <main class="rk-place" data-rk-place="history">
+    <nav class="rk-pivot rk-pivot--nav" aria-label="places">…</nav>
+    <h1 class="rk-place-name">history</h1>
+    <div class="rk-panorama">…</div>
+  </main>
+  ```
+
+  With a framework router the `h1` goes where the strip goes (in the
+  layout that holds the place and its strip), not into the page
+  component inside the content area: there its own padding would add
+  to the place name's. When the place changes, it turns with the place
+  ([motion.md](motion.md)).
 
 ### Go to
 
@@ -277,8 +314,9 @@ those of every floating surface ([states.md](states.md#floating-surfaces)).
 
 ## Tooltips
 
-A tooltip is a small ink strip, like a toast, above its control (below
-when there is no room). It shows after the pointer has rested for
+A tooltip is a small ink strip, like a toast, centred above its control
+(below when there is no room), `size.tip-gap` (6px) from it and at least
+`space-m` from the window's edges. It shows after the pointer has rested for
 `timing.tip-delay`, at once when focus arrives by keyboard, and at once
 when moving on from another tip; never on touch. Escape, a press,
 scrolling or leaving hide it. It names an icon-only control, completes a

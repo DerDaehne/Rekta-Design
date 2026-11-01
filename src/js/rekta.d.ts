@@ -120,7 +120,9 @@ export declare function pivot(el: HTMLElement, options?: {
 
 /** Every scrolled box of a place, and the window, as plain data for a router's history entry. */
 export interface ScrollState { y: number; at: Record<string, [number, number]>; }
-export declare function scrollState(root: Element): { capture(): ScrollState; restore(state: ScrollState | null | undefined): void };
+/** A restore that waits for content rendered after the navigation; `pending` until every offset is set or it gives up. */
+export interface ScrollRestore { readonly pending: boolean; cancel(): void; }
+export declare function scrollState(root: Element): Destroyable & { capture(): ScrollState; restore(state: ScrollState | null | undefined): ScrollRestore };
 
 export declare function strip(el: HTMLElement): Destroyable & { layout(): void };
 
@@ -202,11 +204,15 @@ export declare function pending<T>(button: HTMLElement, work: Promise<T> | (() =
 
 // Floating surfaces, collections --------------------------------------------------------------------------------------
 
-export declare function place(el: HTMLElement, anchor: Element): void;
+/** Below the control when it fits, else above, else on the side with more room, inside the window; `align: 'center'`
+ * (the default under a control marked `data-rk-align="center"`) centres it on the control. */
+export declare function place(el: HTMLElement, anchor: Element, options?: { align?: 'start' | 'center' }): void;
 
 export declare function menu(trigger: HTMLElement, el: HTMLElement, options?: {
   onSelect?: (item: HTMLElement) => void;
   summary?: string | null;
+  /** Default: the trigger's `data-rk-align`, else 'start'. */
+  align?: 'start' | 'center';
 }): Destroyable & {
   open(index?: number): void;
   close(focusTrigger?: boolean): void;

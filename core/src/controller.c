@@ -15,6 +15,7 @@ struct rk_controller {
   rk_window *window;
   rk_controller *sheet, *presenter;                        /* what it presents, what presented it */
   rk_view *sheet_shade, *sheet_box, *focus_before;
+  rk_view *sheet_left;                                     /* its box while it leaves (borrowed): a close request ends that */
   rk_controller **embedded; int nembedded, embed_cap;      /* what it holds in its own views (rk_controller_embed) */
   bool appeared;
   bool transparent;                                        /* only holds embedded[0]: it stands for it */
@@ -585,7 +586,7 @@ static void strip_draw(rk_view *v, rk_canvas *c, void *st) {
   }
   rk_textfmt f = strip_fmt(v, s);
   float gap = rk_metric_of(RK_SPACE_L), x = strip_pad(s) - strip_glide(s, now), H = v->pframe.h;
-  float base = H - (f.size * f.line - rk__text_ascent(&f));      /* titles share the baseline, as transform-origin left bottom */
+  float base = H - (f.size * f.line - rk__text_ascent(&f));      /* every title scales about the active one's baseline */
   rk_canvas_push_clip(c, (rk_rect){ 0, 0, v->pframe.w, H + 8 });
   for (int i = 0; i < s->n; i++) {
     float k = strip_scale(s, i, now);
@@ -1476,7 +1477,10 @@ static void sheets_layout(rk_view *v, void *st) {
 const rk_class rk__sheets_class = { { sizeof(rk_view_class), "rk_sheets", NULL, NULL, sheets_layout, NULL, NULL }, NULL, NULL };
 
 static void user_dismiss(rk_controller *sheet) { rk_retain(sheet); rk_controller_dismiss(sheet); tell(sheet, 0); rk_release(sheet); }
-static void shade_tap(rk_view *v, void *user) { (void)v; user_dismiss(user); }
+/* A sheet that is leaving has its answer: a further close request (Escape, the shading) changes none and asks nothing,
+   it only ends the leaving at once (docs/behaviour.md, sheet()). Ending its motion ends it: sheet_gone runs. */
+static void sheet_finish(rk_controller *sheet) { if (sheet->sheet_left) rk__anim_cancel(sheet->sheet_left, RK_PROP_TRANSFORM); }
+static void shade_tap(rk_view *v, void *user) { (void)v; rk_controller *sheet = user; if (sheet->sheet_left) sheet_finish(sheet); else user_dismiss(sheet); }
 
 rk_view *rk__first_focusable(rk_view *v) {
   if (v->hidden) return NULL;
@@ -1499,7 +1503,9 @@ void rk_controller_present(rk_controller *presenter, rk_controller *sheet) {
   rk_view *box = rk_view_create();
   float m = rk_metric_of(RK_SPACE_M), l = rk_metric_of(RK_SPACE_L), r = rk_metric_of(RK_RADIUS_M);
   rk_view_set_layout(box, RK_LAYOUT_VSTACK);
-  rk_view_set_padding(box, (rk_insets){ l + r, w->size.w > 560 ? rk_metric_of(RK_SPACE_XL) : m, l, w->size.w > 560 ? rk_metric_of(RK_SPACE_XL) : m });
+  /* space-xl at the sides in a sideways window, as the web's (min-width: 760px) and (min-height: 481px) */
+  float side = w->size.w >= RK_TOK_BP_SIDEWAYS_SCROLL_MIN && w->size.h > RK_TOK_BP_SHORT_HEIGHT ? rk_metric_of(RK_SPACE_XL) : m;
+  rk_view_set_padding(box, (rk_insets){ l + r, side, l, side });
   rk_view_set_fill(box, RK_ROLE_BG);
   box->radius = r;
   box->owner = sheet;                                       /* marks it as a box; borrowed */
@@ -1524,14 +1530,22 @@ void rk_controller_present(rk_controller *presenter, rk_controller *sheet) {
   rk__controller_appear(sheet, true);
 }
 
+/* Focus goes back to what had it once the sheet has gone, unless it has gone elsewhere meanwhile (states.md). */
+static void focus_back(rk_window *w, rk_view *f) {
+  if (w && !w->focus && f && rk__view_window(f) == w) rk_window_focus(w, f);
+  rk_release(f);
+}
+
 /* The box that left, and its shading: only these go - the sheet may have been presented again meanwhile. */
-typedef struct gone_box { rk_controller *sheet; rk_view *shade; } gone_box;
+typedef struct gone_box { rk_controller *sheet; rk_view *shade; rk_window *window; rk_view *focus; } gone_box;
 static void sheet_gone(rk_view *box, void *user) {
   gone_box *g = user;
   rk_controller *sheet = g->sheet;
   if (sheet->sheet_box == box) { sheet->sheet_box = sheet->sheet_shade = NULL; }
+  if (sheet->sheet_left == box) sheet->sheet_left = NULL;
   if (g->shade) { if (g->shade->parent) rk__view_detach(g->shade); rk_release(g->shade); }
   if (box->parent) rk__view_detach(box);
+  focus_back(g->window, g->focus);
   free(g);
   rk_release(sheet);
 }
@@ -1542,25 +1556,21 @@ void rk_controller_dismiss(rk_controller *sheet) {
   rk_window *w = sheet->window;
   p->sheet = NULL; sheet->presenter = NULL;
   rk__controller_appear(sheet, false);
-  rk_view *box = sheet->sheet_box, *shade = sheet->sheet_shade;
-  if (w) {
-    rk_view *f = sheet->focus_before;
-    w->focus = NULL;
-    if (f && rk__view_window(f) == w) rk_window_focus(w, f);
-  }
-  rk_release(sheet->focus_before); sheet->focus_before = NULL;
-  if (!box) { rk_release(sheet); return; }
+  rk_view *box = sheet->sheet_box, *shade = sheet->sheet_shade, *f = sheet->focus_before;
+  sheet->focus_before = NULL;
+  if (w) w->focus = NULL;                                   /* nothing in the leaving sheet takes a key */
+  if (!box) { focus_back(w, f); rk_release(sheet); return; }
   double d = 0.8 * rk_duration_of(RK_DURATION_SHORT);
   float a0 = box->popacity, a1 = 0, s0 = shade ? shade->popacity : 0;
   rk_transform t0 = box->ptransform, t1 = box->transform;
   t1.translate_y -= 16;
   if (shade) rk__animate(shade, RK_PROP_OPACITY, &s0, &a1, 1, d, 0, rk__ease_out);
   rk__animate(box, RK_PROP_OPACITY, &a0, &a1, 1, d, 0, rk__ease_out);
-  if (shade) shade->leaving = true;
-  box->leaving = true;
+  box->leaving = true;                                      /* the shading still takes a tap: it ends the leaving */
   sheet->sheet_box = sheet->sheet_shade = NULL;            /* presented again, it gets a box of its own */
+  sheet->sheet_left = box;
   gone_box *g = rk__alloc(sizeof *g);
-  g->sheet = sheet; g->shade = shade ? rk_retain(shade) : NULL;
+  g->sheet = sheet; g->shade = shade ? rk_retain(shade) : NULL; g->window = w; g->focus = f;
   rk__animate_transform_cb(box, &t0, &t1, d, 0, rk__ease_out, sheet_gone, g);
 }
 
@@ -1624,6 +1634,10 @@ bool rk__window_key(rk_window *w, const rk_event *e) {
     for (int i = w->sheets->nkids - 1; i >= 0; i--) {
       rk_view *k = w->sheets->kids[i];
       if (k->owner && !k->leaving) { user_dismiss(k->owner); return true; }
+    }
+    for (int i = w->sheets->nkids - 1; i >= 0; i--) {         /* only leaving: Escape ends that, and goes no further */
+      rk_view *k = w->sheets->kids[i];
+      if (k->owner && k->leaving && ((rk_controller *)k->owner)->sheet_left == k) { sheet_finish(k->owner); return true; }
     }
     back = true;
   }

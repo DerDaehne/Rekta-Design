@@ -49,7 +49,7 @@ export function tokenName(path) {
     case 'color': return rest.slice(1).join('-');                    // color.light.text.primary -> text-primary
     case 'typography': {
       const [kind, key] = rest;
-      return { 'font-family': `font-${key}`, weight: `font-weight-${key}`, size: `font-size-${key}`, 'line-height': `line-height-${key}` }[kind];
+      return { 'font-family': `font-${key}`, weight: `font-weight-${key}`, size: `font-size-${key}`, metrics: `font-${key}`, 'line-height': `line-height-${key}` }[kind];
     }
     case 'spacing': return `space-${rest.join('-')}`;
     case 'radius': return `radius-${rest.join('-')}`;
@@ -401,15 +401,21 @@ function check(tokens) {
 
 // A product's own values, checked against the same rules as Rekta's (docs/data.md): the domain colour codes it sets
 // (--rk-series-N, per theme) must hold 3:1 against the ground and surface, stay 0.09 apart under red-green colour
-// blindness (tritan reported), be set in both themes, and never colour text.
+// blindness (tritan reported), be set in both themes, and never colour text. A product that changes --rk-pivot-wide
+// is warned when no container query repeats the value: the wide facets' first paint would use another.
 //   node scripts/build.mjs --check-product product.css
 export function checkProduct(css, file = 'product CSS') {
-  const problems = [], notes = [], t = buildTokensJson(loadTokens(), 'check'), codes = { light: {}, dark: {} };
+  const problems = [], notes = [], warnings = [], t = buildTokensJson(loadTokens(), 'check'), codes = { light: {}, dark: {} };
+  const wides = new Set(), queries = new Set();
   // Walk the rules: a declaration is dark when a selector or @media around it says dark.
   const stack = [];
   let buf = '';
   for (const ch of css.replace(/\/\*[\s\S]*?\*\//g, '')) {
-    if (ch === '{') { stack.push(buf.trim()); buf = ''; }
+    if (ch === '{') {
+      const at = /^@container\s+[\w-]+\s*\(\s*min-width\s*:\s*([^)]+?)\s*\)/.exec(buf.trim());
+      if (at) queries.add(at[1]);
+      stack.push(buf.trim()); buf = '';
+    }
     else if (ch === '}') { scan(buf); buf = ''; stack.pop(); }
     else if (ch === ';') { scan(buf); buf = ''; }
     else buf += ch;
@@ -421,6 +427,8 @@ export function checkProduct(css, file = 'product CSS') {
       codes[theme][+m[1]] = m[2];
     }
     if (/^\s*(color|-webkit-text-fill-color)\s*:.*var\(--rk-series-/.test(decl)) problems.push(`${file}: text drawn in a series colour (${decl.trim()}); codes are for small marks only`);
+    const w = /^\s*--rk-pivot-wide\s*:\s*(.+?)\s*$/.exec(decl);
+    if (w) wides.add(w[1]);
   }
   for (const theme of ['light', 'dark']) {
     const c = t.themes[theme], set = codes[theme], ns = Object.keys(set).map(Number).sort((x, y) => x - y);
@@ -438,7 +446,17 @@ export function checkProduct(css, file = 'product CSS') {
       const d = distance(a, b, 'tritan'); if (d < 0.09) notes.push(`${file}: ${theme} --rk-series-${ns[i]} and -${ns[j]} are ${d.toFixed(3)} apart under tritan`);
     }
   }
-  return { problems, notes, count: Object.keys(codes.light).length + Object.keys(codes.dark).length };
+  for (const w of wides) if (!/^0(px)?$/.test(w) && !queries.has(w)) warnings.push(`${file}: --rk-pivot-wide is ${w}, but no @container (min-width: ${w}) repeats it, so the wide facets' first paint keeps size.pivot-wide (docs/behaviour.md, pivot(): the first paint)`);
+  return { problems, notes, warnings, count: Object.keys(codes.light).length + Object.keys(codes.dark).length };
+}
+
+// rekta.css as it ships. A container query cannot read a custom property, so the wide facets' first paint
+// (@container rk-facets) takes size.pivot-wide's value here, from the token, never a copy by hand; 0 is never.
+const FACETS_QUERY = '@container rk-facets (min-width: var(--rk-pivot-wide))';
+export function componentsCss(tokens) {
+  const css = readFileSync(join(root, 'src', 'css', 'rekta.css'), 'utf8'), v = tokens.size['pivot-wide'].$value;
+  if (!css.includes(FACETS_QUERY)) throw new Error(`src/css/rekta.css lacks "${FACETS_QUERY}" for the wide facets' first paint`);
+  return css.replace(FACETS_QUERY, `@container rk-facets ${v.value > 0 ? `(min-width: ${v.value}${v.unit})` : '(width < 0px)'}`);
 }
 
 // Icons: src/icons/*.svg (20 × 20, stroke 1.6, square ends) become one sprite of <symbol id="rk-i-NAME"> for the web
@@ -463,7 +481,7 @@ export function buildDist() {
   mkdirSync(join(dist, 'fonts'), { recursive: true });
   writeFileSync(join(dist, 'rekta.tokens.css'), buildTokensCss(tokens));
   writeFileSync(join(dist, 'rekta.tokens.json'), JSON.stringify(buildTokensJson(tokens, pkg.version), null, 2) + '\n');
-  writeFileSync(join(dist, 'rekta.css'), `/* Rekta Design ${pkg.version} components. Load after rekta.tokens.css. */\n` + readFileSync(join(root, 'src', 'css', 'rekta.css'), 'utf8'));
+  writeFileSync(join(dist, 'rekta.css'), `/* Rekta Design ${pkg.version} components. Load after rekta.tokens.css. */\n` + componentsCss(tokens));
   writeFileSync(join(dist, 'rekta.fonts.css'), fontsCss());
   for (const f of readdirSync(join(root, 'site', 'fonts', 'barlow'))) copyFileSync(join(root, 'site', 'fonts', 'barlow', f), join(dist, 'fonts', f));
   const esm = readFileSync(join(root, 'src', 'js', 'rekta.js'), 'utf8').replace(/^export const version = '[^']*';/m, `export const version = '${pkg.version}';`);
@@ -531,6 +549,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (!file) { console.error('usage: node scripts/build.mjs --check-product product.css'); process.exit(2); }
     const r = checkProduct(readFileSync(file, 'utf8'), file);
     for (const n of r.notes) console.log(`  i ${n}`);
+    for (const n of r.warnings) console.log(`  ! ${n}`);
     if (r.problems.length) { console.error(r.problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
     console.log(r.count ? `✓ ${file}: ${r.count} domain colour values pass: 3:1 on the ground, apart under colour blindness, both themes, no text` : `✓ ${file}: no domain colour values (--rk-series-N) to check`);
   } else if (process.argv.includes('--check')) {

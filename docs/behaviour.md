@@ -188,9 +188,11 @@ them:
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
 | `data-rk-measured` | a pivot | `rekta.js` has measured its titles: inactive ones shrink by a scale that animates, instead of the stylesheet's measure-free font-size. |
 | `data-rk-wide` | a pivot and its facets' parent | The facets show side by side (`pivot()`, from `size.pivot-wide` up). |
+| `data-rk-narrow` | the facets' parent | One facet at a time: `pivot()` has decided (below `size.pivot-wide`). With `data-rk-wide`, it tells the first paint's rules (`.rk-facets`) to step back. |
 | `data-rk-state` | the app bar | `halted` or `paused`, following the banner. |
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
+| `data-rk-align` | a control that opens a floating surface (written by the page) | `center`: the control stands in the middle of its container, and `place()` (so `menu()` and `combobox()`) centres the surface on it instead of starting at its leading edge. |
 | `aria-busy` | a `.rk-region` | Loading (`busy()`). |
 | `data-rk-select` | a list or table body | Its items are chosen the Metro way (`select()`). |
 | `aria-selected` | an item of it | `true` when selected: the accent fill and the checkmark. |
@@ -497,9 +499,52 @@ stays visible as a jump list: a title (a click, or ← → Home End with
 focus staying on the strip) glides its facet to the leading edge over
 `duration-pivot-glide`, Tab moves focus into the facet chosen, and the
 title follows the facet at the leading edge as the user scrolls.
-Narrower, it is one facet at a time again, the one last chosen. A pivot
-that picks the place never goes wide. The threshold is the product's to
-pick, per pivot if need be: `style="--rk-pivot-wide: 1100px"`.
+Narrower, it is one facet at a time again, the one last chosen
+(`data-rk-narrow` on the parent). A pivot that picks the place never
+goes wide. The threshold is the product's to pick, per pivot if need
+be: `style="--rk-pivot-wide: 1100px"`.
+
+**The first paint** (server rendering, before the script) decides
+"wide" from the same width as `pivot()`. Put `.rk-facets` around the
+panels' common parent: `rekta.css` makes it a container
+(`container: rk-facets / inline-size`), and `pivot()` then measures
+that container's content width instead of the parent's. The server
+renders the chosen panel and leaves the others `hidden` with
+`data-rk-reveal`; from `size.pivot-wide` up the container query lays
+the row out wide and shows them, narrower they stay hidden. Once
+`pivot()` has decided (`data-rk-wide` or `data-rk-narrow` on the
+parent) these rules step back. A pivot in a narrow pane is narrow from
+the first paint, whatever the window's width.
+
+```html
+<div class="rk-pivot" role="tablist">…</div>
+<div class="rk-facets">
+  <div>
+    <section role="tabpanel" id="p-all">…</section>
+    <section role="tabpanel" id="p-runs" hidden data-rk-reveal>…</section>
+  </div>
+</div>
+```
+
+`.rk-facets` is a wrapper, not the parent itself, because a container
+query styles what is inside its container, never the container: the
+parent is the row it lays out. A container query cannot read
+`--rk-pivot-wide` either, so `dist/rekta.css` carries the token's value
+(1300px), written there by `build.mjs`. A product that changes
+`--rk-pivot-wide` (or a pivot that sets its own) names its container
+itself and repeats its value in one query, with the three rules of
+`@container rk-facets` from `dist/rekta.css`:
+
+```css
+.rk-facets { container-name: product-facets; }   /* rekta.css's own 1300px query steps back */
+@container product-facets (min-width: 1100px) {
+  /* the three rules of @container rk-facets in dist/rekta.css */
+}
+```
+
+`node scripts/build.mjs --check-product product.css` warns when a
+product sets `--rk-pivot-wide` and no container query repeats its value.
+With `0` (never wide), leave `.rk-facets` out.
 
 Wide below a title block (a record, a profile), the row is a stage: at
 most as tall as the window under the sticky chrome (`--rk-stage-top`,
@@ -518,10 +563,16 @@ Every scrolled box of a place as plain data, for a router that is not
 sections, a wide facet row and its facets, a split's panes, anything
 marked `data-rk-scroll`, and the window. Boxes are known by their `id`
 or `data-rk-scroll` value, else by their order. Returns
-`{ capture(), restore(state) }`; `capture()` gives
+`{ capture(), restore(state), destroy }`; `capture()` gives
 `{ y, at: { key: [left, top] } }`, which fits in `history.state` or a
-framework's snapshot. Restore once the place is rendered and laid out.
-`places()` uses it for its own back. A recipe is in
+framework's snapshot. `restore(state)` sets every offset it can at
+once; one it cannot set yet (its box is not there, or still too short
+or narrow, because the data renders after the navigation) waits and is
+set as the boxes appear and grow. It gives up as soon as the user
+scrolls (the wheel, a touch, a press, a scrolling key, or a scroll it
+did not cause), after `timing.restore` (5s), or on `cancel()` or
+`destroy()`. It returns `{ pending, cancel() }`: `pending` is true while
+it still waits. `places()` uses it for its own back. A recipe is in
 [navigation.md](navigation.md#back-with-a-router-of-your-own).
 
 ### `strip(el)`
@@ -636,9 +687,9 @@ sentence share a line and the action goes under them, about 105px on a
   with a `Date` (or anything `new Date()` reads). A state the client
   did not see start (it comes from the server after a reload) passes
   the server's time, or `since: false` when nobody knows: then there is
-  no time line, rather than a wrong one. `until` (a text, "until 18:00")
-  replaces the line for a state with a known end; the state's own
-  `since` is only the word before the time.
+  no time line, rather than a wrong one. `until` (a time, "18:00")
+  replaces the start for a state with a known end; `since` is the word
+  before it ("until").
 - `action` is the remedy's label. `action: { label, href }` makes it a
   link (`a.rk-btn`, with the same classes as the markup's button) that
   navigates (sign in → `/login`) instead of calling `onAction`.
@@ -660,9 +711,13 @@ Returns `{ set(name, on, { from, since, text }), update(name, text), toggle(name
 For `<dialog class="rk-sheet">` opened with `showModal()`. A tap on the
 shading cancels where `closedby` is not supported. Use
 `closedby="closerequest"` on a sheet with unsaved input. The sheet leaves
-the way it came before it closes (`data-rk-phase="leaving"`): `close()`,
-Escape and a `method=dialog` form all wait for it, and `close` fires
-after.
+the way it came before it closes (`data-rk-phase="leaving"`), its
+shading fading with it: `close()`, Escape and a `method=dialog` form all
+wait for it, and `close` fires after. The answer (`returnValue`) is given
+as it starts to leave: a further close request while it leaves (a tap on
+the shading, Escape, another button, `close()`) changes no answer and
+asks nothing, it only ends the leaving at once. Focus goes back once it
+has gone.
 
 With `dirty` (a function), a close request while it returns true
 (Escape, the shading, a `method=dialog` submit with `value="cancel"`)
@@ -694,7 +749,7 @@ or its text plus "…") at the same width, refuses more clicks and writes
 `busy-min` (states.md, "Pending actions"). Resolves or rejects with the
 work.
 
-### `menu(trigger, el, { onSelect, summary })`
+### `menu(trigger, el, { onSelect, summary, align })`
 
 A menu button. `el` holds `.rk-menu-item` buttons (`role` `menuitem`,
 `menuitemcheckbox` or `menuitemradio`), `.rk-menu-sep` and
@@ -705,7 +760,9 @@ A menu button. `el` holds `.rk-menu-item` buttons (`role` `menuitem`,
 item or picks a radio item, closes the menu, returns focus to the
 trigger and calls `onSelect(item)`; a checkbox item toggles and leaves the
 menu open. With `summary` ("status") the trigger says what is ticked
-("status: failed, done", or "status: any"): a filter button. Returns
+("status: failed, done", or "status: any"): a filter button. `align`
+(`'start'` or `'center'`, by default the trigger's `data-rk-align`)
+goes to `place()`. Returns
 `{ open(index), close(), set(isChecked), destroy }` (`set` ticks
 checkbox items from outside, as when a filter comes back from the
 address).
@@ -1019,10 +1076,17 @@ it to take over and reloads. Keeps the browser's install prompt for
 change of `{ supported, installed, canInstall, offlineReady, updateReady }`.
 Returns `{ state, install(), update(), check(), destroy }`.
 
-### `place(el, anchor)`
+### `place(el, anchor, { align })`
 
-Places a fixed floating surface below `anchor`, or above it when there
-is no room; writes `data-rk-side`. For your own floating surfaces.
+Places a fixed floating surface by the rule in
+[states.md](states.md#floating-surfaces): `space-xs` from `anchor`,
+`space-m` from the window's edges; below it when it fits, else above
+when it fits, else on the side with more room, inside the window (it
+may cover `anchor`; a surface taller than the window gets a
+`max-height` and scrolls). At `anchor`'s leading edge, or centred on it
+with `align: 'center'` (the default when `anchor` has
+`data-rk-align="center"`). Writes `data-rk-side`. For your own floating
+surfaces.
 
 ### `tokens`
 

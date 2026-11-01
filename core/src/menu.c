@@ -1,6 +1,8 @@
 /* menu.c: menus, as states.md's floating surfaces: rk-bg, a 1px text-contrast-medium edge, radius-s, no shadow;
-   below the view that opened it, aligned to its leading edge, above it where there is no room, never outside the
-   window; a fade and a 4px shift away from the opener over duration-float, gone at once when it closes.
+   placed by the same rule as the web's place(): space-xs from the view that opened it, space-m from the window's
+   edges; below it when it fits, else above when it fits, else on the side with more room, inside the window (over the
+   opener if need be, its rows scrolling); aligned to the opener's leading edge, or to its centre (rk_menu_set_align);
+   a fade and a 4px shift away from the opener over duration-float, gone at once when it closes.
 
    One item a row at the density's row height: a lowercase verb or option, a filled square for a chosen option, a key
    hint at the end, hairlines between groups, a group's label. Keys: Up and Down (wrapping), Home and End, a letter
@@ -31,6 +33,8 @@ typedef struct menu {
   float min_w; int prefer;                                 /* at least this wide; the item it starts at (-1: the first) */
   bool passive;                                            /* floats without focus: its opener moves the active row */
   void (*opening)(rk_view *menu, void *user); void *opening_user;   /* declare.c: fill it now */
+  rk_align align;                                          /* RK_ALIGN_CENTER: centred on its opener; else its leading edge */
+  float scroll;                                            /* how far its rows have scrolled: a window shorter than the menu */
 } menu;
 
 static float pad_y(void) { return rk_metric_of(RK_SPACE_XS); }
@@ -40,6 +44,7 @@ static float item_h(const menu_item *it) {
   return rk_metric_of(RK_ROW_HEIGHT);
 }
 static bool choosable(const menu_item *it) { return it->kind == ITEM; }
+static float row_top(const menu *m, int i) { float y = pad_y(); for (int k = 0; k < i && k < m->n; k++) y += item_h(&m->items[k]); return y; }
 
 static rk_size menu_measure(rk_view *v, rk_size avail, void *st) {
   (void)v; (void)avail;
@@ -69,7 +74,8 @@ static void menu_draw(rk_view *v, rk_canvas *c, void *st) {
   bool squares = false;
   for (int i = 0; i < m->n; i++) if (m->items[i].check >= 0) squares = true;
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0), k = rk__textfmt(RK_TEXT_META, 0), l = rk__textfmt(RK_TEXT_LABEL, 0);
-  float y = pad_y();
+  float y = pad_y() - m->scroll;
+  rk_canvas_push_clip(c, (rk_rect){ 1, 1, W - 2, H - 2 });
   for (int i = 0; i < m->n; i++) {
     menu_item *it = &m->items[i];
     float h = item_h(it);
@@ -98,14 +104,30 @@ static void menu_draw(rk_view *v, rk_canvas *c, void *st) {
     }
     y += h;
   }
+  rk_canvas_pop_clip(c);
 }
 
 static void close_menu(rk_view *v, bool give_back);
 
 static int row_at_y(menu *m, float y) {
-  float top = pad_y();
+  float top = pad_y() - m->scroll;
   for (int i = 0; i < m->n; i++) { float h = item_h(&m->items[i]); if (y >= top && y < top + h) return i; top += h; }
   return -1;
+}
+
+/* Its rows scroll by `to`, kept between the first and the last. */
+static void scroll_to(rk_view *v, menu *m, float to) {
+  float most = RK_MAX(0.0f, row_top(m, m->n) + pad_y() - v->frame.h);
+  m->scroll = RK_CLAMP(to, 0.0f, most);
+  rk__view_dirty(v);
+}
+
+/* The active row whole in sight. */
+static void reveal(rk_view *v, menu *m) {
+  if (m->active < 0 || m->active >= m->n) return;
+  float top = row_top(m, m->active), bottom = top + item_h(&m->items[m->active]);
+  if (top - pad_y() < m->scroll) scroll_to(v, m, top - pad_y());
+  else if (bottom + pad_y() > m->scroll + v->frame.h) scroll_to(v, m, bottom + pad_y() - v->frame.h);
 }
 
 static void menu_step(rk_view *v, menu *m, int dir) {
@@ -113,6 +135,7 @@ static void menu_step(rk_view *v, menu *m, int dir) {
     i = ((i < 0 ? (dir > 0 ? -1 : 0) : i) + dir + m->n) % m->n;
     if (choosable(&m->items[i])) { m->active = i; break; }
   }
+  reveal(v, m);
   rk__view_dirty(v);
 }
 
@@ -142,6 +165,7 @@ static bool menu_event(rk_view *v, const rk_event *e, void *st) {
     }
     case RK_EVENT_POINTER_DOWN: return true;
     case RK_EVENT_POINTER_UP: choose(v, m, row_at_y(m, e->position.y)); return true;
+    case RK_EVENT_WHEEL: scroll_to(v, m, m->scroll + e->wheel_y); return true;
     case RK_EVENT_KEY_DOWN:
       switch (e->key) {
         case RK_KEY_DOWN: menu_step(v, m, 1); return true;
@@ -155,7 +179,7 @@ static bool menu_event(rk_view *v, const rk_event *e, void *st) {
             for (int k = 1; k <= m->n; k++) {
               int i = ((m->active < 0 ? -1 : m->active) + k) % m->n;
               const char *s = m->items[i].label;
-              if (choosable(&m->items[i]) && s && (s[0] == (char)e->key || s[0] == (char)(e->key + 32))) { m->active = i; rk__view_dirty(v); break; }
+              if (choosable(&m->items[i]) && s && (s[0] == (char)e->key || s[0] == (char)(e->key + 32))) { m->active = i; reveal(v, m); rk__view_dirty(v); break; }
             }
             return true;
           }
@@ -216,8 +240,9 @@ void rk_menu_set_check(rk_view *v, int i, rk_checkmark check) {
 rk_checkmark rk_menu_check(rk_view *v, int i) { menu *m = RK__EXPECT(menu_of, v, "a menu"); int c = m && i >= 0 && i < m->n ? m->items[i].check : -1; return c < 0 ? RK_CHECKMARK_NONE : c ? RK_CHECKMARK_ON : RK_CHECKMARK_OFF; }
 void rk_menu_set_enabled(rk_view *v, int i, bool enabled) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m && i >= 0 && i < m->n) { m->items[i].disabled = !enabled; rk__view_dirty(v); } }
 rk_view *rk_menu_opener(rk_view *v) { menu *m = RK__EXPECT(menu_of, v, "a menu"); return m ? m->from : NULL; }
+void rk_menu_set_align(rk_view *v, rk_align align) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m) m->align = align; }
 
-/* Opens it in the window's top layer at a rect's bottom left (above it where there is no room below), on screen. */
+/* Opens it in the window's top layer by a rect, by states.md's rule for floating surfaces (the web's place()). */
 static void open_by(rk_view *v, rk_view *from, rk_rect at, bool keys, bool passive) {
   menu *m = menu_of(v);
   rk_window *w = from ? rk__view_window(from) : NULL;
@@ -227,20 +252,24 @@ static void open_by(rk_view *v, rk_view *from, rk_rect at, bool keys, bool passi
   if (m->opening) m->opening(v, m->opening_user);          /* declared: its items, as they are now */
   rk_retain(from); rk_release(m->from); m->from = from;    /* held while it is open */
   rk_size s = menu_measure(v, (rk_size){ INFINITY, INFINITY }, m);
-  float gap = rk_metric_of(RK_SPACE_XS), edge = rk_metric_of(RK_SPACE_M);
-  float x = RK_CLAMP(at.x, edge, RK_MAX(edge, w->size.w - edge - s.w)), y = at.y + at.h + gap;
-  bool above = y + s.h > w->size.h - edge && at.y - gap - s.h >= edge;
-  if (above) y = at.y - gap - s.h;
-  y = RK_CLAMP(y, edge, RK_MAX(edge, w->size.h - edge - s.h));
-  m->active = -1; m->hover = false;
+  float gap = rk_metric_of(RK_SPACE_XS), edge = rk_metric_of(RK_SPACE_M), W = w->size.w, H = w->size.h;
+  s.h = RK_MIN(s.h, RK_MAX(0.0f, H - 2 * edge));           /* taller than the window allows: it keeps to it, its rows scroll */
+  float below = H - (at.y + at.h) - gap - edge, room = at.y - gap - edge;
+  bool above = s.h > below && (s.h <= room || room > below);   /* below if it fits, else above if it fits, else more room */
+  float y = above ? at.y - gap - s.h : at.y + at.h + gap;
+  y = RK_CLAMP(y, edge, RK_MAX(edge, H - edge - s.h));
+  /* from the opener's leading edge (its trailing edge when too near the window's), or centred on it */
+  float x = m->align == RK_ALIGN_CENTER ? at.x + at.w / 2 - s.w / 2 : at.x + s.w <= W - edge ? at.x : RK_MIN(at.x + at.w, W - edge) - s.w;
+  x = RK_CLAMP(x, edge, RK_MAX(edge, W - edge - s.w));
+  m->active = -1; m->hover = false; m->scroll = 0;
   rk__view_add(w->floats, v);
-  rk_view_set_frame(v, (rk_rect){ x, y, s.w, s.h });
+  rk_view_set_frame(v, (rk_rect){ roundf(x), roundf(y), s.w, s.h });
   rk__layout_pending();
   if (!m->passive) {
     w->focus_visible = keys;
     rk_window_focus(w, v);
   }
-  if (m->prefer >= 0 && m->prefer < m->n && choosable(&m->items[m->prefer])) m->active = m->prefer;
+  if (m->prefer >= 0 && m->prefer < m->n && choosable(&m->items[m->prefer])) { m->active = m->prefer; reveal(v, m); }
   else if (keys) menu_step(v, m, 1);
   /* it comes in from the opener's side: a fade and a 4px shift over duration-float */
   float o0 = 0, o1 = 1;
@@ -317,10 +346,12 @@ void rk__menu_show_passive(rk_view *v, rk_view *from, rk_rect below) {
   if (!was) {
     open_by(v, from, below, false, true);
     m->active = m->prefer >= 0 && m->prefer < m->n ? m->prefer : -1;
-  } else {                                                 /* open already: its size follows its items */
+  } else {                                                 /* open already: its size follows its items, inside the window */
     rk_size sz = menu_measure(v, (rk_size){ INFINITY, INFINITY }, m);
+    sz.h = RK_MIN(sz.h, RK_MAX(0.0f, w->size.h - rk_metric_of(RK_SPACE_M) - v->frame.y));
     rk_view_set_frame(v, (rk_rect){ v->frame.x, v->frame.y, sz.w, sz.h });
     if (m->active >= m->n) m->active = -1;
+    scroll_to(v, m, m->scroll);
   }
   rk__view_dirty(v);
 }

@@ -515,7 +515,7 @@ export const turn = {
       place.hidden = false;
       // A place you return to comes back as you left it: no second build-in, no redraw.
       if (arriving) arrive(place);
-      else place.getAnimations({ subtree: true }).forEach((a) => { if (a.animationName === 'rk-build-in' || a.animationName === 'rk-draw') a.finish(); });
+      else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
       // Its units turn in from the other side, light ones first, each in its own time.
       const d0 = ms('--rk-duration-moderate');
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
@@ -985,7 +985,9 @@ function stripWheel(e) {
 // Pivot --------------------------------------------------------------------------------------------------------------
 // Inactive titles scale down from the active title's line box by the token ratio (pivot-inactive / pivot-active, or
 // nav-inactive / nav-active for rk-pivot--nav; the stylesheet names the inactive size in --_rk-inactive), measured in
-// the page so fluid sizes and window-size classes stay right.
+// the page so fluid sizes and window-size classes stay right. They scale about the baseline, so every title stands on
+// the active one's: the distance from the baseline to the line box's bottom (the face's descent and half the leading)
+// is measured too, in --_rk-base, the transform's origin.
 function pivotScale(strip) {
   if (!strip.getClientRects().length) return;
   // Measuring is not a change to show: from the stylesheet's measure-free sizes (font-size) to the scale the first time,
@@ -1001,6 +1003,20 @@ function pivotScale(strip) {
   const inactive = parseFloat(getComputedStyle(probe).fontSize), active = item ? parseFloat(getComputedStyle(item).fontSize) : inactive;
   probe.remove();
   if (inactive && active) strip.style.setProperty('--rk-pivot-scale', (inactive / active).toFixed(3));
+  if (item) {
+    // A line in the title's font with an empty inline block on its baseline: the block's foot is the baseline.
+    const line = document.createElement('span'), mark = document.createElement('span');
+    line.dataset.rkProbe = '';
+    line.style.cssText = 'position:absolute;visibility:hidden;display:block;white-space:nowrap';
+    line.style.font = getComputedStyle(item).font;
+    line.textContent = 'x';
+    mark.style.cssText = 'display:inline-block;width:0;height:0';
+    line.appendChild(mark);
+    strip.appendChild(line);
+    const base = line.getBoundingClientRect().bottom - mark.getBoundingClientRect().bottom;
+    line.remove();
+    if (base >= 0) strip.style.setProperty('--_rk-base', `${base.toFixed(2)}px`);
+  }
   for (const el of titles) if (el.offsetWidth) el.style.setProperty('--_rk-w', `${el.offsetWidth}px`);
   void strip.offsetWidth;
   for (const el of titles) el.style.transition = '';
@@ -1060,9 +1076,18 @@ export function pivot(el, { onSelect, turn: placeTurn = null, gone = 'select' } 
   // Who owns hidden on the panels: pivot() sets it one facet at a time (from the start, too); wide, it leaves hidden as
   // it is and shows every panel with data-rk-reveal, so a framework that binds hidden to the chosen facet stays right.
   function narrow() { const i = Math.max(0, chosen()); panels().forEach((p, k) => { if (p) { p.removeAttribute('data-rk-reveal'); p.hidden = k !== i; } }); }
+  // The width that decides: the panels' common parent's, or with .rk-facets around it, that container's content
+  // width, the one rekta.css's first paint queries, so the two never disagree.
+  const widthOf = (parent) => {
+    const box = parent.parentElement && parent.parentElement.classList.contains('rk-facets') ? parent.parentElement : null;
+    if (!box) return parent.clientWidth;
+    const s = getComputedStyle(box);
+    return box.clientWidth - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0);
+  };
   function layout() {
     const ps = panels(), parent = ps.length && ps.every((p) => p && p.parentElement === ps[0].parentElement) ? ps[0].parentElement : null;
-    const min = px('--rk-pivot-wide', el), now = !nav && !!parent && min > 0 && parent.clientWidth >= min;
+    const min = px('--rk-pivot-wide', el), now = !nav && !!parent && min > 0 && widthOf(parent) >= min;
+    if (parent && !nav) parent.toggleAttribute('data-rk-narrow', !now);    /* decided: the first paint's rules step back */
     if (now === wide) return;
     wide = now; host = now ? parent : null;
     el.toggleAttribute('data-rk-wide', now);
@@ -1183,6 +1208,7 @@ export function pivot(el, { onSelect, turn: placeTurn = null, gone = 'select' } 
   mo.observe(el, { childList: true, characterData: true, subtree: true });
   const first = tabs().map(panel).find(Boolean);
   if (first && first.parentElement) ro.observe(first.parentElement);
+  if (first && first.parentElement && first.parentElement.parentElement && first.parentElement.parentElement.classList.contains('rk-facets')) ro.observe(first.parentElement.parentElement);
   last = Math.max(0, chosen());
   sync({ quiet: true });
   resize();
@@ -1204,22 +1230,73 @@ export function pivot(el, { onSelect, turn: placeTurn = null, gone = 'select' } 
 // scrollState(root): every scrolled box of a place (the place, a panorama and its sections, a wide facet row and its
 // facets, a split's panes, anything marked data-rk-scroll) and the window, as plain data a router can keep with its
 // history entry (history.state, SvelteKit's snapshot), and put back on back. Boxes are known by their id or
-// data-rk-scroll value, else by their order. Restore once the place is rendered and laid out.
+// data-rk-scroll value, else by their order.
+// restore(state) sets every offset it can at once. One it cannot set yet (its box is not there, or still too short or
+// narrow for it: data that renders after the navigation, a fetch on mount, a stream) waits, and is set as the boxes
+// appear and grow (a MutationObserver and a ResizeObserver on root). It gives up when the user scrolls (the wheel, a
+// touch, a press, a scrolling key, or a scroll it did not cause), after duration-restore, or on cancel() or destroy().
 const SCROLLERS = '.rk-panorama, .rk-sec, .rk-split-list, .rk-split-detail, [data-rk-wide]:not(.rk-pivot), [data-rk-wide]:not(.rk-pivot) > [role=tabpanel], [data-rk-scroll]';
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
 export function scrollState(root) {
   const boxes = () => [root, ...root.querySelectorAll(SCROLLERS)];
   const keyOf = (b, i) => (b === root ? 'root' : b.id ? `#${b.id}` : b.dataset.rkScroll ? `@${b.dataset.rkScroll}` : String(i));
+  const runs = new Set();
+  function restore(state) {
+    if (!state || !state.at) return { pending: false, cancel() {} };
+    const page = document.scrollingElement || docEl(), WINDOW = {};
+    const want = new Map(Object.entries(state.at)), set = new Map();
+    if (typeof state.y === 'number') want.set(WINDOW, [scrollX, state.y]);
+    const at = (b, [l, t]) => Math.abs(b.scrollLeft - l) <= 1 && Math.abs(b.scrollTop - t) <= 1;
+    // A box scrolls as far as it can towards its offset; it is done once there. What it reached is remembered, so its
+    // own scroll event is known for one.
+    const put = (key, b, o) => {
+      if (!at(b, o)) b.scrollTo({ left: o[0], top: o[1], behavior: 'instant' });
+      set.set(b, [b.scrollLeft, b.scrollTop]);
+      if (at(b, o)) want.delete(key);
+    };
+    boxes().forEach((b, i) => { if (!want.has(keyOf(b, i)) && (b.scrollLeft || b.scrollTop)) { b.scrollTo({ left: 0, top: 0, behavior: 'instant' }); set.set(b, [0, 0]); } });
+    const pass = () => {
+      frame = 0;
+      boxes().forEach((b, i) => { const k = keyOf(b, i), o = want.get(k); if (o) put(k, b, o); });
+      if (want.has(WINDOW)) put(WINDOW, page, want.get(WINDOW));
+      if (!want.size) stop(); else if (live) watch();
+    };
+    let live = true, frame = 0, timer = 0;
+    const later = () => { if (!frame) frame = requestAnimationFrame(pass); };
+    const mo = new MutationObserver(later), ro = new ResizeObserver(later);
+    const watch = () => { for (const b of [root, page, ...root.querySelectorAll(SCROLLERS)]) { ro.observe(b); for (const k of b.children) ro.observe(k); } };
+    // The user's own scroll ends it. A box that only lost content (scrolled back to its new end) is not the user's.
+    const scrolled = (e) => {
+      const b = e.target === document ? page : e.target, s = set.get(b);
+      if (!s || (Math.abs(b.scrollLeft - s[0]) <= 1 && Math.abs(b.scrollTop - s[1]) <= 1)) return;
+      const clamped = (b.scrollTop < s[1] && b.scrollTop >= b.scrollHeight - b.clientHeight - 1) || (b.scrollLeft < s[0] && b.scrollLeft >= b.scrollWidth - b.clientWidth - 1);
+      if (clamped) set.set(b, [b.scrollLeft, b.scrollTop]); else stop();
+    };
+    const keyed = (e) => { if (SCROLL_KEYS.has(e.key)) stop(); };
+    const INPUT = [['wheel', stop], ['touchstart', stop], ['pointerdown', stop], ['keydown', keyed], ['scroll', scrolled]];
+    function stop() {
+      if (!live) return;
+      live = false; runs.delete(run);
+      mo.disconnect(); ro.disconnect(); cancelAnimationFrame(frame); clearTimeout(timer);
+      for (const [type, fn] of INPUT) removeEventListener(type, fn, { capture: true });
+    }
+    const run = { get pending() { return live; }, cancel: stop };
+    pass();
+    if (!live) return run;
+    runs.add(run);
+    mo.observe(root, { childList: true, subtree: true, characterData: true });
+    for (const [type, fn] of INPUT) addEventListener(type, fn, { capture: true, passive: true });
+    timer = setTimeout(stop, ms('--rk-duration-restore'));
+    return run;
+  }
   return {
     capture() {
       const at = {};
       boxes().forEach((b, i) => { if (b.scrollLeft || b.scrollTop) at[keyOf(b, i)] = [Math.round(b.scrollLeft), Math.round(b.scrollTop)]; });
       return { y: Math.round(scrollY), at };
     },
-    restore(state) {
-      if (!state || !state.at) return;
-      boxes().forEach((b, i) => { const o = state.at[keyOf(b, i)]; if (o || b.scrollLeft || b.scrollTop) b.scrollTo({ left: o ? o[0] : 0, top: o ? o[1] : 0, behavior: 'instant' }); });
-      if (typeof state.y === 'number') scrollTo({ left: scrollX, top: state.y, behavior: 'instant' });
-    },
+    restore,
+    destroy() { for (const r of [...runs]) r.cancel(); },
   };
 }
 
@@ -1536,17 +1613,28 @@ export function sheet(dialog, opts = {}) {
   if (had) { Object.assign(had.opts, opts); return had.api; }
   const o = { dirty: null, ...opts };
   const close = HTMLDialogElement.prototype.close;
-  let leaving = false, ask = null, before = null;
+  let leaving = null, ask = null, before = null;
+  // The answer is given as the sheet starts to leave. A further close request while it leaves (a tap on the shading,
+  // Escape, another button) changes no answer and asks nothing: it only ends the leaving at once.
   function leaveThen(value) {
     const d = ms('--rk-duration-short') * 0.8;
     if (!dialog.open) return;
+    if (leaving) { leaving.end(); return; }
     if (ask) unask(false);
-    if (!d || leaving) { leaving = false; close.call(dialog, value); return; }
-    leaving = true;
+    if (!d) { close.call(dialog, value); return; }
     dialog.setAttribute('data-rk-phase', 'leaving');
-    const anims = [dialog.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: d, easing: css('--rk-ease-out'), fill: 'forwards' })];
-    try { anims.push(dialog.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, easing: 'linear', fill: 'forwards', pseudoElement: '::backdrop' })); } catch { /* no pseudo-element animation */ }
-    finished(anims).then(() => { leaving = false; dialog.removeAttribute('data-rk-phase'); close.call(dialog, value); anims.forEach((a) => a.cancel()); });
+    // The sheet and its shading leave together, as they came: 0.8 × duration-short, easing out.
+    const ease = css('--rk-ease-out');
+    const anims = [dialog.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: d, easing: ease, fill: 'forwards' })];
+    try { anims.push(dialog.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, easing: ease, fill: 'forwards', pseudoElement: '::backdrop' })); } catch { /* no pseudo-element animation */ }
+    const run = leaving = {
+      value,
+      end() {
+        if (leaving !== run) return;
+        leaving = null; dialog.removeAttribute('data-rk-phase'); close.call(dialog, value); anims.forEach((a) => a.cancel());
+      },
+    };
+    finished(anims).then(run.end);
   }
   const isDirty = () => { try { return !!(o.dirty && o.dirty()); } catch { return false; } };
   function askFirst(value) {
@@ -1573,6 +1661,7 @@ export function sheet(dialog, opts = {}) {
   }
   // A close request: ask when there is something to lose; while asking, it means "keep editing".
   function request(value) {
+    if (leaving) { leaving.end(); return; }
     if (ask) { unask(true); return; }
     if (isDirty()) askFirst(value); else leaveThen(value);
   }
@@ -1587,7 +1676,12 @@ export function sheet(dialog, opts = {}) {
     const value = e.submitter ? e.submitter.value : '';
     if (value === 'cancel') request(value); else leaveThen(value);
   };
-  const cancel = (e) => { if (!e.cancelable) { unask(false); return; } e.preventDefault(); request('cancel'); };
+  const cancel = (e) => {
+    // While it leaves, the browser's own close (one it does not let a page stop) keeps the answer too.
+    if (leaving && !e.cancelable) { if (leaving.value !== undefined) dialog.returnValue = leaving.value; return; }
+    if (!e.cancelable) { unask(false); return; }
+    e.preventDefault(); request('cancel');
+  };
   // Escape is taken on its keydown while there is something to lose: there it can always be stopped, where the
   // browser lets a page stop only one cancel event per user activation (a third Escape would close the sheet).
   const key = (e) => {
@@ -1658,18 +1752,26 @@ export async function pending(button, work, { label } = {}) {
 }
 
 // Floating surfaces -------------------------------------------------------------------------------------------------
-// place(el, anchor): puts a fixed floating surface below its control, aligned to its leading edge, or above it when
-// there is no room below; it never leaves the viewport. data-rk-side says which side it took.
-export function place(el, anchor) {
-  const a = anchor.getBoundingClientRect(), gap = 4, edge = num('--rk-space-s') || 8;
+// place(el, anchor, { align }): puts a fixed floating surface next to its control, by one rule (docs/states.md, the same
+// in rekta-core): space-xs from the control, space-m from the window's edges (the stylesheet's width limit). Below when
+// it fits there; else above when it fits there; else on the side with more room, kept inside the window, where it may
+// cover the control and its content scrolls. Aligned to the control's leading edge, or with align 'center' (the
+// default for a control marked data-rk-align="center") to its centre; either way inside the window. data-rk-side says
+// which side it took.
+export function place(el, anchor, { align = anchor.getAttribute('data-rk-align') === 'center' ? 'center' : 'start' } = {}) {
+  const a = anchor.getBoundingClientRect(), gap = px('--rk-space-xs'), edge = px('--rk-space-m');
   el.style.left = '0px'; el.style.top = '0px'; el.style.right = 'auto'; el.style.bottom = 'auto';   /* over a stylesheet's own placement */
-  const w = el.offsetWidth, h = el.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
+  el.style.maxHeight = '';
+  const vw = document.documentElement.clientWidth, vh = innerHeight;
+  if (el.offsetHeight > vh - 2 * edge) el.style.maxHeight = `${Math.max(0, vh - 2 * edge)}px`;
+  const w = el.offsetWidth, h = el.offsetHeight;
   const below = vh - a.bottom - gap - edge, above = a.top - gap - edge;
-  const side = h <= below || below >= above ? 'below' : 'above';
-  const top = side === 'below' ? a.bottom + gap : Math.max(edge, a.top - gap - h);
+  const side = h <= below ? 'below' : h <= above ? 'above' : below >= above ? 'below' : 'above';
+  const top = side === 'below' ? a.bottom + gap : a.top - gap - h;
   // From the control's leading edge; one too near the trailing edge for that opens from its trailing edge instead.
-  const left = a.left + w <= vw - edge ? Math.max(edge, a.left) : Math.max(edge, Math.min(a.right, vw - edge) - w);
-  el.style.left = `${Math.round(left)}px`; el.style.top = `${Math.round(top)}px`;
+  const left = align === 'center' ? a.left + a.width / 2 - w / 2 : a.left + w <= vw - edge ? a.left : Math.min(a.right, vw - edge) - w;
+  el.style.left = `${Math.round(Math.max(edge, Math.min(left, vw - edge - w)))}px`;
+  el.style.top = `${Math.round(Math.max(edge, Math.min(top, vh - edge - h)))}px`;
   el.dataset.rkSide = side;
 }
 const canPopover = typeof HTMLElement !== 'undefined' && 'popover' in HTMLElement.prototype;
@@ -1682,8 +1784,8 @@ const isOpen = (el) => (canPopover ? el.matches(':popover-open') : !el.hidden);
 // Home End, a letter jumps to the next item starting with it; Enter or Space chooses; Escape, Tab or a click outside
 // closes and focus returns to the trigger after a choice or Escape. A checkbox item toggles and leaves the menu open,
 // so several can be ticked in a row. With summary ("status"), the trigger says what is ticked: "status: failed, done",
-// or "status: any" when nothing is (a filter button).
-export function menu(trigger, el, { onSelect, summary = null } = {}) {
+// or "status: any" when nothing is (a filter button). align goes to place(): by default the trigger's data-rk-align.
+export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   el.id = el.id || `rk-menu-${Math.random().toString(36).slice(2, 8)}`;
   el.setAttribute('role', 'menu');
   if (canPopover) el.setAttribute('popover', 'auto'); else el.hidden = true;
@@ -1703,7 +1805,7 @@ export function menu(trigger, el, { onSelect, summary = null } = {}) {
   // never counts as a click outside. Placement and focus follow the toggle.
   let first = 0;
   if (canPopover && 'popoverTargetElement' in trigger) trigger.popoverTargetElement = el;
-  const shown = () => { place(el, trigger); trigger.setAttribute('aria-expanded', 'true'); focusItem(first); first = 0; };
+  const shown = () => { place(el, trigger, { align }); trigger.setAttribute('aria-expanded', 'true'); focusItem(first); first = 0; };
   function open(at = 0) {
     if (isOpen(el)) { focusItem(at); return; }
     first = at;
@@ -1745,11 +1847,11 @@ export function menu(trigger, el, { onSelect, summary = null } = {}) {
     if (checkbox) item.setAttribute('aria-checked', String(item.getAttribute('aria-checked') !== 'true'));
     if (item.getAttribute('role') === 'menuitemradio') el.querySelectorAll('[role=menuitemradio]').forEach((r) => r.setAttribute('aria-checked', String(r === item)));
     summarize();
-    if (!checkbox) close(); else if (!canPopover || el.matches(':popover-open')) place(el, trigger);
+    if (!checkbox) close(); else if (!canPopover || el.matches(':popover-open')) place(el, trigger, { align });
     if (onSelect) onSelect(item);
   };
   const outside = (e) => { if (!canPopover && isOpen(el) && !el.contains(e.target) && !trigger.contains(e.target)) close(false); };
-  const reflow = () => { if (isOpen(el)) place(el, trigger); };
+  const reflow = () => { if (isOpen(el)) place(el, trigger, { align }); };
   trigger.addEventListener('click', click);
   trigger.addEventListener('keydown', triggerKey);
   el.addEventListener('keydown', key);
@@ -2570,7 +2672,7 @@ function tipText(el) {
   return t || '';
 }
 function placeTip(t, anchor) {
-  const a = anchor.getBoundingClientRect(), gap = 6, edge = num('--rk-space-s') || 8;
+  const a = anchor.getBoundingClientRect(), gap = px('--rk-tip-gap'), edge = px('--rk-space-m');
   t.style.left = '0px'; t.style.top = '0px';
   const w = t.offsetWidth, h = t.offsetHeight, vw = document.documentElement.clientWidth;
   const above = a.top - gap - h >= edge;
@@ -2641,7 +2743,7 @@ function tips() {
 // Context menu ------------------------------------------------------------------------------------------------------
 // placeAt(el, x, y): a floating surface at a point (a context menu at the pointer), turned to stay in the viewport.
 function placeAt(el, x, y) {
-  const edge = num('--rk-space-s') || 8;
+  const edge = px('--rk-space-m');
   el.style.left = '0px'; el.style.top = '0px';
   const w = el.offsetWidth, h = el.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
   const left = x + w > vw - edge ? Math.max(edge, x - w) : x, top = y + h > vh - edge ? Math.max(edge, y - h) : y;
@@ -3548,7 +3650,7 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
 // SVG points list; with the same number of points each one travels, otherwise the line is redrawn at once.
 const sparkRuns = new WeakMap();
 export function sparkTo(line, points) {
-  const parse = (s) => (s || '').trim().split(/\s+/).map((p) => p.split(',').map(Number));
+  const parse = (s) => (s || '').trim().split(/\s+/).filter(Boolean).map((p) => p.split(',').map(Number));
   const from = parse(line.getAttribute('points')), to = parse(points), d = ms('--rk-duration-long');
   cancelAnimationFrame(sparkRuns.get(line) || 0);
   if (!d || from.length !== to.length) { line.setAttribute('points', points); return; }

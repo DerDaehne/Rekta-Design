@@ -510,6 +510,18 @@
         "$description": "The one bold main title of a screen, such as a record's own (level 2 of the title hierarchy in typography.md)."
       }
     },
+    "metrics": {
+      "ascent": {
+        "$type": "number",
+        "$value": 1.0,
+        "$description": "The sans face's ascent above the baseline, in em (Barlow's hhea ascender, 1000 of 1000 units). With line-height and descent it places the baseline in a line box: the line box's bottom lies (line-height + descent - ascent) / 2 em below the baseline. The stylesheet's fallback for pivot titles uses it until rekta.js has measured the face itself. A product with another face sets its own."
+      },
+      "descent": {
+        "$type": "number",
+        "$value": 0.2,
+        "$description": "The sans face's descent below the baseline, in em (Barlow's hhea descender, 200 of 1000 units). See ascent."
+      }
+    },
     "line-height": {
       "body": {
         "$type": "number",
@@ -654,6 +666,14 @@
         "unit": "px"
       },
       "$description": "The narrowest a pane of a split view may be dragged; below twice this plus the handle the split shows one pane at a time."
+    },
+    "tip-gap": {
+      "$type": "dimension",
+      "$value": {
+        "value": 6,
+        "unit": "px"
+      },
+      "$description": "Between a tooltip and its control: a little more than a floating surface's space-xs, so the ink strip does not touch the control's focus ring."
     },
     "pivot-wide": {
       "$type": "dimension",
@@ -1174,6 +1194,11 @@
       "$type": "duration",
       "$value": "30000ms",
       "$description": "A live region with no update or heartbeat for this long is stale: it says so, and its values stop looking current."
+    },
+    "restore": {
+      "$type": "duration",
+      "$value": "5000ms",
+      "$description": "How long scrollState().restore() waits for content that renders after a navigation (a fetch on mount, streamed data) to put a saved scroll offset back; it gives up sooner when the user scrolls."
     }
   },
   "layer": {

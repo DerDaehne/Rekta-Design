@@ -64,6 +64,7 @@ export function coreTokens(json) {
   for (const [k, v] of Object.entries(json.timing)) defs.push(`#define RK_TOK_TIMING_${C(k.replace(/^duration-/, ''))} ${f(v)}`);
   for (const [k, v] of Object.entries(json.breakpoint)) defs.push(`#define RK_TOK_${C(k)} ${f(v)}`);
   defs.push(`#define RK_TOK_TILE_UNIT_ULTRAWIDE ${f(json.size['tile-unit-ultrawide'])}`);
+  defs.push(`#define RK_TOK_TIP_GAP ${f(json.size['tip-gap'])}`);
   const out = HEAD(`Rekta Design ${json.version} tokens for rekta-core`)
     + `#ifndef RK_TOKENS_H\n#define RK_TOKENS_H\n\n#define RK_TOKENS_VERSION "${json.version}"\n\n`
     + `/* [theme: light, dark][rk_role], 0xRRGGBBAA */\nstatic const rk_color rk_tok_colors[2][RK__ROLE_COUNT] = {\n${themes.join(',\n')}\n};\n\n`

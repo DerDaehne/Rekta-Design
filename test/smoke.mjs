@@ -265,6 +265,70 @@ ok(facets.byName, 'a facet chosen by name', JSON.stringify(facets));
 ok(facets.gone.selected === 'drafts' && facets.gone.stops === 1 && facets.gone.told === 'drafts' && facets.gone.shown, 'the chosen facet goes: its neighbour is chosen, one tab stop stays', JSON.stringify(facets.gone));
 ok(facets.added, 'a facet that comes takes no tab stop, its panel hidden', JSON.stringify(facets));
 ok(facets.scroll, 'scrollState captures every scrolled box and puts it back', JSON.stringify(facets));
+// The first paint of facets that may go wide: .rk-facets is a container, so before the script the row is laid out from
+// the same width pivot() measures. In a 900px pane of a 1440px window (a media query would say wide) both say narrow.
+const fp = await p.evaluate(async () => {
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const out = {};
+  for (const w of [900, 1400]) {
+    const host = document.createElement('div'); host.style.cssText = `position:absolute;left:0;top:0;width:${w}px;z-index:-1`;
+    host.innerHTML = '<div class="rk-pivot" role="tablist" aria-label="fp">' + [0, 1, 2].map((i) => `<button role="tab" id="fpt${w}-${i}" aria-controls="fpp${w}-${i}" aria-selected="${i === 0}">facet ${i}</button>`).join('') + '</div>'
+      + '<div class="rk-facets"><div>' + [0, 1, 2].map((i) => `<section role="tabpanel" id="fpp${w}-${i}"${i ? ' hidden data-rk-reveal' : ''}><p>${'text '.repeat(60)}</p></section>`).join('') + '</div></div>';
+    document.querySelector('.rk').append(host); await frames();
+    const shown = () => [...host.querySelectorAll('[role=tabpanel]')].filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().left)).join();
+    const before = shown(), pv = Rekta.pivot(host.querySelector('.rk-pivot')); await frames();
+    out[w] = { before, after: shown(), wide: pv.wide };
+    pv.destroy(); host.remove();
+  }
+  return out;
+});
+ok(fp[900].before.split(',').length === 1 && !fp[900].wide && fp[900].after === fp[900].before, 'in a narrow container the first paint and pivot() both show one facet', JSON.stringify(fp[900]));
+ok(fp[1400].before.split(',').length === 3 && fp[1400].wide && fp[1400].after === fp[1400].before, 'in a wide container the first paint lays the facets out where pivot() does', JSON.stringify(fp[1400]));
+// Geometry the docs fix: inactive pivot titles stand on the active one's baseline; a sparkline's line is 2px at any
+// tile width; a status region spaces its kicker, figures and actions.
+const geo = await p.evaluate(async () => {
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const host = document.createElement('div'); host.style.cssText = 'position:absolute;left:0;top:0;width:900px;z-index:-1';
+  host.innerHTML = '<div class="rk-pivot" role="tablist" aria-label="g">' + ['all', 'questions', 'drafts'].map((n, i) => `<button role="tab" id="gt-${n}" aria-controls="gp-${n}" aria-selected="${i === 1}">${n}</button>`).join('') + '</div>'
+    + '<div>' + ['all', 'questions', 'drafts'].map((n) => `<div role="tabpanel" id="gp-${n}">${n}</div>`).join('') + '</div>'
+    + '<div class="rk-tiles" style="width:600px">' + ['', 'rk-w2'].map((w) => `<div class="rk-tile ${w}"><span class="rk-stat"><b>1</b><span>x</span></span><svg class="rk-spark rk-spark--static" viewBox="0 0 200 28"><polyline points="1,14 199,14"/></svg></div>`).join('') + '</div>'
+    + '<section class="rk-region rk-status-region" aria-label="job"><p class="rk-kicker">nightly build</p><div class="rk-figures"><span class="rk-stat"><b>412</b><span>tests run</span></span></div><p class="rk-actions"><button class="rk-btn">pause</button></p></section>';
+  document.querySelector('.rk').append(host);
+  const pv = Rekta.pivot(host.querySelector('.rk-pivot')); await frames(); await frames();
+  const feet = [...host.querySelectorAll('[role=tab]')].map((t) => { const m = document.createElement('span'); m.style.cssText = 'display:inline-block;width:0;height:0'; t.append(m); const b = m.getBoundingClientRect().bottom; m.remove(); return b; });
+  const strokes = [...host.querySelectorAll('.rk-spark')].map((svg) => {
+    const l = svg.querySelector('polyline'), k = svg.getScreenCTM().a, pt = svg.createSVGPoint(); pt.x = 100; let half = 0;
+    for (let d = 0; d < 4; d += 0.05) { pt.y = 14 + d / k; if (l.isPointInStroke(pt)) half = d; }
+    return { width: Math.round(svg.getBoundingClientRect().width), stroke: +(2 * half).toFixed(2) };
+  });
+  const region = host.querySelector('.rk-status-region'), mt = (s) => parseFloat(getComputedStyle(region.querySelector(s)).marginTop);
+  const out = { feet, scaled: host.querySelector('#gt-all').getBoundingClientRect().height < host.querySelector('#gt-questions').getBoundingClientRect().height, strokes,
+    region: { figures: mt('.rk-figures'), actions: mt('.rk-actions'), s: Rekta.tokens.px('--rk-space-s'), m: Rekta.tokens.px('--rk-space-m') } };
+  pv.destroy(); host.remove();
+  return out;
+});
+ok(geo.scaled && Math.max(...geo.feet) - Math.min(...geo.feet) <= 0.5, 'inactive pivot titles scale about the baseline: one baseline for all', JSON.stringify(geo.feet));
+ok(geo.strokes[1].width > geo.strokes[0].width * 1.8 && geo.strokes.every((s) => Math.abs(s.stroke - 2) <= 0.2), 'a sparkline\'s line is 2px on a 1 × 1 and a 2 × 1 tile', JSON.stringify(geo.strokes));
+ok(geo.region.figures === geo.region.s && geo.region.actions === geo.region.m, 'a status region: space-s from kicker to figures, space-m to the actions', JSON.stringify(geo.region));
+// Data that renders after the navigation: restore() waits for the boxes to appear and grow; a user scroll first wins.
+const late = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const content = '<div data-rk-scroll="late" style="height:100px;overflow:auto"><div style="height:800px"></div></div><div style="height:900px"></div>';
+  const mk = () => { const el = document.createElement('div'); el.style.cssText = 'position:fixed;left:0;top:0;width:300px;height:200px;overflow:auto;z-index:-1'; document.body.append(el); return el; };
+  const st = { y: scrollY, at: { root: [0, 300], '@late': [0, 400] } };
+  const a = mk(), run = Rekta.scrollState(a).restore(st), waited = run.pending;
+  setTimeout(() => { a.innerHTML = content; }, 300); await wait(800);
+  const out = { waited, root: a.scrollTop, late: a.querySelector('[data-rk-scroll]').scrollTop, done: !run.pending };
+  a.remove();
+  const b = mk(), run2 = Rekta.scrollState(b).restore(st);
+  b.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 40 }));
+  setTimeout(() => { b.innerHTML = content; }, 300); await wait(800);
+  out.user = { pending: run2.pending, root: b.scrollTop, late: b.querySelector('[data-rk-scroll]').scrollTop };
+  b.remove();
+  return out;
+});
+ok(late.waited && late.root === 300 && late.late === 400 && late.done, 'restore() waits for sections that render 300ms later and puts them at their offsets', JSON.stringify(late));
+ok(!late.user.pending && late.user.root === 0 && late.user.late === 0, 'a user scroll before they render keeps the user\'s position', JSON.stringify(late.user));
 const stage = await p.evaluate(async () => {
   const wait = (t) => new Promise((r) => setTimeout(r, t));
   const rec = document.createElement('section'); rec.id = 'rec';
@@ -685,6 +749,11 @@ const tst2 = await p.evaluate(async () => {
   t.show('1 archived', { key: 'arch', undo: () => {}, onEnd: (w) => ends.push(`a1:${w}`) });
   t.show('2 archived', { key: 'arch', undo: () => {}, onEnd: (w) => ends.push(`a2:${w}`) });
   t.dismiss(); out.merged = ends.join(); await wait(400);
+  // The same key without an onEnd of its own: the first onEnd stands for both and hears the end, once.
+  const kept = [];
+  t.show('1 moved', { key: 'mv', undo: () => {}, onEnd: (w) => kept.push(`m1:${w}`) });
+  t.show('2 moved', { key: 'mv', undo: () => {} });
+  await wait(100); t.dismiss(); await wait(400); out.kept = kept.join();
   // release(): held, then counting although the pointer stays; setText leaves the window alone.
   const r = t.show('3 sent', { undo: () => {}, windowMs: 5000 }); await wait(400);
   r.el.dispatchEvent(new PointerEvent('pointerenter')); await wait(300);
@@ -697,6 +766,7 @@ const tst2 = await p.evaluate(async () => {
 });
 ok(tst2.deadline > 2700 && tst2.deadline < 3500, 'a busy page does not stretch a toast\'s window', tst2.deadline);
 ok(tst2.merged === 'a1:merged,a2:dismissed', 'a same-key toast tells the first onEnd it merged', tst2.merged);
+ok(tst2.kept === 'm1:dismissed', 'a same-key toast without its own onEnd keeps the first one, called once with the end', tst2.kept);
 ok(tst2.release.heldBefore && tst2.release.stood && tst2.release.runs && !tst2.release.held && !tst2.release.attr, 'release() lets a held toast run out', JSON.stringify(tst2.release));
 ok(tst2.release.live === 'off' && tst2.release.kept && tst2.release.text === '3 sent. Holding no longer extends.', 'setText changes the words quietly and leaves the window alone', JSON.stringify(tst2.release));
 const ban = await p.evaluate(async () => {
@@ -747,6 +817,47 @@ await go(p, 'navigation');
 await p.click('#n-sort'); await p.waitForTimeout(200); await p.click('#n-sort-menu [data-sort="2"]'); await p.waitForTimeout(500);
 ok((await p.evaluate(() => document.querySelector('#tok-body tr td:nth-child(3)').textContent)) === 'breakpoint', 'a radio menu sorts the tokens by group');
 await p.click('#n-sort'); await p.waitForTimeout(200); await p.click('#n-sort-menu [data-sort="1"]'); await p.waitForTimeout(300);
+// Floating surfaces by one rule (states.md): space-xs from the control, space-m from the window; one that fits on
+// neither side takes the side with more room and stays inside the window; a centred control centres its surface.
+const flo = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const px = (n) => Rekta.tokens.px(n), edge = px('--rk-space-m'), gap = px('--rk-space-xs'), vh = innerHeight, vw = document.documentElement.clientWidth;
+  const rows = (n) => '<p style="height:44px;margin:0">row</p>'.repeat(n);
+  const host = document.createElement('div'); host.innerHTML = '<style>#fx-float { max-height: 500px } #fx-tall { max-height: none }</style>'
+    + '<button id="fx-ctl" class="rk-btn" style="position:fixed;left:40%;top:400px;height:40px">ctl</button>'
+    + `<div id="fx-float" class="rk-float" popover="manual">${rows(20)}</div><div id="fx-small" class="rk-float" popover="manual">${rows(2)}</div>`
+    + `<div id="fx-tall" class="rk-float" popover="manual">${rows(30)}</div>`;
+  document.querySelector('.rk').append(host);
+  const ctl = host.querySelector('#fx-ctl'), f = host.querySelector('#fx-float'), small = host.querySelector('#fx-small'), tall = host.querySelector('#fx-tall'), out = {};
+  // Where place() put a surface, without the 4px shift of its entry.
+  const box = (el) => { const l = parseFloat(el.style.left), t = parseFloat(el.style.top); return { left: l, top: t, width: el.offsetWidth, right: l + el.offsetWidth, bottom: t + el.offsetHeight }; }, c = ctl.getBoundingClientRect();
+  // 500px under a control at 400-440 in a 900px window: 440 below, 380 above, so neither; below has more room.
+  f.showPopover(); Rekta.place(f, ctl);
+  out.nowhere = { side: f.dataset.rkSide, top: box(f).top, bottom: box(f).bottom, inside: box(f).top >= edge - 0.5 && box(f).bottom <= vh - edge + 0.5 };
+  f.hidePopover();
+  small.showPopover(); Rekta.place(small, ctl);
+  out.below = { side: small.dataset.rkSide, gap: box(small).top - c.bottom, left: box(small).left - c.left };
+  small.hidePopover();
+  tall.showPopover(); Rekta.place(tall, ctl);
+  out.tall = { top: box(tall).top, bottom: box(tall).bottom, inside: box(tall).top >= edge - 0.5 && box(tall).bottom <= vh - edge + 0.5, scrolls: tall.scrollHeight > tall.clientHeight };
+  tall.hidePopover();
+  // A control in the middle of its bar: menu() places by the trigger's data-rk-align.
+  ctl.setAttribute('data-rk-align', 'center');
+  const m = document.createElement('div'); m.innerHTML = '<button class="rk-menu-item" role="menuitem">one</button><button class="rk-menu-item" role="menuitem">two</button>';
+  host.append(m);
+  const mm = Rekta.menu(ctl, m); mm.open(); await wait(250);
+  const mc = box(m);
+  out.centre = { menu: mc.left + mc.width / 2, ctl: c.left + c.width / 2, side: m.dataset.rkSide };
+  mm.close(); ctl.style.left = `${vw - 30}px`; mm.open(); await wait(250);
+  out.atEdge = { right: box(m).right, limit: vw - edge };
+  mm.close(); mm.destroy(); host.remove();
+  return { ...out, gap, vh };
+});
+ok(flo.nowhere.side === 'below' && flo.nowhere.inside, 'a surface that fits on neither side takes the side with more room and stays in the window', JSON.stringify(flo.nowhere));
+ok(flo.below.side === 'below' && Math.abs(flo.below.gap - flo.gap) < 1 && Math.abs(flo.below.left) < 1, 'below its control by space-xs, at its leading edge', JSON.stringify(flo.below));
+ok(flo.tall.inside && flo.tall.scrolls, 'a surface taller than the window keeps to it and scrolls', JSON.stringify(flo.tall));
+ok(Math.abs(flo.centre.menu - flo.centre.ctl) <= 1, 'a menu under a control marked data-rk-align="center" is centred on it', JSON.stringify(flo.centre));
+ok(flo.atEdge.right <= flo.atEdge.limit + 0.5, 'centred near the window\'s edge, it stays inside', JSON.stringify(flo.atEdge));
 
 // Forms: make an accent. Late checks, the summary, real contrast, server refusals, the guard, confirm, disable.
 await go(p, 'forms');
@@ -1039,6 +1150,40 @@ await p.mouse.click(700, 850);
 ok(await until(p, () => p.evaluate(() => !document.querySelector('#sheet').open), 3000), 'a tap on the shading cancels');
 await p.click('#reset'); await p.waitForTimeout(300); await p.click('#sheet button[value=reset]'); await p.waitForTimeout(600);
 ok((await toast(p)).startsWith('Demo reset') && (await text(p, '#presses')) === '0', 'reset restores the demo');
+// The answer is given as a sheet starts to leave: a tap on the shading while it leaves changes no answer, asks nothing,
+// and only ends the leaving at once; focus comes back once it has gone. A long duration-short keeps it leaving while
+// the pointer gets there, on a busy runner too.
+await p.evaluate(() => {
+  document.documentElement.style.setProperty('--rk-duration-short', '1500ms');
+  const b = document.createElement('button'); b.id = 'fx-opener'; b.textContent = 'opener'; document.querySelector('.rk').append(b); b.focus();
+  window.fxAnswer = 'none'; Rekta.confirm({ title: 'Archive 3 builds?' }).then((v) => { window.fxAnswer = v; });
+  window.fxShadeIn = document.getAnimations().some((a) => a.effect && a.effect.pseudoElement === '::backdrop' && a.animationName === 'rk-shade-in');
+});
+await p.waitForTimeout(1700);
+await p.click('dialog[open] button[value="ok"]');
+const leavingNow = await p.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return { leaving: !!d && d.getAttribute('data-rk-phase') === 'leaving', focusIn: !!d && d.contains(document.activeElement) }; });
+await p.mouse.click(700, 850); await p.waitForTimeout(100);
+const shut = await p.evaluate(() => ({ answer: window.fxAnswer, open: [...document.querySelectorAll('dialog')].some((x) => x.open), focus: document.activeElement.id, shadeIn: window.fxShadeIn }));
+ok(shut.shadeIn, 'the shading fades in with the sheet');
+ok(leavingNow.leaving && leavingNow.focusIn && shut.answer === true && !shut.open, 'ok, then a tap on the shading while it leaves: still ok, gone at once', JSON.stringify({ ...leavingNow, ...shut }));
+ok(shut.focus === 'fx-opener', 'focus comes back once the sheet has gone', shut.focus);
+// With input to lose: a close request while it leaves asks nothing and keeps the first answer.
+const dirtyLeave = await p.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  const d = document.createElement('dialog'); d.className = 'rk-sheet';
+  d.innerHTML = '<form method="dialog"><h2 class="rk-group">Edit</h2><input value="changed"><p class="rk-actions"><button class="rk-btn" value="cancel">cancel</button><button class="rk-btn" value="save">save</button></p></form>';
+  document.querySelector('.rk').append(d);
+  const s = Rekta.sheet(d, { dirty: () => true });
+  d.showModal(); await wait(1700);
+  d.querySelector('button[value="save"]').click(); await wait(50);
+  const leaving = d.getAttribute('data-rk-phase') === 'leaving';
+  d.querySelector('button[value="cancel"]').click(); await wait(50);
+  const out = { leaving, asked: !!d.querySelector('.rk-sheet-ask'), open: d.open, value: d.returnValue };
+  s.destroy(); d.remove(); document.getElementById('fx-opener').remove();
+  document.documentElement.style.removeProperty('--rk-duration-short');
+  return out;
+});
+ok(dirtyLeave.leaving && !dirtyLeave.asked && !dirtyLeave.open && dirtyLeave.value === 'save', 'a close request while a dirty sheet leaves asks nothing and keeps its answer', JSON.stringify(dirtyLeave));
 
 // Tokens: a table in a split; the current token in the address; selection; filters in the address; the divider.
 // (Places in the app bar, as a phone app has them: the router marks the place you are at.)
@@ -1131,8 +1276,10 @@ const bar = await m.evaluate(async () => {
     + `<button class="rk-ab" id="t-search" type="button" data-rk-priority="pinned">${icon}<span>search</span></button>`
     + `<button class="rk-ab" id="t-goto" type="button" aria-keyshortcuts="Control+K Meta+K">${icon}<span>go to</span><span class="rk-key rk-ab-k" aria-hidden="true">Ctrl+K</span></button>`
     + `<button class="rk-ab" type="button" data-rk-priority="5">${icon}<span>other</span></button><button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+  // The place name as navigation.md gives it: a direct child of the place, right after the strip.
   const name = document.createElement('h1'); name.className = 'rk-place-name'; name.textContent = 'overview';
-  document.querySelector('[data-rk-place="home"]').prepend(name);
+  const strip = document.querySelector('#nav'); strip.after(name);
+  const titleLeft = strip.getBoundingClientRect().left + parseFloat(getComputedStyle(strip).paddingLeft);
   document.querySelector('.rk').append(el);
   const a = Rekta.appbar(el); await wait(100);
   const item = [...el.querySelectorAll('.rk-ab-menu .rk-menu-item')].find((b) => b._rkFor && b._rkFor.id === 't-goto');
@@ -1147,6 +1294,7 @@ const bar = await m.evaluate(async () => {
   r.places = el.hasAttribute('data-rk-places') && document.documentElement.hasAttribute('data-rk-places') && getComputedStyle(document.querySelector('#nav')).display === 'none'
     && el.querySelector('#t-search').hasAttribute('data-rk-overflow');
   r.nameShown = name.getBoundingClientRect().height > 20;
+  { const t = document.createRange(); t.selectNodeContents(name); r.flush = Math.abs(t.getBoundingClientRect().left - titleLeft); }
   a.destroy(); el.remove(); await wait(50);
   r.after = !document.documentElement.hasAttribute('data-rk-places') && getComputedStyle(document.querySelector('#nav')).display !== 'none';
   name.remove();
@@ -1156,6 +1304,9 @@ ok(bar.pinned, 'a pinned control stays in the bar; one without a priority moves 
 ok(bar.words === 'go to' && bar.key === 'Ctrl+K' && bar.ks === 'Control+K Meta+K', 'a moved control\'s menu item keeps its key hint apart', JSON.stringify(bar));
 ok(bar.places && bar.after, 'places in the bar: data-rk-places on the bar and the root, the strip steps aside, back when it goes');
 ok(bar.nameHidden && bar.nameShown, '.rk-place-name shows only while the places are in the bar');
+ok(bar.flush < 1, 'right after the strip, the place name stands where the strip\'s title stood', bar.flush);
+ok(await m.evaluate(() => { const n = document.querySelectorAll('.rk-place-name'), s = n[0] && getComputedStyle(n[0]);
+  return n.length === 1 && n[0].closest('.phone') && n[0].getBoundingClientRect().height > 20 && Math.abs(parseFloat(s.fontSize) - Rekta.tokens.px('--rk-font-size-pivot-active')) < 0.5; }), 'the showcase\'s phone shows a place without a title of its own, named by .rk-place-name');
 const grow = await m.evaluate(async () => {
   const wait = (t) => new Promise((r) => setTimeout(r, t));
   const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';
