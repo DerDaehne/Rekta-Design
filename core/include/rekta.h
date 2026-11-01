@@ -440,7 +440,9 @@ RK_API void rk_label_set_text(rk_view *label, const char *text);
 RK_API void rk_label_set_style(rk_view *label, rk_text_style style);
 RK_API void rk_label_set_color(rk_view *label, rk_role role);
 
-typedef enum rk_button_kind { RK_BUTTON_DEFAULT, RK_BUTTON_PRIMARY, RK_BUTTON_QUIET, RK_BUTTON_BAR, RK_BUTTON_FORCE32 = 0x7fffffff } rk_button_kind;
+/* RK_BUTTON_DESTRUCTIVE: the button that takes an action that cannot be undone (forms.md, "the destructive button"),
+   its frame and words in status-error-full, never filled; the safe answer beside it is the primary one. */
+typedef enum rk_button_kind { RK_BUTTON_DEFAULT, RK_BUTTON_PRIMARY, RK_BUTTON_QUIET, RK_BUTTON_BAR, RK_BUTTON_DESTRUCTIVE, RK_BUTTON_FORCE32 = 0x7fffffff } rk_button_kind;
 /* A button keeps its own width, also in a column. */
 RK_API rk_view *rk_button(const char *label, void (*on_press)(rk_view *button, void *user), void *user);   /* on_press may be NULL */
 RK_API void rk_button_set_label(rk_view *button, const char *label);
@@ -695,7 +697,8 @@ RK_API void rk_controller_present(rk_controller *presenter, rk_controller *sheet
 RK_API void rk_controller_dismiss(rk_controller *sheet);
 RK_API void rk_controller_on_dismiss(rk_controller *sheet, void (*fn)(rk_controller *sheet, void *user), void *user);   /* the user dismissed it: Escape, the shading */
 /* A short question in a sheet, as the web's confirm(): the safe answer is the primary button and has focus (cancel,
-   for what cannot be undone); Escape and the shading answer cancel. answered() hears it once. */
+   for what cannot be undone, and ok is then RK_BUTTON_DESTRUCTIVE); Escape and the shading answer cancel. answered()
+   hears it once. */
 typedef struct rk_confirm_desc {
   uint32_t size;                                   /* sizeof(rk_confirm_desc) */
   const char *title, *text, *kicker;               /* the question; a line under it; a word above it */

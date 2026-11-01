@@ -519,7 +519,10 @@ Text that wraps at its width, in one of the type roles
 .It Fn rk_button "const char *label" "void (*on_press)(rk_view *, void *)" "void *user"
 A button.
 .Fn rk_button_set_kind
-makes it primary, quiet or a bar button;
+makes it primary, quiet, a bar button or destructive
+.Pf ( Dv RK_BUTTON_DESTRUCTIVE :
+the button that takes an action that cannot be undone, its frame and words in
+the error colour, never filled);
 .Fn rk_button_set_icon
 gives it an icon
 .Pq Sx ICONS ;
@@ -1007,7 +1010,11 @@ hears the user close it.
 A question in a sheet with two answers: the safe one is the primary button
 and has focus
 .Pf ( Fa desc->cancel_is_safe
-for what cannot be undone); Escape and the shading answer cancel.
+for what cannot be undone, and
+.Fa ok
+is then
+.Dv RK_BUTTON_DESTRUCTIVE ) ;
+Escape and the shading answer cancel.
 .Fa answered
 hears it once.
 Returns the sheet, so the app may dismiss it before the answer.

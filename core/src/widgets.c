@@ -91,11 +91,12 @@ static void button_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_color ink = rk_color_of(RK_ROLE_TEXT), bg = 0;
   if (b->kind == RK_BUTTON_PRIMARY && !off) { bg = rk_color_of(RK_ROLE_ACCENT); ink = rk_color_of(RK_ROLE_ON_ACCENT); }
   if (b->kind == RK_BUTTON_QUIET) ink = rk_color_of(RK_ROLE_TEXT_HIGH);
+  if (b->kind == RK_BUTTON_DESTRUCTIVE) ink = rk_color_of(RK_ROLE_ERROR_FULL);   /* frame and words; never filled */
   if (b->kind == BUTTON_TOAST) ink = rk_color_of(RK_ROLE_BG);
   if (off) ink = rk_color_of(RK_ROLE_DISABLED);
   if (bg) rk_canvas_fill_round_rect(c, r, rk_metric_of(RK_RADIUS_S), bg);
   if (v->pressed && !off) rk_canvas_fill_round_rect(c, r, b->kind == BUTTON_TOAST ? 0 : rk_metric_of(RK_RADIUS_S), rk_color_of(RK_ROLE_HOVER));
-  if (b->kind == RK_BUTTON_DEFAULT || b->kind == RK_BUTTON_PRIMARY) {
+  if (b->kind == RK_BUTTON_DEFAULT || b->kind == RK_BUTTON_PRIMARY || b->kind == RK_BUTTON_DESTRUCTIVE) {
     rk_color border = b->kind == RK_BUTTON_PRIMARY && !off ? bg : ink;
     rk__canvas_ring(c, r, rk_metric_of(RK_RADIUS_S), 2, border);
   }

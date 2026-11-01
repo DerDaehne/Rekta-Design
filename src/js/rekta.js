@@ -1551,7 +1551,7 @@ export function sheet(dialog, opts = {}) {
     const title = ask.appendChild(document.createElement('h2')); title.className = 'rk-group'; title.id = id; title.textContent = tx('discardTitle');
     const row = ask.appendChild(document.createElement('p')); row.className = 'rk-actions';
     const keep = row.appendChild(document.createElement('button')); keep.type = 'button'; keep.className = 'rk-btn rk-btn--primary'; keep.textContent = tx('guardKeep');
-    const drop = row.appendChild(document.createElement('button')); drop.type = 'button'; drop.className = 'rk-btn'; drop.textContent = tx('guardDiscard');
+    const drop = row.appendChild(document.createElement('button')); drop.type = 'button'; drop.className = 'rk-btn'; drop.dataset.status = 'error'; drop.textContent = tx('guardDiscard');
     keep.addEventListener('click', () => unask(true));
     drop.addEventListener('click', () => leaveThen(value));
     dialog.setAttribute('data-rk-asking', '');
@@ -2398,8 +2398,8 @@ export function disable(control, reason) {
 }
 
 // confirm({ title, text, kicker, ok, cancel, safe }): a short question in a sheet; resolves true when ok is chosen.
-// The safe answer is the primary button and takes focus: for an action that cannot be undone, safe: 'cancel'.
-// Escape and a tap on the shading answer cancel.
+// The safe answer is the primary button and takes focus: for an action that cannot be undone, safe: 'cancel', and ok
+// is then the destructive button (data-status="error", forms.md). Escape and a tap on the shading answer cancel.
 export function confirm({ title, text = '', kicker = '', ok = tx('ok'), cancel = tx('cancel'), safe = 'ok', root = document.querySelector('.rk') || document.body } = {}) {
   const d = document.createElement('dialog');
   d.className = 'rk-sheet';
@@ -2413,7 +2413,9 @@ export function confirm({ title, text = '', kicker = '', ok = tx('ok'), cancel =
   const row = f.appendChild(document.createElement('p')); row.className = 'rk-actions';
   const b = (label, value) => { const x = row.appendChild(document.createElement('button')); x.className = `rk-btn${safe === value ? ' rk-btn--primary' : ''}`; x.value = value; x.textContent = label; if (safe === value) x.autofocus = true; return x; };
   const opener = document.activeElement;
-  b(cancel, 'cancel'); b(ok, 'ok');
+  b(cancel, 'cancel');
+  const yes = b(ok, 'ok');
+  if (safe === 'cancel') yes.dataset.status = 'error';
   root.appendChild(d);
   const sh = sheet(d);
   return new Promise((resolve) => {

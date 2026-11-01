@@ -677,6 +677,12 @@ ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(
 ok(!(await p.getAttribute('#a-remove', 'aria-disabled')), 'remove can act now');
 await p.click('#a-remove'); await p.waitForTimeout(400);
 ok((await sheetTitle(p)) === 'Remove “sea”?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep it', 'confirm: the safe answer first');
+const okLook = await p.evaluate(() => {
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const b = document.querySelector('dialog[open] button[value=ok]'), s = getComputedStyle(b), red = rgb('var(--rk-status-error-full)');
+  return { status: b.dataset.status, words: s.color === red, frame: s.borderTopColor === red, filled: s.backgroundColor !== 'rgba(0, 0, 0, 0)', primary: b.classList.contains('rk-btn--primary') };
+});
+ok(okLook.status === 'error' && okLook.words && okLook.frame && !okLook.filled && !okLook.primary, 'confirm({ safe: \'cancel\' }): ok is the destructive button, framed in the error colour (#101)', JSON.stringify(okLook));
 await p.click('dialog[open] button[value=ok]');
 await until(p, () => p.evaluate(() => !document.querySelector('dialog[open]')), 3000);   /* the sheet leaves first; its answer counts once it has gone */
 ok((await p.evaluate(() => document.documentElement.dataset.accent)) === undefined && (await p.getAttribute('#a-remove', 'aria-disabled')) === 'true', 'removed, ink again', await p.evaluate(() => `accent ${document.documentElement.dataset.accent} remove ${document.querySelector('#a-remove').getAttribute('aria-disabled')} open ${!!document.querySelector('dialog[open]')} phase ${document.querySelector('dialog[open]')?.getAttribute('data-rk-phase')}`));
@@ -718,6 +724,7 @@ const third = await p.evaluate(() => { const d = document.querySelector('#view-s
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 ok(third.open && third.asking && third.value === 'release review' && await p.evaluate(() => document.querySelector('#view-sheet').open), 'a third and fourth Escape ask and keep editing; the sheet never closes without asking', JSON.stringify(third));
 await p.click('#view-sheet .rk-sheet-close'); await p.waitForTimeout(200);
+ok((await p.getAttribute('#view-sheet .rk-sheet-ask .rk-btn:not(.rk-btn--primary)', 'data-status')) === 'error', '"discard changes" is the destructive button');
 await p.click('#view-sheet .rk-sheet-ask .rk-btn:not(.rk-btn--primary)');
 ok(await until(p, () => p.evaluate(() => !document.querySelector('#view-sheet').open), 3000), 'the close button asks too, and discarding closes');
 await p.fill('#a-name', 'sea-2');

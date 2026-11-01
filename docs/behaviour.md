@@ -667,7 +667,8 @@ With `dirty` (a function), a close request while it returns true
 (Escape, the shading, a `method=dialog` submit with `value="cancel"`)
 asks first, inside the sheet (`.rk-sheet-ask`; the sheet gets
 `data-rk-asking` and shows only the question): `discardTitle` with
-"keep editing" (primary, focused) and "discard changes". Another close
+"keep editing" (primary, focused) and "discard changes" (the destructive
+button, `data-status="error"`). Another close
 request while it asks keeps editing. `start()` attaches every sheet, so
 call `sheet(dialog, { dirty })` afterwards: it updates the options of the
 sheet already attached and returns the same handle. While there is
@@ -820,7 +821,10 @@ the form. Returns `{ dirty, changed(), clean(), restore(), destroy }`.
 
 A short question in a sheet; resolves `true` for `ok`. The safe answer
 (`safe: 'cancel'` for an action that cannot be undone) is the primary
-button and takes focus. Escape and the shading answer cancel.
+button and takes focus. With `safe: 'cancel'`, `ok` is the destructive
+button (`data-status="error"`: frame and words in `status-error-full`,
+[forms.md](forms.md#dialog-levels)), as the button that opened the sheet
+should be. Escape and the shading answer cancel.
 
 ### `disable(control, reason)`
 

@@ -113,10 +113,10 @@ thrown away by a refusal.
 While a form differs from how it was loaded or last saved, leaving its
 place (a link, back, Escape, the browser's back or forward) asks first,
 in a sheet: "Leave without saving?", with "keep editing" as the safe,
-primary answer and "discard changes" beside it. Escape and a tap on the
-shading keep editing. Discarding puts the form back as it was. Closing
-the window asks the browser's own question. An unchanged form never
-asks.
+primary answer and "discard changes" beside it, as the destructive
+button. Escape and a tap on the shading keep editing. Discarding puts
+the form back as it was. Closing the window asks the browser's own
+question. An unchanged form never asks.
 
 ## Dialog levels
 
@@ -135,7 +135,9 @@ asks "Are you sure?": it names the action and its consequence.
 be undone (in that sheet, and the one that opens it) is
 `.rk-btn[data-status="error"]`: its frame and words in
 `status-error-full`, never filled and never primary, since the safe
-answer is primary. `--check` holds its words to 4.5:1 on the ground and
+answer is primary. `confirm({ safe: 'cancel' })` and `rk_confirm()` with
+`cancel_is_safe` make their `ok` this button, and the questions about
+unsaved input make "discard changes" one. `--check` holds its words to 4.5:1 on the ground and
 the surface in both themes. It is a frame colour, not a warning sign:
 an undoable action (archive) never wears it.
 

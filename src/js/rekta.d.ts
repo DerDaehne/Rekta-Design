@@ -277,6 +277,8 @@ export declare function confirm(options: {
   kicker?: string;
   ok?: string;
   cancel?: string;
+  /** The primary answer, with focus. `'cancel'` for an action that cannot be undone: `ok` is then the destructive
+   * button (`data-status="error"`). */
   safe?: 'ok' | 'cancel';
   root?: Element;
 }): Promise<boolean>;
