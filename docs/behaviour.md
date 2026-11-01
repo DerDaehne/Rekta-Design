@@ -462,9 +462,12 @@ Sideways:
 - The pivot follows the scroll. A pivot link aligns its section flush
   left (or as far as the panorama scrolls) and moves focus to the
   section's heading. A click wins over the follow.
-- When everything fits, nothing scrolls (`data-rk-fit`).
-- When the window-size class changes, the current section stays
-  current.
+- When everything fits, nothing scrolls (`data-rk-fit`). Otherwise the
+  window never ends flush on a section edge: `panorama()` changes the
+  gap between the sections a little, as it measures them, so at least
+  `space-xl` of the next one shows ([layout.md](layout.md#panorama)).
+- When the window-size class or that gap changes, the current section
+  stays current.
 
 Compact, the sections stack; a pivot that is a direct child of the
 place sticks under the banner and publishes `--rk-pivot-h`.

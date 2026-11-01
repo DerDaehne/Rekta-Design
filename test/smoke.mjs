@@ -527,6 +527,27 @@ const built = await p.evaluate(() => {
 });
 ok(built.rise === 600 && built.fade === 250 && built.ease === 'cubic-bezier(0.1, 0.9, 0.2, 1) cubic-bezier(0.1, 0.9, 0.2, 1)' && built.delays === '0,75,150,225,225,225', 'tiles build in over duration-long on ease-landing, whole after duration-short, duration-greet apart, four steps', JSON.stringify(built));
 ok(built.from === 'matrix(1, 0, 0, 1, 0, 32)' && built.hidden === '0' && built.wholeAt === '1' && built.still > 0 && built.still < 3, 'a tile rises arrive-distance; it is whole while it still settles', JSON.stringify(built));
+// A panorama never ends flush on a section edge (#147): at every width the window's edge falls inside a section,
+// space-xl from either of its ends, the gaps even and never below space-m; when everything fits, nothing scrolls.
+const edges = await p.evaluate(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const place = document.createElement('div'); place.className = 'rk-place'; place.style.cssText = 'position:fixed;left:0;top:0;height:400px;z-index:-1';
+  place.innerHTML = `<div class="rk-panorama" aria-label="edges" style="--rk-sec-w:500px;height:300px">${'<section class="rk-sec"><p>a</p></section>'.repeat(4)}<div class="rk-panorama-end"></div></div>`;
+  document.querySelector('.rk').append(place);
+  const pan = place.firstChild, api = Rekta.panorama(pan), out = { bad: [], changed: 0, fits: 0, worst: 0 };
+  for (let w = 800; w <= 2400; w += 10) {
+    place.style.width = `${w}px`; await frame();
+    const r = [...pan.querySelectorAll('.rk-sec')].map((s) => s.getBoundingClientRect()), edge = pan.getBoundingClientRect().left + pan.clientWidth;
+    const gaps = r.slice(1).map((s, i) => Math.round(s.left - r[i].right)), gap = gaps[0];
+    const even = gaps.every((g) => g === gap), inside = r.some((s) => s.left + 48 <= edge + 0.5 && edge - 0.5 <= s.right - 48);
+    if (pan.hasAttribute('data-rk-fit')) { out.fits += 1; if (r[3].right > edge + 1 || gap < 16 || gap > 48 || !even) out.bad.push(`${w}: fit, gap ${gap}`); continue; }
+    if (!inside || gap < 16 || !even) out.bad.push(`${w}: edge ${Math.round(edge - r[0].left)}, gaps ${gaps}`);
+    if (gap !== 48) { out.changed += 1; out.worst = Math.max(out.worst, Math.abs(gap - 48)); }
+  }
+  api.destroy(); place.remove();
+  return out;
+});
+ok(!edges.bad.length && edges.changed > 0 && edges.fits > 0 && edges.worst <= 96, 'a panorama never ends flush on a section edge: a piece of the next section shows, the gaps even and at least space-m', JSON.stringify(edges));
 // The gesture hint (#149): nudge-distance the gesture's way and back, duration-short each way on ease-landing, added
 // to the part's own transform; it rests where it was.
 const nudged = await p.evaluate(async () => {

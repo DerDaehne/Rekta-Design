@@ -947,18 +947,45 @@ export function panorama(el, { pivot = null } = {}) {
     e.preventDefault();
     goTo(sec);
   }
+  // A panorama that reaches past its window never ends flush on a section edge, so something always says there is more
+  // (layout.md): the window's edge falls inside a section, at least space-xl from either of its ends. The sections keep
+  // their size; the gap between them (space-xl) changes by as little as that takes, never below space-m; a last section
+  // cut by less than space-xl fits instead, when a smaller gap lets it. The edge is where it lies with the first section
+  // at the start, and with any section aligned there, when they are all as wide. Says whether everything fits; then
+  // nothing scrolls.
+  function spread(list) {
+    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => parseFloat(getComputedStyle(s).width) || 0);
+    const edge = el.clientWidth - (parseFloat(getComputedStyle(el).paddingLeft) || 0), n = sizes.length;
+    const before = (j) => sizes.slice(0, j).reduce((a, w) => a + w, 0);
+    const fitsWith = (g) => before(n) + (n - 1) * g <= edge + 1;
+    const inside = (g) => sizes.some((w, i) => before(i) + i * g + xl <= edge + 0.5 && edge - 0.5 <= before(i) + i * g + w - xl);
+    let gap = xl;
+    if (sideways() && !fitsWith(xl) && !inside(xl)) {
+      const ways = n > 1 ? [Math.floor((edge - before(n)) / (n - 1))] : [];      // everything fits
+      for (let j = 1; j <= n; j += 1) {
+        if (j < n) ways.push(Math.floor((edge - xl - before(j)) / j));            // section j shows space-xl
+        if (j > 1) ways.push(Math.ceil((edge + xl - before(j)) / (j - 1)));      // section j - 1 reaches space-xl past it
+      }
+      const best = ways.filter((g) => g >= least && (inside(g) || fitsWith(g))).sort((a, b) => Math.abs(a - xl) - Math.abs(b - xl))[0];
+      if (best !== undefined) gap = best;
+    }
+    if (gap === xl) el.style.removeProperty('--_rk-sec-gap'); else el.style.setProperty('--_rk-sec-gap', `${gap}px`);
+    return fitsWith(gap);
+  }
   function fit() {
     const list = sections();
     // A panorama in a place that is away keeps everything as it was; it is measured again when it shows.
     if (!list.length || !el.getClientRects().length) { stickyStrip(); return; }
-    const last = list[list.length - 1];
-    const contentRight = el.scrollLeft + last.getBoundingClientRect().right - el.getBoundingClientRect().left;
-    el.toggleAttribute('data-rk-fit', sideways() && contentRight <= el.clientWidth + 1);
+    const was = el.style.getPropertyValue('--_rk-sec-gap');
+    el.toggleAttribute('data-rk-fit', sideways() && spread(list.filter((s) => s.getClientRects().length)));
     if (pivot) { pivotScale(pivot); pivotFit(pivot); }
     stickyStrip();
-    // A change of window-size class keeps the reading position: the current section is state, not an offset.
+    // A change of window-size class keeps the reading position: the current section is state, not an offset. So does
+    // a new gap between the sections.
     const now = sideways();
-    if (now !== wasSideways) { wasSideways = now; if (current) goTo(current, { focus: false, instant: true }); clicked = false; }
+    if (now !== wasSideways || (now && el.scrollLeft > 0 && el.style.getPropertyValue('--_rk-sec-gap') !== was)) {
+      wasSideways = now; if (current) goTo(current, { focus: false, instant: true }); clicked = false;
+    }
   }
   // A section strip that sticks (compact, a direct child of the place) publishes its height, so focus and section
   // jumps land below it.

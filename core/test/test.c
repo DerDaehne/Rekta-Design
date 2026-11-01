@@ -185,6 +185,44 @@ static void test_bar_motion(void) {
   done(w);
 }
 
+/* A panorama never ends flush on a section edge: at every window width the edge falls inside a section, space-xl from
+   either of its ends, the gap changed as little as that takes and never below space-m; when everything fits, the gap
+   is space-xl. A new gap keeps the section in sight. */
+static void test_panorama_edge(void) {
+  rk_window *w = window(1000, 500);
+  rk_controller *pano = rk_panorama();
+  for (int i = 0; i < 4; i++) rk_panorama_add(pano, "section", col(16, 0), 0);
+  rk_window_show(w, pano);
+  rk_app_run_for(50);
+  panorama *p = pano->impl;
+  float xl = rk_metric_of(RK_SPACE_XL), m = rk_metric_of(RK_SPACE_M), sw = section_width(&p->secs[0]);
+  int bad = 0, changed = 0, fits = 0, worst = 0;
+  for (float width = 700; width <= 2500; width += 5) {
+    rk_window_set_size(w, width, 500);
+    rk_app_run_for(1);
+    float W = rk_controller_view(pano)->frame.w, edge = W - xl, gap = p->secs[1].x - p->secs[0].x - sw;
+    bool fit = p->secs[3].x + sw - xl <= edge + 1, inside = false;
+    for (int i = 0; i < 4; i++) { float x = p->secs[i].x - xl; if (x + xl <= edge + 0.5f && edge - 0.5f <= x + sw - xl) inside = true; }
+    if (fit) { fits++; if (gap < m || gap > xl) bad++; continue; }   /* a last section cut by less than space-xl may fit */
+    if (!inside || gap < m || p->secs[2].x - p->secs[1].x - sw != gap) bad++;
+    if (gap != xl) { changed++; worst = RK_MAX(worst, (int)fabsf(gap - xl)); }
+  }
+  CHECK(bad == 0 && changed > 0 && fits > 0, "the edge always falls inside a section, the gaps even (%d wrong, %d widths changed, by %d px at most)", bad, changed, worst);
+  CHECK(worst <= (int)(2 * xl), "the gap changes by little: %d px at most", worst);
+  /* the edge would fall in the gap after the second section: the gap grows until the second reaches space-xl past it */
+  rk_window_set_size(w, 1000, 500);
+  rk_app_run_for(1);
+  pano_select(p, 1);
+  rk_app_run_for(800);
+  float W0 = rk_controller_view(pano)->frame.w;
+  rk_window_set_size(w, (2 * sw + xl + 8) + xl + (1000 - W0), 500);   /* the edge 8 px into the gap after the second */
+  rk_app_run_for(1);
+  float W = rk_controller_view(pano)->frame.w, gap = p->secs[1].x - p->secs[0].x - sw;
+  CHECK(gap != xl && pano_inside(p, W - xl, gap), "flush, the gap changes (%g)", gap);
+  CHECK(CLOSE_TO(rk_controller_view(pano)->value, p->secs[1].x - xl, 0.5), "and the section in sight stays (%g, %g)", rk_controller_view(pano)->value, p->secs[1].x - xl);
+  done(w);
+}
+
 /* A gesture hint: nudge-distance the gesture's way, then back to rest; nothing under reduced motion. */
 static void test_nudge(void) {
   rk_window *w = window(600, 400);
@@ -3655,6 +3693,7 @@ static void launch(void *user) {
   test_news_order();
   test_bar_motion();
   test_nudge();
+  test_panorama_edge();
   { int lv = rk__live_views; test_declare(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declare_same_pixels(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare_same_pixels: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }

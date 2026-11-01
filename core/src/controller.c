@@ -707,6 +707,7 @@ static void strip_activate(rk_view *v, int index) {
 typedef struct section { char *title; rk_view *view, *box; float width, x, max; } section;
 typedef struct panorama {
   rk_controller *self; section *secs; int n, cap; rk_view *strip, *track; float max_scroll;
+  float gap;                                                   /* between the sections (pano_gap) */
   int latch; double latch_at;                                  /* what the current wheel gesture moves */
   float boost;                                                 /* wheel acceleration */
 } panorama;
@@ -723,9 +724,48 @@ static void secbox_draw(rk_view *v, rk_canvas *c, void *st) {
 }
 static const rk_class secbox_class = { { sizeof(rk_view_class), "rk_section", secbox_draw, NULL, NULL, NULL, NULL }, NULL, NULL };
 
+/* Where section j starts with a gap of g, the first one at 0. */
+static float pano_start(panorama *p, int j, float g) {
+  float x = 0;
+  for (int i = 0; i < j; i++) x += section_width(&p->secs[i]) + g;
+  return x;
+}
+/* the window's edge, `edge` past the first section's start, lies inside a section, space-xl from either of its ends */
+static bool pano_inside(panorama *p, float edge, float g) {
+  float xl = rk_metric_of(RK_SPACE_XL);
+  for (int i = 0; i < p->n; i++) {
+    float x = pano_start(p, i, g);
+    if (x + xl <= edge + 0.5f && edge - 0.5f <= x + section_width(&p->secs[i]) - xl) return true;
+  }
+  return false;
+}
+static bool pano_fits(panorama *p, float edge, float g) { return pano_start(p, p->n, g) - g <= edge + 1; }
+/* A panorama that reaches past its window never ends flush on a section edge, so something always says there is more
+   (layout.md): the sections keep their size and the gap between them (space-xl) changes by as little as it takes,
+   never below space-m, until the edge falls inside a section, space-xl from either of its ends; a last section cut by
+   less than that fits instead, when a smaller gap lets it. When everything fits, the gap stays. */
+static float pano_gap(panorama *p, float W) {
+  float xl = rk_metric_of(RK_SPACE_XL), least = rk_metric_of(RK_SPACE_M), edge = W - xl, best = xl;
+  if (p->n < 2 || pano_fits(p, edge, xl) || pano_inside(p, edge, xl)) return xl;
+  float change = INFINITY, all = pano_start(p, p->n, 0);
+  for (int j = 0; j <= p->n; j++) {
+    float before = pano_start(p, j, 0);
+    float ways[2] = { j == 0 ? floorf((edge - all) / (float)(p->n - 1))           /* everything fits */
+                      : j < p->n ? floorf((edge - xl - before) / (float)j) : -1,  /* section j shows space-xl */
+                      j > 1 ? ceilf((edge + xl - before) / (float)(j - 1)) : -1 };   /* section j - 1 reaches space-xl past it */
+    for (int k = 0; k < 2; k++)
+      if (ways[k] >= least && fabsf(ways[k] - xl) < change && (pano_inside(p, edge, ways[k]) || pano_fits(p, edge, ways[k]))) { best = ways[k]; change = fabsf(ways[k] - xl); }
+  }
+  return best;
+}
+
+static int pano_active(panorama *p, float scroll);
 static void pano_layout(rk_view *v, void *st) {
   panorama *p = st;
   float W = v->frame.w, H = v->frame.h, xl = rk_metric_of(RK_SPACE_XL), l = rk_metric_of(RK_SPACE_L), sp = rk_metric_of(RK_SPACE_S);
+  float gap = pano_gap(p, W);
+  int keep = p->n && v->value > 0 && p->gap > 0 && gap != p->gap ? pano_active(p, v->value) : -1;   /* a new gap keeps the section */
+  p->gap = gap;
   rk_size ss = rk__measure(p->strip, (rk_size){ W, INFINITY });
   float top = rk_metric_of(RK_SPACE_S);
   rk__set_frame(p->strip, (rk_rect){ 0, top, W, ss.h });
@@ -742,12 +782,14 @@ static void pano_layout(rk_view *v, void *st) {
     rk__set_frame(s->view, (rk_rect){ 0, l, inner, h });
     s->max = RK_MAX(0.0f, h + 2 * l - th);
     if (s->box->value > s->max) s->box->value = s->box->pvalue = s->max;
-    x += w + xl;
+    x += w + gap;
   }
+  if (p->n) x += xl - gap;                                     /* after the last section, the padding */
   /* the last section may reach the left edge */
   p->max_scroll = p->n ? RK_MAX(0.0f, RK_MIN(p->secs[p->n - 1].x - xl, x - W)) : 0;
   if (p->n && x - xl <= W) p->max_scroll = 0;
   rk__set_frame(p->track, (rk_rect){ 0, ty, RK_MAX(W, x), th });
+  if (keep >= 0) { rk__anim_cancel(v, RK_PROP_VALUE); v->value = v->pvalue = RK_MIN(p->secs[keep].x - xl, p->max_scroll); }
   if (v->value > p->max_scroll) { v->value = v->pvalue = p->max_scroll; }
 }
 
