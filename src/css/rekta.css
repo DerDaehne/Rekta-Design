@@ -156,7 +156,9 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-pivot > a, .rk-pivot > button {
   --_rk-s: var(--rk-pivot-scale, 0.6);
   position: relative; padding: 0; border: 0; background: none; cursor: pointer;
-  font: inherit; font-size: var(--rk-font-size-pivot-active); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-nav);
+  /* A button does not inherit these from the user agent; a product that sets its titles in lower case or spaced by
+     CSS writes the strip the same way. */
+  font: inherit; text-transform: inherit; letter-spacing: inherit; font-size: var(--rk-font-size-pivot-active); font-weight: var(--rk-font-weight-light); line-height: var(--rk-line-height-nav);
   color: var(--rk-text-contrast-medium); text-decoration: none;
   transform: scale(var(--_rk-s)); transform-origin: left bottom;
   /* A scaled title keeps its full layout width; rekta.js writes that width to --_rk-w, and the end margin takes

@@ -302,6 +302,16 @@ const shares = await p.evaluate(() => {
 });
 ok(shares.colours && shares.ratio && shares.gap === 2, 'a share bar: each share in its code, as wide as its share, 2px apart', JSON.stringify(shares));
 ok(shares.meter && shares.status, 'a meter fills in its code; a status wins', JSON.stringify(shares));
+// A pivot's titles, buttons or links, are written as the strip says: case and spacing set by CSS reach them (#100).
+const cased = await p.evaluate(() => {
+  const n = document.createElement('div'); n.className = 'rk-pivot'; n.style.cssText = 'text-transform:uppercase;letter-spacing:3px';
+  n.innerHTML = '<button type="button" aria-selected="true">jobs</button><button type="button">runs</button><a href="#">logs</a>';
+  document.querySelector('.rk').append(n);
+  const out = [...n.children].map((x) => `${getComputedStyle(x).textTransform} ${getComputedStyle(x).letterSpacing}`);
+  n.remove();
+  return out;
+});
+ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s text-transform and letter-spacing', JSON.stringify(cased));
 
 // rekta.js in German (?lang=de): its words from the catalogue, its numbers in the locale; none of its English shows.
 {
