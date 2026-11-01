@@ -70,6 +70,7 @@ static const float rk_tok_durations[RK__DURATION_COUNT] = { 100.0f, 250.0f, 400.
 #define RK_TOK_LINE_TIGHT 1.15f
 #define RK_TOK_LINE_TITLE 1.1f
 #define RK_TOK_LINE_NAV 1.3f
+#define RK_TOK_DURATION_GREET 75.0f
 #define RK_TOK_DURATION_PULSE 1400.0f
 #define RK_TOK_DURATION_BUSY 1200.0f
 #define RK_TOK_DURATION_DOTS 2400.0f

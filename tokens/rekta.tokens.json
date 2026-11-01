@@ -757,6 +757,11 @@
         "$value": "30ms",
         "$description": "Delay per tile index when tiles build in (capped at 10). In a place change, the unit of when a part starts (heft-spread) and the step between parts that weigh the same."
       },
+      "greet": {
+        "$type": "duration",
+        "$value": "75ms",
+        "$description": "Live tile news: when several tiles get news within duration-moderate, each shows it this long after the one before it in reading order, four steps at most (the rest with the fourth). About 2.5 × duration-stagger."
+      },
       "pulse": {
         "$type": "duration",
         "$value": "1400ms",

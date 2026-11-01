@@ -1032,6 +1032,8 @@ Called before a change:
 .Dv RK_TRANSITION_FLIP
 (a new status turns the tile over),
 .Dv RK_TRANSITION_CROSSFADE .
+Tiles of one window that peek or flip within duration-moderate go one after
+another in reading order, duration-greet apart, four steps at most.
 .El
 .Pp
 Under reduced motion every change is instant, never skipped.

@@ -968,7 +968,10 @@ the change itself always happens.
 - `tileUpdate(tile, change, { kind })`: a live tile has news. `'peek'` (a
   new number or line, the default) brings the new `.rk-stat` up from
   below; `'flip'` (a new status) turns the tile over. A continuous reading
-  needs neither: change it in place.
+  needs neither: change it in place. Calls on several tiles within
+  `duration-moderate` move one after another in document order,
+  `duration-greet` apart, four steps at most; `change()` still runs at
+  once (for a flip, at the half as before).
 - `sparkTo(polyline, points)`: a line moves its points to new ones over
   `duration-long`; a different number of points redraws at once.
 - `crossfade(change)`: a change of the whole look cross-fades, where view

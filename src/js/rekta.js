@@ -3451,16 +3451,39 @@ export async function presence(scope, { items = () => [...scope.children], show 
   await reflow(scope, () => { apply(); leaving.forEach((a) => a && a.cancel()); coming.forEach(enter); }, { items: () => all.filter((el) => !el.hidden || going.includes(el)), size: false });
   if (presenceRuns.get(scope) === run) presenceRuns.delete(scope);
 }
+// Several tiles with news within duration-moderate show it one after another in reading order (the document's),
+// duration-greet apart, four steps at most: the rest go with the fourth. Each tileUpdate() starts its animations at
+// once; the calls made together are sorted in a microtask, before the frame that would show them, and each one's
+// animations wait for its step.
+let news = null;
+function greet(tile, anims) {
+  if (!news) news = { t0: -Infinity, n: 0, batch: [] };
+  news.batch.push({ tile, anims });
+  if (news.batch.length > 1) return;
+  queueMicrotask(() => {
+    const now = performance.now(), batch = news.batch.sort((a, b) => (a.tile.compareDocumentPosition(b.tile) & 4 ? -1 : 1));
+    news.batch = [];
+    if (now - news.t0 > ms('--rk-duration-moderate')) { news.t0 = now; news.n = 0; }
+    const step = ms('--rk-duration-greet');
+    for (const { anims } of batch) {
+      const wait = Math.max(0, news.t0 + Math.min(news.n, 3) * step - now);
+      news.n += 1;
+      for (const a of anims) a.effect.updateTiming({ delay: a.effect.getTiming().delay + wait });
+    }
+  });
+}
 // tileUpdate(tile, change, { kind }): a live tile has news. 'peek' (a new number or line): the new content rises
 // from peek-travel of its height below while the old one leaves upwards by as much, over duration-moderate. 'flip' (a
-// new status): the tile turns flip-angle away around its horizontal axis, changes, and turns back. A continuous reading (frames a second) is no news: it updates
-// in place. Inside a live region (live()) the change already waits while the region is held.
+// new status): the tile turns flip-angle away around its horizontal axis, changes, and turns back. A continuous reading
+// (frames a second) is no news: it updates in place. Inside a live region (live()) the change already waits while the
+// region is held. News on several tiles at once comes one after another (greet).
 export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
   const d = ms('--rk-duration-moderate');
   if (!d || !shown(tile)) { change(); return Promise.resolve(); }
   if (kind === 'flip') {
     const p = num('--rk-turnstile-perspective') || 800, turn = num('--rk-flip-angle');
     const a = tile.animate([{ transform: `perspective(${p}px) rotateX(0deg)` }, { transform: `perspective(${p}px) rotateX(${-turn}deg)` }], { duration: d / 2, easing: css('--rk-ease-out'), fill: 'forwards' });
+    greet(tile, [a]);
     return a.finished.catch(() => {}).then(() => {
       change();
       a.cancel();
@@ -3480,6 +3503,7 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
   const travel = num('--rk-peek-travel') * 100;
   const out = ghost.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateY(${-travel}%)` }], { duration: d * 0.6, easing: css('--rk-ease-out'), fill: 'forwards' });
   const inn = target.animate([{ opacity: 0, transform: `translateY(${travel}%)` }, { opacity: 1, transform: 'none' }], { duration: d * 0.8, delay: d * 0.2, easing: css('--rk-ease-in'), fill: 'backwards' });
+  greet(tile, [out, inn]);
   return finished([out, inn]).then(() => { ghost.remove(); if (!tile.querySelector('.rk-stat[aria-hidden]')) tile.style.overflow = ''; });
 }
 // sparkTo(line, points): a live line moves to its new points over duration-long instead of jumping. Points are an

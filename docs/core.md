@@ -190,7 +190,9 @@ caller never picks numbers:
 
 `rk_view_transition(view, RK_TRANSITION_PEEK | FLIP | CROSSFADE)`, called
 before a change, animates from the old look to the new: a tile's new number
-peeks in, a new status flips it. Reduced motion zeroes every duration; the end
+peeks in, a new status flips it. Tiles of one window that peek or flip within
+duration-moderate go one after another in reading order, duration-greet
+apart, four steps at most. Reduced motion zeroes every duration; the end
 state is always reached.
 
 ## Accessibility

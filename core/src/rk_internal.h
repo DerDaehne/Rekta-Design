@@ -339,6 +339,7 @@ struct rk_window {
   rk_view *tip, *tip_for; uint32_t tip_timer; double tip_hid;   /* the tooltip shown, whose, its wait, when one went */
   struct rk_history_entry *history; int nhistory, ndone, hcap;   /* its undo history: [0, ndone) done, the rest redoable */
   bool (*should_close)(rk_window *w, void *user); void *close_user;
+  double news_t0; int news_n;                              /* live tile news shown one after another: since, how many */
   rk_window *next;                                         /* the app's list of open windows */
 };
 

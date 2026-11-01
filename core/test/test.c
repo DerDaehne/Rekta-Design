@@ -2205,6 +2205,28 @@ static void scene_controls(const char *name) {
   done(w);
 }
 
+/* News on several tiles at once comes one after another in reading order, duration-greet apart, four steps at most;
+   another window keeps its own order. */
+static void test_news_order(void) {
+  rk_window *w = window(720, 400), *w2 = window(400, 240);
+  rk_view *root = col(16, 32), *grid = rk_add(root, rk_tile_grid()), *t[6];
+  for (int i = 0; i < 6; i++) t[i] = add_tile(grid, RK_STATUS_INFO, "1", "news", 1, 1);
+  rk_view *root2 = col(16, 32), *other = add_tile(rk_add(root2, rk_tile_grid()), RK_STATUS_INFO, "1", "news", 1, 1);
+  show(w, root, "news"); show(w2, root2, "news elsewhere");
+  for (int i = 5; i >= 0; i--) { rk_view_transition(t[i], RK_TRANSITION_PEEK); rk_tile_set_stat(t[i], "2", "news"); }
+  rk_view_transition(other, RK_TRANSITION_PEEK); rk_tile_set_stat(other, "2", "news");
+  rk_app_run_for(300);
+  float s[6];
+  for (int i = 0; i < 6; i++) s[i] = t[i]->transition_t;
+  float g = (float)(RK_TOK_DURATION_GREET / rk_duration_of(RK_DURATION_MODERATE));
+  CHECK(s[0] > 0 && fabsf(s[0] - s[1] - g) < 0.01f && fabsf(s[1] - s[2] - g) < 0.01f && fabsf(s[2] - s[3] - g) < 0.01f && s[3] == s[4] && s[4] == s[5] && s[5] > 0,
+        "tile news goes in reading order, duration-greet apart, four steps: %.3f %.3f %.3f %.3f %.3f %.3f", s[0], s[1], s[2], s[3], s[4], s[5]);
+  CHECK(fabsf(other->transition_t - s[0]) < 0.01f, "another window's news keeps its own order (%.3f)", other->transition_t);
+  rk_app_run_for(700);
+  CHECK(t[5]->transition == 0 && t[0]->transition == 0, "and all of it lands");
+  done(w); done(w2);
+}
+
 static void scene_flip(void) {
   rk_window *w = window(400, 240);
   rk_view *root = col(16, 32);
@@ -3468,6 +3490,7 @@ static void launch(void *user) {
   test_setters();
   test_api_rules();
   test_spring();
+  test_news_order();
   { int lv = rk__live_views; test_declare(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declare_same_pixels(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare_same_pixels: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }

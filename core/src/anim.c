@@ -175,9 +175,12 @@ void rk__anim_close_blocks(void) {
   while (depth) rk_animate_commit();
 }
 
+static void news_settle(void);
+
 bool rk__anim_tick(double now) {
   static anim *finished; static int fcap;
   int nf = 0;
+  news_settle();
   for (int i = 0; i < nanims;) {
     anim *a = &anims[i];
     double t = a->dur > 0 ? (now - a->start - a->delay) / a->dur : 1;
@@ -295,6 +298,39 @@ static void transition_done(rk_view *v, void *user) {
   rk__bitmap_free(v->snapshot); v->snapshot = NULL;
 }
 
+/* Live tile news (motion.md): tiles of one window that get news within duration-moderate show it one after another
+   in reading order, duration-greet apart, four steps at most; the rest go with the fourth. The tiles that got news
+   since the last frame are sorted at the next one, and each one's peek or flip waits for its step. */
+static rk_view **news; static int nnews, news_cap;
+
+static int news_order(const void *x, const void *y) {
+  rk_view *a = *(rk_view *const *)x, *b = *(rk_view *const *)y;
+  rk_window *wa = rk__view_window(a), *wb = rk__view_window(b);
+  if (wa != wb) return wa < wb ? -1 : 1;
+  rk_rect p = rk__window_rect(a), q = rk__window_rect(b);
+  if (p.y != q.y) return p.y < q.y ? -1 : 1;
+  return p.x < q.x ? -1 : p.x > q.x;
+}
+
+static void news_settle(void) {
+  if (!nnews) return;
+  qsort(news, (size_t)nnews, sizeof *news, news_order);
+  double within = rk_duration_of(RK_DURATION_MODERATE), greet = rk__reduced() ? 0 : RK_TOK_DURATION_GREET;
+  for (int i = 0; i < nnews; i++) {
+    rk_view *v = news[i];
+    rk_window *w = rk__view_window(v);
+    anim *a = NULL;
+    for (int k = 0; k < nanims; k++) if (anims[k].view == v && anims[k].prop == RK_PROP_TRANSITION) a = &anims[k];
+    if (w && a) {
+      if (!w->news_n || a->start - w->news_t0 > within) { w->news_t0 = a->start; w->news_n = 0; }
+      a->delay = RK_MAX(0.0, w->news_t0 + RK_MIN(w->news_n, 3) * greet - a->start);
+      w->news_n++;
+    }
+    rk_release(v);
+  }
+  nnews = 0;
+}
+
 void rk_view_transition(rk_view *v, rk_transition kind) {
   if (!rk__view_visible(v) || rk__reduced()) return;
   rk__bitmap_free(v->snapshot);
@@ -304,6 +340,10 @@ void rk_view_transition(rk_view *v, rk_transition kind) {
   double d = kind == RK_TRANSITION_CROSSFADE ? rk_duration_of(RK_DURATION_SHORT) : rk_duration_of(RK_DURATION_MODERATE);
   float a = 0, b = 1;
   rk__animate_cb(v, RK_PROP_TRANSITION, &a, &b, 1, d, 0, NULL, transition_done, NULL);
+  if (kind == RK_TRANSITION_CROSSFADE || !rk__is_tile(v)) return;
+  for (int i = 0; i < nnews; i++) if (news[i] == v) return;
+  news = rk__grow(news, &news_cap, nnews + 1, sizeof *news);
+  news[nnews++] = rk_retain(v);
 }
 
 /* A plain tween: from one value to another over a time, on a curve; it carries on from where it is when retargeted. */
