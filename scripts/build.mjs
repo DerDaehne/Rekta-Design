@@ -8,24 +8,28 @@
 //                         motion duration 0s under reduced motion (unless [data-motion="on"]) and [data-motion="off"],
 //                         the contrast colours for more contrast (unless [data-contrast="normal"]) and for
 //                         [data-contrast="more"], opaque glass for reduced transparency (unless
-//                         [data-transparency="normal"]) and for [data-transparency="reduce"]
+//                         [data-transparency="normal"]) and for [data-transparency="reduce"], and each named accent
+//                         (tokens/rekta.accents.json) for [data-accent="NAME"] in each theme and contrast
 //     rekta.tokens.json   resolved, platform-neutral values for other frameworks (see docs/platforms.md)
 //     rekta.css           the components (src/css/rekta.css)
 //     rekta.fonts.css     @font-face rules for the bundled Barlow files, copied to dist/fonts/
 //     rekta.js            the behaviour as an ES module (src/js/rekta.js)
 //     rekta.global.js     the same as a classic script that sets window.Rekta
+//     rekta.color.js      the colour rules as an ES module (scripts/lib/color.mjs), rekta.color.global.js as a classic
+//                         script that sets window.RektaColor: contrast, apart from status, an accent's check and derivation
 //   and core/src/ (committed, so the C library builds without Node):
 //     rk_tokens.h         the tokens as C tables in the order of the enums in core/include/rekta.h
 //     rk_icons.h          the icons as polylines on the 20-unit grid
 //     rk_fonts.h          the Barlow files in core/fonts/ as byte arrays
 //   node scripts/build.mjs --check   checks the tokens and the stylesheet instead of writing (exit 1 on failure),
 //                                    and that core/src/ is up to date
+//   node scripts/build.mjs --accent COLOUR   derives an accent from one colour for every theme (docs/colour.md)
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { contrast, distance, over, parse, toHex8 } from './lib/color.mjs';
+import { accentCheck, apartFromStatus, contrast, deriveAccent, distance, over, parse, TEXT, toHex8 } from './lib/color.mjs';
 import { coreFonts, coreIcons, coreTokens } from './lib/core.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -205,7 +209,60 @@ ${decl(tokens, contrastDark)}
 :root[data-transparency="reduce"] {
   --${PREFIX}-glass: var(--${PREFIX}-bg);
 }
+${accentsCss(tokens)}`;
+}
+
+// The named accents (tokens/rekta.accents.json): each a pair per theme and per contrast set, picked with
+// data-accent="NAME" on the root (prefs: accent). The selectors are the themes' and the contrast sets' with the name
+// added, so a named accent wins over a product's own --rk-accent on :root and in the selectors of docs/platforms.md.
+export function loadAccents() { return JSON.parse(readFileSync(join(root, 'tokens', 'rekta.accents.json'), 'utf8')).accents; }
+function accentsCss(tokens) {
+  const value = (v) => (v.startsWith('{') ? `var(--${PREFIX}-${tokenName(v.slice(1, -1).split('.'))})` : v);
+  const pair = (p, indent) => ['accent', 'on-accent'].map((k) => `${indent}--${PREFIX}-${k}: ${value(p[k])};`).join('\n');
+  return Object.entries(loadAccents()).map(([name, a]) => {
+    const r = `:root[data-accent="${name}"]`, light = pair(a.light, '  '), dark = pair(a.dark, '  '), lc = pair(a[CONTRAST.light], '  '), dc = pair(a[CONTRAST.dark], '  ');
+    const deep = (x) => x.replace(/^/gm, '  ');
+    return `
+/* Accent "${name}". */
+${r} {
+${light}
+}
+@media (prefers-color-scheme: dark) {
+  ${r}:not([data-theme="light"]) {
+${deep(dark)}
+  }
+}
+${r}[data-theme="dark"] {
+${dark}
+}
+@media (prefers-contrast: more) {
+  ${r}:not([data-contrast="normal"]) {
+${deep(lc)}
+  }
+}
+${r}[data-contrast="more"] {
+${lc}
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  ${r}:not([data-contrast="normal"]):not([data-theme="light"]) {
+${deep(dc)}
+  }
+}
+@media (prefers-contrast: more) {
+  ${r}:not([data-contrast="normal"])[data-theme="dark"] {
+${deep(dc)}
+  }
+}
+@media (prefers-color-scheme: dark) {
+  ${r}[data-contrast="more"]:not([data-theme="light"]) {
+${deep(dc)}
+  }
+}
+${r}[data-contrast="more"][data-theme="dark"] {
+${dc}
+}
 `;
+  }).join('');
 }
 
 // The contrast colours as declarations for each theme: every name either contrast set changes, from the theme's
@@ -273,7 +330,18 @@ export function buildTokensJson(tokens, version) {
     breakpoint: group(tokens.breakpoint, ['breakpoint']),
     descriptions: all,
     hooks: Object.fromEntries(Object.entries(loadHooks()).map(([k, v]) => [`--rk-${k}`, v])),
+    // The named accents (tokens/rekta.accents.json), resolved: per theme the accent and the text on it.
+    accents: Object.fromEntries(Object.entries(loadAccents()).map(([name, a]) => [name, {
+      description: a.$description,
+      ...Object.fromEntries(Object.keys(TEXT).map((theme) => [theme, Object.fromEntries(Object.entries(a[theme] || {}).map(([k, v]) => [k, resolveColor(tokens, v)]))])),
+    }])),
   };
+}
+// A colour of a file beside the tokens (an accent's): #rrggbb, or an alias to a colour token, resolved.
+function resolveColor(tokens, v) {
+  let t = { $value: v };
+  while (typeof t.$value === 'string' && t.$value.startsWith('{')) t = resolveAlias(tokens, t.$value);
+  return toHex8(parse(t.$value));
 }
 // The public hooks (tokens/rekta.hooks.json): --rk- properties that are not tokens, by name without the prefix.
 export function loadHooks() { return JSON.parse(readFileSync(join(root, 'tokens', 'rekta.hooks.json'), 'utf8')).hooks; }
@@ -287,11 +355,11 @@ function fontsCss() {
 }
 
 // The ES module becomes a classic script: export statements go, the module's names are gathered on window.Rekta.
-export function toGlobal(esm) {
+export function toGlobal(esm, global = 'Rekta', what = 'Rekta Design behaviour', from = 'src/js/rekta.js') {
   const names = [...esm.matchAll(/^export\s+(?:async\s+function\*?|function\*?|const|class|let)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
   const body = esm.replace(/^export\s+(async\s+function|function|const|class|let)\s/gm, '$1 ').replace(/^export\s*\{[^}]*\};?\s*$/gm, '');
-  if (/^export\b/m.test(body)) throw new Error('rekta.js has an export the classic script cannot carry');
-  return `/* Rekta Design behaviour, classic script. Generated from src/js/rekta.js by scripts/build.mjs; do not edit. */\n(function () {\n${body}\nwindow.Rekta = { ${names.join(', ')} };\n})();\n`;
+  if (/^export\b/m.test(body)) throw new Error(`${from} has an export the classic script cannot carry`);
+  return `/* ${what}, classic script. Generated from ${from} by scripts/build.mjs; do not edit. */\n(function () {\n${body}\nwindow.${global} = { ${names.join(', ')} };\n})();\n`;
 }
 
 // Said by --check without failing it: trade-offs the docs name (accessibility.md), measured on every build.
@@ -359,6 +427,23 @@ function check(tokens) {
       const d = distance(c[`status-${STATUS[i]}-${form}`], c[`status-${STATUS[j]}-${form}`], 'tritan');
       if (d < 0.09) notes.push(`${theme}: ${STATUS[i]} and ${STATUS[j]} ${form} are ${d.toFixed(3)} apart under tritan (0.09 is required under protan and deutan)`);
     }
+    // A content fill (docs/tiles.md) carries ink like a status tile, and stays apart from status so it never reads as
+    // one. One that is the surface (the contrast sets: plain under more contrast) has nothing to keep apart.
+    for (const name of Object.keys(c).filter((n) => n.startsWith('content-'))) {
+      need('text-primary', name, text, 'tile text');
+      if (c[name] === c.surface) continue;
+      const apart = apartFromStatus(c[name], c), tritan = apart.nearest.tritan;
+      for (const p of apart.problems) problems.push(`${theme}: ${name} ${c[name]}: ${p}`);
+      if (tritan.distance < 0.09) notes.push(`${theme}: ${name} is ${tritan.distance.toFixed(3)} from status-${tritan.status}-${tritan.form} under tritan`);
+    }
+  }
+  // Every named accent holds the accent rules in each theme and contrast set (docs/colour.md).
+  for (const [name, a] of Object.entries(t.accents)) {
+    if (!/^[a-z][a-z-]*$/.test(name)) problems.push(`tokens/rekta.accents.json: "${name}" is not a lowercase name`);
+    for (const [theme, text] of Object.entries(TEXT)) {
+      if (!a[theme] || !a[theme].accent || !a[theme]['on-accent']) { problems.push(`tokens/rekta.accents.json: ${name} has no accent and on-accent for ${theme}`); continue; }
+      for (const p of accentCheck(a[theme].accent, a[theme]['on-accent'], t.themes[theme], text).problems) problems.push(`${theme}: accent ${name} ${a[theme].accent}: ${p}`);
+    }
   }
   // Every --rk- property the stylesheet reads is a token or a documented hook.
   const css = readFileSync(join(root, 'src', 'css', 'rekta.css'), 'utf8');
@@ -387,6 +472,13 @@ function check(tokens) {
     const table = new Set([...doc.slice(a, b).matchAll(/`--rk-([\w-]+)`/g)].map((m) => m[1]));
     for (const h of HOOKS) if (!table.has(h) && !(/^series-[2-7]$/.test(h) && table.has('series-1') && table.has('series-8'))) problems.push(`docs/behaviour.md (Public hooks) lacks --rk-${h}`);
     for (const h of table) if (!HOOKS.has(h)) problems.push(`docs/behaviour.md (Public hooks) lists --rk-${h}, which tokens/rekta.hooks.json does not`);
+  }
+  // Every content fill has its rule in rekta.css (docs/tiles.md), and no rule names one that is not a token.
+  {
+    const fills = Object.keys(t.themes.light).filter((n) => n.startsWith('content-')).map((n) => n.slice(8));
+    const ruled = new Set([...css.matchAll(/\[data-rk-fill='([\w-]+)'\]\s*\{\s*--_rk-fill:\s*var\(--rk-content-([\w-]+)\)/g)].filter((m) => m[1] === m[2]).map((m) => m[1]));
+    for (const f of fills) if (!ruled.has(f)) problems.push(`rekta.css has no rule for the content fill ${f} ([data-rk-fill='${f}'] { --_rk-fill: var(--rk-content-${f}) })`);
+    for (const f of ruled) if (!fills.includes(f)) problems.push(`rekta.css fills tiles with content-${f}, which is not a token`);
   }
   for (const m of css.matchAll(/var\(--rk-([\w-]+)/g)) {
     if (!defined.has(m[1]) && !HOOKS.has(m[1])) problems.push(`rekta.css reads --rk-${m[1]}, which is neither a token nor a public hook`);
@@ -483,6 +575,10 @@ function check(tokens) {
     const declared = new Set([...dts.matchAll(/^export declare (?:function|const|let) (\w+)/gm)].map((m) => m[1]));
     for (const n of exported) if (!declared.has(n)) problems.push(`rekta.js exports ${n}, which src/js/rekta.d.ts does not declare`);
     for (const n of declared) if (!exported.has(n)) problems.push(`src/js/rekta.d.ts declares ${n}, which rekta.js does not export`);
+    // The accent pref's names are the named accents (tokens/rekta.accents.json) and product.
+    const names = new Set((((/type AccentName = ([^;]*);/.exec(dts) || [])[1]) || '').match(/'[\w-]+'/g)?.map((x) => x.slice(1, -1)) || []);
+    for (const n of ['product', ...Object.keys(t.accents)]) if (!names.has(n)) problems.push(`src/js/rekta.d.ts: AccentName lacks '${n}'`);
+    for (const n of names) if (n !== 'product' && !(n in t.accents)) problems.push(`src/js/rekta.d.ts: AccentName has '${n}', which tokens/rekta.accents.json does not`);
     for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
       if (!existsSync(join(root, 'src', 'js', f.replace(/\.js$/, '.d.ts')))) problems.push(`src/js/${f} has no declaration (${f.replace(/\.js$/, '.d.ts')})`);
     }
@@ -498,16 +594,30 @@ function check(tokens) {
   catch (e) { problems.push(`rekta.js cannot be imported without a DOM (server rendering): ${String(e.stderr || e.message).split('\n').find((l) => /Error/.test(l)) || e.message}`); }
   // The classic script must parse as one, with every export on window.Rekta.
   try { new Function(toGlobal(js)); } catch (e) { problems.push(`rekta.global.js does not parse: ${e.message}`); }
+  // The colour rules ship as a module of their own (rekta.color.js) for a product that checks or derives its colours;
+  // its declaration names exactly what it exports.
+  {
+    const color = readFileSync(join(root, 'scripts', 'lib', 'color.mjs'), 'utf8'), dts = readFileSync(join(root, 'scripts', 'lib', 'color.d.ts'), 'utf8');
+    try { new Function(toGlobal(color, 'RektaColor')); } catch (e) { problems.push(`rekta.color.global.js does not parse: ${e.message}`); }
+    const exported = new Set([...color.matchAll(/^export (?:function|const) (\w+)/gm)].map((m) => m[1]));
+    const declared = new Set([...dts.matchAll(/^export declare (?:function|const) (\w+)/gm)].map((m) => m[1]));
+    for (const n of exported) if (!declared.has(n)) problems.push(`scripts/lib/color.mjs exports ${n}, which scripts/lib/color.d.ts does not declare`);
+    for (const n of declared) if (!exported.has(n)) problems.push(`scripts/lib/color.d.ts declares ${n}, which scripts/lib/color.mjs does not export`);
+  }
   return problems;
 }
 
 // A product's own values, checked against the same rules as Rekta's (docs/data.md): the domain colour codes it sets
 // (--rk-series-N, per theme) must hold 3:1 against the ground and surface, stay 0.09 apart under red-green colour
-// blindness (tritan reported), be set in both themes, and never colour text. A product that changes --rk-pivot-wide
-// is warned when no container query repeats the value: the wide facets' first paint would use another.
+// blindness (tritan reported), be set in both themes, and never colour text. Its accent (--rk-accent with
+// --rk-on-accent, per theme) holds the accent rules (docs/colour.md): 3:1 on bg and surface, on-accent 4.5:1 on it,
+// apart from status; under more contrast on-accent 7:1, where a value set in the contrast selectors must hold it and
+// one that is not set there is warned about. A product that changes --rk-pivot-wide is warned when no container query
+// repeats the value: the wide facets' first paint would use another.
 //   node scripts/build.mjs --check-product product.css
 export function checkProduct(css, file = 'product CSS') {
   const problems = [], notes = [], warnings = [], t = buildTokensJson(loadTokens(), 'check'), codes = { light: {}, dark: {} };
+  const accents = Object.fromEntries(Object.keys(TEXT).map((k) => [k, {}]));
   const wides = new Set(), queries = new Set();
   // Walk the rules: a declaration is dark when a selector or @media around it says dark.
   const stack = [];
@@ -527,6 +637,13 @@ export function checkProduct(css, file = 'product CSS') {
     if (m) {
       const ctx = stack.join(' '), theme = /dark/.test(ctx) && !/data-theme=["']?light["']?\]\s*$/.test(stack[stack.length - 1] || '') ? 'dark' : 'light';
       codes[theme][+m[1]] = m[2];
+    }
+    const a = /^\s*--rk-(accent|on-accent)\s*:\s*(.+?)\s*$/.exec(decl);
+    if (a) {
+      const ctx = stack.join(' '), last = stack[stack.length - 1] || '';
+      const theme = /dark/.test(ctx) && !/data-theme=["']?light["']?\]\s*$/.test(last) ? 'dark' : 'light';
+      const more = /prefers-contrast:\s*more|data-contrast=["']?more/.test(ctx);
+      accents[more ? CONTRAST[theme] : theme][a[1]] = a[2];
     }
     if (/^\s*(color|-webkit-text-fill-color)\s*:.*var\(--rk-series-/.test(decl)) problems.push(`${file}: text drawn in a series colour (${decl.trim()}); codes are for small marks only`);
     const w = /^\s*--rk-pivot-wide\s*:\s*(.+?)\s*$/.exec(decl);
@@ -548,8 +665,26 @@ export function checkProduct(css, file = 'product CSS') {
       const d = distance(a, b, 'tritan'); if (d < 0.09) notes.push(`${file}: ${theme} --rk-series-${ns[i]} and -${ns[j]} are ${d.toFixed(3)} apart under tritan`);
     }
   }
+  // The accent: a theme the product leaves alone keeps ink, which holds every rule.
+  let accentCount = 0;
+  for (const theme of ['light', 'dark']) {
+    const own = accents[theme], more = accents[CONTRAST[theme]];
+    if (!own.accent && !own['on-accent'] && !more.accent && !more['on-accent']) continue;
+    const read = (v, fallback) => { if (v === undefined) return fallback; try { return toHex8(parse(v)); } catch { problems.push(`${file}: ${theme} accent value ${v} is not a colour the check reads (hex or rgb)`); return null; } };
+    const pair = [read(own.accent, t.themes[theme].accent), read(own['on-accent'], t.themes[theme]['on-accent'])];
+    accentCount += Object.keys(own).length + Object.keys(more).length;
+    if (pair.includes(null)) continue;
+    for (const p of accentCheck(pair[0], pair[1], t.themes[theme], TEXT[theme]).problems) problems.push(`${file}: ${theme} --rk-accent ${pair[0]}: ${p}`);
+    const set = !!(more.accent || more['on-accent']);
+    const hi = [read(more.accent, pair[0]), read(more['on-accent'], pair[1])];
+    if (hi.includes(null)) continue;
+    for (const p of accentCheck(hi[0], hi[1], t.themes[CONTRAST[theme]], TEXT[CONTRAST[theme]]).problems) {
+      if (set) problems.push(`${file}: ${CONTRAST[theme]} --rk-accent ${hi[0]}: ${p}`);
+      else warnings.push(`${file}: under more contrast the ${theme} accent ${hi[0]} keeps its value: ${p}; set it in the contrast selectors (docs/platforms.md), or derive one with node scripts/build.mjs --accent`);
+    }
+  }
   for (const w of wides) if (!/^0(px)?$/.test(w) && !queries.has(w)) warnings.push(`${file}: --rk-pivot-wide is ${w}, but no @container (min-width: ${w}) repeats it, so the wide facets' first paint keeps size.pivot-wide (docs/behaviour.md, pivot(): the first paint)`);
-  return { problems, notes, warnings, count: Object.keys(codes.light).length + Object.keys(codes.dark).length };
+  return { problems, notes, warnings, count: Object.keys(codes.light).length + Object.keys(codes.dark).length, accents: accentCount };
 }
 
 // rekta.css as it ships. A container query cannot read a custom property, so the wide facets' first paint
@@ -590,6 +725,10 @@ export function buildDist() {
   writeFileSync(join(dist, 'rekta.js'), esm);
   writeFileSync(join(dist, 'rekta.global.js'), toGlobal(esm));
   copyFileSync(join(root, 'src', 'js', 'rekta.d.ts'), join(dist, 'rekta.d.ts'));
+  const color = readFileSync(join(root, 'scripts', 'lib', 'color.mjs'), 'utf8');
+  writeFileSync(join(dist, 'rekta.color.js'), color);
+  writeFileSync(join(dist, 'rekta.color.global.js'), toGlobal(color, 'RektaColor', 'Rekta Design colour rules', 'scripts/lib/color.mjs'));
+  copyFileSync(join(root, 'scripts', 'lib', 'color.d.ts'), join(dist, 'rekta.color.d.ts'));
   // Catalogues in other languages: as a module (export const de), and as a classic script (window.RektaStrings.de).
   for (const f of readdirSync(join(root, 'src', 'js')).filter((x) => /^strings\.[\w-]+\.js$/.test(x))) {
     const text = readFileSync(join(root, 'src', 'js', f), 'utf8'), lang = f.split('.')[1];
@@ -645,8 +784,32 @@ export function checkAll() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const productAt = process.argv.indexOf('--check-product');
-  if (productAt > 0) {
+  const productAt = process.argv.indexOf('--check-product'), accentAt = process.argv.indexOf('--accent');
+  if (accentAt > 0) {
+    // One colour in, an accent for every theme out (docs/colour.md, Deriving an accent): the CSS to paste after the
+    // Rekta stylesheets, with the selectors of docs/platforms.md, or why the colour cannot be one.
+    const seed = process.argv[accentAt + 1];
+    let hex;
+    try { hex = toHex8(parse(seed)); } catch { console.error('usage: node scripts/build.mjs --accent COLOUR (hex or rgb)'); process.exit(2); }
+    const t = buildTokensJson(loadTokens(), 'check'), r = deriveAccent(hex, t.themes);
+    for (const [theme, why] of Object.entries(r.problems)) console.error(`✗ ${hex} in ${theme}: ${why.join('; ')}`);
+    if (!r.ok) process.exit(1);
+    const d = (theme, indent = '') => `${indent}--rk-accent: ${r.themes[theme].accent}; --rk-on-accent: ${r.themes[theme]['on-accent']};`;
+    for (const [theme, p] of Object.entries(r.themes)) {
+      const a = apartFromStatus(p.accent, t.themes[theme]).nearest;
+      console.log(`/* ${theme}: ${p.accent} with ${p['on-accent']}, ${contrast(p.accent, t.themes[theme].bg).toFixed(2)}:1 on bg, text ${contrast(p.accent, p['on-accent']).toFixed(2)}:1, ${a.normal.distance.toFixed(3)} from status-${a.normal.status}-${a.normal.form} (protan ${a.protan.distance.toFixed(3)}, deutan ${a.deutan.distance.toFixed(3)}) */`);
+    }
+    console.log(`/* after rekta.tokens.css and rekta.css: an accent derived from ${hex} */
+:root { ${d('light')} }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${d('dark')} } }
+:root[data-theme="dark"] { ${d('dark')} }
+@media (prefers-contrast: more) { :root:not([data-contrast="normal"]) { ${d('light-contrast')} } }
+:root[data-contrast="more"] { ${d('light-contrast')} }
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) { :root:not([data-contrast="normal"]):not([data-theme="light"]) { ${d('dark-contrast')} } }
+@media (prefers-contrast: more) { :root:not([data-contrast="normal"])[data-theme="dark"] { ${d('dark-contrast')} } }
+@media (prefers-color-scheme: dark) { :root[data-contrast="more"]:not([data-theme="light"]) { ${d('dark-contrast')} } }
+:root[data-contrast="more"][data-theme="dark"] { ${d('dark-contrast')} }`);
+  } else if (productAt > 0) {
     const file = process.argv[productAt + 1];
     if (!file) { console.error('usage: node scripts/build.mjs --check-product product.css'); process.exit(2); }
     const r = checkProduct(readFileSync(file, 'utf8'), file);
@@ -654,10 +817,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     for (const n of r.warnings) console.log(`  ! ${n}`);
     if (r.problems.length) { console.error(r.problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
     console.log(r.count ? `✓ ${file}: ${r.count} domain colour values pass: 3:1 on the ground, apart under colour blindness, both themes, no text` : `✓ ${file}: no domain colour values (--rk-series-N) to check`);
+    console.log(r.accents ? `✓ ${file}: ${r.accents} accent values pass: 3:1 on the ground, text on it, apart from status` : `✓ ${file}: no accent (--rk-accent) to check`);
   } else if (process.argv.includes('--check')) {
     const problems = checkAll();
     if (problems.length) { console.error(problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
-    console.log('✓ tokens and stylesheet pass: contrast (7:1 for more contrast), text on glass over white and black, status marks, colour-blind separation, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
+    console.log('✓ tokens and stylesheet pass: contrast (7:1 for more contrast), text on glass over white and black, status marks, colour-blind separation, named accents and content fills apart from status, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
     for (const n of notes) console.log(`  i ${n}`);
   } else {
     console.log(`✓ dist/ written (Rekta Design ${buildDist()})`);

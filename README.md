@@ -45,7 +45,7 @@ web and a native core, and each one is usable without the next:
 
 | Layer | Files | For |
 |---|---|---|
-| **Tokens** | `tokens/rekta.tokens.json` (source, [DTCG](https://tr.designtokens.org/format/)), `dist/rekta.tokens.json` (resolved, platform-neutral), `dist/rekta.tokens.css` (`--rk-` custom properties) | Every platform. Another party can implement Rekta for WinUI, Qt, SwiftUI, Compose, Flutter or anything else from these: see [docs/platforms.md](docs/platforms.md). |
+| **Tokens** | `tokens/rekta.tokens.json` (source, [DTCG](https://tr.designtokens.org/format/)), `tokens/rekta.accents.json` (named accents), `dist/rekta.tokens.json` (resolved, platform-neutral), `dist/rekta.tokens.css` (`--rk-` custom properties), `dist/rekta.color.js` (the colour rules: contrast, colour blindness, an accent's check and derivation) | Every platform. Another party can implement Rekta for WinUI, Qt, SwiftUI, Compose, Flutter or anything else from these: see [docs/platforms.md](docs/platforms.md). |
 | **Icons** | `src/icons/*.svg` (source), `dist/rekta.icons.svg` (a sprite), `dist/rekta.icons.json` (the shapes as data) | Every platform: 51 icons on a 20px grid, stroke 1.6, square ends. See [docs/shell.md](docs/shell.md). |
 | **Components** | `dist/rekta.css`, `dist/rekta.fonts.css` with `dist/fonts/` | The web: tiles, rows, tags, buttons, fields and every input, pivots, panoramas, the app bar and title bar, sheets, toasts, the status banner, menus and context menus, tooltips, tables, trees, long lists, splits, charts, meters, progress. Classes `.rk-*`; the few rules on the root are listed in [behaviour.md](docs/behaviour.md#rules-on-the-root). |
 | **Native core** | `core/` (`include/rekta.h`, `src/rekta.c`): C99, no dependency beyond the system; `nix run` starts its demo | Desktop apps on Windows, macOS and Linux without web technology: the same tokens, icons and motion, views and controllers composed as in UIKit, a software renderer that draws the same pixels everywhere. See [core/README.md](core/README.md) and [docs/core.md](docs/core.md). |
@@ -78,6 +78,8 @@ whole contract, with every hook, attribute and event, is in
 ```sh
 node scripts/build.mjs           # writes dist/ (no dependencies, no network)
 node scripts/build.mjs --check   # contrast, colour-blind separation, every --rk- read defined
+node scripts/build.mjs --check-product product.css   # a product's accent and colour codes
+node scripts/build.mjs --accent '#049896'   # an accent for every theme from one colour
 node scripts/build-site.mjs      # dist/ plus the showcase site in _site/
 node scripts/build-site.mjs --serve
 PLAYWRIGHT=/path/to/playwright/index.mjs node test/smoke.mjs   # clicks through the showcase in Chromium

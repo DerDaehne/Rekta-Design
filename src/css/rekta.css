@@ -113,6 +113,29 @@ a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit
 .rk-w2 > .rk-tile-msg { -webkit-line-clamp: 6; line-clamp: 6; }   /* past it, an ellipsis; the whole sentence is still read */
 .rk-w2 { grid-column: span 2; }
 .rk-h2 { grid-row: span 2; }
+/* Content fills (docs/tiles.md): a set of tiles without a status (programs, documents) opts in with
+   data-rk-fills="content", and each tile names the main colour of what it opens (data-rk-fill="teal"). Only a set
+   with no status tile in it: one status tile, and every tile of the set is plain again, so a colour never stands
+   beside a status. Removing the switch (or "plain") turns the whole set plain; under more contrast the fills are the
+   surface (the contrast sets), and forced colours drop them with every fill. Ink holds AA on each, secondary text
+   takes ink as on a status tile. */
+.rk-tiles[data-rk-fills='content'] .rk-tile[data-rk-fill] { --rk-text-contrast-high: var(--rk-text-primary); }
+.rk-tiles[data-rk-fills='content']:not(:has(.rk-tile[data-status])) .rk-tile:not([data-status])[data-rk-fill='teal'] { --_rk-fill: var(--rk-content-teal); }
+.rk-tiles[data-rk-fills='content']:not(:has(.rk-tile[data-status])) .rk-tile:not([data-status])[data-rk-fill='steel'] { --_rk-fill: var(--rk-content-steel); }
+.rk-tiles[data-rk-fills='content']:not(:has(.rk-tile[data-status])) .rk-tile:not([data-status])[data-rk-fill='violet'] { --_rk-fill: var(--rk-content-violet); }
+.rk-tiles[data-rk-fills='content']:not(:has(.rk-tile[data-status])) .rk-tile:not([data-status])[data-rk-fill='plum'] { --_rk-fill: var(--rk-content-plum); }
+.rk-tiles[data-rk-fills='content']:not(:has(.rk-tile[data-status])) .rk-tile:not([data-status])[data-rk-fill='rose'] { --_rk-fill: var(--rk-content-rose); }
+
+/* An accent surface (docs/colour.md): the one place-sized area that shows the product's accent, a header, a welcome
+   or a lock screen, with on-accent words. The text tokens follow the fill as in a selected row; a primary button on
+   it turns over (on-accent with accent words) so it does not vanish into it; focus rings take the words' colour.
+   Forced colours drop the fill: the ground with a frame. */
+.rk-accent-surface {
+  --rk-text-primary: var(--rk-on-accent); --rk-text-contrast-high: var(--rk-on-accent); --rk-text-contrast-medium: var(--rk-on-accent); --rk-text-contrast-low: transparent;
+  background-color: var(--rk-accent); color: var(--rk-on-accent);
+}
+.rk-accent-surface :focus-visible { outline-color: currentColor; }
+.rk-accent-surface .rk-btn--primary { background-color: var(--rk-on-accent); border-color: var(--rk-on-accent); color: var(--rk-accent); }
 @keyframes rk-build-in { from { opacity: 0; transform: translateY(6px); } }
 /* Press: a tile nudges back where it is pressed, as a Metro tile does. rekta.js sets --_rk-px and --_rk-py (-1 to 1
    from the tile's centre; 0 0 for Space or Enter) and data-rk-pressed. Pressed in the middle it sinks straight back;
@@ -1136,6 +1159,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-pivot > :hover { color: var(--rk-text-primary); }
   .rk-btn:hover { background-color: var(--rk-hover); }
   .rk-btn--primary:hover { background-color: var(--rk-accent); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+  .rk-accent-surface .rk-btn--primary:hover { background-color: var(--rk-on-accent); }
   .rk-btn:disabled:hover, .rk-btn[aria-disabled='true']:not([data-rk-pending]):hover { background: none; }
   .rk-btn[aria-pressed='true']:hover { background-color: var(--rk-accent); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
   .rk-btn[aria-pressed='true']:is(:disabled, [aria-disabled='true']:not([data-rk-pending])):hover { background: var(--rk-disabled); }
@@ -1164,7 +1188,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 
 /* Forced colours drop fills: tiles keep an edge, marks keep their square, the meter keeps its track and value. */
 @media (forced-colors: active) {
-  .rk-tile { outline: 1px solid CanvasText; outline-offset: -1px; }
+  .rk-tile, .rk-accent-surface { outline: 1px solid CanvasText; outline-offset: -1px; }
   .rk-tag::before, .rk-pulse, .rk-field[data-status='error'] .rk-hint::before { forced-color-adjust: none; background: CanvasText; }
   .rk-progress { forced-color-adjust: none; color: CanvasText; border: 1px solid CanvasText; }
   .rk-region[aria-busy='true']::before, .rk-btn[data-rk-pending]::after, .rk-empty[data-status='error'] > :first-child::before { forced-color-adjust: none; background: CanvasText; }

@@ -36,7 +36,9 @@ export declare const tokens: {
   px(name: string, el?: Element): number;
 };
 
-type PrefName = 'theme' | 'density' | 'motion' | 'contrast' | 'transparency';
+type PrefName = 'theme' | 'density' | 'motion' | 'contrast' | 'transparency' | 'accent';
+/** A named accent of tokens/rekta.accents.json, or `product`: the product's own `--rk-accent` (ink when it sets none). */
+type AccentName = 'product' | 'ink' | 'teal' | 'steel' | 'violet' | 'mauve' | 'pink' | 'magenta';
 export declare const prefs: {
   key: string;
   read(): Partial<Record<PrefName, string>>;
@@ -46,6 +48,7 @@ export declare const prefs: {
   get(name: 'motion'): 'system' | 'on' | 'off';
   get(name: 'contrast'): 'system' | 'more' | 'normal';
   get(name: 'transparency'): 'system' | 'reduce' | 'normal';
+  get(name: 'accent'): AccentName | (string & {});
   set(name: 'theme', value: 'system' | 'light' | 'dark', options?: { remember?: boolean }): void;
   set(name: 'density', value: 'auto' | 'comfortable' | 'compact', options?: { remember?: boolean }): void;
   set(name: 'motion', value: 'system' | 'on' | 'off', options?: { remember?: boolean }): void;
@@ -53,6 +56,9 @@ export declare const prefs: {
   set(name: 'contrast', value: 'system' | 'more' | 'normal', options?: { remember?: boolean }): void;
   /** reduce: glass is the ground and nothing blurs; normal: glass, whatever the system asks. */
   set(name: 'transparency', value: 'system' | 'reduce' | 'normal', options?: { remember?: boolean }): void;
+  /** A named accent wins over the product's own; `product` goes back to it. A product's own names work as well when it
+      styles `:root[data-accent="NAME"]` itself. */
+  set(name: 'accent', value: AccentName | (string & {}), options?: { remember?: boolean }): void;
   restore(): void;
 };
 

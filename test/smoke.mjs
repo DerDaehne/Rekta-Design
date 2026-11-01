@@ -1016,13 +1016,19 @@ ok((await focused(p)) === 'a-light', 'a summary link focuses its field');
 await p.fill('#a-light', '#f7cb47'); await p.waitForTimeout(100);
 const hint = (id) => p.evaluate((i) => document.querySelector(`#${i}`).closest('.rk-field').querySelector('.rk-hint').textContent, id);
 ok((await hint('a-light')).includes(':1 on the light ground'), 'the contrast is checked for real', await hint('a-light'));
-await p.fill('#a-light', '#1f6f5c'); await p.waitForTimeout(100);
+// A colour that reads as a status is refused with the status and a colour that holds (docs/colour.md, #97 #152).
+await p.fill('#a-light', '#1d6b80'); await p.waitForTimeout(100);
+ok(/too close to the status colour for “done”.*Try #[0-9a-f]{6}/.test(await hint('a-light')), 'a colour too close to a status is refused, with the status and a derived one', await hint('a-light'));
+await p.fill('#a-light', '#2762ec'); await p.waitForTimeout(100);
+ok((await hint('a-light')).includes('“active”') && (await hint('a-light')).includes('Its hue is a status hue'), 'a status hue cannot be derived away', await hint('a-light'));
+await p.fill('#a-light', '#1a6680'); await p.waitForTimeout(100);
 ok(!(await p.evaluate(() => document.querySelector('#a-light').closest('.rk-field').dataset.status)), 'corrected as you type');
-await p.fill('#a-name', 'plum'); await p.click('#a-save'); await p.waitForTimeout(1200);
+await p.fill('#a-name', 'teal'); await p.click('#a-save'); await p.waitForTimeout(1200);
 ok((await hint('a-name')).includes('already exists'), 'the server says no at the field', await hint('a-name'));
 await p.fill('#a-name', 'sea'); await p.click('#a-save');
 await p.waitForFunction(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase]) .rk-toast-msg'); return t && t.textContent.startsWith('Accent'); }, null, { timeout: 4000 }).catch(() => {});
-ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#1f6f5c', 'the accent applies', `${await toast(p)} / ${await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim() + ' ' + document.documentElement.dataset.accent + ' ' + localStorage.getItem('rekta-prefs'))}`);
+await until(p, () => p.evaluate(() => document.documentElement.dataset.accent === 'custom'), 2000);   /* the accent pref cross-fades in */
+ok((await toast(p)).startsWith('Accent “sea” applied') && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#1a6680', 'the accent applies', `${await toast(p)} / ${await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim() + ' ' + document.documentElement.dataset.accent + ' ' + localStorage.getItem('rekta-prefs'))}`);
 ok(!(await p.getAttribute('#a-remove', 'aria-disabled')), 'remove can act now');
 await p.click('#a-remove'); await p.waitForTimeout(400);
 ok((await sheetTitle(p)) === 'Remove “sea”?' && (await p.evaluate(() => document.activeElement.textContent)) === 'keep it', 'confirm: the safe answer first');
@@ -1272,9 +1278,85 @@ ok(/^calc\(30%\)$|^30%/.test(waits.size) && waits.dots === '0.168s cubic-bezier(
 
 // Look: prefs, density, motion, the accent slot.
 await go(p, 'look');
-await p.check('input[name=theme][value=dark]'); await p.check('input[name=accent][value=plum]'); await p.waitForTimeout(300);
-ok((await p.evaluate(() => document.documentElement.dataset.theme)) === 'dark' && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#c38aed', 'theme dark, the plum accent in dark', await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim()));
-await p.screenshot({ path: join(shots, 'dark-plum.png') });
+await p.check('input[name=theme][value=dark]'); await p.check('input[name=accent][value=teal]'); await p.waitForTimeout(300);
+ok((await p.evaluate(() => document.documentElement.dataset.theme)) === 'dark' && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim())) === '#00aba9', 'theme dark, the named accent teal in dark', await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-accent').trim()));
+await p.screenshot({ path: join(shots, 'dark-teal.png') });
+// Named accents (#151): each pair as tokens/rekta.accents.json has it, in each theme and contrast set, over a
+// product's own accent; product goes back to it.
+const named = await p.evaluate(async () => {
+  const root = document.documentElement, { accents } = JSON.parse(document.querySelector('#themes-data').textContent), out = { bad: [] };
+  const was = { theme: root.dataset.theme, contrast: root.dataset.contrast, accent: root.dataset.accent };
+  const own = document.createElement('style'); own.textContent = ':root { --rk-accent: #7a2a8c; --rk-on-accent: #ffffff; }'; document.head.append(own);
+  const read = (n) => getComputedStyle(root).getPropertyValue(`--rk-${n}`).trim();
+  for (const [name, a] of Object.entries(accents)) for (const theme of ['light', 'dark', 'light-contrast', 'dark-contrast']) {
+    root.dataset.theme = theme.startsWith('dark') ? 'dark' : 'light';
+    if (theme.endsWith('contrast')) root.dataset.contrast = 'more'; else delete root.dataset.contrast;
+    Rekta.prefs.set('accent', name, { remember: false });
+    if (read('accent') !== a[theme].accent || read('on-accent') !== a[theme]['on-accent']) out.bad.push(`${name} ${theme}: ${read('accent')} ${read('on-accent')}`);
+  }
+  root.dataset.theme = 'light'; delete root.dataset.contrast;
+  Rekta.prefs.set('accent', 'product', { remember: false });
+  out.product = read('accent'); out.attr = root.hasAttribute('data-accent');
+  own.remove();
+  Object.entries(was).forEach(([k, v]) => { if (v === undefined) delete root.dataset[k]; else root.dataset[k] = v; });
+  return out;
+});
+ok(!named.bad.length && named.product === '#7a2a8c' && !named.attr, 'a named accent sets its pair in every theme and contrast set, over the product\'s own; product goes back to it', JSON.stringify(named));
+// Content fills (#157): an opted-in set without a status takes them, ink and secondary text at AA on each; a status
+// tile in the set, the switch off, or more contrast make the whole set plain.
+const fills = await p.evaluate(() => {
+  const root = document.documentElement, was = root.dataset.contrast;
+  const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const names = ['teal', 'steel', 'violet', 'plum', 'rose'];
+  const set = document.createElement('div'); set.className = 'rk-tiles'; set.dataset.rkFills = 'content';
+  set.innerHTML = names.map((n) => `<div class="rk-tile" data-rk-fill="${n}"><span class="rk-stat"><b>1</b><span>app</span></span><span class="rk-meta">m</span></div>`).join('') + '<div class="rk-tile"><b>plain</b></div>';
+  document.querySelector('#colour').append(set);
+  const tiles = [...set.children], bg = (t) => getComputedStyle(t).backgroundColor, surface = rgb('var(--rk-surface)');
+  tiles.forEach((t) => { t.style.transition = 'none'; });   /* the fill as it is, not on its way */
+  const out = {
+    on: names.every((n, i) => bg(tiles[i]) === rgb(`var(--rk-content-${n})`) && bg(tiles[i]) !== surface) && bg(tiles[5]) === surface,
+    low: Math.min(...tiles.slice(0, 5).flatMap((t) => [...t.querySelectorAll('b, .rk-stat span, .rk-meta')].map((e) => ratio(getComputedStyle(e).color, bg(t))))),
+  };
+  set.dataset.rkFills = 'plain'; out.plain = tiles.every((t) => bg(t) === surface);
+  set.dataset.rkFills = 'content'; tiles[5].dataset.status = 'error';
+  out.withStatus = tiles.slice(0, 5).every((t) => bg(t) === surface) && bg(tiles[5]) === rgb('var(--rk-status-error-tile)');
+  delete tiles[5].dataset.status; root.dataset.contrast = 'more';
+  out.contrast = tiles.slice(0, 5).every((t) => bg(t) === rgb('var(--rk-surface)'));
+  if (was === undefined) delete root.dataset.contrast; else root.dataset.contrast = was;
+  set.remove();
+  return out;
+});
+ok(fills.on && fills.low >= 4.5, 'content fills: an opted-in set without a status takes them, every text on them at AA', JSON.stringify(fills));
+ok(fills.plain && fills.withStatus && fills.contrast, 'one switch, a status tile in the set, or more contrast: the whole set is plain', JSON.stringify(fills));
+ok(await p.evaluate(() => { const s = document.querySelector('#launcher'); return s.dataset.rkFills === 'content' && getComputedStyle(s.firstElementChild).backgroundColor !== getComputedStyle(s.lastElementChild).backgroundColor; }), 'the showcase\'s launcher shows content fills');
+// An accent surface (#154): the accent with on-accent words; secondary text, a primary button turned over and a
+// focus ring all read on it, in light and under more contrast with a named accent.
+const surf = await p.evaluate(() => {
+  const root = document.documentElement, was = { contrast: root.dataset.contrast, accent: root.dataset.accent };
+  const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+  const s = document.createElement('header'); s.className = 'rk-accent-surface';
+  s.innerHTML = '<h2 class="rk-title">welcome</h2><p class="rk-meta">since 9:00</p><p class="rk-facts">3 new</p><button class="rk-btn rk-btn--primary" type="button">start</button><button class="rk-btn" type="button">later</button>';
+  document.querySelector('#colour').append(s);
+  s.querySelectorAll('.rk-btn').forEach((b) => { b.style.transition = 'none'; });
+  const measure = () => {
+    const fill = getComputedStyle(s).backgroundColor, [, meta, facts, primary, plain] = s.children, ps = getComputedStyle(primary);
+    return {
+      fill: fill === rgb('var(--rk-accent)'), words: getComputedStyle(s).color === rgb('var(--rk-on-accent)'),
+      low: Math.min(...[s.firstElementChild, meta, facts, plain].map((e) => ratio(getComputedStyle(e).color, fill))),
+      turned: ps.backgroundColor === rgb('var(--rk-on-accent)') && ps.color === rgb('var(--rk-accent)'),
+    };
+  };
+  const out = { now: measure() };
+  root.dataset.accent = 'magenta'; root.dataset.contrast = 'more'; out.more = measure();
+  Object.entries(was).forEach(([k, v]) => { if (v === undefined) delete root.dataset[k]; else root.dataset[k] = v; });
+  s.remove();
+  return out;
+});
+ok(surf.now.fill && surf.now.words && surf.now.turned && surf.now.low >= 4.5 && surf.more.turned && surf.more.low >= 7, 'an accent surface: on-accent words at 4.5:1 (7:1 under more contrast), a primary button turned over', JSON.stringify(surf));
 const btnH = () => p.evaluate(() => Math.round(document.querySelector('#reset').getBoundingClientRect().height));
 ok((await btnH()) === 32, 'fine pointer: compact controls', await btnH());
 await p.check('input[name=density][value=comfortable]'); await p.waitForTimeout(200);
@@ -1285,7 +1367,7 @@ const fade = await p.evaluate(async () => {           /* Rekta's view-transition
   return { during, after: root.hasAttribute('data-rk-crossfade'), vt: typeof document.startViewTransition === 'function' };
 });
 ok(!fade.vt || (fade.during && !fade.after), 'the root carries data-rk-crossfade only while Rekta cross-fades', JSON.stringify(fade));
-await p.check('input[name=density][value=auto]'); await p.check('input[name=theme][value=system]'); await p.check('input[name=accent][value=ink]');
+await p.check('input[name=density][value=auto]'); await p.check('input[name=theme][value=system]'); await p.check('input[name=accent][value=product]');
 ok((await p.evaluate(() => JSON.parse(localStorage.getItem('rekta-prefs')).theme)) === 'system', 'prefs remembered');
 
 // Sheet: the shading cancels; reset.

@@ -15,6 +15,8 @@ line of CSS. This page is the guide for doing that.
 | `tokens/rekta.tokens.json` | The source, in [DTCG](https://tr.designtokens.org/format/) format, with aliases and a `$description` on every token. | Token tools (Style Dictionary, Tokens Studio, Figma plugins), and anyone generating code. |
 | `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme (`light`, `dark`, and `light-contrast`, `dark-contrast` for more contrast, each complete) and density. | Native implementations. Start here. |
 | `dist/rekta.tokens.css` | The resolved values as `--rk-` custom properties, with theme, density and reduced-motion switching. | Web projects. |
+| `tokens/rekta.accents.json` | The named accents: an accent and the text on it per theme and contrast set, checked ([colour.md](colour.md#named-accents)). Resolved as `accents` in `dist/rekta.tokens.json`. | Anyone offering an accent by name. |
+| `dist/rekta.color.js` | The colour rules as a module without dependencies: contrast, OKLab distance and colour blindness, apart from status, an accent's check and derivation. | A product that checks or derives colours at run time; the reference for porting them. |
 | `docs/*.md` | Rules: what each part means, how it behaves, what it must never do. | Everyone. |
 
 `npm run build` (or `node scripts/build.mjs`) writes `dist/`. The build
@@ -64,7 +66,8 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 ## Switching
 
 Six inputs pick values. Each has a system source and an in-app
-override; the override wins.
+override; the override wins. A seventh, the accent, has no system
+source (below).
 
 | Input | System source | Override | Effect |
 |---|---|---|---|
@@ -74,6 +77,7 @@ override; the override wins.
 | Contrast | The OS "increase contrast" setting (`NSWorkspace.accessibilityDisplayShouldIncreaseContrast` on macOS, `UIAccessibility.isDarkerSystemColorsEnabled` on iOS, GNOME's `high-contrast`). Not Windows' contrast themes: those are forced colours, the system's own. | `system`, `more`, `normal` | More: picks `themes.light-contrast` or `themes.dark-contrast` (the theme with its contrast set over it): every text pair at 7:1, opaque glass. Each status tile gets a 2px frame in its `status-*-full` colour. |
 | Transparency | The OS "reduce transparency" setting (`accessibilityDisplayShouldReduceTransparency` on macOS, `isReduceTransparencyEnabled` on iOS). | `system`, `reduce`, `normal` | Reduce: `glass` takes the value of `bg`, and nothing blurs behind it or behind a sheet's `shading`. |
 | Window-size class | The size of the place (pane) and of the window. | none | See below. |
+| Accent | None: the product's own accent, ink when it sets none. | `product`, or a named accent | Picks `accents.<name>` for the theme and contrast set in use. |
 
 Every transition must still reach its end state with zero duration:
 instant, never skipped.
@@ -95,7 +99,7 @@ not set.
 
 | Token | Property | What a product decides | rekta-core |
 |---|---|---|---|
-| `color.*.accent`, `on-accent` | `--rk-accent`, `--rk-on-accent` | Its one hue: primary button, checked controls, a selected item. Per theme. | `rk_app_set_accent(light, dark)` |
+| `color.*.accent`, `on-accent` | `--rk-accent`, `--rk-on-accent` | Its one hue: primary button, checked controls, a selected item, one accent surface per place. Per theme and contrast set; or a named accent (`data-accent`, `prefs` `accent`). Checked with `build.mjs --check-product`; `build.mjs --accent COLOUR` derives the pairs from one colour. | `rk_app_set_accent(light, dark)`, held to the same rules (said through the log); `rk_app_set_accent_named(name)` |
 | `timing.toast` | `--rk-duration-toast` | How long a toast stays, and so the undo window (say 10s instead of 5s). Read when a toast opens. | `rk_app_set_timing(RK_TIMING_TOAST, ms)` |
 | `timing.stale` | `--rk-duration-stale` | When live data without an update counts as stale. A live region's own `stale` option wins. | `rk_app_set_timing(RK_TIMING_STALE, ms)`; `rk_duration_of` reads it |
 | `size.tile-unit`, `size.tile-unit-ultrawide` | `--rk-tile-unit`, `--rk-tile-unit-ultrawide` | The tile grid's cell, below and from 2560px. Set both: from 2560px the stylesheet sets the first from the second. | `rk_app_set_metric(RK_TILE_UNIT, px)` (the ultrawide cell stays the token's) |
@@ -119,9 +123,18 @@ in-app theme:
 :root[data-theme="dark"] { --rk-accent: #d39be0; --rk-on-accent: #2a0f31; }
 ```
 
-An accent must hold 3:1 against `bg` in its theme, `on-accent` 4.5:1 on
-it, and stay clearly apart from every status hue ([colour.md](colour.md));
-the showcase measures a candidate live.
+An accent must hold 3:1 against `bg` and `surface` in its theme,
+`on-accent` 4.5:1 on it (7:1 under more contrast, in the contrast
+selectors), and stay apart from status: 0.09 (OKLab) from every status
+colour, 0.05 under protanopia and deuteranopia, its hue 20° from each
+status hue unless it is nearly grey ([colour.md](colour.md#apart-from-status)).
+The showcase measures a candidate live and says why it refuses one.
+
+rekta-core has the named accents and checks a product's accent, but it
+does not derive one from a colour yet (derive it with `build.mjs
+--accent` and pass the pairs), and it has no accent surface: a view
+filled with `RK_ROLE_ACCENT` keeps its text in ink, so draw `on-accent`
+text on it yourself.
 
 Everything else is the design, not a setting. In particular, do not
 override:

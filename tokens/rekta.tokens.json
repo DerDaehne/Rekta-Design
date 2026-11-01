@@ -43,7 +43,7 @@
       "accent": {
         "$type": "color",
         "$value": "{color.light.text.primary}",
-        "$description": "Optional product accent slot: primary button fill, checked controls, a selected item's fill, a link colour if the product wants one. Defaults to ink, so Rekta stays neutral until a product overrides it per theme. Never a tile, never a status; a selected row is the largest fill it takes. Must hold 3:1 on bg and surface and stay clearly apart from every status-*-full hue."
+        "$description": "Optional product accent slot: primary button fill, checked controls, a selected item's fill, one accent surface per place, a link colour if the product wants one. Ink until a product sets it per theme or picks a named accent (tokens/rekta.accents.json). Never a tile, never a status. Must hold 3:1 on bg and surface and stay apart from status: 0.09 (OKLab) from every status-*-full and -tile, 0.05 under protanopia and deuteranopia, and its hue 20° from each status hue unless its chroma is below 0.05 (docs/colour.md)."
       },
       "on-accent": {
         "$type": "color",
@@ -120,6 +120,33 @@
           }
         }
       },
+      "content": {
+        "teal": {
+          "$type": "color",
+          "$value": "#56a8a7",
+          "$description": "Content fill teal: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        },
+        "steel": {
+          "$type": "color",
+          "$value": "#89a2b5",
+          "$description": "Content fill steel: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        },
+        "violet": {
+          "$type": "color",
+          "$value": "#9177b8",
+          "$description": "Content fill violet: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        },
+        "plum": {
+          "$type": "color",
+          "$value": "#c897ca",
+          "$description": "Content fill plum: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        },
+        "rose": {
+          "$type": "color",
+          "$value": "#efb8d1",
+          "$description": "Content fill rose: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        }
+      },
       "focus": {
         "$type": "color",
         "$value": "#1a44ea",
@@ -187,7 +214,7 @@
       "accent": {
         "$type": "color",
         "$value": "{color.dark.text.primary}",
-        "$description": "Optional product accent slot: primary button fill, checked controls, a selected item's fill, a link colour if the product wants one. Defaults to ink, so Rekta stays neutral until a product overrides it per theme. Never a tile, never a status; a selected row is the largest fill it takes. Must hold 3:1 on bg and surface and stay clearly apart from every status-*-full hue."
+        "$description": "Optional product accent slot: primary button fill, checked controls, a selected item's fill, one accent surface per place, a link colour if the product wants one. Ink until a product sets it per theme or picks a named accent (tokens/rekta.accents.json). Never a tile, never a status. Must hold 3:1 on bg and surface and stay apart from status: 0.09 (OKLab) from every status-*-full and -tile, 0.05 under protanopia and deuteranopia, and its hue 20° from each status hue unless its chroma is below 0.05 (docs/colour.md)."
       },
       "on-accent": {
         "$type": "color",
@@ -264,6 +291,33 @@
           }
         }
       },
+      "content": {
+        "teal": {
+          "$type": "color",
+          "$value": "#055959",
+          "$description": "Content fill teal: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        },
+        "steel": {
+          "$type": "color",
+          "$value": "#425565",
+          "$description": "Content fill steel: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        },
+        "violet": {
+          "$type": "color",
+          "$value": "#665283",
+          "$description": "Content fill violet: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        },
+        "plum": {
+          "$type": "color",
+          "$value": "#633d65",
+          "$description": "Content fill plum: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        },
+        "rose": {
+          "$type": "color",
+          "$value": "#7d415f",
+          "$description": "Content fill rose: a tile's fill in a set of tiles without a status, from the main colour of what each tile opens (docs/tiles.md, Content fills). Never beside a status tile, never a status, never text. text-primary on it at AA; apart from status (docs/colour.md)."
+        }
+      },
       "focus": {
         "$type": "color",
         "$value": "#178bff",
@@ -320,6 +374,33 @@
           }
         }
       },
+      "content": {
+        "teal": {
+          "$type": "color",
+          "$value": "{color.light.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
+        },
+        "steel": {
+          "$type": "color",
+          "$value": "{color.light.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
+        },
+        "violet": {
+          "$type": "color",
+          "$value": "{color.light.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
+        },
+        "plum": {
+          "$type": "color",
+          "$value": "{color.light.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
+        },
+        "rose": {
+          "$type": "color",
+          "$value": "{color.light.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
+        }
+      },
       "glass": {
         "$type": "color",
         "$value": "{color.light.bg}",
@@ -361,6 +442,33 @@
             "$value": "#690615",
             "$description": "Darkened so the darker success tile still parts from it by lightness."
           }
+        }
+      },
+      "content": {
+        "teal": {
+          "$type": "color",
+          "$value": "{color.dark.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
+        },
+        "steel": {
+          "$type": "color",
+          "$value": "{color.dark.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
+        },
+        "violet": {
+          "$type": "color",
+          "$value": "{color.dark.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
+        },
+        "plum": {
+          "$type": "color",
+          "$value": "{color.dark.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
+        },
+        "rose": {
+          "$type": "color",
+          "$value": "{color.dark.surface}",
+          "$description": "Plain under more contrast: tiles with a content fill go back to surface, and only a status keeps a colour."
         }
       },
       "glass": {

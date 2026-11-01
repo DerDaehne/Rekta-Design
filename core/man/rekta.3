@@ -136,7 +136,13 @@ draws a domain colour
 a pivot's
 .Fa .wide
 is the width from which its pages stand side by side
-.Pq see Fn rk_pivot_set_wide .
+.Pq see Fn rk_pivot_set_wide ;
+a tile grid's
+.Fa .content_fills
+and a tile's
+.Fa .content
+give a set without a status its content fills
+.Pq see Fn rk_tile_grid_set_content .
 .It A split's next item
 A new
 .Fa .pulse
@@ -251,6 +257,13 @@ the person once, and only for an app in a bundle.
 .It Fn rk_app_set_theme , Fn rk_app_set_density , Fn rk_app_set_motion , Fn rk_app_set_accent
 Each follows the system until set.
 A change of theme or accent cross-fades the windows.
+The text on an accent is the theme's ground or ink, whichever stands out more;
+each value should hold 3:1 on bg and surface, its text 4.5:1 (7:1 under more
+contrast) and stay apart from status \(em 0.09 in OKLab from every status
+colour, 0.05 under protanopia and deuteranopia, its hue 20 degrees from each
+status hue unless its chroma is below 0.05 \(em as
+.Li build.mjs --check-product
+holds the web's; one that does not is still set, and said through the log.
 .Fn rk_app_on_change
 tells you when any of them changed and returns an id for
 .Fn rk_app_cancel ;
@@ -287,6 +300,19 @@ Each value should hold 3:1 on bg and surface and stand 0.09 apart in OKLab
 under protanopia and deuteranopia from every other code set, as
 .Li build.mjs --check-product
 holds the web's; one that does not is still set, and said through the log.
+.It Fn rk_app_set_accent_named "const char *name"
+A named accent of
+.Pa tokens/rekta.accents.json :
+.Qq ink ,
+.Qq teal ,
+.Qq steel ,
+.Qq violet ,
+.Qq mauve ,
+.Qq pink
+or
+.Qq magenta ,
+a checked pair for each theme and for more contrast.
+False, and said through the log, for a name that is not one; the accent stays.
 .It Fn rk_app_set_metric "rk_metric metric" "float px" , Fn rk_app_set_timing "rk_duration timing" "double ms"
 What a product may change of the design
 .Pq docs/platforms.md, Product overrides :
@@ -556,6 +582,19 @@ change what it shows
 .Fn rk_tile_set_code
 draws its sparkline in a domain colour.
 A tile with an activate handler presses and opens something.
+.It Fn rk_tile_grid_set_content "rk_view *grid" "bool on" , Fn rk_tile_set_content "rk_view *tile" "rk_role fill"
+Content fills: in a tile grid that opts in, a tile without a status takes the
+main colour of what it opens,
+.Dv RK_ROLE_CONTENT_TEAL ,
+.Dv RK_ROLE_CONTENT_STEEL ,
+.Dv RK_ROLE_CONTENT_VIOLET ,
+.Dv RK_ROLE_CONTENT_PLUM
+or
+.Dv RK_ROLE_CONTENT_ROSE
+.Pq Dv RK_ROLE_NONE : plain .
+A grid with a status tile in it shows none, and says so through the log when
+one is set; false makes the whole grid plain again.
+Under more contrast the content fills are the surface.
 .It Fn rk_rows , Fn rk_rows_add
 Hairline rows: a title on the left, a meta or a status on the right.
 A row is a view:

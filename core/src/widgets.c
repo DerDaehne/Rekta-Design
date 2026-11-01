@@ -161,6 +161,7 @@ typedef struct tile {
   rk_status status; char *word, *value, *label, *message, *old_value, *old_label;
   float *series; int nseries; float progress;
   int code;                                                /* the sparkline's domain colour; 0: ink */
+  rk_role content;                                         /* its content fill (rk_tile_set_content); 0: plain */
 } tile;
 
 static float tile_stat_height(rk_view *v, tile *t, rk_textfmt *num, rk_textfmt *lab) {
@@ -182,8 +183,10 @@ static void tile_draw(rk_view *v, rk_canvas *c, void *st) {
   word.color = RK_ROLE_TEXT;
   /* more contrast: the status no longer rests on the fill alone, a frame in its full colour says it too */
   if (rk__prefs.contrast && t->status != RK_STATUS_NONE) rk__canvas_ring(c, (rk_rect){ 0, 0, W, H }, v->radius, 2, rk_color_of(rk__status_full(t->status)));
+  /* a tile in its content fill is a thing to open, not a status: no status word for none on it */
   const char *wd = t->word ? t->word : rk__status_word(t->status);
-  rk__text_draw(c, wd, -1, W - 12 - rk__text_width(wd, -1, &word), 10 - (word.size * word.line - word.size) / 2, &word, ink);
+  if (t->word || t->status != RK_STATUS_NONE || rk__tile_fill(v) == v->fill_role)
+    rk__text_draw(c, wd, -1, W - 12 - rk__text_width(wd, -1, &word), 10 - (word.size * word.line - word.size) / 2, &word, ink);
   /* from the bottom up: progress, sparkline, message, stat (a column justified to the end) */
   float y = H - pad;
   if (t->progress >= 0) {
@@ -248,6 +251,19 @@ static const rk_class tile_class = { { sizeof(rk_view_class), "rk_tile", tile_dr
 
 bool rk__is_tile(rk_view *v) { return v && v->cls == &tile_class; }
 
+/* Content fills (docs/tiles.md): only in a grid that opts in and holds no status tile, so a colour never stands
+   beside a status; the contrast colours make them the surface. */
+static bool grid_has_status(rk_view *grid) {
+  for (int i = 0; i < grid->nkids; i++) if (rk__is_tile(grid->kids[i]) && ((tile *)grid->kids[i]->state)->status != RK_STATUS_NONE) return true;
+  return false;
+}
+rk_role rk__tile_fill(rk_view *v) {
+  tile *t = v->state;
+  if (t->status == RK_STATUS_NONE && t->content && v->parent && v->parent->content_fills && !grid_has_status(v->parent)) return t->content;
+  return v->fill_role;
+}
+static void grid_dirty(rk_view *grid) { for (int i = 0; i < grid->nkids; i++) rk__view_dirty(grid->kids[i]); }
+
 rk_view *rk_tile(const char *value, const char *label) {
   tile *t = rk__alloc(sizeof *t);
   t->progress = -1;
@@ -275,9 +291,12 @@ rk_view *rk_hstack(void) { return container(RK_LAYOUT_HSTACK, rk_metric_of(RK_SP
 void rk_tile_set_status(rk_view *v, rk_status status, const char *word) {
   if (!rk__expect(v && v->cls == &tile_class ? v : NULL, v, __func__, "a tile")) return;
   tile *t = v->state;
+  if (status != RK_STATUS_NONE && v->parent && v->parent->content_fills && !grid_has_status(v->parent))
+    rk__warn("rk_tile_set_status: a status tile in a grid of content fills: its tiles are plain while it is there");
   t->status = status;
   rk__setstr(&t->word, word);
   rk_view_set_fill(v, status_tile(status));
+  if (v->parent && v->parent->content_fills) grid_dirty(v->parent);
   tile_access(v);
   rk__view_dirty(v);
 }
@@ -311,6 +330,20 @@ void rk_tile_set_code(rk_view *v, int code) {
   if (code < 0 || code > 8) { rk__error("rk_tile_set_code: code %d is outside 1 to 8", code); return; }
   ((tile *)v->state)->code = code;
   rk__view_dirty(v);
+}
+
+void rk_tile_set_content(rk_view *v, rk_role fill) {
+  if (!rk__expect(v && v->cls == &tile_class ? v : NULL, v, __func__, "a tile")) return;
+  if (fill != RK_ROLE_NONE && (fill < RK_ROLE_CONTENT_TEAL || fill > RK_ROLE_CONTENT_ROSE)) { rk__error("rk_tile_set_content: role %d is not a content fill", (int)fill); return; }
+  ((tile *)v->state)->content = fill;
+  rk__view_dirty(v);
+}
+
+void rk_tile_grid_set_content(rk_view *v, bool on) {
+  if (!v || v->layout != RK_LAYOUT_TILES) { rk__error("rk_tile_grid_set_content: not a tile grid"); return; }
+  if (on && !v->content_fills && grid_has_status(v)) rk__warn("rk_tile_grid_set_content: the grid has a status tile: its tiles stay plain while it is there");
+  v->content_fills = on;
+  grid_dirty(v);
 }
 
 static void set_value(rk_view *v, float value) {

@@ -42,7 +42,7 @@
 #define RK_CLAMP(v, lo, hi) ((v) < (lo) ? (lo) : (v) > (hi) ? (hi) : (v))
 #define RK_COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
 /* how many there are of each token kind: ours, not the ABI's, so a new one breaks no app */
-#define RK__ROLE_COUNT (RK_ROLE_GLASS + 1)
+#define RK__ROLE_COUNT (RK_ROLE_CONTENT_ROSE + 1)
 #define RK__METRIC_COUNT (RK_PIVOT_WIDE + 1)
 #define RK__DURATION_COUNT (RK_TIMING_TYPE_AHEAD + 1)
 #define RK__TEXT_STYLE_COUNT (RK_TEXT_NAV + 1)
@@ -84,7 +84,7 @@ void *rk__expect(void *state, const void *view, const char *fn, const char *kind
 typedef struct rk_prefs {
   rk_theme theme; rk_motion_pref motion; rk_density density;
   bool system_dark, system_reduced, system_compact;
-  rk_color accent[2];
+  rk_color accent[4][2];                                   /* [light, dark, and more contrast][accent, on-accent]; 0: ink */
   bool contrast;                                           /* more contrast (rk_app_set_contrast) */
   rk_color series[8][2];                                   /* a domain's colour code, light and dark; 0: ink */
   bool metric_set[RK__METRIC_COUNT]; float metric[RK__METRIC_COUNT];         /* a product's own (rk_app_set_metric) */
@@ -110,6 +110,7 @@ rk_color rk__mix(rk_color a, rk_color b, float t);
    (kind 0) or simulated for protanopia (1), deuteranopia (2), tritanopia (3) - Machado 2009, severity 1. */
 double rk__contrast(rk_color a, rk_color b);
 double rk__distance(rk_color a, rk_color b, int kind);
+double rk__hue(rk_color c, double *chroma);              /* OKLCH hue in degrees, and its chroma */
 rk_color rk__series(int code);                             /* a code's colour now (0, or none set: ink) */
 
 /* The words the library says (app.c): rk_app_set_strings over the English ones. */
@@ -241,6 +242,7 @@ struct rk_view {
   bool scrolls;                                            /* scrolls its content: may shrink below it in a stack */
   bool draws_focus;                                        /* draws its own focus ring (a field: around its input) */
   bool disabled;                                           /* it and what it holds take no input (rk_view_set_enabled) */
+  bool content_fills;                                      /* a tile grid: its tiles may take content fills */
   char *tooltip;
   uint8_t cursor;                                          /* the pointer's shape over it, as its last move left it */
   rk_view *menu;                                           /* a button opens it; any other view on a right click */
@@ -437,6 +439,7 @@ void rk__menu_move(rk_view *menu, int dir);
 int rk__menu_active(rk_view *menu);
 void rk__menu_choose(rk_view *menu, int item);                    /* focus inside it goes back to where it came from */
 bool rk__is_tile(rk_view *v);
+rk_role rk__tile_fill(rk_view *v);                         /* a tile's fill now: its status's, its content's or surface */
 void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r);
 void rk__focus_ring(rk_canvas *c, rk_rect r, float out);  /* 2px in the focus colour, out px outside r */
 bool rk__shows_focus(rk_view *v);                         /* v has focus and the keyboard is in use */
