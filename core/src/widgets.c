@@ -189,15 +189,18 @@ static void tile_draw(rk_view *v, rk_canvas *c, void *st) {
     rk_canvas_fill_rect(c, (rk_rect){ pad, y, inner * RK_CLAMP(v->pvalue, 0.0f, 1.0f), 4 }, ink);
     y -= gap;
   }
-  if (t->nseries > 1 && t->status != RK_STATUS_SUCCESS) {          /* stillness means done: no line when finished */
-    float sh = inner * 28 / 200;
+  if (t->nseries > 0 && t->status != RK_STATUS_SUCCESS) {          /* stillness means done: no line when finished */
+    /* docs/data.md: the 200 x 28 box, a 2px stroke, points inset by half the stroke on every side; a constant series
+       (one value too) lies flat along the bottom. */
+    float sh = inner * 28 / 200, in = 1;
     y -= sh;
     float lo = t->series[0], hi = t->series[0];
     for (int i = 1; i < t->nseries; i++) { lo = RK_MIN(lo, t->series[i]); hi = RK_MAX(hi, t->series[i]); }
     float span = hi - lo > 0 ? hi - lo : 1;
     rk_point pts[256];
     int n = RK_MIN(t->nseries, 256);
-    for (int i = 0; i < n; i++) pts[i] = (rk_point){ pad + inner * i / (n - 1), y + sh * (26 - (t->series[i] - lo) / span * 24) / 28 };
+    for (int i = 0; i < n; i++) pts[i] = (rk_point){ pad + in + (inner - 2 * in) * (n > 1 ? (float)i / (n - 1) : 0), y + in + (sh - 2 * in) * (1 - (t->series[i] - lo) / span) };
+    if (n == 1) { pts[1] = pts[0]; pts[1].x = pad + inner - in; n = 2; }
     rk_canvas_polyline(c, pts, n, 2, t->code ? rk__series(t->code) : ink);   /* a mark may take a code; the text never */
     y -= gap;
   }

@@ -141,12 +141,15 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
    arrival; afterwards new readings just move the line. */
 .rk-spark { display: block; width: 100%; height: auto; overflow: visible; color: var(--_rk-mark, currentColor); }
 .rk-tile .rk-spark { color: inherit; }
-.rk-spark polyline { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-dasharray: 1; }
-[data-rk-arriving] .rk-spark:not(.rk-spark--static) polyline { animation: rk-draw var(--rk-duration-long) var(--rk-ease-in) both; }
+/* A fixed 2px line at any width (docs/data.md): the stroke does not scale with the 200 x 28 box. A dash cannot draw it
+   in then (a non-scaling stroke measures its dashes on the screen, not in pathLength), so the line is uncovered from
+   the leading edge instead: a sparkline runs one way, so that is the same drawing. */
+.rk-spark polyline { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+[data-rk-arriving] .rk-spark:not(.rk-spark--static) { animation: rk-wipe var(--rk-duration-long) var(--rk-ease-in) backwards; }
 .rk-tile[data-status='success'] .rk-spark { display: none; }
 /* In a row: the row's secondary colour (its status mark, when it has one), a tile unit wide (a 200 × 28 box: about the text's height). */
 .rk-rows > li > .rk-spark { flex: none; width: var(--rk-tile-unit); align-self: center; color: var(--_rk-mark, var(--rk-text-contrast-high)); }
-@keyframes rk-draw { from { stroke-dashoffset: 1; } }
+@keyframes rk-wipe { from { clip-path: inset(-2px 100% -2px -2px); } to { clip-path: inset(-2px); } }
 
 /* Pivot ---------------------------------------------------------------------------------------------------------- */
 /* Fixed order, active title large and light; inactive titles scale down from the same line box, so the strip's

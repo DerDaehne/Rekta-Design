@@ -453,7 +453,7 @@ RK_API rk_view *rk_tile(const char *value, const char *label);   /* no status un
 RK_API void rk_tile_set_status(rk_view *tile, rk_status status, const char *word);
 RK_API void rk_tile_set_stat(rk_view *tile, const char *value, const char *label);
 RK_API void rk_tile_set_message(rk_view *tile, const char *message);     /* NULL removes it */
-RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);   /* a sparkline; 0 removes it */
+RK_API void rk_tile_set_series(rk_view *tile, const float *values, int count);   /* a sparkline (one value: flat); 0 removes it */
 RK_API void rk_tile_set_progress(rk_view *tile, float progress);        /* 0..1; < 0 removes it */
 RK_API void rk_tile_set_code(rk_view *tile, int code);   /* its sparkline in a domain colour (rk_app_set_series); 0: ink */
 

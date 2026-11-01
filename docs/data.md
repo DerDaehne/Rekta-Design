@@ -122,13 +122,20 @@ A sparkline is a trend at a glance: one series, no axis, no labels.
   beside; a row that carries a `data-status` draws it in the status
   mark. `rekta.css` sets both and gives it a tile unit's width; drawn in
   the tile sparkline's 200 × 28 box, that is about the row's text height.
+- **The line** is 2px at any width, with round joins: it does not grow
+  with the box (`vector-effect: non-scaling-stroke` on the web; rekta-core
+  draws 2px).
 - **Empty or all zero.** No values yet: draw nothing and keep the room,
   so the rows stay aligned and the meta says why ("no data yet"). All
-  zero, or one constant value: that is a value, so draw it, flat along
-  the bottom of the box.
+  zero, one constant value, or a single value: that is a value, so draw
+  it, flat along the bottom of the box, across its whole width.
 - **Clear of the hairline.** Points are laid out inside the box inset by
-  half the stroke (1px), so a flat line is never cut off; the row's
-  padding (`space-s`) keeps that line clear of the row's hairline.
+  half the stroke (1px on the screen) on every side, so a flat line is
+  never cut off: the first point 1px from the leading edge, the last 1px
+  from the trailing edge, the lowest value 1px above the bottom, the
+  highest 1px below the top. In the 200 × 28 box that is `200 / width`
+  units, the box's width in pixels. The row's padding (`space-s`) keeps
+  that line clear of the row's hairline.
 - **Stale or offline**, it fades to 35% with the rest of the live region;
   a finished item's row drops it rather than show a still line.
 

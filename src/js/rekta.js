@@ -507,7 +507,7 @@ export const turn = {
       place.hidden = false;
       // A place you return to comes back as you left it: no second build-in, no redraw.
       if (arriving) arrive(place);
-      else place.getAnimations({ subtree: true }).forEach((a) => { if (a.animationName === 'rk-build-in' || a.animationName === 'rk-draw') a.finish(); });
+      else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
       // Its units turn in from the other side, a row at a time, each in its own time.
       const d0 = ms('--rk-duration-moderate');
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
@@ -3478,7 +3478,7 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
 // SVG points list; with the same number of points each one travels, otherwise the line is redrawn at once.
 const sparkRuns = new WeakMap();
 export function sparkTo(line, points) {
-  const parse = (s) => (s || '').trim().split(/\s+/).map((p) => p.split(',').map(Number));
+  const parse = (s) => (s || '').trim().split(/\s+/).filter(Boolean).map((p) => p.split(',').map(Number));
   const from = parse(line.getAttribute('points')), to = parse(points), d = ms('--rk-duration-long');
   cancelAnimationFrame(sparkRuns.get(line) || 0);
   if (!d || from.length !== to.length) { line.setAttribute('points', points); return; }

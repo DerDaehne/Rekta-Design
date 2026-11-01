@@ -118,16 +118,19 @@
   addEventListener('pointermove', () => { moves += 1; }, { passive: true });
   document.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('a.rk-tile, button.rk-tile')) { presses += 1; $('#presses').textContent = presses; } });
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches && e.target.matches('a.rk-tile, button.rk-tile')) { presses += 1; $('#presses').textContent = presses; } });
-  function points(h) {
-    if (h.length < 2) return '0,14 200,14';
-    const lo = Math.min(...h), span = Math.max(...h) - lo || 1;
-    return h.map((v, i) => `${(i * 200 / (h.length - 1)).toFixed(1)},${(26 - (v - lo) / span * 24).toFixed(1)}`).join(' ');
+  // A sparkline's points in its 200 x 28 box (docs/data.md): inset by half the 2px stroke, a pixel on the screen, on
+  // every side; no values draw nothing, one value or a constant series lies flat along the bottom.
+  function points(h, svg) {
+    if (!h.length) return '';
+    const k = 200 / (svg.getBoundingClientRect().width || 200), lo = Math.min(...h), span = Math.max(...h) - lo || 1;
+    const at = (v, x) => `${x.toFixed(1)},${(28 - k - (v - lo) / span * (28 - 2 * k)).toFixed(1)}`;
+    return h.length === 1 ? `${at(h[0], k)} ${at(h[0], 200 - k)}` : h.map((v, i) => at(v, k + i * (200 - 2 * k) / (h.length - 1))).join(' ');
   }
   function drawLive(key, value, label) {
     for (const tile of $$(`[data-live=${key}]`)) {
       $('[data-v]', tile).textContent = value;
       const svg = $('.rk-spark', tile), h = series[key];
-      Rekta.sparkTo($('polyline', svg), points(h));
+      Rekta.sparkTo($('polyline', svg), points(h, svg));
       const trend = h.length > 1 ? (h[h.length - 1] > h[0] ? 'rising' : h[h.length - 1] < h[0] ? 'falling' : 'flat') : 'flat';
       svg.setAttribute('aria-label', `${label}: ${value}, ${trend} over the last ${h.length} seconds`);
     }
@@ -556,7 +559,7 @@
     queue = Math.max(0, Math.min(40, queue + Math.round((rnd(tickN + 7) - 0.55) * 4)));
     doneToday += Math.round(rnd(tickN + 3) * 3);
     rpsSeries.push(rps); if (rpsSeries.length > 24) rpsSeries.shift();
-    feed.update(() => { $('#lv-rps').textContent = rps; Rekta.sparkTo($('#live-region .rk-spark polyline'), points(rpsSeries)); }, 'rps');
+    feed.update(() => { $('#lv-rps').textContent = rps; Rekta.sparkTo($('#live-region .rk-spark polyline'), points(rpsSeries, $('#live-region .rk-spark'))); }, 'rps');
     // A new count is news: it peeks in. Requests a second is a continuous reading: it changes in place.
     feed.update(() => Rekta.tileUpdate($('#lv-queue').closest('.rk-tile'), () => { $('#lv-queue').textContent = queue; }), 'queue');
     feed.update(() => Rekta.tileUpdate($('#lv-done').closest('.rk-tile'), () => { $('#lv-done').textContent = doneToday; }), 'done');
@@ -674,7 +677,7 @@
     $('.rk-stat span', built).textContent = $('#b-label').value.trim() || 'no label';
     let spark = $('.rk-spark', built);
     if ($('#b-spark').checked && !spark && st !== 'success') {
-      built.insertAdjacentHTML('beforeend', '<svg class="rk-spark" viewBox="0 0 200 28" role="img" aria-label="rising over the last 8 hours"><polyline pathLength="1" points="0,24 30,20 60,22 90,14 120,16 150,9 180,11 200,4"/></svg>');
+      built.insertAdjacentHTML('beforeend', '<svg class="rk-spark" viewBox="0 0 200 28" role="img" aria-label="rising over the last 8 hours"><polyline pathLength="1" points="1,24 30,20 60,22 90,14 120,16 150,9 180,11 199,4"/></svg>');
     } else if ((!$('#b-spark').checked || st === 'success') && spark) spark.remove();
   }
   $('#builder').addEventListener('input', build);
