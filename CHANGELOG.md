@@ -155,6 +155,14 @@ left after #35 (#84).
   `step-back-scale`, `step-back-brightness` (#89, #144, #149).
 - `--check-product` fails a font loaded from another server: the family
   is a product slot (#96).
+- **The showcase shows everything** (the GitHub Page): a new "system"
+  section, a small desktop (window buttons, an app bar with running
+  things, a centred clock and its month, volume keys, a notification
+  centre, toasts from other programs, quick settings in a side panel, the
+  session, a lock screen, the recent stack), a place "all apps" called up
+  at half the pace (launch tiles, content fills, the accent surface), and
+  the wave-1 parts it lacked (facets, a status region, beads, inline
+  motion, letter jumps, a disabled app-bar control).
 
 ### Fixed
 
@@ -174,6 +182,8 @@ left after #35 (#84).
   is now `#1a6680`, and the accent form says why it refuses a colour.
 - rekta-core: a tap that ends a leaving sheet no longer reads a freed
   view (found by ASan).
+- A disabled place in a compact app bar keeps the disabled colour,
+  current or not (#137 by jay23606, in #162).
 
 ### Documented
 
