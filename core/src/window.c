@@ -187,7 +187,14 @@ void rk__window_resized(rk_window *w, float width, float height, float scale) {
   w->scale = scale > 0 ? scale : 1;
   w->needs_layout = true;
   rk__view_relayout_up(w->root);
+  if (w->titlebar) rk_view_relayout(w->titlebar);         /* maximized or not: its middle button says which */
   rk__window_invalidate(w);
+}
+
+void rk__window_set_active(rk_window *w, bool active) {
+  if (!w || w->inactive == !active) return;
+  w->inactive = !active;
+  if (w->titlebar) rk__titlebar_update(w->titlebar);
 }
 
 void rk__toast_leaving(rk_view *t) {
@@ -204,6 +211,19 @@ void rk_window_toast(rk_window *w, const char *message, const char *action, void
     rk_animate_begin(RK_MOTION_LEAVE); rk_view_remove(w->toasts->kids[i]); rk_animate_commit();
   }
   rk_view *t = rk__toast_create(message, action, on_action, user);
+  rk_animate_begin(RK_MOTION_ENTER);
+  rk__view_add(w->toasts, t);
+  rk_animate_commit();
+  rk_release(t);
+}
+
+void rk_window_level(rk_window *w, const char *icon, const char *word, float value, const char *figure) {
+  for (int i = w->toasts->nkids - 1; i >= 0; i--) if (rk__toast_level_update(w->toasts->kids[i], word, value, figure)) return;
+  for (int i = w->toasts->nkids - 1; i >= 0; i--) {             /* it takes the toast's place, as any toast does */
+    rk__toast_leaving(w->toasts->kids[i]);
+    rk_animate_begin(RK_MOTION_LEAVE); rk_view_remove(w->toasts->kids[i]); rk_animate_commit();
+  }
+  rk_view *t = rk__toast_level_create(icon, word, value, figure);
   rk_animate_begin(RK_MOTION_ENTER);
   rk__view_add(w->toasts, t);
   rk_animate_commit();

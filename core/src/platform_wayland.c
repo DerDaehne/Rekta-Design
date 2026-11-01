@@ -291,8 +291,13 @@ static void top_configure(void *data, struct xdg_toplevel *t, int32_t w, int32_t
   wwin *x = data;
   x->pw = w; x->ph = h;
   x->maximized = false;
+  bool active = false;
   uint32_t *s;
-  wl_array_for_each(s, states) if (*s == XDG_TOPLEVEL_STATE_MAXIMIZED || *s == XDG_TOPLEVEL_STATE_FULLSCREEN) x->maximized = true;
+  wl_array_for_each(s, states) {
+    if (*s == XDG_TOPLEVEL_STATE_MAXIMIZED || *s == XDG_TOPLEVEL_STATE_FULLSCREEN) x->maximized = true;
+    if (*s == XDG_TOPLEVEL_STATE_ACTIVATED) active = true;
+  }
+  rk__window_set_active(x->w, active);
 }
 static void top_close(void *data, struct xdg_toplevel *t) { (void)t; rk__window_close_request(((wwin *)data)->w); }
 static void top_bounds(void *data, struct xdg_toplevel *t, int32_t w, int32_t h) { (void)data; (void)t; (void)w; (void)h; }
@@ -380,6 +385,7 @@ static void wl_title(void *n, const char *t) { wwin *x = n; if (x) xdg_toplevel_
 static void wl_move(void *n) { wwin *x = n; if (x && seat) xdg_toplevel_move(x->top, seat, pointer_serial); }
 static void wl_minimize(void *n) { wwin *x = n; if (x) xdg_toplevel_set_minimized(x->top); }
 static void wl_zoom(void *n) { wwin *x = n; if (!x) return; if (x->maximized) xdg_toplevel_unset_maximized(x->top); else xdg_toplevel_set_maximized(x->top); }
+static bool wl_maximized(void *n) { wwin *x = n; return x && x->maximized; }
 
 /* Pointer ------------------------------------------------------------------------------------------------------- */
 
@@ -971,5 +977,6 @@ static void wl_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_wayland = {
   "wayland", wl_init, wl_shutdown, wl_open, wl_close, wl_show, wl_title, wl_present_fb, wl_move, wl_minimize, wl_zoom,
-  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get, wl_text_input, wl_cursor, rk__desktop_choose_files, rk__desktop_notify
+  wl_wait, wl_wake, wl_now, wl_settings, wl_resize, wl_ready, NULL, wl_target, wl_clip_set, wl_clip_get, wl_text_input, wl_cursor, rk__desktop_choose_files, rk__desktop_notify,
+  wl_maximized
 };

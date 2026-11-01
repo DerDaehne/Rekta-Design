@@ -220,12 +220,16 @@ static const rk_strings english = {
   { "idle", "active", "done", "waiting", "failed" },
   { NULL, "%s item", NULL, NULL, NULL, "%s items" },
   "minimize", "maximize", "close", "files", ".", ",", "%sK", "%sM", "%sB", "%sT", 1, english_plural,
+  "restore",
 };
 /* rk-strings-end */
 static rk_strings words;                                   /* the app's, copied; NULL fields: the English word */
 /* the words are every field from undo to group_min (a word added after plural, as rk_strings grows, is a second run) */
 #define WORD_COUNT ((offsetof(rk_strings, group_min) - offsetof(rk_strings, undo)) / sizeof(const char *))
 static const char **word_at(rk_strings *s, size_t i) { return (const char **)((char *)s + offsetof(rk_strings, undo)) + i; }
+/* the second run: the words added after plural, to the end of rk_strings */
+#define WORD2_COUNT ((sizeof(rk_strings) - offsetof(rk_strings, restore)) / sizeof(const char *))
+static const char **word2_at(rk_strings *s, size_t i) { return (const char **)((char *)s + offsetof(rk_strings, restore)) + i; }
 #define RK__PLURAL_COUNT (RK_PLURAL_OTHER + 1)
 
 /* A format takes exactly one %s and no other conversion ("%%" is a percent sign). */
@@ -239,6 +243,7 @@ const rk_strings *rk__words(void) {
   static rk_strings now;
   now = english;
   for (size_t i = 0; i < WORD_COUNT; i++) if (*word_at(&words, i)) *word_at(&now, i) = *word_at(&words, i);
+  for (size_t i = 0; i < WORD2_COUNT; i++) if (*word2_at(&words, i)) *word2_at(&now, i) = *word2_at(&words, i);
   bool forms = false;                                      /* a counting word the app gives is its own in every form */
   for (int f = 0; f < RK__PLURAL_COUNT; f++) forms |= words.items[f] != NULL;
   if (forms) memcpy(now.items, words.items, sizeof now.items);
@@ -317,6 +322,7 @@ void rk__count(char *out, size_t size, const char *const *forms, long n) {
 
 void rk_app_set_strings(const rk_strings *strings) {
   for (size_t i = 0; i < WORD_COUNT; i++) free((void *)*word_at(&words, i));
+  for (size_t i = 0; i < WORD2_COUNT; i++) free((void *)*word2_at(&words, i));
   memset(&words, 0, sizeof words);
   if (strings && RK__SIZED(strings, "rk_app_set_strings", "rk_strings")) {
     rk_strings in;
@@ -329,6 +335,7 @@ void rk_app_set_strings(const rk_strings *strings) {
       if (w && format && !one_s(w)) { rk__error("rk_app_set_strings: \"%s\" needs exactly one %%s: the English word stays", w); continue; }
       *word_at(&words, i) = w ? rk__strdup(w) : NULL;
     }
+    for (size_t i = 0; i < WORD2_COUNT; i++) { const char *w = *word2_at(&in, i); *word2_at(&words, i) = w ? rk__strdup(w) : NULL; }
     words.group_min = in.group_min; words.plural = in.plural;
   }
   changed(false);

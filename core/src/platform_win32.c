@@ -214,6 +214,7 @@ static LRESULT CALLBACK proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       return 0;
     }
     case WM_SIZE: sync_size(x); rk__window_frame(x->w, w_now()); return 0;
+    case WM_ACTIVATE: rk__window_set_active(x->w, LOWORD(wp) != WA_INACTIVE); break;
     case WM_DPICHANGED: {
       x->scale = HIWORD(wp) / 96.0f;
       RECT *r = (RECT *)lp;
@@ -636,6 +637,7 @@ static void w_present(void *n, const rk_bitmap *fb, const rk_irect *changed, int
 static void w_move(void *n) { wwin *x = n; if (x) { ReleaseCapture(); SendMessageW(x->hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0); } }
 static void w_minimize(void *n) { wwin *x = n; if (x) ShowWindow(x->hwnd, SW_MINIMIZE); }
 static void w_zoom(void *n) { wwin *x = n; if (x) ShowWindow(x->hwnd, IsZoomed(x->hwnd) ? SW_RESTORE : SW_MAXIMIZE); }
+static bool w_maximized(void *n) { wwin *x = n; return x && IsZoomed(x->hwnd); }
 
 static bool w_wait(double ms) {
   MSG m;
@@ -703,5 +705,6 @@ static void w_resize(void *n, float w, float h) {
 
 const rk_platform rk__platform_native = {
   "win32", w_init, w_shutdown, w_open, w_close, w_show, w_title, w_present, w_move, w_minimize, w_zoom,
-  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input, w_cursor, w_choose, w_notify
+  w_wait, w_wake, w_now, w_settings, w_resize, NULL, w_refresh, NULL, w_clip_set, w_clip_get, w_text_input, w_cursor, w_choose, w_notify,
+  w_maximized
 };

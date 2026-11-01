@@ -489,7 +489,10 @@ bool rk__shows_focus(rk_view *v) { rk_window *w = rk__view_window(v); return w &
 
 /* Toast ----------------------------------------------------------------------------------------------------------- */
 
-typedef struct toast { void (*fn)(void *); void *user; uint32_t timer; rk_view *view; } toast;
+typedef struct toast {
+  void (*fn)(void *); void *user; uint32_t timer; rk_view *view;
+  char *word; rk_view *meter, *figure;                     /* a level indicator's (rk_window_level) */
+} toast;
 
 #define TOAST_HOLD_MS 1000
 
@@ -523,8 +526,19 @@ static void toast_act(rk_view *b, void *st) {
   go(t);
   if (fn) fn(user);
 }
-static void toast_destroy(void *st) { toast *t = st; if (t->timer) rk_app_cancel(t->timer); free(t); }
+static void toast_destroy(void *st) { toast *t = st; if (t->timer) rk_app_cancel(t->timer); free(t->word); free(t); }
 static const rk_class toast_class = { { sizeof(rk_view_class), "rk_toast", NULL, NULL, NULL, toast_event, toast_destroy }, NULL, NULL };
+
+/* A level indicator's meter: a progress bar's 4px line, in the toast's own colour (the ground's, on ink). */
+static rk_size meter_measure(rk_view *v, rk_size a, void *st) { (void)v; (void)a; (void)st; return (rk_size){ 0, 4 }; }
+static void meter_draw(rk_view *v, rk_canvas *c, void *st) {
+  (void)st;
+  rk_color ink = rk_color_of(RK_ROLE_BG);
+  float W = v->pframe.w, y = (v->pframe.h - 4) / 2;
+  rk_canvas_fill_rect(c, (rk_rect){ 0, y, W, 4 }, with_alpha(ink, 0.2f));
+  rk_canvas_fill_rect(c, (rk_rect){ 0, y, W * RK_CLAMP(v->pvalue, 0.0f, 1.0f), 4 }, ink);
+}
+static const rk_class meter_class = { { sizeof(rk_view_class), "rk_level_meter", meter_draw, meter_measure, NULL, NULL, NULL }, NULL, NULL };
 
 rk_view *rk__toast_create(const char *message, const char *action, void (*on_action)(void *), void *user) {
   toast *t = rk__alloc(sizeof *t);
@@ -557,19 +571,65 @@ rk_view *rk__toast_create(const char *message, const char *action, void (*on_act
   return v;
 }
 
+/* A level indicator (docs/states.md): a toast without an action, its icon, the word, a meter and the figure, for
+   timing.level. */
+rk_view *rk__toast_level_create(const char *icon, const char *word, float value, const char *figure) {
+  toast *t = rk__alloc(sizeof *t);
+  t->word = rk__strdup(word ? word : "");
+  rk_view *v = rk__view_create(&toast_class, t);
+  t->view = v;
+  v->layout = RK_LAYOUT_HSTACK; v->cross = RK_ALIGN_CENTER;
+  v->fill_role = RK_ROLE_TEXT; v->pfill = rk_color_of(RK_ROLE_TEXT);
+  v->radius = rk_metric_of(RK_RADIUS_S);
+  v->clip = true;
+  v->min_h = rk_metric_of(RK_CONTROL_HEIGHT) + 4;
+  v->access = RK_ACCESS_STATUS;
+  rk__setstr(&v->access_label, t->word);
+  float m = rk_metric_of(RK_SPACE_M);
+  rk_view_set_padding(v, (rk_insets){ 0, m, 0, m });
+  rk_view_set_gap(v, rk_metric_of(RK_SPACE_S));
+  if (icon && *icon) { rk_view *i = rk_icon(icon, RK_ROLE_BG); rk__view_add(v, i); rk_release(i); }
+  rk_view *w = rk_label(t->word, RK_TEXT_LABEL);
+  rk_label_set_color(w, RK_ROLE_BG);
+  rk__view_add(v, w); rk_release(w);
+  t->meter = rk__view_create(&meter_class, NULL);
+  t->meter->value = t->meter->pvalue = RK_CLAMP(value, 0.0f, 1.0f);
+  rk_view_set_grow(t->meter, 1);
+  rk__view_add(v, t->meter); rk_release(t->meter);
+  t->figure = rk_label(figure ? figure : "", RK_TEXT_BODY);
+  rk_label_set_color(t->figure, RK_ROLE_BG);
+  rk__view_add(v, t->figure); rk_release(t->figure);
+  t->timer = rk__after_quiet(RK_TOK_TIMING_LEVEL, false, toast_leave, t);
+  return v;
+}
+
+/* The same word again while it shows: it stays, its value glides like progress, and its time starts again. */
+bool rk__toast_level_update(rk_view *v, const char *word, float value, const char *figure) {
+  if (!v || v->cls != &toast_class || v->leaving) return false;
+  toast *t = v->state;
+  if (!t->word || strcmp(t->word, word ? word : "")) return false;
+  set_value(t->meter, RK_CLAMP(value, 0.0f, 1.0f));
+  rk_label_set_text(t->figure, figure);
+  if (t->timer) rk_app_cancel(t->timer);
+  t->timer = rk__after_quiet(RK_TOK_TIMING_LEVEL, false, toast_leave, t);
+  return true;
+}
+
 /* Title bar ------------------------------------------------------------------------------------------------------- */
 
-typedef struct titlebar { rk_window *w; float inset; } titlebar;   /* inset: room for the system's buttons (macOS) */
+typedef struct titlebar { rk_window *w; float inset; bool maximized; } titlebar;   /* inset: room for the system's buttons (macOS) */
 
 static void titlebar_draw(rk_view *v, rk_canvas *c, void *st) {
   titlebar *tb = st;
   float H = v->pframe.h;
   rk_canvas_fill_rect(c, (rk_rect){ 0, H - 1, v->pframe.w, 1 }, rk_color_of(RK_ROLE_TEXT_LOW));
   rk_textfmt name = rk__textfmt(RK_TEXT_LABEL, 0), place = rk__textfmt(RK_TEXT_SMALL, 0);
-  name.color = RK_ROLE_TEXT; place.weight = RK_TOK_WEIGHT_LIGHT; place.line = name.line;
+  /* another window is the active one: the name steps back to the place's colour; the hairline and buttons stay */
+  rk_role ink = tb->w->inactive ? RK_ROLE_TEXT_HIGH : RK_ROLE_TEXT;
+  name.color = ink; place.weight = RK_TOK_WEIGHT_LIGHT; place.line = name.line;
   float x = tb->inset + rk_metric_of(RK_SPACE_S) + 4, ty = (H - name.size * name.line) / 2;
   const char *title = tb->w->title && *tb->w->title ? tb->w->title : "Rekta";
-  rk__text_draw(c, title, -1, x, ty, &name, rk_color_of(RK_ROLE_TEXT));
+  rk__text_draw(c, title, -1, x, ty, &name, rk_color_of(ink));
   x += rk__text_width(title, -1, &name) + rk_metric_of(RK_SPACE_S);
   rk_controller *root = tb->w->controller;
   const char *pl = root ? rk__controller_shown_title(root) : NULL;
@@ -593,18 +653,25 @@ static bool titlebar_event(rk_view *v, const rk_event *e, void *st) {
   return false;
 }
 
-/* minimize, maximize and close, read aloud in the app's words as they are now */
-static void titlebar_names(rk_view *v) {
+/* The window's buttons: minimize, maximize (restore while maximized) and close, quiet, close never in a status colour. */
+static const char *titlebar_icon(int i) { static const char *const icons[4] = { "minus", "maximize", "close", "restore" }; return icons[i]; }
+static bool titlebar_maximized(titlebar *tb) { return rk__platform()->maximized && rk__platform()->maximized(tb->w->native); }
+
+/* minimize, maximize or restore, and close, read aloud in the app's words as they are now */
+static void titlebar_names(rk_view *v, bool maximized) {
   const rk_strings *wd = rk__words();
-  const char *names[3] = { wd->minimize, wd->maximize, wd->close };
+  const char *names[3] = { wd->minimize, maximized ? wd->restore : wd->maximize, wd->close };
   for (int i = 0; i < v->nkids && i < 3; i++) rk__setstr(&v->kids[i]->access_label, names[i]);
 }
 
 static void titlebar_layout(rk_view *v, void *st) {
-  (void)st;
-  titlebar_names(v);
-  float x = v->frame.w;
-  for (int i = v->nkids - 1; i >= 0; i--) { x -= 46; rk__set_frame(v->kids[i], (rk_rect){ x, 0, 46, v->frame.h - 1 }); }
+  titlebar *tb = st;
+  bool maximized = titlebar_maximized(tb);
+  if (v->nkids == 3 && maximized != tb->maximized) { tb->maximized = maximized; rk_button_set_icon(v->kids[1], titlebar_icon(maximized ? 3 : 1)); }
+  titlebar_names(v, maximized);
+  /* each the bar's height and touch-target wide, as the web's .rk-titlebar-win */
+  float x = v->frame.w, bw = rk_metric_of(RK_TOUCH_TARGET);
+  for (int i = v->nkids - 1; i >= 0; i--) { x -= bw; rk__set_frame(v->kids[i], (rk_rect){ x, 0, bw, v->frame.h - 1 }); }
 }
 static void titlebar_destroy(void *st) { free(st); }
 static const rk_class titlebar_class = { { sizeof(rk_view_class), "rk_titlebar", titlebar_draw, NULL, titlebar_layout, titlebar_event, titlebar_destroy }, NULL, NULL };
@@ -620,16 +687,15 @@ rk_view *rk__titlebar_create(rk_window *w) {
   v->fill_role = RK_ROLE_BG; v->pfill = rk_color_of(RK_ROLE_BG);
   /* macOS keeps its traffic lights on the left; elsewhere Rekta draws minimize, maximize and close on the right */
   if (!strcmp(rk__platform()->name, "cocoa")) { tb->inset = 70; return v; }
-  static const char *const icons[3] = { "minus", "window", "close" };
   void (*fns[3])(rk_view *, void *) = { tb_min, tb_zoom, tb_close };
   for (int i = 0; i < 3; i++) {
-    rk_view *b = button_make(NULL, icons[i], RK_BUTTON_BAR);
+    rk_view *b = button_make(NULL, titlebar_icon(i), RK_BUTTON_BAR);
     b->focusable = false;
     rk_view_on_activate(b, fns[i], w);
     b->focusable = false;
     rk__view_add(v, b); rk_release(b);
   }
-  titlebar_names(v);
+  titlebar_names(v, false);
   return v;
 }
 

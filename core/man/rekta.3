@@ -346,9 +346,10 @@ a list's count read aloud
 .Fa items ,
 the window's buttons
 .Fa minimize ,
-.Fa maximize
-and
-.Fa close ,
+.Fa maximize ,
+.Fa close
+and, while it is maximized,
+.Fa restore ,
 and a drop without a title,
 .Fa files .
 A counting word has a form for each
@@ -452,6 +453,23 @@ A short message from the top edge; with an
 (undo, retry) it stays a little longer.
 While focus or the pointer is on it, it stays; Escape dismisses it, and
 focus goes back to where it came from.
+.It Fn rk_window_level "rk_window *window" "const char *icon" "const char *word" "float value" "const char *figure"
+A level indicator, for a value the user changed by a key (volume,
+brightness, zoom): a toast without an action, with an
+.Fa icon
+from the set
+.Pq Dv NULL : none ,
+the
+.Fa word ,
+a meter at
+.Fa value
+(0 to 1) and the
+.Fa figure .
+Called again with the same word while it shows, it stays and only its
+value glides; it goes
+.Li timing.level
+after the last change.
+Another word takes its place, as any toast does.
 .It Fn rk_window_do "rk_window *window" "const rk_action *action"
 Runs
 .Fa action->run
@@ -755,6 +773,12 @@ them; typed less than
 apart they are one prefix, and the same letter again moves on.
 .Fn rk_list_on_change
 hears what the user changes.
+With
+.Fn rk_list_on_remove ,
+Delete (or Backspace) on the active row asks the app to remove it,
+reversibly
+.Pq Fn rk_window_do ;
+the next row takes its place, the one before at the end.
 .Fn rk_list_is_selected ,
 .Fn rk_list_selection_count ,
 .Fn rk_list_selection
