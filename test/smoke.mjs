@@ -478,7 +478,12 @@ const news = await p.evaluate(async () => {
 });
 ok(news.leaves === 'translateY(-40%)' && news.rises === 'translateY(40%)' && /rotateX\(-90deg\)/.test(news.flips), 'tile news peeks by peek-travel and flips by flip-angle', JSON.stringify(news));
 // News on several tiles at once comes one after another in reading order, duration-greet apart, four steps at most.
+// The showcase's live feed has news every 1.5s too, which would join the batch: it is off while this is measured, and
+// the check waits until any news it had is past duration-moderate.
 const greeted = await p.evaluate(async () => {
+  const feed = document.querySelector('#lv-feed'), was = feed && feed.checked;
+  if (feed) feed.checked = false;
+  await new Promise((r) => setTimeout(r, 2 * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rk-duration-moderate'))));
   const grid = document.createElement('div'); grid.className = 'rk-tiles'; grid.style.cssText = 'position:fixed;left:0;top:0;width:900px;z-index:-1';
   grid.innerHTML = '<div class="rk-tile"><span class="rk-stat">1</span></div>'.repeat(6);
   document.body.append(grid);
@@ -487,6 +492,7 @@ const greeted = await p.evaluate(async () => {
   const d = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rk-duration-moderate'));
   const waits = tiles.map((t) => Math.round(t.querySelector('.rk-stat:not([aria-hidden])').getAnimations()[0].effect.getTiming().delay - 0.2 * d));
   await Promise.all(runs); grid.remove();
+  if (feed) feed.checked = was;
   return waits.join();
 });
 ok(greeted === '0,75,150,225,225,225', 'news on several tiles goes in reading order, duration-greet apart, four steps', greeted);

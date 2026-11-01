@@ -707,6 +707,9 @@ static void event(rk_window *w, const rk_event *e) {
       rk_view *h = w->capture ? w->capture : hit_window(w, e->position.x, e->position.y);
       w->capture = NULL;
       rk_view *p = w->pressed;
+      /* the activation may take h away (a tap on a leaving sheet's shading ends it at once): hold it until the up is
+         dispatched, and dispatch only while it is still in the window */
+      rk_retain(h);
       if (p) {
         /* the hit area reaches space-m past the resting box while pressed: the sink pulls the edge off the pointer */
         rk_rect r = rk__window_rect(p);
@@ -715,7 +718,8 @@ static void event(rk_window *w, const rk_event *e) {
         press_end(w, p);
         if (inside) activate(p);
       }
-      dispatch(w, h, e);
+      if (rk__view_window(h) == w) dispatch(w, h, e);
+      rk_release(h);
       break;
     }
     case RK_EVENT_KEY_DOWN: {
