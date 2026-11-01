@@ -2183,8 +2183,15 @@ const sy = await open();
   await sy.click('.rk-toast:not([data-rk-phase]) .rk-toast-act'); await sy.waitForTimeout(700);
   ok(await sy.evaluate(() => document.querySelectorAll('#centre > li').length === 5 && document.querySelector('#centre > li b').textContent === 'Backup'), 'undo puts it back where it was');
   // Quick settings: a side panel; a group gives its place to its list.
-  await sy.evaluate(() => document.querySelector('#sb-quick').click()); await sy.waitForTimeout(600);
-  ok(await sy.evaluate(() => { const d = document.querySelector('#quick-panel'), r = d.getBoundingClientRect(); return d.open && Math.round(r.right) === document.documentElement.clientWidth && Math.round(r.height) === innerHeight; }), 'quick settings: a side panel at the trailing edge, full height');
+  await sy.evaluate(() => document.querySelector('#sb-quick').click());
+  // Measured once its slide in has ended, not after a fixed wait a busy runner may not have reached.
+  const quick = await sy.evaluate(async () => {
+    const d = document.querySelector('#quick-panel');
+    await Promise.all(d.getAnimations().map((a) => a.finished.catch(() => {})));
+    const r = d.getBoundingClientRect();
+    return { open: d.open, right: r.right, vw: document.documentElement.clientWidth, h: r.height, vh: innerHeight };
+  });
+  ok(quick.open && Math.abs(quick.right - quick.vw) < 1 && Math.abs(quick.h - quick.vh) < 1, 'quick settings: a side panel at the trailing edge, full height', JSON.stringify(quick));
   await sy.click('#qs-net'); await sy.waitForTimeout(400);
   ok(await sy.evaluate(() => !document.querySelector('#qs-nets').hidden && document.querySelector('#qs-nets > .rk-in-back').textContent === 'back · wi-fi'), 'wi-fi opens its networks in place, under "back · wi-fi"');
   await sy.click('label:has(> input[value="Office 5G"])'); await sy.waitForTimeout(400);
