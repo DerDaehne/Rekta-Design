@@ -1158,7 +1158,12 @@ another in reading order, duration-greet apart, four steps at most.
 .It Fn rk_view_nudge "rk_view *view" "float dx" "float dy"
 A view that answers a gesture nobody can see (a swipe) hints at it when it
 is only tapped: it moves nudge-distance the gesture's way
-.Pq Fa dx , Fa dy : 1, 0 is right; 0, \-1 is up
+.Po
+.Fa dx
+and
+.Fa dy :
+1, 0 is right; 0, \-1 is up
+.Pc
 and back, duration-short each way.
 Call it from the tap; the words that name the gesture stay.
 .El
