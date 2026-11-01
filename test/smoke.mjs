@@ -582,6 +582,11 @@ const tst2 = await p.evaluate(async () => {
   t.show('1 archived', { key: 'arch', undo: () => {}, onEnd: (w) => ends.push(`a1:${w}`) });
   t.show('2 archived', { key: 'arch', undo: () => {}, onEnd: (w) => ends.push(`a2:${w}`) });
   t.dismiss(); out.merged = ends.join(); await wait(400);
+  // The same key without an onEnd of its own: the first onEnd stands for both and hears the end, once.
+  const kept = [];
+  t.show('1 moved', { key: 'mv', undo: () => {}, onEnd: (w) => kept.push(`m1:${w}`) });
+  t.show('2 moved', { key: 'mv', undo: () => {} });
+  await wait(100); t.dismiss(); await wait(400); out.kept = kept.join();
   // release(): held, then counting although the pointer stays; setText leaves the window alone.
   const r = t.show('3 sent', { undo: () => {}, windowMs: 5000 }); await wait(400);
   r.el.dispatchEvent(new PointerEvent('pointerenter')); await wait(300);
@@ -594,6 +599,7 @@ const tst2 = await p.evaluate(async () => {
 });
 ok(tst2.deadline > 2700 && tst2.deadline < 3500, 'a busy page does not stretch a toast\'s window', tst2.deadline);
 ok(tst2.merged === 'a1:merged,a2:dismissed', 'a same-key toast tells the first onEnd it merged', tst2.merged);
+ok(tst2.kept === 'm1:dismissed', 'a same-key toast without its own onEnd keeps the first one, called once with the end', tst2.kept);
 ok(tst2.release.heldBefore && tst2.release.stood && tst2.release.runs && !tst2.release.held && !tst2.release.attr, 'release() lets a held toast run out', JSON.stringify(tst2.release));
 ok(tst2.release.live === 'off' && tst2.release.kept && tst2.release.text === '3 sent. Holding no longer extends.', 'setText changes the words quietly and leaves the window alone', JSON.stringify(tst2.release));
 const ban = await p.evaluate(async () => {

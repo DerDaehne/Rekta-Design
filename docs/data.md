@@ -58,6 +58,21 @@ still shows, `space-s` high, at most three tile units wide.
   go beside or under it as tags (`.rk-tag[data-rk-code]`, the square in
   the code, the words in ink), in the bar's order, `aria-hidden` when
   they repeat the name. Never a number inside a share.
+- **In a row of a collection.** Where every row of a list or table has
+  its own bar (each ride's time in zones), five tags and a full name per
+  row make the list restless and a screen reader reads every figure for
+  every row. There the bar may become a mark: `aria-hidden="true"`, no
+  `role`, no name, no tags. Only when both hold:
+  - a sentence in the same row sums the shares up in words ("mostly
+    base · 41% hard") and is part of what the row says (its text or its
+    accessible name), and
+  - the row leads to its detail (a place, a pane, a sheet), and there
+    the shares stand one by one with words: this bar with its name and
+    tags, or a meter with its label per share.
+
+  Colour is still never the only thing that says something: the sentence
+  says it in the row, the detail says each share. A bar outside such a
+  row (a tile, a detail, a single summary) keeps its name and its tags.
 - **One bar per whole.** Two wholes to compare are two bars, one under
   the other, at the same width.
 

@@ -635,9 +635,9 @@ sentence share a line and the action goes under them, about 105px on a
   with a `Date` (or anything `new Date()` reads). A state the client
   did not see start (it comes from the server after a reload) passes
   the server's time, or `since: false` when nobody knows: then there is
-  no time line, rather than a wrong one. `until` (a text, "until 18:00")
-  replaces the line for a state with a known end; the state's own
-  `since` is only the word before the time.
+  no time line, rather than a wrong one. `until` (a time, "18:00")
+  replaces the start for a state with a known end; `since` is the word
+  before it ("until").
 - `action` is the remedy's label. `action: { label, href }` makes it a
   link (`a.rk-btn`, with the same classes as the markup's button) that
   navigates (sign in → `/login`) instead of calling `onAction`.
