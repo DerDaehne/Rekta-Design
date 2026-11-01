@@ -528,6 +528,21 @@
         },
         "$description": "Fluid size role."
       },
+      "display": {
+        "$type": "fluidDimension",
+        "$value": {
+          "min": {
+            "value": 80,
+            "unit": "px"
+          },
+          "max": {
+            "value": 144,
+            "unit": "px"
+          },
+          "viewport": 0.084
+        },
+        "$description": "A time or a number read from across a room (a lock screen, a wall display, a kiosk): twice nav-active at every width, light, never for anything read up close (typography.md)."
+      },
       "pivot-active": {
         "$type": "fluidDimension",
         "$value": {
@@ -753,6 +768,14 @@
         "unit": "px"
       },
       "$description": "Between a tooltip and its control: a little more than a floating surface's space-xs, so the ink strip does not touch the control's focus ring."
+    },
+    "day-cell": {
+      "$type": "dimension",
+      "$value": {
+        "value": 36,
+        "unit": "px"
+      },
+      "$description": "A day's square in a month (a date picker's, a month to look at): seven make the month's width; today's frame stands 2px inside it."
     },
     "pivot-wide": {
       "$type": "dimension",
@@ -1283,6 +1306,11 @@
       "$type": "duration",
       "$value": "1000ms",
       "$description": "In a collection whose entries take focus, letters typed less than this apart form one prefix to jump to; after a pause a letter starts again. Wall time: reduced motion leaves it alone."
+    },
+    "indicator": {
+      "$type": "duration",
+      "$value": "1700ms",
+      "$description": "How long a short indicator (a volume or a brightness being set) stands in place of an app-bar control after its last change, before the control turns back (indicate()). Long enough to read the value once more after letting go. Wall time: reduced motion leaves it alone."
     }
   },
   "layer": {

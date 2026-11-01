@@ -198,6 +198,17 @@ implementation needs the same:
 - **Toast and banner**: one toast at a time, the undo window held while
   hovered or focused; one banner at a time, the most severe state first,
   its end reported as a toast.
+- **Desktop patterns**: a place called up (a launcher) turns at half the
+  pace; a month to look at; the display step; an icon per menu item.
+  rekta-core has these (`rk_controller_set_called`, `rk_month`,
+  `RK_TEXT_DISPLAY`, `rk_menu_set_icon`). It does not have yet: an app
+  bar (so no centred control, indicator or giving way to full screen),
+  a notification's title, picture and pressable text in its toast
+  (`rk_window_toast` is a message and one action), a menu's second
+  level, the preview tile and the recent stack, and the session bar. An
+  app on rekta-core builds those from its views by these pages
+  ([navigation.md](navigation.md), [states.md](states.md),
+  [tiles.md](tiles.md), [shell.md](shell.md)).
 
 ## What stays identical
 

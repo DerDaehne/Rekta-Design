@@ -810,6 +810,17 @@ static void test_menu(void) {
   CHECK(tm->active == 19 && tm->scroll > 0 && last >= 0 && last + rk_metric_of(RK_ROW_HEIGHT) <= tr.h + 0.5f, "End scrolls its rows to the last one (%g)", tm->scroll);
   key(w, RK_KEY_ESCAPE, 0);
   rk_view_set_menu(more, m);                                   /* takes m back, lets go of the tall one */
+  /* an icon per item: at the start, and once one has one, every row's words start at one edge */
+  rk_view *im = rk_menu();
+  rk_menu_add(im, "network", NULL, on_menu, NULL);
+  int sound_i = rk_menu_add(im, "sound and the devices that play it", NULL, on_menu, NULL);
+  float plain = menu_measure(im, (rk_size){ 1000, 1000 }, im->state).w;
+  rk_menu_set_icon(im, sound_i, "speaker");
+  float with = menu_measure(im, (rk_size){ 1000, 1000 }, im->state).w;
+  CHECK(((menu *)im->state)->items[sound_i].icon && plain > 192 && with >= plain + 20 + rk_metric_of(RK_SPACE_S) - 0.5f, "an icon makes room at the start (%g, was %g)", with, plain);
+  rk_menu_set_icon(im, sound_i, NULL);
+  CHECK(!((menu *)im->state)->items[sound_i].icon, "and goes again");
+  rk_release(im);
   done(w);
 }
 
@@ -1300,6 +1311,18 @@ static const char *comp_commit(rk_view *t, int row, int col, const char *value, 
   snprintf(col == 0 ? comp_name[row] : comp_group[row], 32, "%s", value);
   commits++;
   return NULL;
+}
+
+/* A month to look at: the picker's month without its edge, choosing nothing, named for a screen reader. */
+static void test_month(void) {
+  rk_view *m = rk_month(2026, 10);
+  rk_size sz = month_measure(m, (rk_size){ 1000, 1000 }, m->state);
+  CHECK(fabsf(sz.w - sheet_size().w) < 0.5f && fabsf(sz.w - (7 * RK_TOK_DAY_CELL + 2 * rk_metric_of(RK_SPACE_S))) < 0.5f, "a month is seven day cells wide (%g)", sz.w);
+  CHECK(!m->focusable && m->access_label && !strcmp(m->access_label, "October 2026"), "it takes no focus and is named by its month (%s)", m->access_label ? m->access_label : "(none)");
+  rk_month_set(m, 0, 0);
+  int now = today();
+  CHECK(((month_view *)m->state)->cur == ymd(now / 10000, now / 100 % 100, 1), "0, 0: this month");
+  rk_release(m);
 }
 
 static void test_cell_edit(void) {
@@ -2209,6 +2232,37 @@ static void test_navigation(void) {
   rk_app_run_for(5400);
   CHECK(w->toasts->nkids == 0, "gone after its time");
   done(w);
+}
+
+/* A place that is called up (a launcher) turns at half the pace, to it and back from it; the rest at full pace. */
+static double turn_takes(bool called, bool back) {
+  rk_window *w = window(600, 400);
+  rk_view *h = col(16, 0);
+  rk_add(h, rk_label("Home", RK_TEXT_TITLE));
+  rk_view *grid = rk_add(h, rk_tile_grid());
+  for (int i = 0; i < 3; i++) rk_add(grid, rk_tile("12", "builds"));
+  rk_controller *pl = rk_places(rk_controller_create_with_view(h, "home"));
+  rk_window_show(w, pl);
+  rk_app_run_for(1500);
+  rk_view *p = col(16, 0);
+  rk_add(p, rk_label("Launcher", RK_TEXT_TITLE));
+  rk_view *apps = rk_add(p, rk_tile_grid());
+  for (int i = 0; i < 3; i++) rk_add(apps, rk_tile("", "an app"));
+  rk_controller *c = rk_controller_create_with_view(p, "launcher");
+  rk_controller_set_called(c, called);
+  rk_places_go(pl, c);
+  if (back) { rk_app_run_for(1500); rk_places_back(pl); }
+  double t0 = rk_app_now();
+  while (rk__anim_running() && rk_app_now() - t0 < 3000) rk_app_run_for(1000.0 / 60);
+  double took = rk_app_now() - t0;
+  done(w);
+  return took;
+}
+
+static void test_called_place(void) {
+  double full = turn_takes(false, false), half = turn_takes(true, false), away = turn_takes(true, true);
+  CHECK(full > 400 && half > 0.4 * full && half < 0.6 * full, "a called place turns in at half the pace (%.0f ms, %.0f in full)", half, full);
+  CHECK(away > 0.4 * full && away < 0.6 * full, "and back from it too (%.0f ms)", away);
 }
 
 /* Scenes for the reference images --------------------------------------------------------------------------------- */
@@ -3612,6 +3666,8 @@ static void launch(void *user) {
   test_undo();
   test_focus();
   test_navigation();
+  test_called_place();
+  test_month();
   test_side_pivot();
   test_tree();
   test_split();

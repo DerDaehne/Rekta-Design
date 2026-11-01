@@ -80,8 +80,9 @@ export declare function press(scope?: Document | Element): Destroyable;
 
 export declare function arrive(el: Element): void;
 export declare const turn: {
-  leave(place: Element, options?: { pressed?: Element | null; back?: boolean }): Promise<void>;
-  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean }): Promise<void>;
+  /** `called`: a change to or from a place that is called up (`data-rk-called`) turns at half the pace; by default, whether `place` is one. */
+  leave(place: Element, options?: { pressed?: Element | null; back?: boolean; called?: boolean }): Promise<void>;
+  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean; called?: boolean }): Promise<void>;
   finish(): void;
   readonly running: boolean;
 };
@@ -134,7 +135,7 @@ export declare function strip(el: HTMLElement): Destroyable & { layout(): void }
 
 // Feedback ------------------------------------------------------------------------------------------------------------
 
-export type ToastEnd = 'expired' | 'undone' | 'replaced' | 'acted' | 'dismissed' | 'merged';
+export type ToastEnd = 'expired' | 'undone' | 'replaced' | 'acted' | 'opened' | 'dismissed' | 'merged';
 export interface ToastOptions {
   key?: string;
   undo?: (() => void) | null;
@@ -145,6 +146,16 @@ export interface ToastOptions {
   /** The undo window in ms (default: duration-toast). */
   windowMs?: number;
   onEnd?: ((reason: ToastEnd) => void) | null;
+  /** A notification's title, in semibold over its text (which is then cut after two lines). */
+  title?: string;
+  /** The sender's icon at the start: a name from the icon set, or an element drawn in the text colour. */
+  icon?: string | Element | null;
+  /** The notification's own picture (an avatar, a cover) in place of the icon, cropped square. */
+  picture?: string;
+  /** The default action: pressing the text runs it and the toast ends `opened`. */
+  open?: (() => void) | null;
+  /** From another program: it enters whole from the window's edge, and pressing its text closes it when it has no `open`. */
+  edge?: boolean;
 }
 export interface Toast {
   readonly key: string;
@@ -431,6 +442,8 @@ export declare function enter(el: Element): Promise<void>;
 export declare function leave(el: Element): Promise<Animation | null>;
 export declare function presence(scope: Element, options: { items?: (() => Element[]) | Iterable<Element>; show: (item: Element) => boolean }): Promise<void>;
 export declare function tileUpdate(tile: HTMLElement, change: () => void, options?: { kind?: 'peek' | 'flip' }): Promise<void>;
+/** A short indicator stands in place of an app-bar control and turns back `timing.indicator` after the last call. */
+export declare function indicate(control: HTMLElement, content: Element): void;
 /** `points` as in the polyline's attribute ("0,4 10,2 20,6"). */
 export declare function sparkTo(line: SVGPolylineElement, points: string): void;
 export declare function crossfade(change: () => void): Promise<void>;

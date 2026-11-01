@@ -21,6 +21,7 @@ typedef struct menu_item {
   int kind, check;                                         /* check: -1 no square, 0 empty, 1 filled, 2 a mark: the chosen option */
   bool disabled;
   char *label, *key;
+  char *icon;                                              /* from the icon set, at the start: rk_menu_set_icon */
   void (*fn)(rk_view *menu, int item, void *user); void *user;
 } menu_item;
 
@@ -51,12 +52,13 @@ static rk_size menu_measure(rk_view *v, rk_size avail, void *st) {
   menu *m = st;
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0), k = rk__textfmt(RK_TEXT_META, 0);
   float w = 0, h = 2 * pad_y(), side = rk_metric_of(RK_SPACE_M);
-  bool squares = false;
-  for (int i = 0; i < m->n; i++) if (m->items[i].check >= 0) squares = true;
+  bool squares = false, icons = false;
+  for (int i = 0; i < m->n; i++) { if (m->items[i].check >= 0) squares = true; if (m->items[i].icon) icons = true; }
   for (int i = 0; i < m->n; i++) {
     menu_item *it = &m->items[i];
     float iw = it->label ? rk__text_width(it->label, -1, it->kind == LABEL ? &k : &f) : 0;
     if (squares && it->kind == ITEM) iw += 10 + rk_metric_of(RK_SPACE_S);
+    if (icons && it->kind == ITEM) iw += 20 + rk_metric_of(RK_SPACE_S);
     if (it->key) iw += rk_metric_of(RK_SPACE_L) + rk__text_width(it->key, -1, &k);
     w = RK_MAX(w, iw);
     h += item_h(it);
@@ -71,8 +73,8 @@ static void menu_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, H - 2 }, r - 1, rk_color_of(RK_ROLE_BG));
   rk_window *w = rk__view_window(v);
   bool keys = (w && w->focus == v && w->focus_visible) || m->passive;
-  bool squares = false;
-  for (int i = 0; i < m->n; i++) if (m->items[i].check >= 0) squares = true;
+  bool squares = false, icons = false;
+  for (int i = 0; i < m->n; i++) { if (m->items[i].check >= 0) squares = true; if (m->items[i].icon) icons = true; }
   rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0), k = rk__textfmt(RK_TEXT_META, 0), l = rk__textfmt(RK_TEXT_LABEL, 0);
   float y = pad_y() - m->scroll;
   rk_canvas_push_clip(c, (rk_rect){ 1, 1, W - 2, H - 2 });
@@ -95,6 +97,10 @@ static void menu_draw(rk_view *v, rk_canvas *c, void *st) {
           if (it->check) rk_canvas_fill_rect(c, sq, ink); else rk_canvas_stroke_rect(c, sq, 1, ink);
         }
         x += 10 + rk_metric_of(RK_SPACE_S);
+      }
+      if (icons) {                                            /* once one item has an icon, every row's words line up */
+        if (it->icon) rk_canvas_icon(c, it->icon, (rk_rect){ x, y + (h - 20) / 2, 20, 20 }, ink);
+        x += 20 + rk_metric_of(RK_SPACE_S);
       }
       if (it->label) rk__text_draw(c, it->label, -1, x, y + (h - f.size * f.line) / 2, &f, ink);
       if (it->key) {
@@ -192,7 +198,7 @@ static bool menu_event(rk_view *v, const rk_event *e, void *st) {
 
 static void menu_destroy(void *st) {
   menu *m = st;
-  for (int i = 0; i < m->n; i++) { free(m->items[i].label); free(m->items[i].key); }
+  for (int i = 0; i < m->n; i++) { free(m->items[i].label); free(m->items[i].key); free(m->items[i].icon); }
   rk_release(m->from);
   free(m->items); free(m);
 }
@@ -238,6 +244,13 @@ void rk_menu_set_check(rk_view *v, int i, rk_checkmark check) {
   rk__view_relayout_up(v); rk__view_dirty(v);
 }
 rk_checkmark rk_menu_check(rk_view *v, int i) { menu *m = RK__EXPECT(menu_of, v, "a menu"); int c = m && i >= 0 && i < m->n ? m->items[i].check : -1; return c < 0 ? RK_CHECKMARK_NONE : c ? RK_CHECKMARK_ON : RK_CHECKMARK_OFF; }
+void rk_menu_set_icon(rk_view *v, int i, const char *icon) {
+  menu *m = RK__EXPECT(menu_of, v, "a menu");
+  if (!m || i < 0 || i >= m->n || m->items[i].kind != ITEM) return;
+  free(m->items[i].icon);
+  m->items[i].icon = icon && *icon ? rk__strdup(icon) : NULL;
+  rk__view_relayout_up(v);
+}
 void rk_menu_set_enabled(rk_view *v, int i, bool enabled) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m && i >= 0 && i < m->n) { m->items[i].disabled = !enabled; rk__view_dirty(v); } }
 rk_view *rk_menu_opener(rk_view *v) { menu *m = RK__EXPECT(menu_of, v, "a menu"); return m ? m->from : NULL; }
 void rk_menu_set_align(rk_view *v, rk_align align) { menu *m = RK__EXPECT(menu_of, v, "a menu"); if (m) m->align = align; }
@@ -332,7 +345,7 @@ void rk__menu_shape(rk_view *v, float min_w, int prefer) { menu *m = menu_of(v);
 void rk_menu_clear(rk_view *v) {
   menu *m = RK__EXPECT(menu_of, v, "a menu");
   if (!m) return;
-  for (int i = 0; i < m->n; i++) { free(m->items[i].label); free(m->items[i].key); }
+  for (int i = 0; i < m->n; i++) { free(m->items[i].label); free(m->items[i].key); free(m->items[i].icon); }
   m->n = 0; m->active = -1;
   rk__view_relayout_up(v);
 }

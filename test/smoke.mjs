@@ -764,6 +764,173 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
   ok(back.tip === 'print it' && back.off === null && back.desc === null && !back.why, 'enabled again: its own tooltip comes back', JSON.stringify(back));
   await p.evaluate(() => { window.tBar.destroy(); document.querySelector('#t-bar').remove(); });
 }
+// Shell patterns (#120 #121 #128 #133 #142): an app bar with a centred control, a short indicator, a count that peeks,
+// giving way to full screen; a notification from another program; a menu's second level and icons; a called place;
+// the display step.
+{
+  const icon = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/></svg>';
+  const two = await p.evaluate(async (icon) => {
+    const wait = (t) => new Promise((r) => setTimeout(r, t));
+    const el = document.createElement('div'); el.className = 'rk-appbar'; el.id = 't-two'; el.style.cssText = 'width:900px;left:0;right:auto;bottom:200px';
+    el.innerHTML = `<span class="rk-ab-status"><i class="rk-pulse"></i><span class="rk-ab-k">live</span></span><span class="rk-ab-mid" id="t2-mid">a mode that says a little more</span>`
+      + `<button class="rk-ab" id="t2-a" type="button">${icon}<span>alpha</span></button><button class="rk-ab" id="t2-b" type="button" data-rk-priority="2">${icon}<span>beta</span></button>`
+      + `<button class="rk-ab" id="t2-clock" type="button" data-rk-align="center"><span>12:45<br>1 November</span></button>`
+      + `<button class="rk-ab" id="t2-c" type="button">${icon}<span>gamma</span></button><button class="rk-ab" id="t2-d" type="button" data-rk-priority="3"><span data-rk-peek>3</span><span>notifications</span></button>`
+      + `<button class="rk-ab rk-ab-more" type="button" hidden>${icon}<span>more</span></button>`;
+    document.querySelector('.rk').append(el);
+    const bar = Rekta.appbar(el); await wait(100);
+    const centre = (id) => { const r = el.querySelector(id).getBoundingClientRect(); return r.left + r.width / 2; };
+    const b = el.getBoundingClientRect(), c = el.querySelector('#t2-clock').getBoundingClientRect();
+    const r = { wide: Math.abs(centre('#t2-clock') - (b.left + b.width / 2)), moved: el.querySelectorAll('[data-rk-overflow]').length, mid: el.querySelector('#t2-mid').getBoundingClientRect().right <= c.left + 0.5 };
+    el.style.width = '470px'; bar.layout(); await wait(50);
+    const c2 = el.querySelector('#t2-clock').getBoundingClientRect(), b2 = el.getBoundingClientRect();
+    const lead = [...el.querySelectorAll('#t2-a, #t2-b, .rk-ab-status')].filter((x) => x.getClientRects().length).every((x) => x.getBoundingClientRect().right <= c2.left + 0.5);
+    const trail = [...el.querySelectorAll('#t2-c, #t2-d, .rk-ab-more')].filter((x) => x.getClientRects().length).every((x) => x.getBoundingClientRect().left >= c2.right - 0.5);
+    r.narrow = { centre: Math.abs(c2.left + c2.width / 2 - (b2.left + b2.width / 2)), lead, trail, full: el.getAttribute('data-rk-full'), clock: el.querySelector('#t2-clock').hasAttribute('data-rk-overflow'),
+      more: !el.querySelector('.rk-ab-more').hidden, lastIsMore: [...el.children].filter((x) => x.getClientRects().length && !x.matches('.rk-ab-menu')).pop().matches('.rk-ab-more'),
+      midShown: getComputedStyle(el.querySelector('#t2-mid')).display !== 'none', midBefore: el.querySelector('#t2-mid').getBoundingClientRect().right <= c2.left + 0.5 };
+    // A count peeks; an indicator stands in place of the clock and turns back; the bar gives way to full screen.
+    const d = el.querySelector('#t2-d'); d.removeAttribute('data-rk-overflow');
+    const peek = Rekta.tileUpdate(d, () => { d.querySelector('[data-rk-peek]').textContent = '4'; });
+    await wait(30); r.peeks = d.querySelector('[data-rk-peek]').getAnimations().length > 0 || !!d.querySelector('[aria-hidden="true"][data-rk-peek]'); await peek;
+    const meter = document.createElement('span'); meter.className = 'rk-meter'; meter.style.setProperty('--rk-v', 0.4);
+    const clock = el.querySelector('#t2-clock');
+    Rekta.indicate(clock, meter); await wait(30);
+    r.flips = clock.getAnimations().length > 0; await wait(400);
+    r.stands = clock.hasAttribute('data-rk-indicating') && clock.contains(meter) && clock.querySelector(':scope > span').hidden && meter.getBoundingClientRect().width > 100;
+    await wait(Rekta.tokens.ms('--rk-duration-indicator') + 700);
+    r.back = !clock.hasAttribute('data-rk-indicating') && !clock.contains(meter) && !clock.querySelector(':scope > span').hidden;
+    el.setAttribute('data-rk-away', ''); await wait(Rekta.tokens.ms('--rk-duration-short') + 100);
+    r.away = el.getBoundingClientRect().top >= b2.bottom - 1 && getComputedStyle(el).visibility === 'hidden';
+    bar.destroy(); el.remove();
+    return r;
+  }, icon);
+  ok(two.wide < 1 && two.moved === 0 && two.mid, 'a centred control stands at the bar\'s centre; the middle line ends before it', JSON.stringify(two));
+  ok(two.narrow.centre < 1 && two.narrow.lead && two.narrow.trail && !two.narrow.clock, 'narrower: each side keeps to its half, the centred control stays', JSON.stringify(two.narrow));
+  ok(two.narrow.more && two.narrow.lastIsMore && /start|end/.test(two.narrow.full || ''), 'a side that does not fit gives its own controls away; more ends the trailing side', JSON.stringify(two.narrow));
+  ok(two.narrow.full === 'end' ? two.narrow.midShown && two.narrow.midBefore : !two.narrow.midShown, 'the middle line goes only when the leading side is full, and cuts before the centred control', JSON.stringify(two.narrow));
+  ok(two.peeks, 'a count in a control (data-rk-peek) peeks');
+  ok(two.flips && two.stands && two.back, 'indicate(): the indicator turns in, stands in place, and turns back after timing.indicator', JSON.stringify(two));
+  ok(two.away, 'data-rk-away: the bar glides out over its edge and takes no focus');
+
+  // A notification from another program: from the edge, title over two lines at most, a picture, a pressable text.
+  const note = await p.evaluate(async () => {
+    const wait = (t) => new Promise((r) => setTimeout(r, t));
+    const region = document.createElement('div'); region.className = 'rk-toasts'; region.setAttribute('role', 'status'); region.id = 't-toasts';
+    document.querySelector('.rk').append(region);
+    const t = Rekta.toaster(region); let opened = 0, ended = '';
+    const pic = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#c33"/></svg>');
+    const long = 'Are we still on for three? I booked the room by the window, and the projector is there too. Bring the drafts and the numbers from last week, please.';
+    const n = t.show(long, { edge: true, title: 'Ana Ruiz', picture: pic, open: () => { opened += 1; }, onEnd: (why) => { ended = why; } });
+    await wait(20);
+    const el = n.el, msg = el.querySelector('.rk-toast-msg'), text = el.querySelector('.rk-toast-text'), img = el.querySelector('.rk-toast-pic img');
+    const anim = el.getAnimations()[0], kf = anim && anim.effect.getKeyframes();
+    const r = { from: el.dataset.rkFrom, button: msg.tagName, opacity: kf ? kf.every((k) => k.opacity === undefined) : false, edge: kf ? kf[0].transform : '',
+      title: getComputedStyle(el.querySelector('.rk-toast-title')).fontWeight, lines: Math.round(text.getBoundingClientRect().height / parseFloat(getComputedStyle(text).lineHeight)), whole: msg.textContent.includes('last week'),
+      pic: img ? [img.getBoundingClientRect().width, img.getBoundingClientRect().height, getComputedStyle(img).objectFit] : null };
+    await Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {})));
+    r.inPlace = Math.abs(el.getBoundingClientRect().top - region.getBoundingClientRect().top) < 1;
+    msg.click(); await wait(10);
+    r.opened = opened === 1 && ended === 'opened' && el.dataset.rkPhase === 'leaving';
+    const anim2 = el.getAnimations()[0]; r.out = anim2 ? anim2.animationName : '';
+    await wait(300);
+    const plain = t.show('A plain one.'); r.plain = plain.el.querySelector('.rk-toast-msg').tagName === 'P' && !plain.el.hasAttribute('data-rk-from');
+    const quiet = t.show('No default action', { edge: true, icon: 'bell', onEnd: (why) => { ended = why; } }); await wait(300);
+    r.icon = !!quiet.el.querySelector('.rk-toast-pic svg.rk-icon'); quiet.el.querySelector('.rk-toast-msg').click(); await wait(10);
+    r.closes = ended === 'dismissed';
+    t.destroy(); await wait(300); region.remove();
+    return r;
+  });
+  ok(note.from === 'edge' && note.opacity && /translateY\(calc\(-100%/.test(note.edge) && note.inPlace, 'a notification enters whole from the edge, without a fade, to where toasts stand', JSON.stringify(note));
+  ok(note.title === '600' && note.lines === 2 && note.whole, 'its title is semibold, its text cut after two lines and still all there', JSON.stringify(note));
+  ok(note.pic && note.pic[0] === 20 && note.pic[1] === 20 && note.pic[2] === 'cover' && note.icon, 'the sender\'s icon or its own picture in the 20px field, cropped square', JSON.stringify(note));
+  ok(note.button === 'BUTTON' && note.opened && note.out === 'rk-toast-edge-out' && note.closes && note.plain, 'pressing the text runs the default action (opened), else closes; it leaves the way it came; a plain toast is unchanged', JSON.stringify(note));
+
+  // A menu's second level in place; an icon per item.
+  await p.evaluate((icon) => {
+    const wrap = document.createElement('div'); wrap.id = 't-menu'; wrap.style.cssText = 'position:fixed;left:40px;top:120px';
+    wrap.innerHTML = `<button class="rk-btn" id="t-menu-btn" type="button">tray</button><div id="t-tray"><button class="rk-menu-item" role="menuitem" id="t-m-net" aria-haspopup="menu" aria-controls="t-lvl">${icon.replace('<svg', '<svg class="rk-icon"')}network</button>`
+      + `<button class="rk-menu-item" role="menuitem" id="t-m-sound">sound</button><div class="rk-menu-level" id="t-lvl" role="menu" aria-label="network" hidden>`
+      + '<button class="rk-menu-item" role="menuitemradio" aria-checked="true" id="t-m-home">Home</button><button class="rk-menu-item" role="menuitemradio" aria-checked="false" id="t-m-office">Office 5G</button></div></div>';
+    document.querySelector('.rk').append(wrap);
+    window.tMenuChosen = ''; window.tMenu = Rekta.menu(wrap.querySelector('#t-menu-btn'), wrap.querySelector('#t-tray'), { onSelect: (i) => { window.tMenuChosen = i.id; } });
+  }, icon);
+  await p.focus('#t-menu-btn'); await p.keyboard.press('Enter'); await p.waitForTimeout(250);
+  const lv0 = await p.evaluate(() => {
+    const m = document.querySelector('#t-tray'), net = m.querySelector('#t-m-net'), snd = m.querySelector('#t-m-sound'), words = (b) => { const t = document.createRange(); t.selectNodeContents(b.lastChild); return t.getBoundingClientRect().left; };
+    return { focus: document.activeElement.id, chevron: getComputedStyle(net, '::after').content !== 'none', aligned: Math.abs(words(net) - words(snd)) < 1, w: m.getBoundingClientRect().width, l: m.getBoundingClientRect().left, t: m.getBoundingClientRect().top };
+  });
+  await p.keyboard.press('ArrowRight'); await p.waitForTimeout(100);
+  const lv1 = await p.evaluate(() => {
+    const m = document.querySelector('#t-tray'), back = m.querySelector('.rk-menu-back'), shown = (id) => m.querySelector(id).getClientRects().length > 0;
+    return { focus: document.activeElement.id, back: back ? [back.textContent, back.getAttribute('aria-label'), shown('.rk-menu-back')] : null, list: shown('#t-m-net') || shown('#t-m-sound'), expanded: m.querySelector('#t-m-net').getAttribute('aria-expanded'),
+      w: m.getBoundingClientRect().width, l: m.getBoundingClientRect().left, t: m.getBoundingClientRect().top, anims: m.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length };
+  });
+  ok(lv0.focus === 't-m-net' && lv0.chevron && lv0.aligned, 'an item with a level ends in a chevron; once one item has an icon, every row\'s words start at one edge', JSON.stringify(lv0));
+  ok(lv1.focus === 't-m-home' && lv1.back && lv1.back[0] === 'network' && lv1.back[1] === 'back: network' && lv1.back[2] && !lv1.list && lv1.expanded === 'true', '→ opens the level in place, under a back row with its name', JSON.stringify(lv1));
+  ok(Math.abs(lv1.w - lv0.w) < 1 && Math.abs(lv1.l - lv0.l) < 1 && Math.abs(lv1.t - lv0.t) < 1 && lv1.anims === 0, 'the surface keeps its width and place; nothing moves', JSON.stringify([lv0, lv1]));
+  await p.keyboard.press('Escape'); await p.waitForTimeout(50);
+  const lv2 = await p.evaluate(() => ({ focus: document.activeElement.id, open: document.querySelector('#t-tray').matches(':popover-open'), level: document.querySelector('#t-lvl').hidden }));
+  ok(lv2.focus === 't-m-net' && lv2.open && lv2.level, 'Escape goes back one level, to the item that opened it', JSON.stringify(lv2));
+  await p.keyboard.press('Enter'); await p.waitForTimeout(50); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await p.waitForTimeout(50);
+  const lv3 = await p.evaluate(() => ({ chosen: window.tMenuChosen, open: document.querySelector('#t-tray').matches(':popover-open'), level: document.querySelector('#t-lvl').hidden, focus: document.activeElement.id }));
+  ok(lv3.chosen === 't-m-office' && !lv3.open && lv3.level && lv3.focus === 't-menu-btn', 'a choice in the level closes every level, focus back to the control', JSON.stringify(lv3));
+  await p.evaluate(() => { window.tMenu.destroy(); document.querySelector('#t-menu').remove(); });
+
+  // A place called up turns at half the pace; the display step is twice nav-active, light, tabular.
+  const called = await p.evaluate(async () => {
+    const make = (name) => { const m = document.createElement('main'); m.className = 'rk-place'; m.dataset.rkPlace = name; m.style.cssText = 'position:fixed;inset:0;background:var(--rk-bg);z-index:5'; m.innerHTML = '<h1 class="rk-title">A place</h1><div class="rk-tiles"><a class="rk-tile" href="#">one</a><a class="rk-tile" href="#">two</a></div>'; document.body.append(m); return m; };
+    const time = async (opts) => { const a = make('t-a'), b = make('t-b'); b.hidden = true; const t0 = performance.now(); await Rekta.turn.leave(a, opts); await Rekta.turn.enter(b, opts); const t = performance.now() - t0; a.remove(); b.remove(); return t; };
+    const full = await time({}), half = await time({ called: true });
+    const a = make('t-c'); a.setAttribute('data-rk-called', ''); a.hidden = true;
+    const t0 = performance.now(); await Rekta.turn.enter(a); const byAttr = performance.now() - t0; a.remove();
+    const d = document.createElement('p'); d.className = 'rk-display'; d.textContent = '12:45'; document.querySelector('.rk-place:not([hidden])').append(d);
+    const s = getComputedStyle(d), r = { full, half, byAttr, size: parseFloat(s.fontSize), weight: s.fontWeight, nums: s.fontVariantNumeric, nav: 2 * Rekta.tokens.px('--rk-font-size-nav-active') };
+    d.remove();
+    return r;
+  });
+  ok(called.half > 0.35 * called.full && called.half < 0.65 * called.full && called.byAttr < 0.65 * called.full, 'a place called up (data-rk-called) turns at half the pace', JSON.stringify(called));
+  ok(Math.abs(called.size - called.nav) < 1 && called.weight === '300' && called.nums === 'tabular-nums', '.rk-display: twice nav-active, light, tabular figures', JSON.stringify(called));
+  // A month to look at (#127): day-cell squares, seven wide, today framed 2px inside its cell.
+  const month = await p.evaluate(() => {
+    const t = document.createElement('table'); t.className = 'rk-month';
+    t.innerHTML = '<caption>October 2026</caption><thead><tr>' + ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => `<th scope="col">${d}</th>`).join('') + '</tr></thead>'
+      + '<tbody><tr><td></td><td></td><td></td><td>1</td><td>2</td><td>3</td><td aria-current="date">4</td></tr></tbody>';
+    document.querySelector('.rk-place:not([hidden])').append(t);
+    const cell = t.querySelector('td').getBoundingClientRect(), today = getComputedStyle(t.querySelector('[aria-current]'));
+    const r = { cell: [cell.width, cell.height], width: t.getBoundingClientRect().width, unit: Rekta.tokens.px('--rk-day-cell'), frame: [today.outlineWidth, today.outlineOffset, today.outlineStyle] };
+    t.remove();
+    return r;
+  });
+  // A preview tile (#123): two units wide, the app's picture fills the top, the title one line and cut at the foot.
+  const prev = await p.evaluate(() => {
+    const g = document.createElement('div'); g.className = 'rk-tiles'; g.style.cssText = 'width:800px';
+    const pic = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#36c"/></svg>');
+    g.innerHTML = `<button class="rk-tile rk-tile--preview" type="button"><span class="rk-tile-preview"><img src="${pic}" alt=""></span><span class="rk-tile-foot"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-file"/></svg><span>A very long title of an open document that does not fit on one line at all.odt</span></span></button>`;
+    document.querySelector('.rk-place:not([hidden])').append(g);
+    const t = g.firstChild, tr = t.getBoundingClientRect(), pr = t.querySelector('.rk-tile-preview').getBoundingClientRect(), title = t.querySelector('.rk-tile-foot > span');
+    const unit = Rekta.tokens.px('--rk-tile-unit'), gap = Rekta.tokens.px('--rk-space-s');
+    const r = { w: tr.width, want: 2 * unit + gap, top: pr.top - tr.top, fills: Math.abs(pr.width - tr.width) < 1 && pr.height > tr.height / 2, cut: title.scrollWidth > title.clientWidth && getComputedStyle(title).textOverflow === 'ellipsis' && title.getBoundingClientRect().height < 30 };
+    g.remove();
+    return r;
+  });
+  ok(Math.abs(prev.w - prev.want) < 1 && prev.top < 1 && prev.fills && prev.cut, 'a preview tile: two units wide, the preview fills its top, the title one line and cut', JSON.stringify(prev));
+  // The session's actions (#132): a sheet across the full width at the top, on surface, in the banner's geometry.
+  const sess = await p.evaluate(async () => {
+    const d = document.createElement('dialog'); d.className = 'rk-sheet rk-session'; d.setAttribute('aria-labelledby', 't-s-word');
+    d.innerHTML = '<form method="dialog"><span class="rk-banner-head"><span class="rk-banner-word" id="t-s-word">session</span></span><p class="rk-actions"><button class="rk-btn rk-btn--primary" value="lock">lock</button><button class="rk-btn rk-btn--quiet" value="off">power off</button></p>'
+      + '<button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close">×</button></form>';
+    document.querySelector('.rk').append(d);
+    const s = Rekta.sheet(d); d.showModal(); await new Promise((r) => setTimeout(r, 400));
+    const r = d.getBoundingClientRect(), word = d.querySelector('.rk-banner-word').getBoundingClientRect(), acts = d.querySelector('.rk-actions').getBoundingClientRect();
+    const probe = document.createElement('i'); probe.style.color = 'var(--rk-surface)'; document.body.append(probe); const surface = getComputedStyle(probe).color; probe.remove();
+    const out = { top: r.top, width: Math.abs(r.width - document.documentElement.clientWidth), bg: getComputedStyle(d).backgroundColor === surface, row: acts.left > word.right && Math.abs(acts.top - word.top) < 40, anim: d.getAnimations().map((a) => a.animationName) };
+    d.close(); await new Promise((res) => setTimeout(res, 400)); s.destroy(); d.remove();
+    return out;
+  });
+  ok(sess.top < 1 && sess.width < 2 && sess.bg && sess.row && sess.anim.includes('rk-banner-in'), 'the session bar: full width at the top, on surface, the word then the actions, in as the banner comes', JSON.stringify(sess));
+  ok(month.unit === 36 && Math.abs(month.cell[0] - 36) < 0.5 && Math.abs(month.cell[1] - 36) < 0.5 && Math.abs(month.width - 7 * 36) < 0.5 && month.frame.join() === '1px,-3px,solid', '.rk-month: day-cell squares, seven wide, today framed inside its cell', JSON.stringify(month));
+}
 await p.mouse.move(5, 5);
 await p.click('#tree > li:nth-child(1) > .rk-tree-row'); await p.waitForTimeout(100);
 await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.waitForTimeout(100);
@@ -1380,7 +1547,7 @@ await d2.close();
 
 // Icons and the app shell: the sprite, the gallery, the title bar, installable, offline.
 const sh = await open();
-ok((await sh.evaluate(() => document.querySelectorAll('symbol[id^="rk-i-"]').length)) === 51 && (await sh.evaluate(() => document.querySelectorAll('.icon-gallery li').length)) === 51, 'fifty-one icons in the sprite and the gallery');
+ok((await sh.evaluate(() => document.querySelectorAll('symbol[id^="rk-i-"]').length)) === 61 && (await sh.evaluate(() => document.querySelectorAll('.icon-gallery li').length)) === 61, 'sixty-one icons in the sprite and the gallery');
 ok(await sh.evaluate(() => { const u = document.querySelector('.icon-gallery use'); const b = u.closest('svg').getBBox(); return b.width > 4 && b.height > 4; }), 'an icon draws from the sprite');
 ok((await sh.evaluate(() => getComputedStyle(document.querySelector('#titlebar')).display)) === 'none', 'the title bar hides in a browser tab');
 await sh.evaluate(() => document.documentElement.setAttribute('data-rk-titlebar', '')); await sh.waitForTimeout(100);

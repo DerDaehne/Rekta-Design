@@ -127,6 +127,7 @@ export const strings = {
   loadFailed: 'Could not load the choices. Type to try again.',
   keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
   cannotAct: (label, reason) => `${label} (${reason})`,
+  back: 'back',
 };
 // rk-strings-end
 const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
@@ -404,9 +405,9 @@ function heftOf() {
 // Heft sets when a part starts as well as how long it takes: light parts first, heavy ones later, (heft - heft-min) ×
 // heft-spread × duration-stagger after the turn begins. Parts of one size (heft within 0.05) follow one another in
 // reading order, half a duration-stagger apart, six steps at most: the size leads, the order only sorts what weighs
-// the same.
-function turnStarts(list, at, held) {
-  const step = ms('--rk-duration-stagger'), seen = new Map(), heft = heftOf(), lo = num('--rk-heft-min'), spread = num('--rk-heft-spread');
+// the same. `pace` is 1, or 0.5 for a place that is called up (calledUp()): half the stagger as well as half the time.
+function turnStarts(list, at, held, pace = 1) {
+  const step = ms('--rk-duration-stagger') * pace, seen = new Map(), heft = heftOf(), lo = num('--rk-heft-min'), spread = num('--rk-heft-spread');
   return list.map((el) => {
     const h = heft(at.get(el));
     if (el === held) return { h, at: 0 };
@@ -472,6 +473,10 @@ function turnRows(u, place, held) {
 }
 // A row's perspective grows with its reach from the edge it turns about, so a wide row turns as flat as a narrow one.
 function perspective(far) { return Math.round((num('--rk-turnstile-perspective') || 800) + num('--rk-turnstile-reach') * Math.max(0, far)) + 'px'; }
+// A place that is called up and left again many times an hour (a launcher, a start surface; data-rk-called) turns at
+// half the pace, in and out: every duration and the stagger halve, the curves, angles and hand-over stay (motion.md).
+// A change takes that pace when either side is such a place, so the way in and the way out match.
+const calledUp = (...list) => list.some((p) => p && p.hasAttribute && p.hasAttribute('data-rk-called'));
 // arrive(el): a place (or the root) builds in: tiles rise and sparklines draw while data-rk-arriving is on, for the arrival
 // window. A framework router calls it for a place it opened by client navigation.
 export function arrive(el) {
@@ -483,7 +488,7 @@ export function arrive(el) {
 export const turn = {
   get running() { return !!turning; },
   finish() { if (turning) turning.finish(); },
-  leave(place, { pressed = null, back = false } = {}) {
+  leave(place, { pressed = null, back = false, called = calledUp(place) } = {}) {
     turn.finish();
     // A place still building in leaves from its end state: the turn wins over the arrival.
     for (const el of [place, docEl()]) { clearTimeout(el._rkArrive); el.removeAttribute('data-rk-arriving'); }
@@ -500,11 +505,11 @@ export const turn = {
       }
       releasePress(true);
       if (held) held.setAttribute('data-rk-pressed', '');
-      const out = ms('--rk-duration-short'), overlap = num('--rk-turn-overlap');
+      const pace = called ? 0.5 : 1, out = ms('--rk-duration-short') * pace, overlap = num('--rk-turn-overlap');
       const u = turnUnits(place, held), kind = back ? 'back-out' : 'out';
       turnRows(u, place, held);
       // the pressed tile goes when the last of the others does, or later
-      const starts = turnStarts(u.list, u.at, held), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
+      const starts = turnStarts(u.list, u.at, held, pace), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
       let end = 0;
       u.list.forEach((el, i) => {
         const h = starts[i].h, d = out * h;
@@ -532,7 +537,7 @@ export const turn = {
       timers.push(later(done, u.list.length ? end : 0));
     });
   },
-  enter(place, { back = false, focus = null, arriving = !back } = {}) {
+  enter(place, { back = false, focus = null, arriving = !back, called = calledUp(place) } = {}) {
     turn.finish();
     return new Promise((resolve) => {
       place.hidden = false;
@@ -540,11 +545,11 @@ export const turn = {
       if (arriving) arrive(place);
       else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
       // Its units turn in from the other side, light ones first, each in its own time.
-      const d0 = ms('--rk-duration-moderate');
+      const pace = called ? 0.5 : 1, d0 = ms('--rk-duration-moderate') * pace;
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
       turnRows(u, place, null);
       let end = 0;
-      const starts = turnStarts(u.list, u.at, null);
+      const starts = turnStarts(u.list, u.at, null, pace);
       u.list.forEach((el, i) => {
         const { h, at } = starts[i], d = d0 * h;
         el.style.setProperty('--_rk-turn-delay', `${at}ms`);
@@ -667,13 +672,13 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     showBack();
     const run = async () => {
       if (from && from !== to) {
-        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed });
+        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed, called: calledUp(from, to) });
       }
       to.hidden = false;
       setItem(state && state.item, { back, place: true });
       restore(to, state);
       const f = focusTarget(to, state, back);
-      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f });
+      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f, called: calledUp(from, to) });
       if (onChange) onChange({ from: prev, to: name, back });
       document.dispatchEvent(new CustomEvent('rk:placechange', { detail: { from: prev, to: name, back } }));
     };
@@ -1153,7 +1158,7 @@ export function pivot(el, { onSelect, turn: placeTurn = null, gone = 'select' } 
       list.forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; const p = panel(t); if (p && p !== from) p.hidden = true; });
       pivotGlide(el, list[i]);
       if (focus) list[i].focus();
-      (from ? turn.leave(from, { back }) : Promise.resolve()).then(() => { if (mine === gen && to) turn.enter(to, { back }); });
+      (from ? turn.leave(from, { back, called: calledUp(from, to) }) : Promise.resolve()).then(() => { if (mine === gen && to) turn.enter(to, { back, called: calledUp(from, to) }); });
       told(i);
       return;
     }
@@ -1372,7 +1377,7 @@ export function toaster(region) {
     sr.textContent = tx('undoWindow', secs, again);
     msg.appendChild(sr);
   }
-  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null, status = '', windowMs = 0, onEnd = null } = {}) {
+  function show(text, { key = text, undo = null, from = null, action = 'undo', act = null, status = '', windowMs = 0, onEnd = null, title = '', icon: pic = null, picture = '', open: run = null, edge = false } = {}) {
     if (open && open.key === key && open.undo && undo) { open.update(text, undo, { windowMs, onEnd }); return open; }
     if (open) open.leave(false, 'replaced');
     // The window runs against a deadline in wall-clock time, so a late or throttled timer (a busy page, a background
@@ -1383,8 +1388,30 @@ export function toaster(region) {
     const el = document.createElement('div');
     el.className = 'rk-toast';
     if (status) { el.dataset.status = status; if (status === 'error') el.setAttribute('role', 'alert'); }
-    const msg = el.appendChild(document.createElement('p'));
+    // A notification from another program enters whole from the window's edge: it came from outside (motion.md).
+    if (edge) el.setAttribute('data-rk-from', 'edge');
+    // Its text is pressable when it has a default action ("open what this is about"); a notification without one
+    // closes when its text is pressed. It may bring a title, and the sender's icon or its own picture at the start.
+    const pressable = !!run || edge;
+    const msg = el.appendChild(document.createElement(pressable ? 'button' : 'p'));
     msg.className = 'rk-toast-msg';
+    let words = msg;
+    if (pressable) {
+      msg.type = 'button';
+      msg.addEventListener('click', () => { if (run) { leave(false, 'opened'); run(); } else leave(false); });
+    }
+    if (title || pic || picture) {
+      if (pic || picture) {
+        const field = msg.appendChild(document.createElement('span'));
+        field.className = 'rk-toast-pic'; field.setAttribute('aria-hidden', 'true');
+        if (picture) { const img = field.appendChild(document.createElement('img')); img.src = picture; img.alt = ''; } else field.appendChild(typeof pic === 'string' ? icon(pic) : pic);
+      }
+      const body = msg.appendChild(document.createElement('span'));
+      body.className = 'rk-toast-body';
+      if (title) { const b = body.appendChild(document.createElement('b')); b.className = 'rk-toast-title'; b.textContent = title; }
+      words = body.appendChild(document.createElement('span'));
+      words.className = 'rk-toast-text';
+    }
     let count = null;
     if (undo) {
       const btn = el.appendChild(document.createElement('button'));
@@ -1403,7 +1430,7 @@ export function toaster(region) {
     }
     const left = () => (running ? Math.max(0, deadline - Date.now()) : remaining);
     const secs = () => Math.max(0, Math.ceil(left() / 1000));
-    say(msg, text, !!undo, false, secs());
+    say(words, text, !!undo, false, secs());
     const paint = () => { if (count) { count.textContent = secs(); el.style.setProperty('--rk-toast-left', total ? left() / total : 0); } };
     function schedule() {
       clearTimeout(timer);
@@ -1416,13 +1443,13 @@ export function toaster(region) {
       if (deadline - Date.now() <= 0) { running = false; remaining = 0; paint(); leave(false, 'expired'); return; }
       paint(); schedule();
     }
-    function run() { if (running || done || waiting) return; running = true; deadline = Date.now() + remaining; schedule(); }
+    function go() { if (running || done || waiting) return; running = true; deadline = Date.now() + remaining; schedule(); }
     function stop() { if (!running) return; remaining = Math.max(0, deadline - Date.now()); running = false; clearTimeout(timer); timer = 0; }
     function hold() {
       if (done || waiting) return;
       const was = held;
       held = (hover || focus) && !released;
-      if (held) stop(); else run();
+      if (held) stop(); else go();
       if (held !== was) {
         el.toggleAttribute('data-rk-held', held);
         el.dispatchEvent(new CustomEvent('rk:toasthold', { bubbles: true, detail: { held, remaining: left() } }));
@@ -1435,7 +1462,7 @@ export function toaster(region) {
       if (waiting) { clearTimeout(waiting); waiting = 0; if (open === api) open = null; end(); return; }
       const hadFocus = el.contains(document.activeElement);
       el.setAttribute('data-rk-phase', 'leaving');
-      setTimeout(() => el.remove(), ms('--rk-duration-short'));
+      setTimeout(() => el.remove(), ms('--rk-duration-short') * (edge ? 0.6 : 1));
       if (open === api) open = null;
       end();
       if (hadFocus) returnFocus(from);
@@ -1448,7 +1475,7 @@ export function toaster(region) {
       remaining = Math.max(0, t); total = Math.max(total, remaining);
       if (!remaining) { paint(); leave(false, 'expired'); return; }
       paint();
-      if (was || !held) run();
+      if (was || !held) go();
     }
     const api = {
       key, el, action,
@@ -1459,7 +1486,7 @@ export function toaster(region) {
       // A new text, the window left alone; announced once (without the window sentence) only when asked.
       setText(t, { announce = false } = {}) {
         if (done) return;
-        const node = msg.firstChild && msg.firstChild.nodeType === 3 ? msg.firstChild : msg.insertBefore(document.createTextNode(''), msg.firstChild);
+        const node = words.firstChild && words.firstChild.nodeType === 3 ? words.firstChild : words.insertBefore(document.createTextNode(''), words.firstChild);
         if (announce) node.nodeValue = t; else quietly(el, () => { node.nodeValue = t; });
       },
       get remaining() { return left(); },
@@ -1473,7 +1500,7 @@ export function toaster(region) {
         if (e) { const before = onEnd; onEnd = e; if (before && before !== e) before('merged'); }
         stop(); released = false;
         total = remaining = w || (undo ? windowMs || tokenWindow() : total);
-        say(msg, t, !!u, true, secs()); paint(); hold(); if (!held) run();
+        say(words, t, !!u, true, secs()); paint(); hold(); if (!held) go();
       },
       sync() { if (running) { clearTimeout(timer); tick(); } },
     };
@@ -1483,7 +1510,7 @@ export function toaster(region) {
     el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) { focus = false; hold(); } });
     paint();
     open = api;
-    const insert = () => { waiting = 0; region.appendChild(el); hold(); if (!held) run(); };
+    const insert = () => { waiting = 0; region.appendChild(el); hold(); if (!held) go(); };
     if (region.querySelector('.rk-toast[data-rk-phase="leaving"]')) waiting = setTimeout(insert, ms('--rk-duration-short')); else insert();
     return api;
   }
@@ -1808,6 +1835,9 @@ const isOpen = (el) => (canPopover ? el.matches(':popover-open') : !el.hidden);
 // closes and focus returns to the trigger after a choice or Escape. A checkbox item toggles and leaves the menu open,
 // so several can be ticked in a row. With summary ("status"), the trigger says what is ticked: "status: failed, done",
 // or "status: any" when nothing is (a filter button). align goes to place(): by default the trigger's data-rk-align.
+// A second level stands in place of the list (docs/states.md): an item with aria-haspopup="menu" and aria-controls
+// names a .rk-menu-level (role menu, hidden) inside the menu; → Enter or Space opens it under a "back" row with its
+// name, the surface keeping its width and place; ← or Escape goes back one level, focus to the item that opened it.
 export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   el.id = el.id || `rk-menu-${Math.random().toString(36).slice(2, 8)}`;
   el.setAttribute('role', 'menu');
@@ -1829,6 +1859,39 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   // never counts as a click outside. Placement and focus follow the toggle.
   let first = 0;
   if (canPopover && 'popoverTargetElement' in trigger) trigger.popoverTargetElement = el;
+  const levelOf = (item) => { const id = item && item.getAttribute('aria-haspopup') === 'menu' && item.getAttribute('aria-controls'); const l = id && document.getElementById(id); return l && el.contains(l) ? l : null; };
+  const openLevels = () => [...el.querySelectorAll('.rk-menu-level:not([hidden])')];
+  // The level in sight: its rows stand in place of the list, under a back row with the level's name. The surface
+  // keeps its width and place (moved back inside the window only when the level does not fit there); nothing moves.
+  function enter(item) {
+    const level = levelOf(item);
+    if (!level || item.getAttribute('aria-disabled') === 'true') return false;
+    let back = level.querySelector(':scope > .rk-menu-back');
+    if (!back) {
+      back = level.insertBefore(document.createElement('button'), level.firstChild);
+      back.type = 'button'; back.className = 'rk-menu-item rk-menu-back'; back.setAttribute('role', 'menuitem');
+      back.textContent = level.getAttribute('aria-label') || item.textContent.trim();
+      back.setAttribute('aria-label', `${tx('back')}: ${back.textContent}`);
+    }
+    el.style.minWidth = `${el.offsetWidth}px`;
+    level.hidden = false;
+    item.setAttribute('aria-expanded', 'true');
+    reflow();
+    const rows = items();
+    (rows[rows.indexOf(back) + 1] || back).focus();
+    return true;
+  }
+  function out() {
+    const level = openLevels().pop();
+    if (!level) return false;
+    const item = el.querySelector(`[aria-controls="${CSS.escape(level.id)}"]`);
+    level.hidden = true;
+    if (item) { item.setAttribute('aria-expanded', 'false'); item.focus(); }
+    if (!openLevels().length) el.style.minWidth = '';
+    reflow();
+    return true;
+  }
+  const reset = () => { openLevels().forEach((l) => { l.hidden = true; }); el.querySelectorAll('[aria-haspopup="menu"][aria-expanded]').forEach((i) => i.setAttribute('aria-expanded', 'false')); el.style.minWidth = ''; };
   const shown = () => { place(el, trigger, { align }); trigger.setAttribute('aria-expanded', 'true'); focusItem(first); first = 0; };
   function open(at = 0) {
     if (isOpen(el)) { focusItem(at); return; }
@@ -1839,10 +1902,11 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
   function close(refocus = true) {
     if (!isOpen(el)) return;
     closeFloat(el);
+    reset();
     trigger.setAttribute('aria-expanded', 'false');
     if (refocus) trigger.focus();
   }
-  const toggle = (e) => { if (e.newState === 'open') shown(); else trigger.setAttribute('aria-expanded', 'false'); };
+  const toggle = (e) => { if (e.newState === 'open') shown(); else { trigger.setAttribute('aria-expanded', 'false'); reset(); } };
   const click = (e) => {
     if (canPopover && trigger.popoverTargetElement === el) return;                    // the browser toggles
     e.preventDefault(); if (isOpen(el)) close(); else open(0);
@@ -1856,13 +1920,17 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
     else if (e.key === 'ArrowUp') { e.preventDefault(); focusItem(i - 1); }
     else if (e.key === 'Home') { e.preventDefault(); focusItem(0); }
     else if (e.key === 'End') { e.preventDefault(); focusItem(-1); }
-    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'ArrowRight' && levelOf(list[i])) { e.preventDefault(); enter(list[i]); }
+    else if (e.key === 'ArrowLeft' && openLevels().length) { e.preventDefault(); out(); }
+    else if (e.key === 'Escape') { e.preventDefault(); if (!out()) close(); }
     else if (e.key === 'Tab') close(false);
     else { const hit = find(e, list, list[i]); if (hit) { e.preventDefault(); hit.focus(); } }
   };
   const choose = (e) => {
     const item = e.target.closest('.rk-menu-item');
     if (!item || item.getAttribute('aria-disabled') === 'true') { if (item) e.preventDefault(); return; }
+    if (item.classList.contains('rk-menu-back')) { out(); return; }
+    if (enter(item)) return;
     const checkbox = item.getAttribute('role') === 'menuitemcheckbox';
     if (checkbox) item.setAttribute('aria-checked', String(item.getAttribute('aria-checked') !== 'true'));
     if (item.getAttribute('role') === 'menuitemradio') el.querySelectorAll('[role=menuitemradio]').forEach((r) => r.setAttribute('aria-checked', String(r === item)));
@@ -1871,7 +1939,7 @@ export function menu(trigger, el, { onSelect, summary = null, align } = {}) {
     if (onSelect) onSelect(item);
   };
   const outside = (e) => { if (!canPopover && isOpen(el) && !el.contains(e.target) && !trigger.contains(e.target)) close(false); };
-  const reflow = () => { if (isOpen(el)) place(el, trigger, { align }); };
+  function reflow() { if (isOpen(el)) place(el, trigger, { align }); }
   trigger.addEventListener('click', click);
   trigger.addEventListener('keydown', triggerKey);
   el.addEventListener('keydown', key);
@@ -2440,7 +2508,7 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
     return copy.textContent.replace(/\s+/g, ' ').trim();
   };
   const keyHint = (c) => shortcutText(c) || ((c.querySelector('.rk-key') || {}).textContent || '').trim();
-  const candidates = (pinned = false) => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back') && (pinned || c.dataset.rkPriority !== 'pinned'))
+  const candidates = (pinned = false) => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back') && c.dataset.rkAlign !== 'center' && (pinned || c.dataset.rkPriority !== 'pinned'))
     .map((c, i) => ({ c, i, p: Number(c.dataset.rkPriority || 0) }))
     .sort((a, b) => a.p - b.p || b.i - a.i).map((x) => x.c);
   function build() {
@@ -2463,16 +2531,42 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
   }
   const fits = () => el.scrollWidth <= el.clientWidth + 1;
   const placesShown = () => { const p = el.querySelector(':scope > .rk-ab-places'); return !!p && getComputedStyle(p).display !== 'none'; };
+  // Two sides around a control in the middle (a clock, data-rk-align="center"; docs/navigation.md). Each side has half
+  // the bar less half that control. A side that does not fit gives its own controls away, least important first:
+  // giving away one of the other side's would not help. "more" ends the trailing side. The middle line cuts before
+  // the centred control, pinned (up to half the bar) or not, and is gone only while the leading side has given
+  // controls away (data-rk-full="start"). The centred control stands at the bar's centre (--_rk-shift).
+  function twoSides(c) {
+    const cs = getComputedStyle(el), gap = parseFloat(cs.columnGap) || 0;
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const room = (inner - c.offsetWidth) / 2 - gap;
+    const mid = el.querySelector(':scope > .rk-ab-mid');
+    const kidsOf = (lead) => [...el.children].filter((k) => k !== pop && k !== c && k !== mid && !!(k.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) === lead);
+    const width = (list) => { const v = list.filter((k) => k.getClientRects().length); return v.reduce((sum, k) => sum + k.getBoundingClientRect().width, 0) + Math.max(0, v.length - 1) * gap; };
+    const lead = kidsOf(true), trail = kidsOf(false), full = [];
+    el.style.removeProperty('--_rk-mid-max');
+    const pinned = mid && mid.dataset.rkPriority === 'pinned';
+    const midNeed = pinned ? Math.min(mid.scrollWidth, inner / 2) + gap : 0;
+    for (const x of candidates().filter((k) => lead.includes(k))) { if (width(lead) + midNeed <= room) break; x.setAttribute('data-rk-overflow', ''); full.push('start'); }
+    if (mid) el.style.setProperty('--_rk-mid-max', `${Math.max(0, Math.floor(room - width(lead) - (lead.some((k) => k.getClientRects().length) ? gap : 0)))}px`);
+    if (full.length || width(trail) > room) more.hidden = false;
+    for (const x of candidates().filter((k) => trail.includes(k))) { if (width(trail) <= room) break; x.setAttribute('data-rk-overflow', ''); full.push('end'); }
+    if (full.length) el.setAttribute('data-rk-full', [...new Set(full)].join(' ')); else el.removeAttribute('data-rk-full');
+    const b = el.getBoundingClientRect(), r = c.getBoundingClientRect(), was = parseFloat(el.style.getPropertyValue('--_rk-shift')) || 0;
+    el.style.setProperty('--_rk-shift', `${Math.round(b.left + b.width / 2 - (r.left - was + r.width / 2))}px`);
+  }
   function layout() {
     if (el.hasAttribute('data-rk-selecting')) return;
     el.querySelectorAll(':scope > [data-rk-overflow]').forEach((c) => c.removeAttribute('data-rk-overflow'));
+    el.removeAttribute('data-rk-full');
     more.hidden = true;
-    const withPlaces = placesShown();
+    const withPlaces = placesShown(), centred = el.querySelector(':scope > .rk-ab[data-rk-align="center"]');
     markPlaces(el, withPlaces);
     if (withPlaces) {                                 /* the places hold the bar: every command is in "more", pinned too */
       const all = candidates(true);
       if (all.length) { more.hidden = false; all.forEach((c) => c.setAttribute('data-rk-overflow', '')); }
-    } else if (!fits()) {
+    } else if (centred && centred.getClientRects().length) twoSides(centred);
+    else if (!fits()) {
       more.hidden = false;
       for (const c of candidates()) { if (fits()) break; c.setAttribute('data-rk-overflow', ''); }
     }
@@ -3749,9 +3843,39 @@ function greet(tile, anims) {
     }
   });
 }
+// indicate(control, content): a short indicator (a volume or a brightness being set) stands in place of a control:
+// the control turns away as a live tile does for a new status, and the indicator turns in; timing.indicator after the
+// last call it turns back. A call while it stands changes it in place: a reading that keeps changing is no news. The
+// control's own children are hidden meanwhile, and data-rk-indicating is on it. The words to hear go through a live
+// region, not through this.
+const indicating = new WeakMap();
+export function indicate(control, content) {
+  let s = indicating.get(control);
+  const back = () => {
+    const t = indicating.get(control);
+    if (!t) return;
+    indicating.delete(control);
+    tileUpdate(control, () => { t.node.remove(); t.hid.forEach((k) => { k.hidden = false; }); control.removeAttribute('data-rk-indicating'); }, { kind: 'flip' });
+  };
+  if (s) {
+    if (s.node !== content) { s.node.replaceWith(content); s.node = content; }
+  } else {
+    s = { node: content, hid: [], timer: 0 };
+    indicating.set(control, s);
+    tileUpdate(control, () => {
+      s.hid = [...control.children].filter((k) => !k.hidden);
+      s.hid.forEach((k) => { k.hidden = true; });
+      control.appendChild(s.node);
+      control.setAttribute('data-rk-indicating', '');
+    }, { kind: 'flip' });
+  }
+  clearTimeout(s.timer);
+  s.timer = setTimeout(back, ms('--rk-duration-indicator'));
+}
 // tileUpdate(tile, change, { kind }): a live tile has news. 'peek' (a new number or line): the new content rises
 // from peek-travel of its height below while the old one leaves upwards by as much, over duration-moderate. 'flip' (a
-// new status): the tile turns flip-angle away around its horizontal axis, changes, and turns back. A continuous reading
+// new status): the tile turns flip-angle away around its horizontal axis, changes, and turns back. What peeks is the
+// tile's .rk-stat, or the part a page marks data-rk-peek (a count in an app-bar control). A continuous reading
 // (frames a second) is no news: it updates in place. Inside a live region (live()) the change already waits while the
 // region is held. News on several tiles at once comes one after another (greet).
 export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
@@ -3767,7 +3891,7 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
       return tile.animate([{ transform: `perspective(${p}px) rotateX(${turn}deg)` }, { transform: `perspective(${p}px) rotateX(0deg)` }], { duration: d / 2, easing: css('--rk-ease-in') }).finished.catch(() => {});
     });
   }
-  const target = tile.querySelector('.rk-stat') || tile;
+  const target = tile.querySelector('.rk-stat, [data-rk-peek]') || tile;
   const was = target.textContent;
   const ghost = target.cloneNode(true);
   const tr = tile.getBoundingClientRect(), r = target.getBoundingClientRect();

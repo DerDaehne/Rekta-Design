@@ -429,6 +429,7 @@ typedef enum rk_text_style {
   RK_TEXT_STAT,                                    /* size-xxl, medium, tabular figures: a tile's number */
   RK_TEXT_PIVOT,                                   /* size-pivot-active, light: a pivot title */
   RK_TEXT_NAV,                                     /* size-nav-active, light: a place's strip */
+  RK_TEXT_DISPLAY,                                 /* size-display, light, tabular figures: read from across a room */
   RK_TEXT_FORCE32 = 0x7fffffff
 } rk_text_style;
 
@@ -496,6 +497,7 @@ RK_API void rk_menu_open_at(rk_view *menu, rk_view *from, rk_point point);   /* 
 RK_API void rk_menu_close(rk_view *menu);
 RK_API rk_view *rk_menu_opener(rk_view *menu);                    /* what opened it, while open and in a handler */
 RK_API void rk_menu_set_align(rk_view *menu, rk_align align);      /* RK_ALIGN_CENTER: centred on a centred opener */
+RK_API void rk_menu_set_icon(rk_view *menu, int item, const char *icon);   /* from the icon set, at the start; NULL removes it */
 
 /* A view that scrolls its content up and down: the wheel, the keys a focused view inside leaves, and focus landing
    inside move it, on the panorama's spring; a thin bar shows while it moves. Takes content. */
@@ -524,6 +526,10 @@ RK_API rk_view *rk_select(const char *const *options, int count, int chosen);   
 RK_API rk_view *rk_date(int year, int month, int day);    /* 0, 0, 0: none yet */
 RK_API bool rk_date_value(rk_view *date, int *year, int *month, int *day);   /* false: none yet */
 RK_API void rk_date_set_value(rk_view *date, int year, int month, int day);   /* 0, 0, 0 clears it */
+/* A month to look at (a calendar at a clock): the picker's month on the ground, Monday first, today framed; it
+   chooses nothing and takes no focus. 0, 0: this month. */
+RK_API rk_view *rk_month(int year, int month);
+RK_API void rk_month_set(rk_view *view, int year, int month);
 RK_API double rk_control_value(rk_view *control);
 RK_API void rk_control_set_value(rk_view *control, double value);   /* a number snaps to the range and step; an index it lacks is ignored */
 RK_API void rk_control_on_change(rk_view *control, void (*fn)(rk_view *control, void *user), void *user);
@@ -672,6 +678,9 @@ RK_API void rk_places_go(rk_controller *places, rk_controller *place);   /* take
 RK_API void rk_places_back(rk_controller *places);
 RK_API int rk_places_depth(rk_controller *places);
 RK_API void rk_places_on_back(rk_controller *places, void (*fn)(rk_controller *places, void *user), void *user);   /* the user went back (Escape, the back key) */
+/* A place that is called up and left again many times an hour (a launcher, a start surface): a change to or from it,
+   by places or a pivot that picks the place, turns at half the pace, every duration and the stagger halved. */
+RK_API void rk_controller_set_called(rk_controller *place, bool called);
 
 /* Panorama: one place laid out sideways in sections under a strip of their titles that glides by place. */
 RK_API rk_controller *rk_panorama(void);

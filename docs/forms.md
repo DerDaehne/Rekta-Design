@@ -91,11 +91,48 @@ it chooses rows, it sets nothing.
   what is below down) is declined: it moves the content below, which
   none of Rekta's floating surfaces do; a list that floats leaves the
   page where it was.
+- **Date:** where the platform has a picker of its own (a browser, a
+  phone), the date field opens that. Where Rekta draws it (rekta-core, a
+  desktop shell), the field opens **the month** below it, as a floating
+  surface: the month's name and year over the weekdays, arrows to the
+  month before and after; the weekdays in the label's voice, Monday
+  first (ISO 8601, in every locale: a week has one shape everywhere);
+  only the month's own days, in `size.day-cell` (36px) squares, body
+  size in tabular figures; no week numbers. Today is framed by a 1px
+  line in the text colour, 2px inside its cell; the chosen day takes the
+  accent with on-accent figures; the keys' day carries the focus ring.
+  Keys: ← → a day, ↑ ↓ a week, Page Up and Page Down a month (with
+  Shift a year), Home and End the month's first and last day, Enter or
+  Space takes the day, Escape closes and focus goes back to the field.
+  Month and weekday names are a date, so content: they are written as
+  the language writes them ("October 2026", "Mo"), not lowercased like
+  UI words; `Intl` gives them on the web, `rk_strings` in rekta-core.
 - **Segments** are for options that fit on one line; more than five, or
   long labels, go in a select.
 - **Files:** each file becomes a row with its size, a progress bar while
   it uploads and its status; a file that is too large says why in its
   row, never in a dialog.
+
+## A month to look at
+
+A month shown only to be read (a calendar at a clock, a schedule's
+overview) is the picker's month on the ground, without its edge and its
+arrows: name and year, the weekdays, the days, today framed. It
+**chooses nothing**: no day takes focus, a press, a hover tint or the
+accent, and it has no keys of its own; it is read as a table. It shows
+the month it is given, this one by default. An app that pages through
+months puts its own buttons beside it (and back to today); one that
+marks days with events adds a mark under the figure, never a fill.
+
+```html
+<table class="rk-month">
+  <caption>October 2026</caption>
+  <thead><tr><th scope="col" abbr="Monday">Mo</th><th scope="col" abbr="Tuesday">Tu</th>…<th scope="col" abbr="Sunday">Su</th></tr></thead>
+  <tbody><tr><td></td><td></td><td></td><td>1</td>…</tr>…<tr>…<td aria-current="date">29</td>…</tr></tbody>
+</table>
+```
+
+rekta-core: `rk_month(year, month)`, `rk_month_set()`.
 
 ## Check late, correct early
 

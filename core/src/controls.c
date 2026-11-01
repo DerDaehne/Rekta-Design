@@ -751,7 +751,7 @@ typedef struct date_box { control c; int seg; char typed[5]; int ntyped; bool do
 typedef struct date_sheet { date_box *box; int cur; } date_sheet;   /* cur: the day the keys are on */
 
 #define DATE_ICON 40.0f
-#define CELL 36.0f
+#define CELL RK_TOK_DAY_CELL                                /* size.day-cell, as .rk-month on the web */
 
 static rk_textfmt date_fmt(void) { rk_textfmt f = rk__textfmt(RK_TEXT_BODY, 0); f.tabular = true; f.line = 1; return f; }
 
@@ -900,19 +900,20 @@ static rk_rect day_cell(int cur, int day) {
 static void month_title(int cur, char *out, size_t size) { snprintf(out, size, "%s %d", rk__words()->months[cur / 100 % 100 - 1], cur / 10000); }
 static void sheet_name(rk_view *v, int cur) { char title[128]; month_title(cur, title, sizeof title); rk__setstr(&v->access_label, title); }
 
-static void sheet_draw(rk_view *v, rk_canvas *c, void *st) {
-  date_sheet *s = st;
+/* The month, as the picker and a month to look at both draw it: its name and year over the weekdays, Monday first,
+   then only the month's own days in cells of day-cell; today framed by a 1px line in the text colour, 2px inside its
+   cell; the chosen day (picker only) in the accent; the keys' day ringed. The picker adds the arrows to the month
+   before and after. */
+static void month_body(rk_canvas *c, float W, int cur, int chosen, bool ring, bool arrows) {
   const char *const *days = rk__words()->weekdays;          /* the app's words, Monday first */
-  float W = v->pframe.w, H = v->pframe.h, r = rk_metric_of(RK_RADIUS_S), pad = sheet_pad(), head = sheet_head();
-  rk_canvas_fill_round_rect(c, (rk_rect){ 0, 0, W, H }, r, rk_color_of(RK_ROLE_TEXT_MEDIUM));
-  rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, H - 2 }, r - 1, rk_color_of(RK_ROLE_BG));
-  int y = s->cur / 10000, m = s->cur / 100 % 100;
+  float pad = sheet_pad(), head = sheet_head();
+  int y = cur / 10000, m = cur / 100 % 100;
   rk_color ink = rk_color_of(RK_ROLE_TEXT);
   char title[128];
-  month_title(s->cur, title, sizeof title);
+  month_title(cur, title, sizeof title);
   rk_textfmt t = strong_fmt();
   rk__text_draw(c, title, -1, (W - rk__text_width(title, -1, &t)) / 2, pad + (head - t.size) / 2, &t, ink);
-  for (int k = 0; k < 2; k++) {                            /* the month before and after */
+  for (int k = 0; arrows && k < 2; k++) {                  /* the month before and after */
     float cx = k ? W - pad - CELL / 2 : pad + CELL / 2, cy = pad + head / 2, d = k ? 3 : -3;
     rk_point chev[3] = { { cx - d, cy - 6 }, { cx + d, cy }, { cx - d, cy + 6 } };
     rk_canvas_polyline(c, chev, 3, 2, ink);
@@ -920,21 +921,50 @@ static void sheet_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_textfmt l = rk__textfmt(RK_TEXT_LABEL, 0);
   for (int i = 0; i < 7; i++) rk__text_draw(c, days[i], -1, pad + i * CELL + (CELL - rk__text_width(days[i], -1, &l)) / 2, pad + head, &l, rk_color_of(RK_ROLE_TEXT_HIGH));
   rk_textfmt f = date_fmt();
-  int chosen = (int)s->box->c.value, now = today();
-  rk_window *w = rk__view_window(v);
-  bool keys = w && w->focus == v && w->focus_visible;
+  int now = today();
   for (int d = 1; d <= days_in(y, m); d++) {
-    rk_rect cell = day_cell(s->cur, d);
+    rk_rect cell = day_cell(cur, d);
     int value = y * 10000 + m * 100 + d;
     rk_rect in = { cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4 };
     rk_color k = ink;
     if (value == chosen) { rk_canvas_fill_rect(c, in, rk_color_of(RK_ROLE_ACCENT)); k = rk_color_of(RK_ROLE_ON_ACCENT); }
     else if (value == now) rk_canvas_stroke_rect(c, in, 1, ink);
-    if (value == s->cur && keys) rk__focus_ring(c, cell, 0);
+    if (value == cur && ring) rk__focus_ring(c, cell, 0);
     char text[12];
     snprintf(text, sizeof text, "%d", d);
     rk__text_draw(c, text, -1, cell.x + (cell.w - rk__text_width(text, -1, &f)) / 2, cell.y + (cell.h - f.size) / 2, &f, k);
   }
+}
+
+static void sheet_draw(rk_view *v, rk_canvas *c, void *st) {
+  date_sheet *s = st;
+  float W = v->pframe.w, H = v->pframe.h, r = rk_metric_of(RK_RADIUS_S);
+  rk_canvas_fill_round_rect(c, (rk_rect){ 0, 0, W, H }, r, rk_color_of(RK_ROLE_TEXT_MEDIUM));
+  rk_canvas_fill_round_rect(c, (rk_rect){ 1, 1, W - 2, H - 2 }, r - 1, rk_color_of(RK_ROLE_BG));
+  rk_window *w = rk__view_window(v);
+  month_body(c, W, s->cur, s->box ? (int)s->box->c.value : 0, w && w->focus == v && w->focus_visible, true);
+}
+
+/* A month to look at (a calendar at a clock): the picker's month on the ground, without its edge and arrows; it
+   chooses nothing and takes no focus. */
+typedef struct month_view { int cur; } month_view;
+static void month_draw(rk_view *v, rk_canvas *c, void *st) { month_body(c, v->pframe.w, ((month_view *)st)->cur, 0, false, false); }
+static rk_size month_measure(rk_view *v, rk_size avail, void *st) { (void)v; (void)avail; (void)st; return sheet_size(); }
+static const rk_class month_class = { { sizeof(rk_view_class), "rk_month", month_draw, month_measure, NULL, NULL, free }, NULL, NULL };
+static month_view *month_of(rk_view *v) { return v && v->cls == &month_class ? v->state : NULL; }
+
+void rk_month_set(rk_view *v, int year, int month) {
+  month_view *mv = RK__EXPECT(month_of, v, "a month");
+  if (!mv) return;
+  int now = today();
+  mv->cur = year >= 1 && month >= 1 && month <= 12 ? ymd(year, month, 1) : ymd(now / 10000, now / 100 % 100, 1);
+  sheet_name(v, mv->cur);
+  rk__view_dirty(v);
+}
+rk_view *rk_month(int year, int month) {
+  rk_view *v = rk__view_create(&month_class, rk__alloc(sizeof(month_view)));
+  rk_month_set(v, year, month);
+  return v;
 }
 
 static void sheet_set(rk_view *v, date_sheet *s, int value) { s->cur = value; sheet_name(v, value); rk__view_dirty(v); }
