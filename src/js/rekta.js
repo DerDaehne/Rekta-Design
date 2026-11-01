@@ -2508,7 +2508,7 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
     return copy.textContent.replace(/\s+/g, ' ').trim();
   };
   const keyHint = (c) => shortcutText(c) || ((c.querySelector('.rk-key') || {}).textContent || '').trim();
-  const candidates = (pinned = false) => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back') && (pinned || c.dataset.rkPriority !== 'pinned'))
+  const candidates = (pinned = false) => [...el.querySelectorAll(':scope > .rk-ab')].filter((c) => c !== more && !c.classList.contains('rk-ab-back') && c.dataset.rkAlign !== 'center' && (pinned || c.dataset.rkPriority !== 'pinned'))
     .map((c, i) => ({ c, i, p: Number(c.dataset.rkPriority || 0) }))
     .sort((a, b) => a.p - b.p || b.i - a.i).map((x) => x.c);
   function build() {
@@ -2531,16 +2531,42 @@ export function appbar(el, { more = el.querySelector('.rk-ab-more') } = {}) {
   }
   const fits = () => el.scrollWidth <= el.clientWidth + 1;
   const placesShown = () => { const p = el.querySelector(':scope > .rk-ab-places'); return !!p && getComputedStyle(p).display !== 'none'; };
+  // Two sides around a control in the middle (a clock, data-rk-align="center"; docs/navigation.md). Each side has half
+  // the bar less half that control. A side that does not fit gives its own controls away, least important first:
+  // giving away one of the other side's would not help. "more" ends the trailing side. The middle line cuts before
+  // the centred control, pinned (up to half the bar) or not, and is gone only while the leading side has given
+  // controls away (data-rk-full="start"). The centred control stands at the bar's centre (--_rk-shift).
+  function twoSides(c) {
+    const cs = getComputedStyle(el), gap = parseFloat(cs.columnGap) || 0;
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const room = (inner - c.offsetWidth) / 2 - gap;
+    const mid = el.querySelector(':scope > .rk-ab-mid');
+    const kidsOf = (lead) => [...el.children].filter((k) => k !== pop && k !== c && k !== mid && !!(k.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) === lead);
+    const width = (list) => { const v = list.filter((k) => k.getClientRects().length); return v.reduce((sum, k) => sum + k.getBoundingClientRect().width, 0) + Math.max(0, v.length - 1) * gap; };
+    const lead = kidsOf(true), trail = kidsOf(false), full = [];
+    el.style.removeProperty('--_rk-mid-max');
+    const pinned = mid && mid.dataset.rkPriority === 'pinned';
+    const midNeed = pinned ? Math.min(mid.scrollWidth, inner / 2) + gap : 0;
+    for (const x of candidates().filter((k) => lead.includes(k))) { if (width(lead) + midNeed <= room) break; x.setAttribute('data-rk-overflow', ''); full.push('start'); }
+    if (mid) el.style.setProperty('--_rk-mid-max', `${Math.max(0, Math.floor(room - width(lead) - (lead.some((k) => k.getClientRects().length) ? gap : 0)))}px`);
+    if (full.length || width(trail) > room) more.hidden = false;
+    for (const x of candidates().filter((k) => trail.includes(k))) { if (width(trail) <= room) break; x.setAttribute('data-rk-overflow', ''); full.push('end'); }
+    if (full.length) el.setAttribute('data-rk-full', [...new Set(full)].join(' ')); else el.removeAttribute('data-rk-full');
+    const b = el.getBoundingClientRect(), r = c.getBoundingClientRect(), was = parseFloat(el.style.getPropertyValue('--_rk-shift')) || 0;
+    el.style.setProperty('--_rk-shift', `${Math.round(b.left + b.width / 2 - (r.left - was + r.width / 2))}px`);
+  }
   function layout() {
     if (el.hasAttribute('data-rk-selecting')) return;
     el.querySelectorAll(':scope > [data-rk-overflow]').forEach((c) => c.removeAttribute('data-rk-overflow'));
+    el.removeAttribute('data-rk-full');
     more.hidden = true;
-    const withPlaces = placesShown();
+    const withPlaces = placesShown(), centred = el.querySelector(':scope > .rk-ab[data-rk-align="center"]');
     markPlaces(el, withPlaces);
     if (withPlaces) {                                 /* the places hold the bar: every command is in "more", pinned too */
       const all = candidates(true);
       if (all.length) { more.hidden = false; all.forEach((c) => c.setAttribute('data-rk-overflow', '')); }
-    } else if (!fits()) {
+    } else if (centred && centred.getClientRects().length) twoSides(centred);
+    else if (!fits()) {
       more.hidden = false;
       for (const c of candidates()) { if (fits()) break; c.setAttribute('data-rk-overflow', ''); }
     }
@@ -3817,9 +3843,39 @@ function greet(tile, anims) {
     }
   });
 }
+// indicate(control, content): a short indicator (a volume or a brightness being set) stands in place of a control:
+// the control turns away as a live tile does for a new status, and the indicator turns in; timing.indicator after the
+// last call it turns back. A call while it stands changes it in place: a reading that keeps changing is no news. The
+// control's own children are hidden meanwhile, and data-rk-indicating is on it. The words to hear go through a live
+// region, not through this.
+const indicating = new WeakMap();
+export function indicate(control, content) {
+  let s = indicating.get(control);
+  const back = () => {
+    const t = indicating.get(control);
+    if (!t) return;
+    indicating.delete(control);
+    tileUpdate(control, () => { t.node.remove(); t.hid.forEach((k) => { k.hidden = false; }); control.removeAttribute('data-rk-indicating'); }, { kind: 'flip' });
+  };
+  if (s) {
+    if (s.node !== content) { s.node.replaceWith(content); s.node = content; }
+  } else {
+    s = { node: content, hid: [], timer: 0 };
+    indicating.set(control, s);
+    tileUpdate(control, () => {
+      s.hid = [...control.children].filter((k) => !k.hidden);
+      s.hid.forEach((k) => { k.hidden = true; });
+      control.appendChild(s.node);
+      control.setAttribute('data-rk-indicating', '');
+    }, { kind: 'flip' });
+  }
+  clearTimeout(s.timer);
+  s.timer = setTimeout(back, ms('--rk-duration-indicator'));
+}
 // tileUpdate(tile, change, { kind }): a live tile has news. 'peek' (a new number or line): the new content rises
 // from peek-travel of its height below while the old one leaves upwards by as much, over duration-moderate. 'flip' (a
-// new status): the tile turns flip-angle away around its horizontal axis, changes, and turns back. A continuous reading
+// new status): the tile turns flip-angle away around its horizontal axis, changes, and turns back. What peeks is the
+// tile's .rk-stat, or the part a page marks data-rk-peek (a count in an app-bar control). A continuous reading
 // (frames a second) is no news: it updates in place. Inside a live region (live()) the change already waits while the
 // region is held. News on several tiles at once comes one after another (greet).
 export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
@@ -3835,7 +3891,7 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
       return tile.animate([{ transform: `perspective(${p}px) rotateX(${turn}deg)` }, { transform: `perspective(${p}px) rotateX(0deg)` }], { duration: d / 2, easing: css('--rk-ease-in') }).finished.catch(() => {});
     });
   }
-  const target = tile.querySelector('.rk-stat') || tile;
+  const target = tile.querySelector('.rk-stat, [data-rk-peek]') || tile;
   const was = target.textContent;
   const ghost = target.cloneNode(true);
   const tr = tile.getBoundingClientRect(), r = target.getBoundingClientRect();

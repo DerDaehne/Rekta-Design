@@ -1298,6 +1298,11 @@
       "$type": "duration",
       "$value": "1000ms",
       "$description": "In a collection whose entries take focus, letters typed less than this apart form one prefix to jump to; after a pause a letter starts again. Wall time: reduced motion leaves it alone."
+    },
+    "indicator": {
+      "$type": "duration",
+      "$value": "1700ms",
+      "$description": "How long a short indicator (a volume or a brightness being set) stands in place of an app-bar control after its last change, before the control turns back (indicate()). Long enough to read the value once more after letting go. Wall time: reduced motion leaves it alone."
     }
   },
   "layer": {

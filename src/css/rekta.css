@@ -746,7 +746,23 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-ab-mid > * { flex: none; }
 .rk-ab-mid > :last-child { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rk-ab-mid[data-rk-priority='pinned'] { flex: 0 0 auto; max-width: 50%; }
-.rk-appbar:has(> .rk-ab-more:not([hidden])) > .rk-ab-mid:not([data-rk-priority='pinned']) { display: none; }   /* the bar is full: it has given way */
+.rk-appbar:not(:has(> .rk-ab[data-rk-align='center'])):has(> .rk-ab-more:not([hidden])) > .rk-ab-mid:not([data-rk-priority='pinned']) { display: none; }   /* the bar is full: it has given way */
+/* A control in the middle of the bar (a clock, data-rk-align="center"; docs/navigation.md): the bar has two sides
+   around it. The leading side starts at the bar's start, the trailing side ends at its end, and the centred control
+   stands at the bar's centre (appbar() writes --_rk-shift; without it, in the middle of the room between the sides).
+   The middle line cuts before it (--_rk-mid-max) and is gone only while the leading side has given controls away. */
+.rk-appbar:has(> .rk-ab[data-rk-align='center']) > .rk-ab-status { margin-inline-end: 0; }
+.rk-appbar > .rk-ab[data-rk-align='center'] { margin-inline: auto; translate: var(--_rk-shift, 0px) 0; }
+.rk-appbar:has(> .rk-ab[data-rk-align='center']) > .rk-ab-mid { flex: 0 1 auto; max-width: var(--_rk-mid-max, none); }
+.rk-appbar:has(> .rk-ab[data-rk-align='center']) > .rk-ab-mid[data-rk-priority='pinned'] { max-width: min(50%, var(--_rk-mid-max, 50%)); }
+.rk-appbar[data-rk-full~='start'] > .rk-ab-mid:not([data-rk-priority='pinned']) { display: none; }
+/* Giving way to a full-screen window (the page writes data-rk-away): the bar glides out over its own edge and comes
+   back the same way; while out it takes no focus. */
+.rk-appbar { transition: translate var(--rk-duration-short) var(--rk-ease-in), visibility 0s; }
+.rk-appbar[data-rk-away] { translate: 0 100%; visibility: hidden; transition: translate var(--rk-duration-short) var(--rk-ease-out), visibility 0s var(--rk-duration-short); }
+/* A short indicator in place of a control (indicate()): the control's own parts are hidden, the indicator stands in
+   their place with the control's height; a meter in it is a tile unit wide at most. */
+.rk-ab[data-rk-indicating] .rk-meter { display: block; flex: none; width: var(--rk-tile-unit); }
 /* "more" opens its menu above the bar at the bar's trailing edge. rekta.js places it as it places every floating
    surface; this holds without the script. */
 .rk-float.rk-ab-menu { inset: auto var(--rk-space-m) calc(var(--rk-appbar-height) + env(safe-area-inset-bottom) + var(--rk-space-xs)) auto; --_rk-from: 4px; }

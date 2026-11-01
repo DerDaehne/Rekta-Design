@@ -221,6 +221,10 @@ them:
 | `data-value` | a combobox's input | The chosen option's value. |
 | `--_rk-v` | a slider | How far its value is along the track, for the fill. |
 | `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
+| `data-rk-full` | the app bar | `start`, `end` or both: around a centred control, the side that has given controls away (`appbar()`). |
+| `data-rk-away` | the app bar (written by the page) | It gives way to a full-screen window: it glides out over its edge and takes no focus. |
+| `data-rk-indicating` | an app-bar control | A short indicator stands in its place (`indicate()`). |
+| `data-rk-peek` | a part of an element (written by the page) | What peeks when `tileUpdate()` brings it news: a count in an app-bar control. A tile's `.rk-stat` needs none. |
 | `data-rk-probe` | a `span` inside a measured element (a pivot strip; any element whose length token is a `calc()`) | A measuring probe, in and out within one call: an app's own `MutationObserver` on such an element should ignore it. |
 | `data-rk-places` | the app bar, the root | The bar holds the places (`appbar()`, compact). |
 | `data-rk-held` | a toast | Its window holds: the pointer rests on it or focus is in it. |
@@ -919,11 +923,36 @@ Moves the app bar's controls that do not fit into the menu of `more` (a
 - **Places.** While `.rk-ab-places` shows (compact), every command is
   in "more", and `data-rk-places` is on the bar and the
   root (`docs/navigation.md`).
+- **Two sides.** A control in the middle of the bar (a clock), marked
+  `data-rk-align="center"`, stands at the bar's centre and never moves.
+  The controls before it in the bar are the leading side, those after
+  it the trailing side; each side has half the bar less half the
+  centred control. A side that does not fit gives its own controls
+  away, by the order above; "more", last in the bar, ends the trailing
+  side. `.rk-ab-mid` cuts before the centred control (pinned, up to half
+  the bar) and is gone only while the leading side has given controls
+  away; `data-rk-full` (`start`, `end`) names the sides that have.
 - **It lays itself out again** when the bar's width changes, when its
   children change (places a framework renders later), when a child
   grows or shrinks on its own (the live word a banner writes, a pinned
   `.rk-ab-mid`), and once the web fonts have arrived; sizes its own
   layout causes do not set it off again. `layout()` does it by hand.
+
+### `indicate(control, content)`
+
+A short indicator (a volume or a brightness being set) stands in place
+of an app-bar control: the control turns away about its horizontal axis
+as a live tile does for a new status, and `content` (an element: an
+icon, a word, a meter) turns in. A call while it stands changes it in
+place; `timing.indicator` (1.7s) after the last call the control turns
+back. Its own children are `hidden` meanwhile and `data-rk-indicating`
+is on it. The words to hear go through a live region
+(`.rk-status-region`), not through the control.
+
+```js
+const level = Object.assign(document.createElement('span'), { className: 'rk-meter' });
+onVolume((v) => { level.style.setProperty('--rk-v', v); Rekta.indicate(clock, level); status.textContent = `volume ${Math.round(v * 100)}%`; });
+```
 
 ### `form(el, { validators, onSubmit, submit })`
 

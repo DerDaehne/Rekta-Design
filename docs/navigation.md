@@ -315,6 +315,65 @@ on touch when it is tapped. `disable(control, reason)` does it on a
 its item is disabled and says it in the label, "print (needs a
 printer)".
 
+### A control in the middle
+
+A control may stand in the middle of the bar (a clock: the time over
+the date, two lines in the 48px control), marked `data-rk-align="center"`.
+Its floating surface is centred on it ([states.md](states.md#floating-surfaces)).
+
+- **Two sides.** The bar then has a leading side (back, the live state,
+  the middle line and the controls before the centred one) and a
+  trailing side (the controls after it, "more" last). Each side has half
+  the bar less half the centred control; the centred control stands at
+  the bar's centre and never moves into "more".
+- **Each side gives its own way.** A side that does not fit gives its
+  own controls away, the least important first: moving a control of the
+  other side would not help. "more" ends the trailing side whichever
+  side gave the controls.
+- **The middle line** cuts before the centred control, pinned or not (a
+  pinned one keeps up to half the bar, but always ends before it), and
+  is gone only while the leading side has given controls away; a full
+  trailing side leaves it alone.
+
+### A short indicator in place of a control
+
+A system indicator (the volume, the brightness, while it is being set)
+does not open anything: it stands for a moment in place of a control,
+usually the centred one. The control turns away about its horizontal
+axis and the indicator turns in, the turn of a live tile's new status
+(`flip-angle`, its curves and perspective); `timing.indicator` (1.7s)
+after the last change it turns back. Changes while it stands go in
+place: a reading that keeps changing is no news. It means "this holds
+only now"; what lasts is a control or a toast. The value is also said
+in a live region. `indicate(control, content)` does it on the web.
+
+### A count in a control
+
+A control that counts (notifications 3) shows its figure in a part of
+its own, `data-rk-peek`; when the count changes, the new figure peeks
+in as a live tile's number does (`tileUpdate()`), and the control's
+edge glides if its width changes ([motion.md](motion.md), resize).
+
+### Giving way to full screen
+
+The bar stays at every width, with one exception: while a window or a
+place takes the whole screen (a video, a presentation), the bar gives
+way. It glides out over its own edge, `duration-short` · `ease-out`,
+and back in the same way · `ease-in` when the full screen ends; while
+out it takes no focus. The page writes `data-rk-away` on the bar. It
+has stepped aside, not gone: a key or a gesture at that edge may bring
+it back for a moment.
+
+### Programs in the background
+
+Other programs' status icons do not each get a control: the bar keeps
+"never an icon alone". They gather in one control, "in the background"
+with their number, whose menu lists each program: its icon, its name,
+its state at the item's end where a key hint would stand, in the key
+hint's style. A program's own menu is the item's second level
+([states.md](states.md#floating-surfaces)), its words as the program
+writes them. The count peeks as above.
+
 ### When the bar is full
 
 Controls that do not fit move into "more", the least important first
