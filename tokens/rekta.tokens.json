@@ -1001,12 +1001,12 @@
       "stagger": {
         "$type": "duration",
         "$value": "30ms",
-        "$description": "Delay per tile index when tiles build in (capped at 10). In a place change, the unit of when a part starts (heft-spread) and the step between parts that weigh the same."
+        "$description": "In a place change, the unit of when a part starts (heft-spread) and the step between parts that weigh the same; the step between a chart's bars as they grow (capped at 10)."
       },
       "greet": {
         "$type": "duration",
         "$value": "75ms",
-        "$description": "Live tile news: when several tiles get news within duration-moderate, each shows it this long after the one before it in reading order, four steps at most (the rest with the fourth). About 2.5 × duration-stagger."
+        "$description": "The step between parts that come one after another in reading order, four steps at most (the rest with the fourth): tiles building in on arrival, and live tile news when several tiles get it within duration-moderate. About 2.5 × duration-stagger."
       },
       "pulse": {
         "$type": "duration",
@@ -1104,6 +1104,16 @@
           0.98
         ],
         "$description": "Place change, arriving: a part swings in quick at first and lands with a trace of speed left, so its motion ends when its animation does. With turnstile-in-angle."
+      },
+      "landing": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.1,
+          0.9,
+          0.2,
+          1.0
+        ],
+        "$description": "A very fast start and a long settle, ending at rest without overshoot: tiles building in on arrival (their travel over duration-long, their opacity over duration-short) and the nudge that hints at a gesture."
       }
     },
     "transform": {
@@ -1173,6 +1183,22 @@
           "unit": "px"
         },
         "$description": "Facet change: how far the incoming facet travels from its side of the pivot."
+      },
+      "arrive-distance": {
+        "$type": "dimension",
+        "$value": {
+          "value": 32,
+          "unit": "px"
+        },
+        "$description": "Tiles building in on arrival: how far each rises to its place (ease-landing, duration-long), far enough to be seen arriving rather than appearing. As much as space-l."
+      },
+      "nudge-distance": {
+        "$type": "dimension",
+        "$value": {
+          "value": 16,
+          "unit": "px"
+        },
+        "$description": "A part that answers a gesture nobody can see (a swipe) hints at it when it is only tapped: it moves this far the gesture's way and back, duration-short each way on ease-landing. As much as space-m."
       },
       "tile-tilt": {
         "$type": "number",

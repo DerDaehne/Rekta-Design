@@ -155,8 +155,10 @@ title bar (the default) or keep the system's frame.
 **Controller.** A controller owns one root view, created lazily by its
 `load` callback, and receives `appear` and `disappear` as it comes and goes.
 Controllers contain controllers: `rk_places` is a navigation stack (a place
-change turns), `rk_panorama` lays sections sideways under a pivot strip,
-`rk_pivot` shows facets of one place. `rk_controller_present` shows a sheet
+change turns; a view marked with `rk_view_set_carry` is its part's title and
+travels into the new place's first `RK_TEXT_TITLE` label, and back),
+`rk_panorama` lays sections sideways under a pivot strip, `rk_pivot` shows
+facets of one place. `rk_controller_present` shows a sheet
 from the top edge; `rk_controller_dismiss` lets it leave the way it came.
 
 **View.** A view has a frame in its parent, a fill from the theme (a role, so
@@ -197,8 +199,10 @@ grows.
 before a change, animates from the old look to the new: a tile's new number
 peeks in, a new status flips it. Tiles of one window that peek or flip within
 duration-moderate go one after another in reading order, duration-greet
-apart, four steps at most. Reduced motion zeroes every duration; the end
-state is always reached.
+apart, four steps at most. `rk_view_nudge(view, dx, dy)` is the gesture
+hint: a view that answers a gesture nobody can see moves `nudge-distance`
+its way and back when it is only tapped. Reduced motion zeroes every
+duration; the end state is always reached.
 
 ## Accessibility
 

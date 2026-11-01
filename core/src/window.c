@@ -14,6 +14,7 @@ static void root_layout(rk_view *v, void *state) {
   float top = 0;
   if (w->titlebar) { top = 36; rk__set_frame(w->titlebar, (rk_rect){ 0, 0, v->frame.w, top }); }
   rk__set_frame(w->content, (rk_rect){ 0, top, v->frame.w, v->frame.h - top });
+  rk__set_frame(w->carries, (rk_rect){ 0, 0, v->frame.w, v->frame.h });
   rk__set_frame(w->sheets, (rk_rect){ 0, 0, v->frame.w, v->frame.h });
   rk__set_frame(w->toasts, (rk_rect){ 0, top, v->frame.w, v->frame.h - top });
   rk__set_frame(w->floats, (rk_rect){ 0, 0, v->frame.w, v->frame.h });
@@ -61,6 +62,7 @@ rk_window *rk_window_create(const rk_window_desc *desc) {
   w->content = rk_view_create(); rk_view_set_layout(w->content, RK_LAYOUT_OVERLAY);
   if (!d.system_frame) { w->titlebar = rk__titlebar_create(w); rk__view_add(w->root, w->titlebar); rk_release(w->titlebar); }
   rk__view_add(w->root, w->content); rk_release(w->content);
+  w->carries = rk_view_create(); w->carries->passthrough = true; rk__view_add(w->root, w->carries); rk_release(w->carries);
   /* a toast says something happened; a sheet asks, above everything (the web's dialogs are in the top layer) */
   w->toasts = rk__view_create(&toasts_class, NULL); w->toasts->passthrough = true; rk__view_add(w->root, w->toasts); rk_release(w->toasts);
   w->sheets = rk__view_create(&rk__sheets_class, NULL); w->sheets->passthrough = true; rk__view_add(w->root, w->sheets); rk_release(w->sheets);

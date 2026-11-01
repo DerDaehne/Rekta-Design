@@ -1048,6 +1048,13 @@ hears it.
 marks a place that is called up and left again many times an hour (a
 launcher): a change to or from it turns at half the pace, every duration and
 the stagger halved, the curves and angles as they are.
+.Pp
+A view marked with
+.Fn rk_view_set_carry
+is the title of the part it is in: when that part opens a place, the title
+does not turn away but travels into the new place's title (its first
+.Dv RK_TEXT_TITLE
+label), and back into the part.
 .It Fn rk_panorama , Fn rk_panorama_add
 One place laid out sideways in sections under a strip of their titles.
 .Fn rk_panorama_insert ,
@@ -1148,6 +1155,12 @@ Called before a change:
 .Dv RK_TRANSITION_CROSSFADE .
 Tiles of one window that peek or flip within duration-moderate go one after
 another in reading order, duration-greet apart, four steps at most.
+.It Fn rk_view_nudge "rk_view *view" "float dx" "float dy"
+A view that answers a gesture nobody can see (a swipe) hints at it when it
+is only tapped: it moves nudge-distance the gesture's way
+.Pq Fa dx , Fa dy : 1, 0 is right; 0, \-1 is up
+and back, duration-short each way.
+Call it from the tap; the words that name the gesture stay.
 .El
 .Pp
 Under reduced motion every change is instant, never skipped.

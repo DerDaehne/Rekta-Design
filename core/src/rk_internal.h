@@ -238,6 +238,7 @@ struct rk_view {
   float radius;
   bool rule_top, rule_bottom, hidden, clip, focusable, leaving, entering, placed, fill_anim;
   bool passthrough;                                        /* a layer: only its children take the pointer */
+  bool carry;                                              /* the title of its part, carried into a place it opens */
   bool hug;                                                /* keeps its own width across a stack, as a button */
   bool scrolls;                                            /* scrolls its content: may shrink below it in a stack */
   bool draws_focus;                                        /* draws its own focus ring (a field: around its input) */
@@ -334,6 +335,7 @@ struct rk_window {
   void *native;
   rk_view *root;                                           /* title bar, content, sheets, toasts */
   rk_view *titlebar, *content, *sheets, *toasts, *floats;   /* floats: menus, above everything */
+  rk_view *carries;                                        /* a title carried into a place, above the content */
   rk_controller *controller;
   rk_bitmap *fb;                                           /* what the last frame was drawn into */
   rk_bitmap *own_fb; bool fb_elsewhere;                    /* ours, where the platform gives no buffer */
@@ -444,6 +446,7 @@ int rk__menu_active(rk_view *menu);
 void rk__menu_choose(rk_view *menu, int item);                    /* focus inside it goes back to where it came from */
 bool rk__is_tile(rk_view *v);
 rk_role rk__tile_fill(rk_view *v);                         /* a tile's fill now: its status's, its content's or surface */
+bool rk__is_title(rk_view *v);                             /* a label in RK_TEXT_TITLE: a place's title */
 void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r);
 void rk__focus_ring(rk_canvas *c, rk_rect r, float out);  /* 2px in the focus colour, out px outside r */
 bool rk__shows_focus(rk_view *v);                         /* v has focus and the keyboard is in use */

@@ -192,6 +192,37 @@ ok((await focused(p)) === 'notes-title', 'focus on the place title', await focus
 await p.click('[data-rk-place=notes] .rk-crumb'); await p.waitForTimeout(TURN);
 ok(await visible(p, 'home') && (await p.evaluate(() => location.hash)) === '', 'the crumb goes back home');
 ok((await focused(p)) === 'tile-notes', 'focus back on the opening tile', await focused(p));
+// The tapped part carries its title into the place it opens (#145): the title stands while the rest turns away, then
+// travels on ease-pivot-glide over duration-moderate to the new place's title and lands on its pixels; the new place's
+// parts arrive from the middle of the travel on. Back runs it the other way. Nothing is left behind, and focus lands.
+{
+  const copies = () => p.evaluate(() => [...document.body.children].filter((c) => c.getAttribute('aria-hidden') === 'true' && c.style.position === 'fixed').map((c) => c.textContent.trim()));
+  await p.click('#tile-notes');
+  let leaving = null;
+  await until(p, async () => (leaving = await p.evaluate(() => ({ source: getComputedStyle(document.querySelector('#tile-notes [data-rk-carry]')).opacity }))) && leaving.source === '0', 800);
+  const standing = await copies();
+  let flight = null;
+  await until(p, async () => (flight = await p.evaluate(() => {
+    const t = document.querySelector('#notes-title'), copy = [...document.body.children].find((c) => c.style.position === 'fixed' && c.textContent.trim() === 'Rekta 0.2');
+    if (!copy) return null;
+    const a = copy.getAnimations()[0], r = t.getBoundingClientRect(), delays = [...document.querySelectorAll('[data-rk-place=notes] [data-rk-turn]')].map((u) => parseFloat(u.style.getPropertyValue('--_rk-turn-delay')));
+    return { at: [Math.round(parseFloat(copy.style.left) - r.left), Math.round(parseFloat(copy.style.top) - r.top)].join(), lands: a.effect.getKeyframes().at(-1).transform, d: a.effect.getTiming().duration, ease: a.effect.getTiming().easing, title: getComputedStyle(t).opacity, first: Math.min(...delays) };
+  })), 2000);
+  const settled = () => p.evaluate(() => ({ title: getComputedStyle(document.querySelector('#notes-title')).opacity, source: document.querySelector('#tile-notes [data-rk-carry]').style.opacity, left: [...document.body.children].filter((c) => c.style.position === 'fixed' && c.getAttribute('aria-hidden') === 'true').length }));
+  let after = null;
+  await until(p, async () => (after = await settled()) && after.title === '1' && !after.left, 3000);
+  ok(leaving.source === '0' && standing.includes('0.2'), 'leaving, the tapped tile\'s title stands while its tile turns away', JSON.stringify({ leaving, standing }));
+  ok(flight && flight.at === '0,0' && flight.lands === 'none' && flight.d === 400 && flight.ease === 'cubic-bezier(0.65, 0, 0.35, 1)' && flight.title === '0' && flight.first >= 200, 'the title travels to the new place\'s title on ease-pivot-glide and lands on its pixels; the rest arrive from the middle', JSON.stringify(flight));
+  ok(after.title === '1' && after.source === '' && !after.left && (await focused(p)) === 'notes-title', 'once landed the title is the place\'s own and has focus; nothing is left behind', JSON.stringify(after));
+  await p.waitForTimeout(TURN);
+  await p.click('[data-rk-place=notes] .rk-crumb');
+  let back = [];
+  await until(p, async () => (back = await copies()).includes('Rekta 0.2'), 1500);
+  let home = null;
+  await until(p, async () => (home = await p.evaluate(() => ({ tile: getComputedStyle(document.querySelector('#tile-notes [data-rk-carry]')).opacity, title: document.querySelector('#notes-title').style.opacity, left: [...document.body.children].filter((c) => c.style.position === 'fixed' && c.getAttribute('aria-hidden') === 'true').length }))) && home.tile === '1' && !home.left, 3000);
+  ok(back.includes('Rekta 0.2') && home.tile === '1' && home.title === '' && !home.left && (await visible(p, 'home')) && (await focused(p)) === 'tile-notes', 'back, the place\'s title travels into the tile that opened it, and focus returns to the tile', JSON.stringify({ back, home }));
+  await p.waitForTimeout(TURN);
+}
 
 // Browser back and forward; Escape; a navigation during a turn.
 await p.click('#tile-tokens'); await p.waitForTimeout(TURN);
@@ -514,6 +545,61 @@ const inline = await p.evaluate(async () => {
 });
 ok(inline.waits === '0' && inline.glides && !inline.path && inline.after === '1' && !inline.leavePath, 'a bar control fades in after its neighbours make room, and leaves by a fade, without a path', JSON.stringify(inline));
 ok(stripped.arrive, 'arrive() is exported for framework routers', JSON.stringify(stripped));
+// Tiles building in (#144): each rises arrive-distance over duration-long on ease-landing and is whole after
+// duration-short on the same curve; they follow one another duration-greet apart, four steps at most.
+const built = await p.evaluate(() => {
+  const place = document.createElement('div'); place.style.cssText = 'position:fixed;left:0;top:0;width:1000px;z-index:-1';
+  place.innerHTML = `<div class="rk-tiles">${[0, 1, 2, 3, 4, 5].map((i) => `<div class="rk-tile" style="--rk-i:${i}"><span class="rk-stat">${i}</span></div>`).join('')}</div>`;
+  document.querySelector('.rk').append(place);
+  Rekta.arrive(place);
+  const tiles = [...place.querySelectorAll('.rk-tile')], anim = (t, name) => t.getAnimations().find((a) => a.animationName === name);
+  const rise = anim(tiles[0], 'rk-build-in'), fade = anim(tiles[0], 'rk-build-in-fade');
+  const out = { rise: Math.round(rise.effect.getTiming().duration), fade: Math.round(fade.effect.getTiming().duration), ease: [rise, fade].map((a) => a.effect.getKeyframes()[0].easing).join(' '), delays: tiles.map((t) => Math.round(anim(t, 'rk-build-in').effect.getTiming().delay)).join() };
+  rise.pause(); fade.pause(); rise.currentTime = 0; fade.currentTime = 0;
+  out.from = getComputedStyle(tiles[0]).transform; out.hidden = getComputedStyle(tiles[0]).opacity;
+  rise.currentTime = fade.currentTime = out.fade;
+  out.wholeAt = getComputedStyle(tiles[0]).opacity; out.still = new DOMMatrix(getComputedStyle(tiles[0]).transform).f;
+  place.remove();
+  return out;
+});
+ok(built.rise === 600 && built.fade === 250 && built.ease === 'cubic-bezier(0.1, 0.9, 0.2, 1) cubic-bezier(0.1, 0.9, 0.2, 1)' && built.delays === '0,75,150,225,225,225', 'tiles build in over duration-long on ease-landing, whole after duration-short, duration-greet apart, four steps', JSON.stringify(built));
+ok(built.from === 'matrix(1, 0, 0, 1, 0, 32)' && built.hidden === '0' && built.wholeAt === '1' && built.still > 0 && built.still < 3, 'a tile rises arrive-distance; it is whole while it still settles', JSON.stringify(built));
+// A panorama never ends flush on a section edge (#147): at every width the window's edge falls inside a section,
+// space-xl from either of its ends, the gaps even and never below space-m; when everything fits, nothing scrolls.
+const edges = await p.evaluate(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const place = document.createElement('div'); place.className = 'rk-place'; place.style.cssText = 'position:fixed;left:0;top:0;height:400px;z-index:-1';
+  place.innerHTML = `<div class="rk-panorama" aria-label="edges" style="--rk-sec-w:500px;height:300px">${'<section class="rk-sec"><p>a</p></section>'.repeat(4)}<div class="rk-panorama-end"></div></div>`;
+  document.querySelector('.rk').append(place);
+  const pan = place.firstChild, api = Rekta.panorama(pan), out = { bad: [], changed: 0, fits: 0, worst: 0 };
+  for (let w = 800; w <= 2400; w += 10) {
+    place.style.width = `${w}px`; await frame();
+    const r = [...pan.querySelectorAll('.rk-sec')].map((s) => s.getBoundingClientRect()), edge = pan.getBoundingClientRect().left + pan.clientWidth;
+    const gaps = r.slice(1).map((s, i) => Math.round(s.left - r[i].right)), gap = gaps[0];
+    const even = gaps.every((g) => g === gap), inside = r.some((s) => s.left + 48 <= edge + 0.5 && edge - 0.5 <= s.right - 48);
+    if (pan.hasAttribute('data-rk-fit')) { out.fits += 1; if (r[3].right > edge + 1 || gap < 16 || gap > 48 || !even) out.bad.push(`${w}: fit, gap ${gap}`); continue; }
+    if (!inside || gap < 16 || !even) out.bad.push(`${w}: edge ${Math.round(edge - r[0].left)}, gaps ${gaps}`);
+    if (gap !== 48) { out.changed += 1; out.worst = Math.max(out.worst, Math.abs(gap - 48)); }
+  }
+  api.destroy(); place.remove();
+  return out;
+});
+ok(!edges.bad.length && edges.changed > 0 && edges.fits > 0 && edges.worst <= 96, 'a panorama never ends flush on a section edge: a piece of the next section shows, the gaps even and at least space-m', JSON.stringify(edges));
+// The gesture hint (#149): nudge-distance the gesture's way and back, duration-short each way on ease-landing, added
+// to the part's own transform; it rests where it was.
+const nudged = await p.evaluate(async () => {
+  const t = document.createElement('div'); t.className = 'rk-tile'; t.style.cssText = 'position:fixed;left:200px;top:200px;width:150px;height:150px;z-index:-1';
+  document.querySelector('.rk').append(t);
+  const run = Rekta.nudge(t, 'left'), a = t.getAnimations()[0], k = a.effect.getKeyframes();
+  const out = { to: k[1].transform, at: k[1].computedOffset, ease: k[0].easing, back: k[1].easing, composite: a.effect.composite, d: a.effect.getTiming().duration };
+  await run;
+  out.after = t.getAnimations().length; out.rest = getComputedStyle(t).transform;
+  try { Rekta.nudge(t, 'sideways'); out.unknown = 'accepted'; } catch { out.unknown = 'refused'; }
+  t.remove();
+  return out;
+});
+ok(nudged.to === 'translate(-16px, 0px)' && nudged.at === 0.5 && nudged.ease === 'cubic-bezier(0.1, 0.9, 0.2, 1)' && nudged.back === nudged.ease && nudged.composite === 'add' && nudged.d === 500, 'a gesture hint moves nudge-distance the gesture\'s way and back on ease-landing, added to the part\'s own transform', JSON.stringify(nudged));
+ok(nudged.after === 0 && nudged.rest === 'none' && nudged.unknown === 'refused', 'a gesture hint rests where the part was; an unknown direction is refused', JSON.stringify(nudged));
 
 // A domain colour code: a tag's square and a chart series take --rk-series-N; their text stays ink.
 const codes = await p.evaluate(() => {
@@ -1979,6 +2065,14 @@ ok(await r.evaluate(() => {
   box.remove();
   return still && lefts.join() === '235,247,259';
 }), 'reduced motion: the beads stand still in the middle');
+ok(await r.evaluate(async () => {
+  const t = document.createElement('div'); t.className = 'rk-tile'; t.style.cssText = 'position:fixed;left:0;top:0;width:150px;height:150px';
+  document.querySelector('.rk').append(t);
+  await Rekta.nudge(t, 'right');
+  const still = !t.getAnimations().length;
+  t.remove();
+  return still;
+}), 'reduced motion: no gesture hint');
 await r.close();
 
 await browser.close();

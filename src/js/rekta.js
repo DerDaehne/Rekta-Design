@@ -43,6 +43,7 @@
      reflow     FLIP: what a change moves or resizes glides there (a tile resized, a grid re-flowed)
      enter, leave, presence   things arrive in and leave a list or a grid; the rest close the gap
      tileUpdate a live tile has news: the new number peeks up, a new status flips the tile
+     nudge      a part whose gesture nobody can see (a swipe) hints at it when it is only tapped
      sparkTo    a live line moves to its new points
      crossfade  a change of the whole look fades instead of flipping
      combobox   a field with a list of choices that filters as you type
@@ -482,18 +483,76 @@ function perspective(far) { return Math.round((num('--rk-turnstile-perspective')
 // A change takes that pace when either side is such a place, so the way in and the way out match.
 const calledUp = (...list) => list.some((p) => p && p.hasAttribute && p.hasAttribute('data-rk-called'));
 // arrive(el): a place (or the root) builds in: tiles rise and sparklines draw while data-rk-arriving is on, for the arrival
-// window. A framework router calls it for a place it opened by client navigation.
+// window: the last tile (three duration-greet steps, then its duration-long rise), a sparkline's duration-long after
+// it, and a frame to spare. A framework router calls it for a place it opened by client navigation.
 export function arrive(el) {
   el.setAttribute('data-rk-arriving', '');
-  const wait = ms('--rk-duration-moderate') + 10 * ms('--rk-duration-stagger') + ms('--rk-duration-long') + 50;
+  const wait = 3 * ms('--rk-duration-greet') + 2 * ms('--rk-duration-long') + 50;
   clearTimeout(el._rkArrive);
   el._rkArrive = setTimeout(() => el.removeAttribute('data-rk-arriving'), wait);
+}
+// The title a part carries into the place it opens (motion.md): it does not turn away with its part. Leaving, a copy
+// stands where it was (the title itself turns transparent, keeping its room, and can still take focus) while the rest
+// of the place turns away. Arriving, it travels over duration-moderate on ease-pivot-glide to where the new place
+// rests its title: a copy of that title
+// travels from the old one's place and size to its own, under the old copy, which fades over the first half, so the
+// same words never change and other words cross over. The new place's parts arrive from the middle of the travel on.
+// The copies stand in the body, fixed (a place is a container, which would hold a fixed box), with the look
+// they had where they stood. Back runs it the other way.
+let lifted = null;
+const COPIED = ['font-family', 'font-size', 'font-weight', 'font-style', 'font-variant-numeric', 'line-height', 'letter-spacing', 'text-transform', 'text-align', 'white-space', 'overflow-wrap', 'color', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left'];
+function copyOf(el, r) {
+  const s = getComputedStyle(el), c = el.cloneNode(true);
+  for (const x of [c, ...c.querySelectorAll('[id]')]) x.removeAttribute('id');
+  c.removeAttribute('data-rk-carry'); c.removeAttribute('class'); c.setAttribute('aria-hidden', 'true');
+  // An inline title keeps its one line: a block as wide as its box would round it onto two.
+  const w = s.display === 'inline' ? Math.ceil(r.width) + 1 : r.width;
+  c.style.cssText = `${COPIED.map((k) => `${k}:${s.getPropertyValue(k)}`).join(';')};position:fixed;left:${r.left}px;top:${r.top}px;width:${w}px;height:${r.height}px;margin:0;border:0;box-sizing:border-box;display:block;overflow:visible;visibility:visible;pointer-events:none;transform-origin:0 0;z-index:var(--rk-layer-sticky)`;
+  return c;
+}
+function liftTitle(el) {
+  const r = el.getBoundingClientRect(), copy = copyOf(el, r);
+  document.body.appendChild(copy);
+  lifted = { el, copy, r, size: parseFloat(getComputedStyle(el).fontSize) || 1, was: el.style.opacity };
+  el.style.opacity = '0';
+}
+function dropTitle() {
+  if (!lifted) return;
+  lifted.copy.remove(); lifted.el.style.opacity = lifted.was;
+  lifted = null;
+}
+function flyTitle(to, d) {
+  const from = lifted, r = to.getBoundingClientRect(), copy = copyOf(to, r), was = to.style.opacity;
+  lifted = null;
+  from.copy.before(copy);
+  to.style.opacity = '0';
+  const k = from.size / (parseFloat(getComputedStyle(to).fontSize) || from.size), dx = from.r.left - r.left, dy = from.r.top - r.top, ease = css('--rk-ease-pivot-glide');
+  const anims = [
+    copy.animate([{ transform: `translate(${dx}px, ${dy}px) scale(${k})` }, { transform: 'none' }], { duration: d, easing: ease, fill: 'forwards' }),
+    from.copy.animate([{ transform: 'none' }, { transform: `translate(${-dx}px, ${-dy}px) scale(${1 / k})` }], { duration: d, easing: ease, fill: 'forwards' }),
+    from.copy.animate([{ opacity: 1 }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], { duration: d, fill: 'forwards' }),
+  ];
+  let over = false;
+  const f = {
+    d, host: null, flown: false, held: false,
+    // The title shows itself when it has arrived and the part that holds it has come to rest, in the same frame.
+    end() {
+      if (over) return;
+      over = true;
+      anims.forEach((a) => a.cancel()); copy.remove(); from.copy.remove();
+      from.el.style.opacity = from.was; to.style.opacity = was;
+    },
+    landed() { f.held = false; if (f.flown) f.end(); },
+  };
+  f.finished = finished(anims).then(() => { f.flown = true; if (!f.held) f.end(); });
+  return f;
 }
 export const turn = {
   get running() { return !!turning; },
   finish() { if (turning) turning.finish(); },
-  leave(place, { pressed = null, back = false, called = calledUp(place) } = {}) {
+  leave(place, { pressed = null, back = false, called = calledUp(place), carry = null } = {}) {
     turn.finish();
+    dropTitle();
     // A place still building in leaves from its end state: the turn wins over the arrival.
     for (const el of [place, docEl()]) { clearTimeout(el._rkArrive); el.removeAttribute('data-rk-arriving'); }
     return new Promise((resolve) => {
@@ -511,6 +570,11 @@ export const turn = {
       if (held) held.setAttribute('data-rk-pressed', '');
       const pace = called ? 0.5 : 1, out = ms('--rk-duration-short') * pace, overlap = num('--rk-turn-overlap');
       const u = turnUnits(place, held), kind = back ? 'back-out' : 'out';
+      // A title carried into the next place stands: it is lifted when the part that holds it starts to turn, at once
+      // when it is a part of its own.
+      const title = carry && ms('--rk-duration-moderate') && carry.getClientRects().length ? carry : null;
+      if (title && u.list.includes(title)) { u.list.splice(u.list.indexOf(title), 1); liftTitle(title); }
+      const titleHost = title && !lifted ? u.list.find((el) => el.contains(title)) : null;
       turnRows(u, place, held);
       // the pressed tile goes when the last of the others does, or later
       const starts = turnStarts(u.list, u.at, held, pace), lastStart = Math.max(0, ...starts.filter((x, i) => u.list[i] !== held).map((x) => x.at));
@@ -519,6 +583,7 @@ export const turn = {
         const h = starts[i].h, d = out * h;
         let at = el === held ? lastStart : starts[i].at;
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
+        if (el === titleHost) timers.push(later(() => liftTitle(title), el === held ? Math.max(at, hold) : at));
         if (el === held) {
           at = Math.max(at, hold);
           timers.push(later(() => { if (el.matches(':hover')) el.style.setProperty('--_rk-tint', 'var(--rk-hover)'); el.setAttribute('data-rk-turn', 'pressed'); }, at));
@@ -541,21 +606,27 @@ export const turn = {
       timers.push(later(done, u.list.length ? end : 0));
     });
   },
-  enter(place, { back = false, focus = null, arriving = !back, called = calledUp(place) } = {}) {
+  enter(place, { back = false, focus = null, arriving = !back, called = calledUp(place), carry = null } = {}) {
     turn.finish();
     return new Promise((resolve) => {
       place.hidden = false;
       // A place you return to comes back as you left it: no second build-in, no redraw.
       if (arriving) arrive(place);
-      else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
+      else place.getAnimations({ subtree: true }).forEach((a) => { if (['rk-build-in', 'rk-build-in-fade', 'rk-draw', 'rk-wipe'].includes(a.animationName)) a.finish(); });
       // Its units turn in from the other side, light ones first, each in its own time.
       const pace = called ? 0.5 : 1, d0 = ms('--rk-duration-moderate') * pace;
       const u = turnUnits(place, null), kind = back ? 'back-in' : 'in';
+      // The carried title travels in; the part that holds it lands with it, the others arrive from its middle on.
+      const flight = lifted && carry && d0 && carry.getClientRects().length ? flyTitle(carry, d0) : null;
+      if (!flight) dropTitle();
+      else if (u.list.includes(carry)) u.list.splice(u.list.indexOf(carry), 1);
+      else if ((flight.host = u.list.find((el) => el.contains(carry)) || null)) flight.held = true;
       turnRows(u, place, null);
-      let end = 0;
+      let end = flight ? d0 : 0;
       const starts = turnStarts(u.list, u.at, null, pace);
       u.list.forEach((el, i) => {
-        const { h, at } = starts[i], d = d0 * h;
+        const { h } = starts[i], d = d0 * h;
+        const at = !flight ? starts[i].at : el === flight.host ? Math.max(0, flight.d - d) : starts[i].at + flight.d / 2;
         el.style.setProperty('--_rk-turn-delay', `${at}ms`);
         el.style.setProperty('--_rk-turn-duration', `${Math.round(d)}ms`);
         el.setAttribute('data-rk-turn', kind);
@@ -568,20 +639,21 @@ export const turn = {
       // one let go a frame early would jump, one held after it stopped would keep its layer and sharpen a moment
       // later. The parts fill backwards only, so motion, animation and layer all end in the same frame.
       let over = false;
-      const release = (el) => { el.removeAttribute('data-rk-turn'); TURN_PROPS.forEach((p) => el.style.removeProperty(p)); unalignLayer(el); };
+      const release = (el) => { el.removeAttribute('data-rk-turn'); TURN_PROPS.forEach((p) => el.style.removeProperty(p)); unalignLayer(el); if (flight && el === flight.host) flight.landed(); };
       const done = () => {
         if (over) return;
         over = true;
         clearTimeout(timer);
         u.list.forEach(release);
+        if (flight) flight.end();
         turning = null;
         resolve();
       };
       turning = { finish: done };
-      Promise.all(u.list.map((el) => {
+      Promise.all([...u.list.map((el) => {
         const own = el.getAnimations().filter((a) => /^rk-turn-(back-)?in$/.test(a.animationName));
         return Promise.all(own.map((a) => a.finished)).then(() => { if (!over) release(el); }, () => {});
-      })).then(done);
+      }), flight && flight.finished]).then(done);
       const timer = later(done, end + 250);                      // a part that never animates (hidden meanwhile)
     });
   },
@@ -667,6 +739,14 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     const w = watchers.get(current), named = w ? w.fn(item, { ...opts, params: new URLSearchParams(params) }) : null;
     document.title = typeof named === 'string' && named ? `${named} · ${titleOf(current)}` : titleOf(current);
   }
+  // The title that travels (motion.md): forward, the opened part's [data-rk-carry] to the new place's title; back, the
+  // place's title to the [data-rk-carry] of the part that opened it.
+  const carried = (el) => (el ? (el.matches('[data-rk-carry]') ? el : el.querySelector('[data-rk-carry]')) : null);
+  function carryOf(from, to, state, back, pressed) {
+    const opener = back && state && state.opener ? [...to.querySelectorAll('a[href]')].find((a) => a.getAttribute('href') === state.opener) : null;
+    const pair = back ? [from.querySelector('.rk-title'), carried(opener)] : [carried(pressed), to.querySelector('.rk-title')];
+    return pair[0] && pair[1] ? pair : [null, null];
+  }
   function show(name, state, { instant = false, back = false, pressed = null } = {}) {
     const prev = current, from = byName(prev), to = byName(name);
     current = name;
@@ -675,14 +755,15 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
     params = (state && state.params) || '';
     showBack();
     const run = async () => {
+      const [lifts, lands] = from && from !== to && !instant ? carryOf(from, to, state, back, pressed) : [null, null];
       if (from && from !== to) {
-        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed, called: calledUp(from, to) });
+        if (instant) { turn.finish(); from.hidden = true; } else await turn.leave(from, { back, pressed, called: calledUp(from, to), carry: lifts });
       }
       to.hidden = false;
       setItem(state && state.item, { back, place: true });
       restore(to, state);
       const f = focusTarget(to, state, back);
-      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f, called: calledUp(from, to) });
+      if (instant) { turn.finish(); if (!back) arrive(to); f.focus({ preventScroll: true }); } else await turn.enter(to, { back, focus: f, called: calledUp(from, to), carry: lands });
       if (onChange) onChange({ from: prev, to: name, back });
       document.dispatchEvent(new CustomEvent('rk:placechange', { detail: { from: prev, to: name, back } }));
     };
@@ -954,18 +1035,45 @@ export function panorama(el, { pivot = null } = {}) {
     e.preventDefault();
     goTo(sec);
   }
+  // A panorama that reaches past its window never ends flush on a section edge, so something always says there is more
+  // (layout.md): the window's edge falls inside a section, at least space-xl from either of its ends. The sections keep
+  // their size; the gap between them (space-xl) changes by as little as that takes, never below space-m; a last section
+  // cut by less than space-xl fits instead, when a smaller gap lets it. The edge is where it lies with the first section
+  // at the start, and with any section aligned there, when they are all as wide. Says whether everything fits; then
+  // nothing scrolls.
+  function spread(list) {
+    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => parseFloat(getComputedStyle(s).width) || 0);
+    const edge = el.clientWidth - (parseFloat(getComputedStyle(el).paddingLeft) || 0), n = sizes.length;
+    const before = (j) => sizes.slice(0, j).reduce((a, w) => a + w, 0);
+    const fitsWith = (g) => before(n) + (n - 1) * g <= edge + 1;
+    const inside = (g) => sizes.some((w, i) => before(i) + i * g + xl <= edge + 0.5 && edge - 0.5 <= before(i) + i * g + w - xl);
+    let gap = xl;
+    if (sideways() && !fitsWith(xl) && !inside(xl)) {
+      const ways = n > 1 ? [Math.floor((edge - before(n)) / (n - 1))] : [];      // everything fits
+      for (let j = 1; j <= n; j += 1) {
+        if (j < n) ways.push(Math.floor((edge - xl - before(j)) / j));            // section j shows space-xl
+        if (j > 1) ways.push(Math.ceil((edge + xl - before(j)) / (j - 1)));      // section j - 1 reaches space-xl past it
+      }
+      const best = ways.filter((g) => g >= least && (inside(g) || fitsWith(g))).sort((a, b) => Math.abs(a - xl) - Math.abs(b - xl))[0];
+      if (best !== undefined) gap = best;
+    }
+    if (gap === xl) el.style.removeProperty('--_rk-sec-gap'); else el.style.setProperty('--_rk-sec-gap', `${gap}px`);
+    return fitsWith(gap);
+  }
   function fit() {
     const list = sections();
     // A panorama in a place that is away keeps everything as it was; it is measured again when it shows.
     if (!list.length || !el.getClientRects().length) { stickyStrip(); return; }
-    const last = list[list.length - 1];
-    const contentRight = el.scrollLeft + last.getBoundingClientRect().right - el.getBoundingClientRect().left;
-    el.toggleAttribute('data-rk-fit', sideways() && contentRight <= el.clientWidth + 1);
+    const was = el.style.getPropertyValue('--_rk-sec-gap');
+    el.toggleAttribute('data-rk-fit', sideways() && spread(list.filter((s) => s.getClientRects().length)));
     if (pivot) { pivotScale(pivot); pivotFit(pivot); }
     stickyStrip();
-    // A change of window-size class keeps the reading position: the current section is state, not an offset.
+    // A change of window-size class keeps the reading position: the current section is state, not an offset. So does
+    // a new gap between the sections.
     const now = sideways();
-    if (now !== wasSideways) { wasSideways = now; if (current) goTo(current, { focus: false, instant: true }); clicked = false; }
+    if (now !== wasSideways || (now && el.scrollLeft > 0 && el.style.getPropertyValue('--_rk-sec-gap') !== was)) {
+      wasSideways = now; if (current) goTo(current, { focus: false, instant: true }); clicked = false;
+    }
   }
   // A section strip that sticks (compact, a direct child of the place) publishes its height, so focus and section
   // jumps land below it.
@@ -4099,6 +4207,22 @@ export function tileUpdate(tile, change, { kind = 'peek' } = {}) {
   const inn = target.animate([{ opacity: 0, transform: `translateY(${travel}%)` }, { opacity: 1, transform: 'none' }], { duration: d * 0.8, delay: d * 0.2, easing: css('--rk-ease-in'), fill: 'backwards' });
   greet(tile, [out, inn]);
   return finished([out, inn]).then(() => { ghost.remove(); if (!tile.querySelector('.rk-stat[aria-hidden]')) tile.style.overflow = ''; });
+}
+// nudge(el, direction): a part that answers a gesture nobody can see (a swipe) hints at it when it is only tapped: it
+// moves nudge-distance the gesture's way ('left', 'right', 'up', 'down') and back, duration-short each way on
+// ease-landing, and rests where it was. The movement adds to the part's own transform, so a press still shows under
+// it; a tap while it moves starts it again. Under reduced motion it stays still: the words that name the gesture say it.
+const nudges = new WeakMap();
+export function nudge(el, direction) {
+  const d = ms('--rk-duration-short'), n = num('--rk-nudge-distance');
+  const to = { left: [-n, 0], right: [n, 0], up: [0, -n], down: [0, n] }[direction];
+  if (!to) throw new Error(`unknown nudge direction ${direction}`);
+  if (nudges.has(el)) nudges.get(el).cancel();
+  if (!d || !shown(el)) return Promise.resolve();
+  const ease = css('--rk-ease-landing');
+  const a = el.animate([{ transform: 'none', easing: ease }, { transform: `translate(${to[0]}px, ${to[1]}px)`, easing: ease }, { transform: 'none' }], { duration: 2 * d, composite: 'add' });
+  nudges.set(el, a);
+  return a.finished.catch(() => {}).then(() => { if (nudges.get(el) === a) nudges.delete(el); });
 }
 // sparkTo(line, points): a live line moves to its new points over duration-long instead of jumping. Points are an
 // SVG points list; with the same number of points each one travels, otherwise the line is redrawn at once.

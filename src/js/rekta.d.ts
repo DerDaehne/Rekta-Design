@@ -86,9 +86,9 @@ export declare function press(scope?: Document | Element): Destroyable;
 
 export declare function arrive(el: Element): void;
 export declare const turn: {
-  /** `called`: a change to or from a place that is called up (`data-rk-called`) turns at half the pace; by default, whether `place` is one. */
-  leave(place: Element, options?: { pressed?: Element | null; back?: boolean; called?: boolean }): Promise<void>;
-  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean; called?: boolean }): Promise<void>;
+  /** `called`: a change to or from a place that is called up (`data-rk-called`) turns at half the pace; by default, whether `place` is one. `carry`: a title that does not turn away but stands for the next enter(), which takes it to its own `carry`. */
+  leave(place: Element, options?: { pressed?: Element | null; back?: boolean; called?: boolean; carry?: Element | null }): Promise<void>;
+  enter(place: Element, options?: { back?: boolean; focus?: HTMLElement | null; arriving?: boolean; called?: boolean; carry?: Element | null }): Promise<void>;
   finish(): void;
   readonly running: boolean;
 };
@@ -475,6 +475,8 @@ export declare function presence(scope: Element, options: { items?: (() => Eleme
 export declare function tileUpdate(tile: HTMLElement, change: () => void, options?: { kind?: 'peek' | 'flip' }): Promise<void>;
 /** A short indicator stands in place of an app-bar control and turns back `timing.level` after the last call. */
 export declare function indicate(control: HTMLElement, content: Element): void;
+/** A part that answers a gesture nobody can see hints at it when tapped: the gesture's way and back. */
+export declare function nudge(el: Element, direction: 'left' | 'right' | 'up' | 'down'): Promise<void>;
 /** `points` as in the polyline's attribute ("0,4 10,2 20,6"). */
 export declare function sparkTo(line: SVGPolylineElement, points: string): void;
 export declare function crossfade(change: () => void): Promise<void>;

@@ -185,6 +185,115 @@ static void test_bar_motion(void) {
   done(w);
 }
 
+/* A panorama never ends flush on a section edge: at every window width the edge falls inside a section, space-xl from
+   either of its ends, the gap changed as little as that takes and never below space-m; when everything fits, the gap
+   is space-xl. A new gap keeps the section in sight. */
+static void test_panorama_edge(void) {
+  rk_window *w = window(1000, 500);
+  rk_controller *pano = rk_panorama();
+  for (int i = 0; i < 4; i++) rk_panorama_add(pano, "section", col(16, 0), 0);
+  rk_window_show(w, pano);
+  rk_app_run_for(50);
+  panorama *p = pano->impl;
+  float xl = rk_metric_of(RK_SPACE_XL), m = rk_metric_of(RK_SPACE_M), sw = section_width(&p->secs[0]);
+  int bad = 0, changed = 0, fits = 0, worst = 0;
+  for (float width = 700; width <= 2500; width += 5) {
+    rk_window_set_size(w, width, 500);
+    rk_app_run_for(1);
+    float W = rk_controller_view(pano)->frame.w, edge = W - xl, gap = p->secs[1].x - p->secs[0].x - sw;
+    bool fit = p->secs[3].x + sw - xl <= edge + 1, inside = false;
+    for (int i = 0; i < 4; i++) { float x = p->secs[i].x - xl; if (x + xl <= edge + 0.5f && edge - 0.5f <= x + sw - xl) inside = true; }
+    if (fit) { fits++; if (gap < m || gap > xl) bad++; continue; }   /* a last section cut by less than space-xl may fit */
+    if (!inside || gap < m || p->secs[2].x - p->secs[1].x - sw != gap) bad++;
+    if (gap != xl) { changed++; worst = RK_MAX(worst, (int)fabsf(gap - xl)); }
+  }
+  CHECK(bad == 0 && changed > 0 && fits > 0, "the edge always falls inside a section, the gaps even (%d wrong, %d widths changed, by %d px at most)", bad, changed, worst);
+  CHECK(worst <= (int)(2 * xl), "the gap changes by little: %d px at most", worst);
+  /* the edge would fall in the gap after the second section: the gap grows until the second reaches space-xl past it */
+  rk_window_set_size(w, 1000, 500);
+  rk_app_run_for(1);
+  pano_select(p, 1);
+  rk_app_run_for(800);
+  float W0 = rk_controller_view(pano)->frame.w;
+  rk_window_set_size(w, (2 * sw + xl + 8) + xl + (1000 - W0), 500);   /* the edge 8 px into the gap after the second */
+  rk_app_run_for(1);
+  float W = rk_controller_view(pano)->frame.w, gap = p->secs[1].x - p->secs[0].x - sw;
+  CHECK(gap != xl && pano_inside(p, W - xl, gap), "flush, the gap changes (%g)", gap);
+  CHECK(CLOSE_TO(rk_controller_view(pano)->value, p->secs[1].x - xl, 0.5), "and the section in sight stays (%g, %g)", rk_controller_view(pano)->value, p->secs[1].x - xl);
+  done(w);
+}
+
+/* A carried title (motion.md): the opened part's title stands while its place turns away, travels into the new place's
+   title and lands on it, the rest of the new place arriving from the middle of the travel; back, the other way. */
+static void test_carry(void) {
+  rk_window *w = window(800, 600);
+  rk_view *home = col(16, 0), *part = rk_add(home, col(4, 8));
+  rk_view *name = rk_add(part, rk_label("Nightly import", RK_TEXT_GROUP));
+  rk_add(part, rk_label("failed twice this week", RK_TEXT_META));
+  for (int i = 0; i < 3; i++) rk_add(home, rk_label("A line of the home place.", RK_TEXT_BODY));
+  rk_view_set_carry(name, true);
+  part->focusable = true;
+  rk_controller *pc = rk_places(rk_controller_create_with_view(home, "home"));
+  rk_window_show(w, pc);
+  rk_app_run_for(50);
+  rk_view *there = col(16, 0), *title = rk_add(there, rk_label("Nightly import", RK_TEXT_TITLE));
+  rk_view *rows = rk_add(there, rk_rows());
+  rk_rows_add(rows, "Last run", "2:14", RK_STATUS_ERROR);
+  rk_window_focus(w, part);
+  w->activated = part;
+  rk_rect from = rk__window_rect(name);
+  rk_places_go(pc, rk_controller_create_with_view(there, "nightly"));
+  places *pl = pc->impl;
+  rk_app_run_for(30);
+  CHECK(pl->carry && name->popacity == 0 && !pl->carry->to, "leaving, the title stands as a picture while its place turns away");
+  double t0 = rk_app_now();
+  while (pl->carry && !pl->carry->to && rk_app_now() - t0 < 2000) rk_app_run_for(8);
+  CHECK(pl->carry && pl->carry->to == title && title->popacity == 0, "then it travels to the new place's title");
+  rk_app_run_for(100);
+  float t = pl->carry ? pl->carry->layer->pvalue : -1;
+  rk_view *row = rows->nkids ? rows->kids[0] : rows;              /* a unit: the rows turn one by one */
+  CHECK(t > 0.1f && t < 0.5f && fabsf(row->ptransform.rotate_y) > RK_TOK_TURNSTILE_IN_ANGLE - 1, "the rest wait for the middle of the travel (%g, %g)", t, row->ptransform.rotate_y);
+  rk_app_run_for(1500);
+  rk_rect to = rk__window_rect(title);
+  CHECK(!pl->carry && title->popacity == 1 && name->popacity == 1 && w->carries->nkids == 0, "it lands, and the title is the place's own; nothing is left");
+  CHECK(fabsf(to.y - from.y) > 0 || fabsf(to.x - from.x) > 0, "it went somewhere");
+  rk_places_back(pc);
+  rk_app_run_for(30);
+  CHECK(pl->carry && title->popacity == 0, "back, the place's title stands");
+  rk_app_run_for(1800);
+  CHECK(!pl->carry && name->popacity == 1 && w->carries->nkids == 0, "and travels into the part that opened it");   /* the place it left is gone, title and all */
+  rk_app_set_motion(RK_MOTION_PREF_OFF);
+  w->activated = part;
+  rk_places_go(pc, rk_controller_create_with_view(col(16, 0), "plain"));
+  CHECK(!pl->carry && name->popacity == 1, "reduced motion: nothing travels");
+  rk_app_set_motion(RK_MOTION_PREF_SYSTEM);
+  rk_app_run_for(100);
+  done(w);
+}
+
+/* A gesture hint: nudge-distance the gesture's way, then back to rest; nothing under reduced motion. */
+static void test_nudge(void) {
+  rk_window *w = window(600, 400);
+  rk_view *root = col(8, 16), *grid = rk_add(root, rk_tile_grid()), *t = rk_add(grid, rk_tile("3", "swipe to dismiss"));
+  show(w, root, "nudge");
+  rk_view_nudge(t, -1, 0);
+  rk_app_run_for(60);
+  CHECK(t->ptransform.translate_x < -RK_TOK_NUDGE_DISTANCE / 2 && t->ptransform.translate_y == 0, "quick away, the gesture's way (%g)", t->ptransform.translate_x);
+  rk_app_run_for(rk_duration_of(RK_DURATION_SHORT));
+  CHECK(t->ptransform.translate_x > -RK_TOK_NUDGE_DISTANCE && t->ptransform.translate_x < 0, "on its way back (%g)", t->ptransform.translate_x);
+  rk_app_run_for(rk_duration_of(RK_DURATION_SHORT));
+  CHECK(t->ptransform.translate_x == 0 && t->anims == 0, "and rests where it was, without a bounce (%g)", t->ptransform.translate_x);
+  float lo = 0;
+  rk_view_nudge(t, 0, 1);
+  for (int i = 0; i < 40; i++) { rk_app_run_for(16); lo = RK_MIN(lo, t->ptransform.translate_y); }
+  CHECK(lo >= 0 && t->ptransform.translate_y == 0, "down and back, never past its rest (%g)", lo);
+  rk_app_set_motion(RK_MOTION_PREF_OFF);
+  rk_view_nudge(t, 1, 0);
+  CHECK(t->ptransform.translate_x == 0 && t->anims == 0, "reduced motion: no hint");
+  rk_app_set_motion(RK_MOTION_PREF_SYSTEM);
+  done(w);
+}
+
 /* Input ----------------------------------------------------------------------------------------------------------- */
 
 static int activations;
@@ -3815,6 +3924,9 @@ static void launch(void *user) {
   test_spring();
   test_news_order();
   test_bar_motion();
+  test_nudge();
+  test_panorama_edge();
+  test_carry();
   { int lv = rk__live_views; test_declare(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declare_same_pixels(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declare_same_pixels: %d views more\n", rk__live_views - lv); }
   { int lv = rk__live_views; test_declared_bindings(); rk_app_run_for(800); if (getenv("RK_LEAKS")) fprintf(stderr, "test_declared_bindings: %d views more\n", rk__live_views - lv); }

@@ -1,7 +1,7 @@
 {
   "$description": "Rekta Design's public hooks: --rk- custom properties that are not tokens. A page, a native shell or rekta.js writes them; rekta.css reads them. build.mjs ships them as `hooks` in rekta.tokens.json and --check holds docs/behaviour.md (Public hooks) to this list.",
   "hooks": {
-    "i": { "writtenBy": "the page", "readBy": "A tile's build-in order (0–10)." },
+    "i": { "writtenBy": "the page", "readBy": "A tile's build-in order (0–3; a higher one goes with the fourth)." },
     "v": { "writtenBy": "the page", "readBy": "A meter's value, 0 to 1; a share of a .rk-shares bar, in any unit." },
     "titlebar-controls": { "writtenBy": "a native shell", "readBy": "Room kept at the title bar's end for the window's own buttons (140px by default) when data-rk-titlebar shows it." },
     "sec-w": { "writtenBy": "the page", "readBy": "A panorama section's width when sideways." },

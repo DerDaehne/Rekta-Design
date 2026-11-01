@@ -186,7 +186,7 @@ them:
 |---|---|---|
 | `data-rk-pressed` | a tile, a `[data-rk-press]` item | Being pressed, or held for the rest of `duration-press` after a quick tap. |
 | `data-rk-turn` | units of a place, or the place | `out`, `back-out`, `pressed` while leaving; `in`, `back-in` while arriving. |
-| `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it; `turned` after a place turn, where only sparklines draw. Removed once the build-in is over (`duration-moderate` + 10 × `duration-stagger` + `duration-long` + 50ms), so a re-render never replays it. A page without the script may set and remove it itself, with the same value and window. |
+| `data-rk-arriving` | the root or a place | Arrival build-in: tiles build in and sparklines draw only under it; `turned` after a place turn, where only sparklines draw. Removed once the build-in is over (3 × `duration-greet` + 2 × `duration-long` + 50ms), so a re-render never replays it. A page without the script may set and remove it itself, with the same value and window. |
 | `data-rk-phase` | a toast, the banner | `leaving` while it goes; `clear` on the banner when no state stands. |
 | `data-rk-from` | a toast | `edge`: a notification from another program; it enters whole from the window's edge and leaves back out (`toaster.show({ edge })`). |
 | `data-rk-fit` | a panorama, a pivot | Everything fits: nothing scrolls (and the panorama's trailing spacer is gone). |
@@ -197,6 +197,7 @@ them:
 | `data-rk-pending` | a button | Its action is running (`pending()`). |
 | `data-rk-side` | a floating surface | `below` or `above` its control (`place()`). |
 | `data-rk-called` | a place (written by the page) | It is called up and left again many times an hour (a launcher): a change to or from it turns at half the pace (`turn`). |
+| `data-rk-carry` | an element inside a part that opens a place (written by the page) | The part's title: it travels into the new place's `.rk-title` instead of turning away, and back into the part ([motion.md](motion.md#place-change-in-detail)). |
 | `data-rk-align` | a control that opens a floating surface (written by the page) | `center`: the control stands in the middle of its container, and `place()` (so `menu()` and `combobox()`) centres the surface on it instead of starting at its leading edge. |
 | `aria-busy` | a `.rk-region` | Loading (`busy()`). |
 | `data-rk-select` | a list or table body | Its items are chosen the Metro way (`select()`). |
@@ -237,7 +238,7 @@ them:
 
 | Property | Written by | Read by |
 |---|---|---|
-| `--rk-i` | the page | A tile's build-in order (0–10). |
+| `--rk-i` | the page | A tile's build-in order (0–3; a higher one goes with the fourth). |
 | `--rk-v` | the page | A meter's value, 0 to 1; a share of a `.rk-shares` bar, in any unit. |
 | `--rk-titlebar-controls` | a native shell | Room kept at the title bar's end for the window's own buttons (140px by default) when `data-rk-titlebar` shows it. |
 | `--rk-sec-w` | the page | A panorama section's width when sideways. |
@@ -401,13 +402,16 @@ The place change as two primitives that any router can call.
 
 | Member | Does |
 |---|---|
-| `turn.leave(place, { pressed, back, called })` | Turns the visible units of `place` away, each by its weight ([motion.md](motion.md)), `pressed` last from its pressed pose once its press has sunk in; then hides `place`. Resolves when it is gone. |
-| `turn.enter(place, { back, focus, arriving, called })` | Shows `place` and turns it in, then focuses `focus`. Its tiles build in unless `arriving` is false (the default for `back`). |
+| `turn.leave(place, { pressed, back, called, carry })` | Turns the visible units of `place` away, each by its weight ([motion.md](motion.md)), `pressed` last from its pressed pose once its press has sunk in; then hides `place`. Resolves when it is gone. `called` turns at half the pace (by default, whether `place` is called up). `carry` is a title that does not turn away: it stands for the next `turn.enter()`. |
+| `turn.enter(place, { back, focus, arriving, called, carry })` | Shows `place` and turns it in, then focuses `focus`. Its tiles build in unless `arriving` is false (the default for `back`). `carry` is where the title the leave kept lands (the place's `.rk-title` forward, the opening part's title back); the rest arrive from the middle of its travel. Without it, a kept title goes. |
 | `turn.finish()` | Ends a running turn in its end state. Call it before any navigation that does not wait: a navigation is never refused. |
 | `turn.running` | Whether a turn runs. |
 
 With a framework router: `await turn.leave(oldEl, { pressed })`, render
-the new route, then `await turn.enter(newEl, { focus: heading })`.
+the new route, then `await turn.enter(newEl, { focus: heading })`. To
+carry the opened part's title, pass `carry: pressed.querySelector('[data-rk-carry]')`
+to the leave and `carry: newEl.querySelector('.rk-title')` to the enter;
+`places()` does it by itself, both ways.
 
 A place that is called up and left again many times an hour (a
 launcher, a start surface) carries `data-rk-called`: a change to or
@@ -487,9 +491,12 @@ Sideways:
 - The pivot follows the scroll. A pivot link aligns its section flush
   left (or as far as the panorama scrolls) and moves focus to the
   section's heading. A click wins over the follow.
-- When everything fits, nothing scrolls (`data-rk-fit`).
-- When the window-size class changes, the current section stays
-  current.
+- When everything fits, nothing scrolls (`data-rk-fit`). Otherwise the
+  window never ends flush on a section edge: `panorama()` changes the
+  gap between the sections a little, as it measures them, so at least
+  `space-xl` of the next one shows ([layout.md](layout.md#panorama)).
+- When the window-size class or that gap changes, the current section
+  stays current.
 
 Compact, the sections stack; a pivot that is a direct child of the
 place sticks under the banner and publishes `--rk-pivot-h`.
@@ -1188,7 +1195,7 @@ Returns `{ update(options), active, destroy }`: `update` with new values
 on the same labels moves the line or the bars to them, and the axis with
 them, over `duration-long`; new labels redraw.
 
-### Motion: `reflow`, `enter`, `leave`, `presence`, `tileUpdate`, `sparkTo`, `crossfade`
+### Motion: `reflow`, `enter`, `leave`, `presence`, `tileUpdate`, `nudge`, `sparkTo`, `crossfade`
 
 The movements that follow a change of content ([motion.md](motion.md)).
 Each takes its duration from a token, so reduced motion makes it instant;
@@ -1219,6 +1226,12 @@ the change itself always happens.
   `duration-moderate` move one after another in document order,
   `duration-greet` apart, four steps at most; `change()` still runs at
   once (for a flip, at the half as before).
+- `nudge(el, direction)`: a part that answers a gesture nobody can see (a
+  swipe) hints at it when someone only taps it: it moves
+  `nudge-distance` the gesture's way (`'left'`, `'right'`, `'up'`,
+  `'down'`) and back, `duration-short` each way. Call it from the tap;
+  the words that name the gesture stay. Under reduced motion it does
+  nothing. Resolves when it rests.
 - `sparkTo(polyline, points)`: a line moves its points to new ones over
   `duration-long`; a different number of points redraws at once.
 - `crossfade(change)`: a change of the whole look cross-fades, where view

@@ -373,6 +373,29 @@ void rk_view_transition(rk_view *v, rk_transition kind) {
   news[nnews++] = rk_retain(v);
 }
 
+/* A gesture hint (motion.md): nudge-distance the gesture's way and back, duration-short each way on ease-landing,
+   quick away and settling long, so it rests where it was without a bounce. Under reduced motion it stays still: the
+   words that name the gesture say it. */
+static const float ease_landing[4] = RK_TOK_EASE_LANDING;
+
+static void nudge_back(rk_view *v, void *user) {
+  (void)user;
+  /* only from the far end: a change that took the transform over on the way has its own motion */
+  float x = v->ptransform.translate_x - v->transform.translate_x, y = v->ptransform.translate_y - v->transform.translate_y;
+  if (hypotf(x, y) < RK_TOK_NUDGE_DISTANCE - 0.01f) return;
+  rk_transform from = v->ptransform, to = v->transform;
+  rk__animate_transform(v, &from, &to, rk_duration_of(RK_DURATION_SHORT), 0, ease_landing);
+}
+
+void rk_view_nudge(rk_view *v, float dx, float dy) {
+  float len = hypotf(dx, dy);
+  double d = rk_duration_of(RK_DURATION_SHORT);
+  if (!v || len <= 0 || d <= 0 || !rk__view_visible(v)) return;
+  rk_transform from = v->ptransform, to = v->transform;
+  to.translate_x += RK_TOK_NUDGE_DISTANCE * dx / len; to.translate_y += RK_TOK_NUDGE_DISTANCE * dy / len;
+  rk__animate_transform_cb(v, &from, &to, d, 0, ease_landing, nudge_back, NULL);
+}
+
 /* A plain tween: from one value to another over a time, on a curve; it carries on from where it is when retargeted. */
 float rk__tween_at(const rk_tween *t, double now) {
   if (t->dur <= 0 || now >= t->t0 + t->dur) return t->to;

@@ -38,6 +38,16 @@ links) hints at what's further along and jumps to a section.
 - **Fit first.** When every section fits, nothing scrolls: no trailing
   spacer, no scrollbar, and the strip only changes title sizes. A jump
   aligns a section flush left, or as far as the panorama can scroll.
+- **Never flush at the edge.** When the sections reach past the window,
+  the window's edge never falls on a section's edge or in the gap: it
+  falls inside a section, at least `space-xl` from either of its ends,
+  so a piece of the next section always says there is more. The sections
+  keep their size; the gap between them (`space-xl`) changes by as little
+  as that takes, either way, never below `space-m`; the gaps of one
+  panorama stay even. A last section cut by less than `space-xl` fits
+  whole instead, when a smaller gap lets it. The rule holds with the first section at the
+  start, and with any section a jump aligns there when the sections are
+  all as wide. No motion; when everything fits, it does not apply.
 
 ## Sideways scrolling by mouse wheel
 
@@ -129,7 +139,7 @@ can usefully show, not just stretched.
 | Breakpoint | Token | What changes |
 |---|---|---|
 | 375px | `breakpoint.mobile` | Panoramas and multi-column grids stack into a single column (two for tile grids); the pivot header is the only thing that still scrolls sideways, as a strip. |
-| 1440px | `breakpoint.desktop` | A panorama shows several sections side by side, enough that the next one is visibly starting at the edge. |
+| 1440px | `breakpoint.desktop` | A panorama shows several sections side by side, and at least `space-xl` of the next one at the edge (never flush, above). |
 | 1920px | `breakpoint.wide` | All of a panorama's sections fit side by side without scrolling. |
 | 2560px | `breakpoint.ultrawide` | Tile grids gain more columns (the tile unit grows slightly, from `--unit` 150 to 170 in the source prototype) and individual tiles can show a second level of detail (e.g. a second chart) instead of sitting in empty space. |
 
