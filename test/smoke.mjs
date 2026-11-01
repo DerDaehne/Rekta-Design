@@ -463,7 +463,7 @@ await p.keyboard.press('Escape');
   await p.keyboard.press('s'); const s1 = await at(); await p.keyboard.press('s'); const s2 = await at();
   await p.waitForTimeout(1100); await p.keyboard.press('p'); await p.keyboard.press('a'); await p.keyboard.press('n'); const pan = await at();
   const stop = await p.evaluate(() => [...document.querySelectorAll('#comp-body tr')].filter((r) => r.tabIndex === 0).map((r) => r.dataset.name).join());
-  ok(s1 === 'Sparkline' && s2 === 'Sheet' && pan === 'Panorama' && stop === 'Panorama' && (await sel()).length === 0, 'letters jump in a table: s, s again, then "pan"; the tab stop follows, nothing is selected', `${s1} ${s2} ${pan} / ${stop} / ${await sel()}`);
+  ok(s1 === 'Sparkline' && s2 === 'Sheet' && pan === 'Panorama' && stop === 'Panorama' && JSON.stringify(await sel()) === '["Sparkline"]', 'letters jump in a table: s, s again, then "pan"; the tab stop follows, the selection stays', `${s1} ${s2} ${pan} / ${stop} / ${await sel()}`);
 }
 await p.click('#comp-table thead th:nth-child(2) .rk-sort'); await p.waitForTimeout(500);
 ok((await p.evaluate(() => document.querySelector('#comp-body tr').dataset.name)) === 'App bar', 'sort by component');

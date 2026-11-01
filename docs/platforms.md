@@ -180,7 +180,12 @@ implementation needs the same:
   tell a wheel from a trackpad pan; leave the pan alone.
 - **Keys**: Escape closes the innermost thing first (a menu, a toast
   with focus, a selection, then the place); Ctrl/Cmd+Z undoes the open
-  toast's action except in a text field.
+  toast's action except in a text field. A grid of tiles that open is
+  one tab stop with arrows by position, and in every collection whose
+  entries take focus letters jump, one prefix while typed within
+  `timing.type-ahead` ([navigation.md](navigation.md#keyboard)).
+  rekta-core has the letters in its list, table and tree; its tiles are
+  still one Tab stop each.
 - **Toast and banner**: one toast at a time, the undo window held while
   hovered or focused; one banner at a time, the most severe state first,
   its end reported as a toast.

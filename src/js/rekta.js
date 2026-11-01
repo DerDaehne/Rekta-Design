@@ -2312,7 +2312,8 @@ export function palette(el, { items = () => [], trigger = null, router = null, s
 // appbar(el, { more }): controls that do not fit move into a "more" menu, the least important first (data-rk-priority,
 // higher stays longer, none is 0; then from the end). more is a .rk-ab button shown only while something has moved;
 // its menu repeats each moved control's words (its key hint apart, as the palette shows it), and choosing one clicks
-// the control; a control that cannot act (disable()) is a disabled item whose label names the reason. Back, the live state, a selection's controls and data-rk-priority="pinned" never move (pinned ones do
+// the control; a control that cannot act (disable()) is a disabled item whose label names the reason. Back, the live
+// state, a selection's controls and data-rk-priority="pinned" never move (pinned ones do
 // while the bar holds the places, which come first). While the bar holds the places, data-rk-places is on the bar and the root, and rekta.css leaves the places' top strip out.
 const placesBars = new Set();                                         // bars holding the places: the root says so while any does
 const markPlaces = (bar, on) => { if (on) placesBars.add(bar); else placesBars.delete(bar); bar.toggleAttribute('data-rk-places', on); docEl().toggleAttribute('data-rk-places', placesBars.size > 0); };
