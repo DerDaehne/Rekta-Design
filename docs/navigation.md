@@ -204,7 +204,9 @@ without having read a manual. Its controls are 48px in every density.
 
 The live status is a square and a word, and the word is always visible
 (`live`, or the banner state's word such as `halted`): the square's
-colour is never the only signal.
+colour is never the only signal. It is there for a product with a live
+state (a server connection, a running system); a product without one
+leaves `.rk-ab-status` out, and the bar's other parts keep their places.
 
 In the compact window-size class, a "back" control is the leading item
 in the same bar, within the thumb's reach, hidden at the top place.
@@ -265,6 +267,29 @@ with an icon over a lowercase word.
   component inside the content area: there its own padding would add
   to the place name's. When the place changes, it turns with the place
   ([motion.md](motion.md)).
+
+### Running things in the bar
+
+A product may show the things it has running in the bar: windows in a
+desktop shell, open documents or tabs, sessions in a terminal app. Each
+is a labelled control (`.rk-ab.rk-ab-run`: its icon, or the sender's
+picture icon, and its name, cut with an ellipsis), after the live state
+and before the product's commands.
+
+- **Order of start,** never re-sorted, never most-recently-used: like a
+  pivot, a fixed order says where each one is.
+- **The one in front** is marked as a place in the bar is: `text-primary`
+  and `aria-current="true"`; the others in `text-contrast-high` (on glass
+  nothing lower). Choosing one brings it to the front; choosing the one
+  in front may minimise it.
+- **No groups per app** in the bar: two windows of one program are two
+  controls, each with its own name. A product with many may group them in
+  a place of its own (an overview), not in the bar.
+- **They give way first:** when the bar is full, running things move into
+  "more" before any command, the latest started first and the one in
+  front last (`appbar()` does it); "more" lists them by name.
+- **Without a live state** the bar still holds: the last running thing
+  pushes the commands to the trailing end.
 
 ### Go to
 
@@ -363,6 +388,8 @@ Every pointer action has a keyboard path.
 | Anywhere | Ctrl/Cmd+K | Go to: the palette |
 | Anywhere but a text field | ? | The keyboard shortcuts |
 | A table | Ctrl/Cmd+A, Shift+click | Select all, select a range |
+| An entry of a list whose entries can be removed | Delete (⌫ without a Delete key) | Removes it, with undo; focus moves to the next ([collections.md](collections.md#removing-entries)) |
+| A side panel's list chosen in place | Escape, ← | Back up to its group ([states.md](states.md#choosing-in-place)) |
 
 The keyboard shortcuts are listed in the app itself (a sheet behind `?`
 and an entry in the palette), never only in a manual.

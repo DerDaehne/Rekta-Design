@@ -71,6 +71,9 @@
 .rk-rows > li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 var(--rk-space-m); padding: var(--rk-space-s) 0; border-top: 1px solid var(--rk-text-contrast-low); }
 .rk-rows > li:last-child { border-bottom: 1px solid var(--rk-text-contrast-low); }
 .rk-rows b { font-weight: var(--rk-font-weight-semibold); }
+/* Entries that can be dragged away (removable()): the browser keeps the vertical scroll and leaves the sideways
+   movement to the script. */
+[data-rk-removable] > * { touch-action: pan-y; }
 
 /* Tiles ---------------------------------------------------------------------------------------------------------- */
 /* A full fill, 0-2px radius, no border, no shadow. Compact: at least two columns, as many tile-units as fit, each
@@ -110,9 +113,27 @@ a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden;
   font-size: var(--rk-font-size-s); line-height: var(--rk-line-height-compact);
 }
-.rk-w2 > .rk-tile-msg { -webkit-line-clamp: 6; line-clamp: 6; }   /* past it, an ellipsis; the whole sentence is still read */
+.rk-w2 > .rk-tile-msg, .rk-w3 > .rk-tile-msg, .rk-w4 > .rk-tile-msg { -webkit-line-clamp: 6; line-clamp: 6; }   /* past it, an ellipsis; the whole sentence is still read */
 .rk-w2 { grid-column: span 2; }
 .rk-h2 { grid-row: span 2; }
+/* Three and four units wide take the whole row of a compact grid, which may have only two columns; sideways they span
+   their units (below), in a section at least that wide. */
+.rk-w3, .rk-w4 { grid-column: 1 / -1; }
+/* A tile that opens something launchable (docs/tiles.md): its icon at the top leading corner, its count at the top
+   trailing one in tabular figures, its name at the foot; on a tile two units or more wide the newest line between
+   them (peek). Neutral: a count is not a status. The icon takes tile-icon, tile-icon-large on a tile two units high. */
+.rk-launch {
+  display: grid; grid-template: 'icon count' auto 'peek peek' 1fr 'name name' auto / minmax(0, 1fr) auto; align-items: start;
+}
+.rk-launch > :is(.rk-picture, .rk-icon) { grid-area: icon; width: var(--rk-tile-icon); height: var(--rk-tile-icon); }
+.rk-launch.rk-h2 > :is(.rk-picture, .rk-icon) { width: var(--rk-tile-icon-large); height: var(--rk-tile-icon-large); }
+.rk-launch-count { grid-area: count; font-size: var(--rk-font-size-m); font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; line-height: 1; }
+.rk-launch-peek {
+  grid-area: peek; align-self: end; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  font-size: var(--rk-font-size-s);
+}
+.rk-launch:not(.rk-w2, .rk-w3, .rk-w4) > .rk-launch-peek { display: none; }
+.rk-launch-name { grid-area: name; align-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--rk-font-weight-semibold); }
 @keyframes rk-build-in { from { opacity: 0; transform: translateY(6px); } }
 /* Press: a tile nudges back where it is pressed, as a Metro tile does. rekta.js sets --_rk-px and --_rk-py (-1 to 1
    from the tile's centre; 0 0 for Space or Enter) and data-rk-pressed. Pressed in the middle it sinks straight back;
@@ -506,6 +527,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 /* Icons: 20px, stroke 1.6, square ends, in the text colour (rekta.icons.svg: <svg class="rk-icon"><use href="#rk-i-NAME"/>). */
 .rk-icon { display: inline-block; flex: none; width: 20px; height: 20px; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.6; overflow: visible; }
 .rk-icon--16 { width: 16px; height: 16px; }
+/* A picture icon, one Rekta did not draw (an app's icon, a favicon, a logo: docs/shell.md): coloured, so only on the
+   ground or a neutral surface, never on a status fill; at the icon's 20px beside its word, larger only on a launch
+   tile. Its colours are its own and never a status. */
+.rk-picture { display: inline-block; flex: none; width: 20px; height: 20px; object-fit: contain; vertical-align: middle; }
 /* Visually hidden, still read. */
 .rk-sr { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
@@ -692,6 +717,13 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-titlebar-place { overflow: hidden; text-overflow: ellipsis; font-weight: var(--rk-font-weight-light); color: var(--rk-text-contrast-high); }
 .rk-titlebar-place:not(:empty)::before { content: '/'; margin-right: var(--rk-space-s); color: var(--rk-text-contrast-medium); }
 .rk-titlebar--inline { display: flex; }
+/* The window is not the active one (titlebar() writes data-rk-inactive): its name steps back to the place's colour;
+   the hairline and the buttons stay. */
+.rk-titlebar[data-rk-inactive] .rk-titlebar-name { color: var(--rk-text-contrast-high); }
+/* Window buttons a page draws itself (a frameless native shell without an overlay of its own): quiet icon buttons the
+   bar's height and touch-target wide at its end; close is quiet like the others, never in the error colour. */
+.rk-titlebar-win { display: flex; align-self: stretch; margin-inline-start: auto; margin-inline-end: calc(-1 * var(--rk-space-s)); }
+.rk-titlebar-win > .rk-btn { width: var(--rk-touch-target); min-width: var(--rk-touch-target); height: auto; min-height: 0; border-radius: 0; }
 @media (display-mode: window-controls-overlay) {
   .rk-titlebar:not(.rk-titlebar--inline) { display: flex; position: fixed; top: env(titlebar-area-y, 0); left: env(titlebar-area-x, 0); width: env(titlebar-area-width, 100%); z-index: var(--rk-layer-banner); }
   .rk:has(> .rk-titlebar) { padding-top: env(titlebar-area-height, 36px); }
@@ -728,6 +760,14 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-ab b { font-weight: inherit; }
 .rk-ab svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .rk-ab-back { order: -1; }
+/* Running things (windows, documents, sessions: docs/navigation.md) are labelled controls in the order they started;
+   the one in front is marked as a place in the bar is, the others step back. The last of them pushes the commands to
+   the trailing end, where a bar with no live state has nothing else to do it. */
+.rk-ab-run { min-width: 0; max-width: calc(2 * var(--rk-tile-unit)); color: var(--rk-text-contrast-high); }
+.rk-ab-run > :not(svg, img) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk-ab-run:is([aria-current='true'], [aria-current='page']) { color: var(--rk-text-primary); }
+.rk-appbar > .rk-ab-run:not(:has(~ .rk-ab-run)) { margin-inline-end: auto; }
+.rk-appbar > .rk-ab-status:has(~ .rk-ab-run) { margin-inline-end: 0; }
 .rk-ab[data-rk-overflow] { display: none; }
 .rk-ab-status { display: inline-flex; flex: none; align-items: center; gap: var(--rk-space-s); margin-inline-end: auto; font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); white-space: nowrap; }
 /* The middle, between the live state and the controls: the product's own short line (a mode, a count). It takes the
@@ -952,6 +992,27 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-sheet:has(> form > .rk-sheet-close) > form > .rk-kicker:first-child, .rk-sheet:has(> .rk-sheet-close) > .rk-kicker:first-child { padding-right: var(--rk-touch-target); }
 /* Asking before unsaved input goes (sheet(dialog, { dirty })): the question takes the sheet's place, in it. */
 .rk-sheet[data-rk-asking] > :not(.rk-sheet-ask) { display: none !important; }
+/* A side panel (docs/states.md): a sheet that comes whole from the trailing edge, full height, two tile units wide
+   (with its padding; never under pane-min, never over the window), the same width on every facet so it never jumps.
+   It shades, holds focus and closes like a sheet; it arrives over duration-moderate, a longer way than a sheet's. */
+.rk-sheet--side {
+  margin: 0 0 0 auto; width: min(max(calc(2 * var(--rk-tile-unit) + var(--rk-space-s) + 2 * var(--rk-space-m)), var(--rk-pane-min)), 100%);
+  height: 100dvh; max-height: 100dvh; padding: var(--rk-space-l) var(--rk-space-m);
+  border: 0; border-left: 1px solid var(--rk-text-contrast-low); border-radius: 0;
+}
+.rk-sheet--side:dir(rtl) { margin: 0 auto 0 0; border-left: 0; border-right: 1px solid var(--rk-text-contrast-low); }
+.rk-sheet--side[open] { animation: rk-from-side var(--rk-duration-moderate) var(--rk-ease-in) both; }
+.rk-sheet--side[open]::backdrop { animation-duration: var(--rk-duration-moderate); }
+.rk-sheet--side:dir(rtl)[open] { animation-name: rk-from-side-rtl; }
+@keyframes rk-from-side { from { transform: translateX(100%); } }
+@keyframes rk-from-side-rtl { from { transform: translateX(-100%); } }
+/* Choosing in place (inPlace()): a group gives its place to the list it opens, under a row "back · name". */
+.rk-in-back {
+  display: flex; align-items: center; gap: var(--rk-space-s); width: 100%; min-height: var(--rk-row-height); padding: 0;
+  border: 0; border-bottom: 1px solid var(--rk-text-contrast-low); background: none; color: inherit;
+  font: inherit; font-weight: var(--rk-font-weight-semibold); text-align: start; cursor: pointer;
+}
+.rk-in-back > svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .rk-scrim { position: fixed; inset: 0; background: var(--rk-shading); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 @keyframes rk-from-top { from { opacity: 0; transform: translateY(-16px); } }
 /* Something that appears in place to say a thing (an error summary, a refusal, waiting updates): a fade and 8px. */
@@ -1040,6 +1101,13 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   transform: scaleX(var(--rk-toast-left, 1)); transform-origin: right;
   transition: transform var(--rk-duration-long) var(--rk-ease-in);
 }
+/* A level indicator (toaster().level()): no action, its icon, word, a meter and the value; the meter in the toast's
+   own colour, as a progress bar is in a tile's. A new value glides like progress. */
+.rk-toast--level { align-items: center; gap: var(--rk-space-s); padding-inline: var(--rk-space-m); }
+.rk-toast--level > .rk-toast-msg { flex: none; padding-inline: 0; font-weight: var(--rk-font-weight-semibold); }
+.rk-toast--level > .rk-meter { flex: 1 1 auto; min-width: var(--rk-touch-target); height: 4px; background: color-mix(in srgb, currentColor 20%, transparent); }
+.rk-toast--level > .rk-meter::before { background: currentColor; }
+.rk-toast-level { flex: none; min-width: 4ch; font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; text-align: end; }
 .rk-toast-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @keyframes rk-toast-in { from { opacity: 0; transform: translateY(var(--_rk-from)); visibility: hidden; } }
 @keyframes rk-toast-out { from { opacity: 0; transform: translateY(var(--_rk-from)); visibility: hidden; } }
@@ -1221,6 +1289,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   .rk-ab-back { display: none; }
   .rk-ab-k { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
   .rk-sheet { padding-inline: var(--rk-space-xl); }
+  .rk-sheet--side { padding-inline: var(--rk-space-m); }   /* its width is two tile units with this padding */
   .rk-toasts { justify-items: center; }
   .rk-toast { max-width: 32rem; }
   .rk-banner { padding-inline: var(--rk-space-xl); }
@@ -1284,6 +1353,8 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 @container rk (min-width: 760px) {
   @media (min-height: 481px) {
     .rk-tiles { grid-template-columns: repeat(auto-fill, var(--rk-tile-unit)); grid-auto-rows: var(--rk-tile-unit); }
+    .rk-w3 { grid-column: span 3; }
+    .rk-w4 { grid-column: span 4; }
     .rk-panorama {
       display: flex; gap: var(--rk-space-xl); min-height: 0; padding-inline: var(--rk-space-xl);
       overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-padding-inline: var(--rk-space-xl); scroll-behavior: smooth;

@@ -102,6 +102,7 @@ not set.
 | `size.pivot-wide` | `--rk-pivot-wide` | From what width a pivot shows its facets side by side; 0 never. May differ per pivot. | `rk_app_set_metric(RK_PIVOT_WIDE, px)`; per pivot `rk_pivot_set_wide` |
 | a domain colour code (no token: a product slot) | `--rk-series-1` to `-8` | Colours its users already read, such as heart-rate zones, for small data marks; per theme, as the accent. Checked with `build.mjs --check-product`. | `rk_app_set_series(code, light, dark)`, held to the same rules (said through the log); `rk_tile_set_code`, `rk_row_set_code` |
 | density | `data-density` on the root | Not a token to override but a setting for the user: `Rekta.prefs` writes it (`auto`, `comfortable`, `compact`). | `rk_app_set_density` |
+| `typography.font-family.sans` | `--rk-font-sans` | Its typeface, under the conditions below ([typography.md](typography.md#the-family)). | not yet: rekta-core draws Barlow, built in; `rk_app_add_font` adds a face only for the characters Barlow lacks |
 
 A length may be written in any form, `px`, `rem` or a `calc()` of
 other tokens: `rekta.js` resolves it as the browser lays it out.
@@ -123,6 +124,18 @@ An accent must hold 3:1 against `bg` in its theme, `on-accent` 4.5:1 on
 it, and stay clearly apart from every status hue ([colour.md](colour.md));
 the showcase measures a candidate live.
 
+A family of its own is a product's too, under four conditions: it has
+the four weights the roles use (300, 400, 500, 600), tabular figures,
+a licence that allows shipping it with the app, and it ships with the
+app (its files beside `rekta.fonts.css`, never from a font CDN). The
+type scale stays the design's; the text budgets that depend on the
+family's width are measured again ([typography.md](typography.md#the-family)).
+
+```css
+/* after rekta.tokens.css and rekta.css; the @font-face rules for its four weights in the product's own CSS */
+:root { --rk-font-sans: 'Atkinson Hyperlegible Next', 'Arial', sans-serif; }
+```
+
 Everything else is the design, not a setting. In particular, do not
 override:
 
@@ -136,7 +149,8 @@ override:
   (The `timing.*` values above are wall time and stay under reduced
   motion; that is why they may change.)
 - **Spacing, radius and the type scale.** The tile grid, the hairlines and
-  the title hierarchy are built from them.
+  the title hierarchy are built from them. (The family is a product's;
+  its sizes are not.)
 
 ## Window-size classes
 
@@ -223,3 +237,34 @@ implementation.
   shell gets the same by setting `data-rk-titlebar` on the root.
 - **Installed web apps:** see [shell.md](shell.md): the window-controls
   overlay, offline, and updates that wait to be asked.
+- **Window buttons:** minimise, maximise (restore while maximised) and
+  close, quiet, close never red, the name stepping back while the window
+  is not the active one ([shell.md](shell.md#window-buttons)). rekta-core
+  draws them so on Windows, X11 and Wayland; macOS keeps its own.
+- **Picture icons** (an app's icon, a favicon, a logo): a single-colour
+  variant in the text colour where the source has one, else the picture
+  at the fixed sizes, only on a neutral ground
+  ([shell.md](shell.md#picture-icons)).
+
+## What rekta-core does not draw yet
+
+Some patterns are the web's alone for now. Each is in the docs as the
+design; rekta-core follows when an app needs it, and until then an app
+builds it from views or does without:
+
+- **The app bar** (with the live state, the places and running things):
+  rekta-core has none; a native app uses its window's own chrome.
+- **A side panel and choosing in place:** rekta-core's sheets come from
+  the top.
+- **A launch tile:** rekta-core's tiles carry a stat, a message, a
+  sparkline and progress, not an icon and a count; a tile spans any
+  number of units (`rk_view_set_span`).
+- **Dragging a row away:** rekta-core's lists take Delete
+  (`rk_list_on_remove`), not the drag; its declared lists (`RK_LIST`)
+  do not offer the removal yet.
+- **A family of the product's:** rekta-core draws Barlow, built in.
+- **The inactive title on macOS:** the system draws that title bar's
+  buttons; the name does not step back there yet.
+- **Other programs' windows** ([motion.md](motion.md#other-programs-windows)):
+  neither the web build nor rekta-core shows them; the tokens are there
+  for a surface that does.

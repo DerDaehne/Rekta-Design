@@ -143,6 +143,10 @@ in a banner) but maps each onto one of these colours and never reuses a
 word for two states. A status is never decoration: no status colour for
 emphasis, selection, branding or a chart series.
 
+Colours Rekta did not choose follow the same rule: an app's icon, a
+favicon or a logo keeps its own colours, stands only on a neutral ground,
+and never says a status ([shell.md](shell.md#picture-icons)).
+
 That holds for Rekta's own mark too: a line with a square, both in ink
 (`text-primary` of the theme the mark stands in; the showcase's icon
 draws its own ink ground and the mark in the ground's colour, one colour

@@ -155,6 +155,31 @@ End move; Shift extends the selection; letters jump to the next line that
 starts with them, as in every list whose entries take focus
 ([navigation.md](navigation.md#typing-filter-or-jump)).
 
+## Removing entries
+
+A list whose entries a person may remove (notifications, recent files,
+a queue) offers three ways, and every one is followed by the undo toast
+([live.md](live.md#undo)):
+
+- **A button** in the row: a quiet icon button (`close` or `trash`) with
+  its name ("dismiss", "remove"). It is the way that is always there;
+  the other two are shortcuts, as a context menu is.
+- **Delete** (⌫ on a keyboard without Delete) removes the focused entry,
+  outside text fields; focus moves to the next entry, or to the one
+  before at the end.
+- **Dragging it away:** the entry follows the pointer sideways towards
+  its trailing edge only; let go past half its width it leaves that way
+  and the rest close the gap, let go before it glides back. The drag
+  starts only when the movement is sideways (a vertical one stays a
+  scroll) and never within `space-l` of the window's edges, where a
+  phone's back gesture begins ([layout.md](layout.md)). It never starts
+  on a control in the row, and a click that ends it is cancelled:
+  dragging never activates.
+
+`removable(list, { onRemove })` does all three on the web;
+rekta-core's lists and tables take Delete with `rk_list_on_remove()`
+(the drag is the web's for now).
+
 ## Ordering by hand
 
 Items that can be reordered carry a grip (`rk-grip`: six squares) at
