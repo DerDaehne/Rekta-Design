@@ -909,7 +909,8 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
     r.stands = clock.hasAttribute('data-rk-indicating') && clock.contains(meter) && clock.querySelector(':scope > span').hidden && meter.getBoundingClientRect().width > 100;
     await wait(Rekta.tokens.ms('--rk-duration-level') + 700);
     r.back = !clock.hasAttribute('data-rk-indicating') && !clock.contains(meter) && !clock.querySelector(':scope > span').hidden;
-    el.setAttribute('data-rk-away', ''); await wait(Rekta.tokens.ms('--rk-duration-short') + 100);
+    // Read once its glide out has ended (getAnimations() includes the transitions), not after a fixed wait.
+    el.setAttribute('data-rk-away', ''); await Promise.all(el.getAnimations().map((x) => x.finished.catch(() => {}))); await wait(50);
     r.away = el.getBoundingClientRect().top >= b2.bottom - 1 && getComputedStyle(el).visibility === 'hidden';
     bar.destroy(); el.remove();
     return r;
@@ -2134,8 +2135,9 @@ const sy = await open();
   await sy.evaluate(() => window.site.home.goTo('system')); await sy.waitForTimeout(700);
   const run0 = await sy.evaluate(() => ({ runs: [...document.querySelectorAll('#screen-bar .rk-ab-run')].map((b) => `${b.dataset.app}${b.getAttribute('aria-current') === 'true' ? '*' : ''}`).join(), pic: document.querySelector('#screen-bar .rk-ab-run img.rk-picture').naturalWidth > 0, win: document.querySelector('#win-name').textContent, btns: [...document.querySelectorAll('#win-bar .rk-titlebar-win > .rk-btn')].map((b) => b.getAttribute('aria-label')).join() }));
   ok(run0.runs === 'notes*,chat' && run0.pic && run0.win === 'Notes' && run0.btns === 'minimize,maximize,close', 'system: running things in the bar, the one in front marked, a picture icon; the window has its three buttons', JSON.stringify(run0));
-  await sy.click('#win-max'); await sy.waitForTimeout(500);
-  const max = await sy.evaluate(() => ({ max: document.querySelector('#win').hasAttribute('data-max'), label: document.querySelector('#win-max').getAttribute('aria-label'), glyph: document.querySelector('#win-max use').getAttribute('href'), w: Math.round(document.querySelector('#win').getBoundingClientRect().width), desk: Math.round(document.querySelector('#desk').getBoundingClientRect().width) }));
+  await sy.click('#win-max');
+  // Measured once the window's own transitions have ended, not after a fixed wait.
+  const max = await sy.evaluate(async () => { await Promise.all(document.querySelector('#win').getAnimations().map((x) => x.finished.catch(() => {}))); return { max: document.querySelector('#win').hasAttribute('data-max'), label: document.querySelector('#win-max').getAttribute('aria-label'), glyph: document.querySelector('#win-max use').getAttribute('href'), w: Math.round(document.querySelector('#win').getBoundingClientRect().width), desk: Math.round(document.querySelector('#desk').getBoundingClientRect().width) }; });
   ok(max.max && max.label === 'restore' && max.glyph === '#rk-i-restore' && Math.abs(max.w - max.desk) <= 1, 'maximize fills the desktop and the button becomes restore', JSON.stringify(max));
   await sy.click('#win-max'); await sy.waitForTimeout(500);
   ok(await sy.evaluate(() => !document.querySelector('#win').hasAttribute('data-max') && document.querySelector('#win-max').getAttribute('aria-label') === 'maximize'), 'restore brings it back');
