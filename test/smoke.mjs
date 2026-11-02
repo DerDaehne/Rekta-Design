@@ -1983,10 +1983,18 @@ await sp.evaluate(() => {
 await sp.waitForTimeout(300);
 const lv1 = await sp.evaluate(() => { const t = document.querySelector('#t-toasts .rk-toast'); window.tLevelEl = t; return { level: t.classList.contains('rk-toast--level'), word: t.querySelector('.rk-toast-msg').textContent, fig: t.querySelector('.rk-toast-level').textContent, v: t.querySelector('.rk-meter').style.getPropertyValue('--rk-v'), icon: !!t.querySelector('svg.rk-icon'), act: !!t.querySelector('button') }; });
 ok(lv1.level && lv1.word === 'volume' && lv1.fig === '40%' && lv1.v === '0.4' && lv1.icon && !lv1.act, 'a level indicator: icon, word, meter and figure, no action', JSON.stringify(lv1));
-await sp.waitForTimeout(1000);
-await sp.evaluate(() => window.tToasts.level('volume', 0.6));
-await sp.waitForTimeout(800);
-const lv2 = await sp.evaluate(() => { const all = document.querySelectorAll('#t-toasts .rk-toast'); return { n: all.length, same: all[0] === window.tLevelEl, fig: all[0].querySelector('.rk-toast-level').textContent, leaving: all[0].hasAttribute('data-rk-phase') }; });
+await until(sp, async () => (await sp.evaluate(() => document.querySelectorAll('#t-toasts .rk-toast').length)) === 0, 3000);   // the first one has gone
+// Pressed again 0.7s in, and looked at 1s after that: past timing.level from the first press, so it stands only if its
+// time started again. Timed in the page, so round trips to a busy runner do not move the presses.
+const lv2 = await sp.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  window.tToasts.level('volume', 0.5); window.tLevelEl = document.querySelector('#t-toasts .rk-toast:not([data-rk-phase])');
+  await wait(700);
+  window.tToasts.level('volume', 0.6);
+  await wait(1000);
+  const all = document.querySelectorAll('#t-toasts .rk-toast');
+  return { n: all.length, same: all[0] === window.tLevelEl, fig: all[0].querySelector('.rk-toast-level').textContent, leaving: all[0].hasAttribute('data-rk-phase') };
+});
 ok(lv2.n === 1 && lv2.same && lv2.fig === '60%' && !lv2.leaving, 'pressed again, it stays and only its value changes; its time starts again', JSON.stringify(lv2));
 ok(await until(sp, async () => (await sp.evaluate(() => document.querySelectorAll('#t-toasts .rk-toast').length)) === 0, 2500), 'it goes timing.level after the last change');
 await sp.evaluate(() => { window.tToasts.destroy(); document.querySelector('#t-toasts').remove(); });
