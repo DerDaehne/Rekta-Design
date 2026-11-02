@@ -5,15 +5,17 @@ tokens, public hooks, `data-rk-*` attributes, events and the `rekta.js`
 API are the public surface. Before 1.0, a minor version may still break
 it; each entry says how.
 
-## Unreleased
+## 0.6.0 — 2026-11-02
 
 The reports #87–#157 on 0.5.0: motion, controls, layout and parity,
 accessibility, colour and the patterns of a whole system's surfaces (a
 launcher, a lock screen, notifications, windows). Rekta is one language
 for every surface; a pattern describes its main case, and a product may
 deviate where it keeps Rekta's rules (principles.md). Declined: #146,
-#150, #153; deferred: #155. Open points: #159. And rekta-core: what was
-left after #35 (#84).
+#150, #153; deferred: #155. Open points: #159; rekta-core's parity with
+the web: #160. And rekta-core: what was left after #35 (#84).
+rekta-core's soname follows the minor version (`librekta.so.0.6`), so
+apps linked against 0.5 relink.
 
 ### Changed (may need a change in an app)
 
@@ -184,6 +186,10 @@ left after #35 (#84).
   view (found by ASan).
 - A disabled place in a compact app bar keeps the disabled colour,
   current or not (#137 by jay23606, in #162).
+- The panorama's mark: at its start it is the first section, however
+  narrow the sections (#164); a jump by key keeps its target marked for
+  the whole glide instead of falling back to the old section (#165).
+  behaviour.md states the rule.
 
 ### Documented
 

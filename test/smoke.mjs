@@ -174,20 +174,24 @@ ok(!(await p.evaluate(() => /\{\{|<!--@/.test(document.body.innerHTML))), 'every
 ok((await p.evaluate(() => { const seen = new Set(), twice = []; document.querySelectorAll('[id]').forEach((e) => { if (seen.has(e.id)) twice.push(e.id); seen.add(e.id); }); return twice.join(); })) === '', 'every id is unique');
 
 // Tile → place: the turnstile, the address, the title, focus; the crumb back.
+// The turn takes its angle and curve from the tokens (turnstile-out-angle, ease-turn-out), not from literals. They are
+// read in the moment the parts start to leave, by an observer set before the click: the leaving lasts about 0.25s, and
+// a look after the click returns could come after it on a busy runner.
+await p.evaluate(() => {
+  window.tTurnSeen = null;
+  const mo = new MutationObserver(() => {
+    const u = document.querySelector('[data-rk-turn="out"]');
+    if (!u || window.tTurnSeen) return;
+    const s = getComputedStyle(document.documentElement);
+    window.tTurnSeen = { n: document.querySelectorAll('[data-rk-turn]').length, ease: getComputedStyle(u).animationTimingFunction, want: s.getPropertyValue('--rk-ease-turn-out').trim(), angle: s.getPropertyValue('--rk-turnstile-out-angle').trim() };
+    mo.disconnect();
+  });
+  mo.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-rk-turn'] });
+});
 await p.click('#tile-notes');
-// The turn takes its angle and curve from the tokens (turnstile-out-angle, ease-turn-out), not from literals. Both are
-// read in one look while the parts leave: the leaving lasts about 0.4s, and the time a click takes to return varies
-// with the page and the runner, so a fixed wait and a second round trip could land after it.
 {
-  const t = await p.evaluate(() => new Promise((res) => {
-    const end = performance.now() + 1000;
-    (function look() {
-      const u = document.querySelector('[data-rk-turn="out"]');
-      if (!u && performance.now() < end) { requestAnimationFrame(look); return; }
-      const s = getComputedStyle(document.documentElement);
-      res({ n: document.querySelectorAll('[data-rk-turn]').length, ease: u && getComputedStyle(u).animationTimingFunction, want: s.getPropertyValue('--rk-ease-turn-out').trim(), angle: s.getPropertyValue('--rk-turnstile-out-angle').trim() });
-    }());
-  }));
+  await until(p, () => p.evaluate(() => !!window.tTurnSeen), 2000);
+  const t = await p.evaluate(() => window.tTurnSeen || { n: 0 });
   ok(t.n > 3, 'leaving units turn', t.n);
   ok(t.ease === t.want && t.want === 'cubic-bezier(0.35, 0, 0.65, 0.6)' && t.angle === '60deg', 'a leaving part turns by the token angle on the token curve', JSON.stringify(t));
 }
@@ -592,6 +596,34 @@ const edges = await p.evaluate(async () => {
   return out;
 });
 ok(!edges.bad.length && edges.changed > 0 && edges.fits > 0 && edges.worst <= 96, 'a panorama never ends flush on a section edge: a piece of the next section shows, the gaps even and at least space-m', JSON.stringify(edges));
+// The pivot's mark while it follows (#164, #165): with sections narrower than a third of the width, the start marks
+// the first; a jump by key keeps its target marked for the whole glide, as a click on a title does.
+const follows = await p.evaluate(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const place = document.createElement('div'); place.className = 'rk-place'; place.style.cssText = 'position:fixed;left:0;top:0;width:1400px;height:400px;z-index:-1';
+  const ids = [...'abcdefghij'];
+  place.innerHTML = `<nav class="t-strip">${ids.map((i) => `<a href="#t-sec-${i}">${i}</a>`).join('')}</nav>`
+    + `<div class="rk-panorama" aria-label="letters" style="--rk-sec-w:150px;height:300px">${ids.map((i) => `<section class="rk-sec" id="t-sec-${i}"><p>${i}</p></section>`).join('')}<div class="rk-panorama-end"></div></div>`;
+  document.querySelector('.rk').append(place);
+  const strip = place.firstChild, pan = place.lastChild, api = Rekta.panorama(pan, { pivot: strip });
+  const marked = () => { const a = strip.querySelector('[aria-current]'); return a ? a.textContent : ''; };
+  const out = {};
+  await frame(); await frame();                                                // its gaps are measured: it rests
+  pan.scrollTo({ left: 600, behavior: 'instant' }); await frame(); await frame();
+  out.mid = marked();
+  pan.scrollTo({ left: 0, behavior: 'instant' }); await frame(); await frame();
+  out.start = marked();
+  pan.focus();
+  const seen = new Set();
+  pan.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+  const end = performance.now() + Rekta.tokens.ms('--rk-duration-pivot-glide') + 300;
+  while (performance.now() < end) { await new Promise((r) => requestAnimationFrame(r)); seen.add(marked()); }
+  out.during = [...seen].join();
+  api.destroy(); place.remove();
+  return out;
+});
+ok(follows.mid !== 'a' && follows.start === 'a', 'at its start the panorama marks its first section, however narrow the sections', JSON.stringify(follows));
+ok(follows.during === 'b', 'a jump by key keeps its target marked for the whole glide', JSON.stringify(follows));
 // The gesture hint (#149): nudge-distance the gesture's way and back, duration-short each way on ease-landing, added
 // to the part's own transform; it rests where it was.
 const nudged = await p.evaluate(async () => {
@@ -838,7 +870,8 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
     return { grey: getComputedStyle(b).color === grey && getComputedStyle(b.querySelector('svg')).stroke === grey, tip: b.dataset.rkTip, why: why && why.hidden ? why.textContent : '(none)', focusable: b.tabIndex === 0 && !b.disabled, hint: !!el.querySelector('.rk-hint') };
   }, icon);
   ok(d.grey && d.focusable && d.tip === 'needs a printer' && d.why === 'needs a printer' && !d.hint, 'disable() in the app bar: disabled colour, focusable, the reason in its tooltip and a hidden description, no hint beside it', JSON.stringify(d));
-  await p.hover('#t-print'); await p.waitForTimeout(700);
+  // The tip comes after a rest: wait until it is open (a busy runner gets there later), then look once.
+  await p.hover('#t-print'); await until(p, () => p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open')), 3000);
   const rest = await p.evaluate(() => ({ tip: document.querySelector('.rk-tip').matches(':popover-open') && document.querySelector('.rk-tip').textContent, tint: getComputedStyle(document.querySelector('#t-print')).backgroundColor, said: document.querySelector('#t-print').getAttribute('aria-describedby') }));
   ok(rest.tip === 'needs a printer' && /rgba\(0, 0, 0, 0\)|transparent/.test(rest.tint) && !/rk-tip/.test(rest.said), 'under a resting pointer the reason shows, no hover tint, described once', JSON.stringify(rest));
   await p.click('#t-print', { force: true }); await p.waitForTimeout(100);
@@ -909,7 +942,8 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
     r.stands = clock.hasAttribute('data-rk-indicating') && clock.contains(meter) && clock.querySelector(':scope > span').hidden && meter.getBoundingClientRect().width > 100;
     await wait(Rekta.tokens.ms('--rk-duration-level') + 700);
     r.back = !clock.hasAttribute('data-rk-indicating') && !clock.contains(meter) && !clock.querySelector(':scope > span').hidden;
-    el.setAttribute('data-rk-away', ''); await wait(Rekta.tokens.ms('--rk-duration-short') + 100);
+    // Read once its glide out has ended (getAnimations() includes the transitions), not after a fixed wait.
+    el.setAttribute('data-rk-away', ''); await Promise.all(el.getAnimations().map((x) => x.finished.catch(() => {}))); await wait(50);
     r.away = el.getBoundingClientRect().top >= b2.bottom - 1 && getComputedStyle(el).visibility === 'hidden';
     bar.destroy(); el.remove();
     return r;
@@ -1951,11 +1985,12 @@ const panel = await sp.evaluate(async () => {
   Rekta.sheet(d); window.tIn = Rekta.inPlace(d);
   d.showModal();
   const moving = d.getAnimations().length > 0;
-  await wait(600);
+  // Measured once its slide in has ended, not after a fixed wait a busy runner may not have reached.
+  await Promise.all(d.getAnimations().map((x) => x.finished.catch(() => {})));
   const r = d.getBoundingClientRect();
-  return { moving, right: Math.round(r.right), vw: innerWidth, h: Math.round(r.height), vh: innerHeight, w: Math.round(r.width), want: Math.round(2 * Rekta.tokens.px('--rk-tile-unit') + Rekta.tokens.px('--rk-space-s') + 2 * Rekta.tokens.px('--rk-space-m')) };
+  return { moving, right: r.right, vw: innerWidth, h: r.height, vh: innerHeight, w: Math.round(r.width), want: Math.round(2 * Rekta.tokens.px('--rk-tile-unit') + Rekta.tokens.px('--rk-space-s') + 2 * Rekta.tokens.px('--rk-space-m')) };
 });
-ok(panel.moving && panel.right === panel.vw && panel.h === panel.vh && panel.w === panel.want, 'a side panel slides in at the trailing edge, full height, two tile units wide with its padding', JSON.stringify(panel));
+ok(panel.moving && Math.abs(panel.right - panel.vw) < 1 && Math.abs(panel.h - panel.vh) < 1 && panel.w === panel.want, 'a side panel slides in at the trailing edge, full height, two tile units wide with its padding', JSON.stringify(panel));
 await sp.click('#t-wifi'); await sp.waitForTimeout(400);
 const chose = await sp.evaluate(() => ({ group: document.querySelector('#t-group').hidden, list: !document.querySelector('#t-nets').hidden, back: (document.querySelector('#t-nets > .rk-in-back') || {}).textContent, focus: document.activeElement.id, depth: window.tIn.depth }));
 ok(chose.group && chose.list && chose.back === 'back · wi-fi' && chose.focus === 't-net1' && chose.depth === 1, 'choosing in place: the list takes the group\'s place under "back · name", focus in it', JSON.stringify(chose));
@@ -1982,10 +2017,18 @@ await sp.evaluate(() => {
 await sp.waitForTimeout(300);
 const lv1 = await sp.evaluate(() => { const t = document.querySelector('#t-toasts .rk-toast'); window.tLevelEl = t; return { level: t.classList.contains('rk-toast--level'), word: t.querySelector('.rk-toast-msg').textContent, fig: t.querySelector('.rk-toast-level').textContent, v: t.querySelector('.rk-meter').style.getPropertyValue('--rk-v'), icon: !!t.querySelector('svg.rk-icon'), act: !!t.querySelector('button') }; });
 ok(lv1.level && lv1.word === 'volume' && lv1.fig === '40%' && lv1.v === '0.4' && lv1.icon && !lv1.act, 'a level indicator: icon, word, meter and figure, no action', JSON.stringify(lv1));
-await sp.waitForTimeout(1000);
-await sp.evaluate(() => window.tToasts.level('volume', 0.6));
-await sp.waitForTimeout(800);
-const lv2 = await sp.evaluate(() => { const all = document.querySelectorAll('#t-toasts .rk-toast'); return { n: all.length, same: all[0] === window.tLevelEl, fig: all[0].querySelector('.rk-toast-level').textContent, leaving: all[0].hasAttribute('data-rk-phase') }; });
+await until(sp, async () => (await sp.evaluate(() => document.querySelectorAll('#t-toasts .rk-toast').length)) === 0, 3000);   // the first one has gone
+// Pressed again 0.7s in, and looked at 1s after that: past timing.level from the first press, so it stands only if its
+// time started again. Timed in the page, so round trips to a busy runner do not move the presses.
+const lv2 = await sp.evaluate(async () => {
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  window.tToasts.level('volume', 0.5); window.tLevelEl = document.querySelector('#t-toasts .rk-toast:not([data-rk-phase])');
+  await wait(700);
+  window.tToasts.level('volume', 0.6);
+  await wait(1000);
+  const all = document.querySelectorAll('#t-toasts .rk-toast');
+  return { n: all.length, same: all[0] === window.tLevelEl, fig: all[0].querySelector('.rk-toast-level').textContent, leaving: all[0].hasAttribute('data-rk-phase') };
+});
 ok(lv2.n === 1 && lv2.same && lv2.fig === '60%' && !lv2.leaving, 'pressed again, it stays and only its value changes; its time starts again', JSON.stringify(lv2));
 ok(await until(sp, async () => (await sp.evaluate(() => document.querySelectorAll('#t-toasts .rk-toast').length)) === 0, 2500), 'it goes timing.level after the last change');
 await sp.evaluate(() => { window.tToasts.destroy(); document.querySelector('#t-toasts').remove(); });
@@ -2134,8 +2177,9 @@ const sy = await open();
   await sy.evaluate(() => window.site.home.goTo('system')); await sy.waitForTimeout(700);
   const run0 = await sy.evaluate(() => ({ runs: [...document.querySelectorAll('#screen-bar .rk-ab-run')].map((b) => `${b.dataset.app}${b.getAttribute('aria-current') === 'true' ? '*' : ''}`).join(), pic: document.querySelector('#screen-bar .rk-ab-run img.rk-picture').naturalWidth > 0, win: document.querySelector('#win-name').textContent, btns: [...document.querySelectorAll('#win-bar .rk-titlebar-win > .rk-btn')].map((b) => b.getAttribute('aria-label')).join() }));
   ok(run0.runs === 'notes*,chat' && run0.pic && run0.win === 'Notes' && run0.btns === 'minimize,maximize,close', 'system: running things in the bar, the one in front marked, a picture icon; the window has its three buttons', JSON.stringify(run0));
-  await sy.click('#win-max'); await sy.waitForTimeout(500);
-  const max = await sy.evaluate(() => ({ max: document.querySelector('#win').hasAttribute('data-max'), label: document.querySelector('#win-max').getAttribute('aria-label'), glyph: document.querySelector('#win-max use').getAttribute('href'), w: Math.round(document.querySelector('#win').getBoundingClientRect().width), desk: Math.round(document.querySelector('#desk').getBoundingClientRect().width) }));
+  await sy.click('#win-max');
+  // Measured once the window's own transitions have ended, not after a fixed wait.
+  const max = await sy.evaluate(async () => { await Promise.all(document.querySelector('#win').getAnimations().map((x) => x.finished.catch(() => {}))); return { max: document.querySelector('#win').hasAttribute('data-max'), label: document.querySelector('#win-max').getAttribute('aria-label'), glyph: document.querySelector('#win-max use').getAttribute('href'), w: Math.round(document.querySelector('#win').getBoundingClientRect().width), desk: Math.round(document.querySelector('#desk').getBoundingClientRect().width) }; });
   ok(max.max && max.label === 'restore' && max.glyph === '#rk-i-restore' && Math.abs(max.w - max.desk) <= 1, 'maximize fills the desktop and the button becomes restore', JSON.stringify(max));
   await sy.click('#win-max'); await sy.waitForTimeout(500);
   ok(await sy.evaluate(() => !document.querySelector('#win').hasAttribute('data-max') && document.querySelector('#win-max').getAttribute('aria-label') === 'maximize'), 'restore brings it back');

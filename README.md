@@ -102,8 +102,8 @@ on every push to `main` (and by hand).
 
 ## Status
 
-**0.5: everything data-heavy desktop and web apps need, on the web and
-natively.** 0.2 laid the foundation: one token source for every
+**0.6: one language for every surface, from a data-heavy app to the
+shell around it.** 0.2 laid the foundation: one token source for every
 platform, the component stylesheet and a framework-free behaviour
 script, with routes and back, window-size classes, density and a
 keyboard model. 0.3 adds rekta-core, native views in C with a declared
@@ -121,7 +121,14 @@ declarations. 0.5 makes it hold under real servers and routers (undo
 windows on the clock, sheets that keep asking, facets that come and go,
 scroll offsets for any router) and brings rekta-core level with the web:
 its words, a domain's colour code, the product overrides and facets side
-by side. Next: date ranges, rich text. See
+by side. 0.6 widens it to every surface a product has: more contrast
+and less transparency, named and derived accents, content fills, and
+the patterns of a system's own surfaces (a launcher with launch tiles, a
+lock screen, a notification centre, a side panel, the session, other
+programs' windows and toasts), with motion to match (a title carried
+into its place, places called up at half the pace, a gesture hint).
+Next: date ranges, rich text, and rekta-core level with the web again
+(#160). See
 [CHANGELOG.md](CHANGELOG.md).
 
 ## License
