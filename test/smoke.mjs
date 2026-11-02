@@ -1985,11 +1985,12 @@ const panel = await sp.evaluate(async () => {
   Rekta.sheet(d); window.tIn = Rekta.inPlace(d);
   d.showModal();
   const moving = d.getAnimations().length > 0;
-  await wait(600);
+  // Measured once its slide in has ended, not after a fixed wait a busy runner may not have reached.
+  await Promise.all(d.getAnimations().map((x) => x.finished.catch(() => {})));
   const r = d.getBoundingClientRect();
-  return { moving, right: Math.round(r.right), vw: innerWidth, h: Math.round(r.height), vh: innerHeight, w: Math.round(r.width), want: Math.round(2 * Rekta.tokens.px('--rk-tile-unit') + Rekta.tokens.px('--rk-space-s') + 2 * Rekta.tokens.px('--rk-space-m')) };
+  return { moving, right: r.right, vw: innerWidth, h: r.height, vh: innerHeight, w: Math.round(r.width), want: Math.round(2 * Rekta.tokens.px('--rk-tile-unit') + Rekta.tokens.px('--rk-space-s') + 2 * Rekta.tokens.px('--rk-space-m')) };
 });
-ok(panel.moving && panel.right === panel.vw && panel.h === panel.vh && panel.w === panel.want, 'a side panel slides in at the trailing edge, full height, two tile units wide with its padding', JSON.stringify(panel));
+ok(panel.moving && Math.abs(panel.right - panel.vw) < 1 && Math.abs(panel.h - panel.vh) < 1 && panel.w === panel.want, 'a side panel slides in at the trailing edge, full height, two tile units wide with its padding', JSON.stringify(panel));
 await sp.click('#t-wifi'); await sp.waitForTimeout(400);
 const chose = await sp.evaluate(() => ({ group: document.querySelector('#t-group').hidden, list: !document.querySelector('#t-nets').hidden, back: (document.querySelector('#t-nets > .rk-in-back') || {}).textContent, focus: document.activeElement.id, depth: window.tIn.depth }));
 ok(chose.group && chose.list && chose.back === 'back · wi-fi' && chose.focus === 't-net1' && chose.depth === 1, 'choosing in place: the list takes the group\'s place under "back · name", focus in it', JSON.stringify(chose));
