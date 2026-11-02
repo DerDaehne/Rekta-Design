@@ -186,6 +186,10 @@ apps linked against 0.5 relink.
   view (found by ASan).
 - A disabled place in a compact app bar keeps the disabled colour,
   current or not (#137 by jay23606, in #162).
+- The panorama's mark: at its start it is the first section, however
+  narrow the sections (#164); a jump by key keeps its target marked for
+  the whole glide instead of falling back to the old section (#165).
+  behaviour.md states the rule.
 
 ### Documented
 

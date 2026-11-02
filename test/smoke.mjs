@@ -592,6 +592,34 @@ const edges = await p.evaluate(async () => {
   return out;
 });
 ok(!edges.bad.length && edges.changed > 0 && edges.fits > 0 && edges.worst <= 96, 'a panorama never ends flush on a section edge: a piece of the next section shows, the gaps even and at least space-m', JSON.stringify(edges));
+// The pivot's mark while it follows (#164, #165): with sections narrower than a third of the width, the start marks
+// the first; a jump by key keeps its target marked for the whole glide, as a click on a title does.
+const follows = await p.evaluate(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const place = document.createElement('div'); place.className = 'rk-place'; place.style.cssText = 'position:fixed;left:0;top:0;width:1400px;height:400px;z-index:-1';
+  const ids = [...'abcdefghij'];
+  place.innerHTML = `<nav class="t-strip">${ids.map((i) => `<a href="#t-sec-${i}">${i}</a>`).join('')}</nav>`
+    + `<div class="rk-panorama" aria-label="letters" style="--rk-sec-w:150px;height:300px">${ids.map((i) => `<section class="rk-sec" id="t-sec-${i}"><p>${i}</p></section>`).join('')}<div class="rk-panorama-end"></div></div>`;
+  document.querySelector('.rk').append(place);
+  const strip = place.firstChild, pan = place.lastChild, api = Rekta.panorama(pan, { pivot: strip });
+  const marked = () => { const a = strip.querySelector('[aria-current]'); return a ? a.textContent : ''; };
+  const out = {};
+  await frame(); await frame();                                                // its gaps are measured: it rests
+  pan.scrollTo({ left: 600, behavior: 'instant' }); await frame(); await frame();
+  out.mid = marked();
+  pan.scrollTo({ left: 0, behavior: 'instant' }); await frame(); await frame();
+  out.start = marked();
+  pan.focus();
+  const seen = new Set();
+  pan.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+  const end = performance.now() + Rekta.tokens.ms('--rk-duration-pivot-glide') + 300;
+  while (performance.now() < end) { await new Promise((r) => requestAnimationFrame(r)); seen.add(marked()); }
+  out.during = [...seen].join();
+  api.destroy(); place.remove();
+  return out;
+});
+ok(follows.mid !== 'a' && follows.start === 'a', 'at its start the panorama marks its first section, however narrow the sections', JSON.stringify(follows));
+ok(follows.during === 'b', 'a jump by key keeps its target marked for the whole glide', JSON.stringify(follows));
 // The gesture hint (#149): nudge-distance the gesture's way and back, duration-short each way on ease-landing, added
 // to the part's own transform; it rests where it was.
 const nudged = await p.evaluate(async () => {

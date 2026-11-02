@@ -978,7 +978,10 @@ export function panorama(el, { pivot = null } = {}) {
     if (sideways()) {
       const edge = el.getBoundingClientRect().left, reach = el.clientWidth / 3;
       for (const s of list) if (s.getBoundingClientRect().left - edge <= reach) active = s;
-      if (el.scrollLeft >= el.scrollWidth - el.clientWidth - 1) active = list[list.length - 1];
+      // At either end the end's section is the one, however narrow the sections are (several edges may lie in the
+      // first third of the width).
+      if (Math.abs(el.scrollLeft) <= 1) active = list[0];
+      else if (Math.abs(el.scrollLeft) >= el.scrollWidth - el.clientWidth - 1) active = list[list.length - 1];
     } else {
       const edge = num('--rk-banner-h') + num('--rk-pivot-h'), reach = innerHeight / 3;
       for (const s of list) if (s.getBoundingClientRect().top - edge <= reach) active = s;
@@ -987,7 +990,9 @@ export function panorama(el, { pivot = null } = {}) {
   }
   let queued = false;
   const queue = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; follow(); }); } };
-  const userScroll = () => { clicked = false; };
+  // A scroll of the user's own ends a jump's hold on the mark; a key the panorama took for a jump (key(), which runs
+  // first and prevents its default) is the jump itself, so its target stays marked for the whole glide.
+  const userScroll = (e) => { if (e.type === 'keydown' && e.defaultPrevented) return; clicked = false; };
 
   // One gesture, one scroller.
   function wheel(e) {

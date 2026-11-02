@@ -488,9 +488,15 @@ Sideways:
   native; at either end the wheel falls through; Ctrl+wheel zooms.
 - With focus on the panorama: ← → PageUp PageDown jump a section, Home
   and End go to the ends.
-- The pivot follows the scroll. A pivot link aligns its section flush
-  left (or as far as the panorama scrolls) and moves focus to the
-  section's heading. A click wins over the follow.
+- The pivot follows the scroll. The chosen section is the last one
+  whose leading edge lies within a third of the width from the window's
+  edge; at the start it is the first, at the end the last, however
+  narrow the sections are. A pivot link aligns its section flush left
+  (or as far as the panorama scrolls) and moves focus to the section's
+  heading. A jump, by a pivot link or a key (← →, Page Up, Page Down,
+  Home, End), marks its target at once and keeps it marked for the
+  whole glide; a scroll of the user's own (a wheel, a touch, a key the
+  panorama does not take) ends that.
 - When everything fits, nothing scrolls (`data-rk-fit`). Otherwise the
   window never ends flush on a section edge: `panorama()` changes the
   gap between the sections a little, as it measures them, so at least
