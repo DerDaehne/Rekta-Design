@@ -174,20 +174,24 @@ ok(!(await p.evaluate(() => /\{\{|<!--@/.test(document.body.innerHTML))), 'every
 ok((await p.evaluate(() => { const seen = new Set(), twice = []; document.querySelectorAll('[id]').forEach((e) => { if (seen.has(e.id)) twice.push(e.id); seen.add(e.id); }); return twice.join(); })) === '', 'every id is unique');
 
 // Tile → place: the turnstile, the address, the title, focus; the crumb back.
+// The turn takes its angle and curve from the tokens (turnstile-out-angle, ease-turn-out), not from literals. They are
+// read in the moment the parts start to leave, by an observer set before the click: the leaving lasts about 0.25s, and
+// a look after the click returns could come after it on a busy runner.
+await p.evaluate(() => {
+  window.tTurnSeen = null;
+  const mo = new MutationObserver(() => {
+    const u = document.querySelector('[data-rk-turn="out"]');
+    if (!u || window.tTurnSeen) return;
+    const s = getComputedStyle(document.documentElement);
+    window.tTurnSeen = { n: document.querySelectorAll('[data-rk-turn]').length, ease: getComputedStyle(u).animationTimingFunction, want: s.getPropertyValue('--rk-ease-turn-out').trim(), angle: s.getPropertyValue('--rk-turnstile-out-angle').trim() };
+    mo.disconnect();
+  });
+  mo.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-rk-turn'] });
+});
 await p.click('#tile-notes');
-// The turn takes its angle and curve from the tokens (turnstile-out-angle, ease-turn-out), not from literals. Both are
-// read in one look while the parts leave: the leaving lasts about 0.4s, and the time a click takes to return varies
-// with the page and the runner, so a fixed wait and a second round trip could land after it.
 {
-  const t = await p.evaluate(() => new Promise((res) => {
-    const end = performance.now() + 1000;
-    (function look() {
-      const u = document.querySelector('[data-rk-turn="out"]');
-      if (!u && performance.now() < end) { requestAnimationFrame(look); return; }
-      const s = getComputedStyle(document.documentElement);
-      res({ n: document.querySelectorAll('[data-rk-turn]').length, ease: u && getComputedStyle(u).animationTimingFunction, want: s.getPropertyValue('--rk-ease-turn-out').trim(), angle: s.getPropertyValue('--rk-turnstile-out-angle').trim() });
-    }());
-  }));
+  await until(p, () => p.evaluate(() => !!window.tTurnSeen), 2000);
+  const t = await p.evaluate(() => window.tTurnSeen || { n: 0 });
   ok(t.n > 3, 'leaving units turn', t.n);
   ok(t.ease === t.want && t.want === 'cubic-bezier(0.35, 0, 0.65, 0.6)' && t.angle === '60deg', 'a leaving part turns by the token angle on the token curve', JSON.stringify(t));
 }
