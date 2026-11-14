@@ -488,7 +488,7 @@
           "Arial",
           "sans-serif"
         ],
-        "$description": "The one family. Ship the font files with the app (fonts/), never from a CDN. A product may set its own (docs/typography.md, The family): with the four weights the roles use (300, 400, 500, 600), tabular figures and a licence to ship it; the type scale stays."
+        "$description": "The one family. The first name is the family; the names after it are the web profile's fallback chain, ending in the platform's default sans face. Another platform draws the first family it has, else its own default sans face. Ship the font files with the app (fonts/), never from a CDN. A product may set its own (docs/typography.md, The family): with the four weights the roles use (300, 400, 500, 600), tabular figures and a licence to ship it; the type scale stays."
       },
       "mono": {
         "$type": "fontFamily",
@@ -499,7 +499,7 @@
           "Consolas",
           "monospace"
         ],
-        "$description": "Machine text: IDs, code, logs."
+        "$description": "Machine text: IDs, code, logs. The platform's own monospace face; the names after the first are the web profile's fallback chain, ending in the platform's default monospace face."
       }
     },
     "weight": {
@@ -1498,7 +1498,7 @@
     "float": {
       "$type": "number",
       "$value": 50,
-      "$description": "Floating surfaces (menus, lists) where the browser has no popover top layer. With popovers they sit in the top layer and need no value."
+      "$description": "Floating surfaces (menus, lists), above the toast region, in an implementation that stacks them by order among the app's layers. Not needed where the platform has a layer of its own for floating surfaces above everything (the web profile's popover top layer)."
     }
   },
   "breakpoint": {
