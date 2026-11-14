@@ -2,11 +2,12 @@
 
 ## One language for every surface
 
-Rekta is one design language for every surface a product has: a web
-app, a desktop program, a phone, a shell around other programs (a
-launcher, a lock screen, a notification centre). The same tokens,
-patterns and motion apply on each; a new kind of surface gets new
-patterns in the same language, not a second system.
+Rekta is one design language for every surface a product has: a shell
+around other programs (a launcher, a lock screen, a notification centre),
+a desktop app, a phone, a web app. It is first the design of a desktop
+shell and its apps; the web is a profile of it, for installable apps
+(PWAs). The same tokens, patterns and motion apply on each; a new kind of
+surface gets new patterns in the same language, not a second system.
 
 A pattern describes its main case, with tokens, not every variant: what
 most products need, said once and exactly. A product that implements

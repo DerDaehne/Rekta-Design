@@ -1,23 +1,23 @@
 # Platforms
 
-Rekta Design is defined once, platform-neutrally: the tokens in
-`tokens/rekta.tokens.json`, the rules in this folder, and the behaviour
-contract in [behaviour.md](behaviour.md). The web build (`rekta.css`,
-`rekta.js`) is one implementation of it. Any other party can implement
-Rekta for another toolkit (WinUI, WPF, Qt, GTK, SwiftUI, Compose,
-Flutter, a game UI, a terminal) from the same sources without reading a
-line of CSS. This page is the guide for doing that.
+Rekta Design is a specification, defined once for every platform: the
+tokens in `tokens/rekta.tokens.json`, the rules in this folder and the
+behaviour contract in [behaviour.md](behaviour.md). It is written for a
+desktop shell and its apps first; the web is a profile of it, for
+installable apps (PWAs). The web build (`rekta.css`, `rekta.js`) and
+rekta-core implement it, and any other party can, for any toolkit, from
+the same sources without reading a line of CSS. This page is the guide.
 
 ## What to read
 
 | File | What it is | Who reads it |
 |---|---|---|
-| `tokens/rekta.tokens.json` | The source, in [DTCG](https://tr.designtokens.org/format/) format, with aliases and a `$description` on every token. | Token tools (Style Dictionary, Tokens Studio, Figma plugins), and anyone generating code. |
+| `tokens/rekta.tokens.json` | The source, in [DTCG](https://tr.designtokens.org/format/) format, with aliases and a `$description` on every token. One type is Rekta's own, not DTCG's: `fluidDimension`, a length between `min` and `max` that follows the width of its box ([Values and units](#values-and-units)). | Token tools (Style Dictionary, Tokens Studio, Figma plugins), and anyone generating code. |
 | `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme (`light`, `dark`, and `light-contrast`, `dark-contrast` for more contrast, each complete) and density. | Native implementations. Start here. |
 | `dist/rekta.tokens.css` | The resolved values as `--rk-` custom properties, with theme, density and reduced-motion switching. | Web projects. |
 | `tokens/rekta.accents.json` | The named accents: an accent and the text on it per theme and contrast set, checked ([colour.md](colour.md#named-accents)). Resolved as `accents` in `dist/rekta.tokens.json`. | Anyone offering an accent by name. |
 | `dist/rekta.color.js` | The colour rules as a module without dependencies: contrast, OKLab distance and colour blindness, apart from status, an accent's check and derivation. | A product that checks or derives colours at run time; the reference for porting them. |
-| `docs/*.md` | Rules: what each part means, how it behaves, what it must never do. | Everyone. |
+| `docs/*.md` | Rules: what each part means, how it behaves, what it must never do. The [glossary](#glossary) at the end of this page says what their words mean on each platform. | Everyone. |
 
 `npm run build` (or `node scripts/build.mjs`) writes `dist/`. The build
 has no dependencies.
@@ -108,12 +108,12 @@ not set.
 | density | `data-density` on the root | Not a token to override but a setting for the user: `Rekta.prefs` writes it (`auto`, `comfortable`, `compact`). | `rk_app_set_density` |
 | `typography.font-family.sans` | `--rk-font-sans` | Its typeface, under the conditions below ([typography.md](typography.md#the-family)). | not yet: rekta-core draws Barlow, built in; `rk_app_add_font` adds a face only for the characters Barlow lacks |
 
-A length may be written in any form, `px`, `rem` or a `calc()` of
-other tokens: `rekta.js` resolves it as the browser lays it out.
+On the web, a length may be written in any form, `px`, `rem` or a
+`calc()` of other tokens: `rekta.js` resolves it as the browser lays it out.
 
-The accent is set per theme, with the selectors `rekta.tokens.css`
-uses, so the dark value also wins over the system's dark mode and the
-in-app theme:
+The accent is set per theme and contrast set, on every platform, so the
+dark value holds under the system's dark mode and the in-app theme alike.
+On the web, with the selectors `rekta.tokens.css` uses:
 
 ```css
 /* after rekta.tokens.css and rekta.css */
@@ -140,12 +140,12 @@ text on it yourself.
 A family of its own is a product's too, under four conditions: it has
 the four weights the roles use (300, 400, 500, 600), tabular figures,
 a licence that allows shipping it with the app, and it ships with the
-app (its files beside `rekta.fonts.css`, never from a font CDN). The
-type scale stays the design's; the text budgets that depend on the
+app (on the web its files beside `rekta.fonts.css`, never from a font CDN).
+The type scale stays the design's; the text budgets that depend on the
 family's width are measured again ([typography.md](typography.md#the-family)).
 
 ```css
-/* after rekta.tokens.css and rekta.css; the @font-face rules for its four weights in the product's own CSS */
+/* on the web, after rekta.tokens.css and rekta.css; the @font-face rules for its four weights in the product's own CSS */
 :root { --rk-font-sans: 'Atkinson Hyperlegible Next', 'Arial', sans-serif; }
 ```
 
@@ -292,3 +292,31 @@ builds it from views or does without:
 - **Other programs' windows** ([motion.md](motion.md#other-programs-windows)):
   neither the web build nor rekta-core shows them; the tokens are there
   for a surface that does.
+
+## Glossary
+
+The docs name things by what they are to the user: a place, a pane, a
+window, a screen. A few web words remain where a rule was first written
+for the web profile; where a rule says "the browser", read "the
+platform". This is what each word means on every platform, and what it
+is in the web profile.
+
+| In the docs | On every platform | In the web profile |
+|---|---|---|
+| **Window** | The area an app has to draw in, framed by the platform; a shell's window is the screen. Its size, with the pane's, decides the [window-size class](#window-size-classes), not the device. | The browser window, or the installed app's. |
+| **Viewport** | The window's visible area. | `innerWidth`, `innerHeight`, `dvh`. |
+| **Screen** | One display. A window lies on one; a shell draws its surfaces on each ([shell.md](shell.md)). | `screen`; a page knows only its window. |
+| **Pane** | One box that hosts a place; a window shows one, or several in a split. | The element that hosts the place (`.rk-place`, a `main`). |
+| **Place** | Where the user is: one entry in the history, with a name, reached by a press and left by back ([navigation.md](navigation.md#places-history-and-back)). | A route. |
+| **URL, address, route, hash, path** | A place's address: what the app, or the platform, restores the place from, and shares where it can. | The URL, in hash (`#runs`) or path (`/runs`) mode; `history` holds one entry per place; `?facet=` names a facet without an entry. |
+| **The page, page scroll, "the page scrolls"** | The place's own scroller. In a compact window the whole place scrolls as one; sideways, each section scrolls inside itself and nothing outside the pane moves. | The document's scroll (`scrollY`), `100dvh`, `scroll-margin-top`. |
+| **Back, Escape** | The platform's back command, in whatever form it has (a key, a gesture from an edge, a window-title button, Alt+Left, a mouse button), and Escape, which closes the innermost thing first ([Behaviours to rebuild](#behaviours-to-rebuild)). | `history.back()` and `popstate`; Escape on `keydown`, `closedby="closerequest"` on a dialog. |
+| **Hover** | Pointer rest: a pointer resting over a control without a press. It exists only where a pointer can rest (a mouse, a pen, a trackpad), never on touch, and is never the only way to anything ([accessibility.md](accessibility.md#pointer-and-touch)). | `:hover`, under `(hover: hover)`. |
+| **Tab, tab stop** | The Tab key, and one stop in the keyboard's walk through the window's controls; a collection is one stop with the arrows inside. A browser tab is one of several windows in one frame: "open in a new tab" is "open in a new window". | `tabindex`, a roving `tabindex`; a modified click, left to the browser. |
+| **`prefers-*`** | A system setting the user made once for everything (appearance, reduced motion, more contrast, less transparency), read from the platform and followed while it changes ([Switching](#switching)). | The media queries `prefers-color-scheme`, `prefers-reduced-motion`, `prefers-contrast`, `prefers-reduced-transparency`. |
+| **The root, `data-*` on the root** | The app as a whole: where the settings and a product's overrides are held. | The `html` element (`data-theme`, `data-density`, …) and `--rk-*` on `:root`. |
+| **`<dialog>`, `showModal()`, top layer** | A modal surface: the one surface above everything else in the window that holds focus, shades what lies under it and answers before anything else can be done (a sheet, a side panel, the session bar). The platform's modal layer draws it; `layer.*` orders only what lies below ([Values and units](#values-and-units)). | `<dialog>` opened with `showModal()`, in the browser's top layer. |
+| **Popover** | A floating surface (a menu, a select's list, a tip) above its control, without shading, closed by a press outside or Escape. | `popover`; `layer.float` where the browser has none. |
+| **First paint** | The first frame a place shows: already in its final layout, the addressed facet chosen, nothing jumping once behaviour attaches. | The markup the server, or the framework, renders before `rekta.js` runs. |
+| **`.rk-*`, `data-rk-*`** | The web profile's names for a pattern and for its state. Another implementation gives them its own names (a type, a role, a property); the pattern and the state are the rule, the names are not. | The classes and attributes of `rekta.css` and `rekta.js` ([behaviour.md](behaviour.md)). |
+| **`role`, `aria-*`** | What assistive technology is told about a control: its role, name, value and state, through the platform's accessibility API. | ARIA attributes in the markup. |
