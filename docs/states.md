@@ -225,7 +225,7 @@ From bottom to top:
 | `layer.appbar` | The app bar |
 | `layer.banner` | The status banner |
 | `layer.toast` | The toast region |
-| `layer.float` | Floating surfaces (menus, lists) where the browser has no popover top layer |
+| `layer.float` | Floating surfaces (menus, lists) in an implementation that stacks them by order; not needed where the platform has a layer of its own for them (the web's popover top layer) |
 | Top layer | Sheets (modal dialogs) and side panels, floating surfaces (popovers, where the browser has them), in the order they opened |
 
 - One modal at a time. A floating surface may open from inside a sheet;

@@ -5,6 +5,30 @@ tokens, public hooks, `data-rk-*` attributes, events and the `rekta.js`
 API are the public surface. Before 1.0, a minor version may still break
 it; each entry says how.
 
+## Unreleased
+
+Rekta is first the design of a desktop shell and its apps; the web is a
+profile of it, for installable apps (PWAs). No rule changes; the README,
+principles.md and platforms.md say so, and platforms.md gains a glossary.
+
+### Documented
+
+- README: what Rekta is for, in the first lines; "What's in the box" by
+  layer: the specification, tokens and icons, the web profile,
+  rekta-core, each one implementation among several.
+- principles.md: the surfaces in the order shell, app, phone, web, and
+  the one sentence on what comes first.
+- platforms.md: Rekta as a specification; a glossary of the words the
+  docs use (window, screen, pane, place, and the web words: viewport,
+  page scroll, hover, back and Escape, `prefers-*`, tab, `<dialog>` and
+  the top layer, popover, URL and route, the root, first paint, `.rk-*`
+  and `data-rk-*`, `role` and `aria-*`) and what each means on every
+  platform; the CSS examples of the product overrides say they are the
+  web's; `fluidDimension` is named as Rekta's own token type.
+- Tokens: `typography.font-family.sans` and `.mono` and `layer.float`
+  describe their rule without CSS words; the CSS output is unchanged.
+  states.md's layer table says the same of `layer.float`.
+
 ## 0.6.0 — 2026-11-02
 
 The reports #87–#157 on 0.5.0: motion, controls, layout and parity,

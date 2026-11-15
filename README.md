@@ -1,14 +1,17 @@
 # Rekta Design
 
 Rekta Design is a platform-neutral design language: an information-dense,
-motion-guided way to lay out an app, distilled from a prototype built for
-one product (kabai studio, "Metro × Porsche v3") into something any
-project — web or native — can reuse.
+motion-guided way to lay out a desktop shell (a launcher, a lock screen,
+a bar, a notification centre) and the apps that run in it. It is written
+for that desktop first; the web is a profile of it, for installable apps
+(PWAs). It was distilled from a prototype built for one web product
+(kabai studio, "Metro × Porsche v3") into a specification any project —
+a shell, a native app, a web app — can implement.
 
 Its name comes from Latin *recta*, the straight line: sharp edges, a
 strict grid, nothing rounded off. Its signature layout is the
 **panorama**, a canvas
-wider than the viewport that the user moves through sideways, with
+wider than the window that the user moves through sideways, with
 **live tiles** carrying real information instead of icons, organised
 into **pivots** (ordered facets of one place).
 
@@ -40,16 +43,18 @@ Full write-ups: [docs/principles.md](docs/principles.md),
 
 ## What's in the box
 
-Rekta has no dependencies on any framework. It ships four layers for the
-web and a native core, and each one is usable without the next:
+Rekta has no dependencies on any framework. It ships in four layers, and
+each one is usable without the next: the specification, the tokens and
+icons it is written in, the web profile, and rekta-core. Every
+implementation — the web profile, rekta-core, a toolkit's theme, a shell
+— reads the same specification and tokens; none of them is the design.
 
 | Layer | Files | For |
 |---|---|---|
-| **Tokens** | `tokens/rekta.tokens.json` (source, [DTCG](https://tr.designtokens.org/format/)), `tokens/rekta.accents.json` (named accents), `dist/rekta.tokens.json` (resolved, platform-neutral), `dist/rekta.tokens.css` (`--rk-` custom properties), `dist/rekta.color.js` (the colour rules: contrast, colour blindness, an accent's check and derivation) | Every platform. Another party can implement Rekta for WinUI, Qt, SwiftUI, Compose, Flutter or anything else from these: see [docs/platforms.md](docs/platforms.md). |
-| **Icons** | `src/icons/*.svg` (source), `dist/rekta.icons.svg` (a sprite), `dist/rekta.icons.json` (the shapes as data) | Every platform: 63 icons on a 20px grid, stroke 1.6, square ends. See [docs/shell.md](docs/shell.md). |
-| **Components** | `dist/rekta.css`, `dist/rekta.fonts.css` with `dist/fonts/` | The web: tiles, rows, tags, buttons, fields and every input, pivots, panoramas, the app bar and title bar, sheets, toasts, the status banner, menus and context menus, tooltips, tables, trees, long lists, splits, charts, meters, progress. Classes `.rk-*`; the few rules on the root are listed in [behaviour.md](docs/behaviour.md#rules-on-the-root). |
-| **Native core** | `core/` (`include/rekta.h`, `src/rekta.c`): C99, no dependency beyond the system; `nix run` starts its demo | Desktop apps on Windows, macOS and Linux without web technology: the same tokens, icons and motion, views and controllers composed as in UIKit, a software renderer that draws the same pixels everywhere. See [core/README.md](core/README.md) and [docs/core.md](docs/core.md). |
-| **Behaviour** | `dist/rekta.js` (ES module), `dist/rekta.global.js` (classic script, `window.Rekta`) | The web, with any framework or none: press, the turnstile, routes and back, the panorama's wheel and keyboard, pivots, toasts and an undo history, the banner, live regions, menus, selection, tables, trees, long lists, sorting by hand, forms and inputs, charts, tooltips, the title bar, installing and offline. See [docs/behaviour.md](docs/behaviour.md). |
+| **Specification** | `docs/*.md`: the rules (what each part means, how it behaves, what it must never do), the patterns of a desktop shell and of an app, and the behaviour contract | Every platform. [docs/platforms.md](docs/platforms.md) is the guide for implementing it, with a glossary of what the docs' words mean on each platform. |
+| **Tokens and icons** | `tokens/rekta.tokens.json` (source, [DTCG](https://tr.designtokens.org/format/)), `tokens/rekta.accents.json` (named accents), `dist/rekta.tokens.json` (resolved, platform-neutral), `dist/rekta.tokens.css` (`--rk-` custom properties), `dist/rekta.color.js` (the colour rules: contrast, colour blindness, an accent's check and derivation); `src/icons/*.svg` (source), `dist/rekta.icons.svg` (a sprite), `dist/rekta.icons.json` (the shapes as data) | Every platform: the one source of every colour, size, duration and curve, and 63 icons on a 20px grid, stroke 1.6, square ends ([docs/shell.md](docs/shell.md)). Another party implements Rekta for any toolkit from these. |
+| **Web profile** | `dist/rekta.css`, `dist/rekta.fonts.css` with `dist/fonts/`: tiles, rows, tags, buttons, fields and every input, pivots, panoramas, the app bar and title bar, sheets, toasts, the status banner, menus and context menus, tooltips, tables, trees, long lists, splits, charts, meters, progress (classes `.rk-*`); `dist/rekta.js` (ES module), `dist/rekta.global.js` (classic script, `window.Rekta`): press, the turnstile, routes and back, the panorama's wheel and keyboard, pivots, toasts and an undo history, the banner, live regions, menus, selection, tables, trees, long lists, sorting by hand, forms and inputs, charts, tooltips, the title bar, installing and offline | Installable web apps (PWAs), and web apps with any framework or none. The reference implementation of the app patterns and of some of the shell's, such as the session bar, the side panel, the recent stack and the level indicator. The few rules on the root are listed in [behaviour.md](docs/behaviour.md#rules-on-the-root); the whole contract is [docs/behaviour.md](docs/behaviour.md). |
+| **rekta-core** | `core/` (`include/rekta.h`, `src/rekta.c`): C99, no dependency beyond the system; `nix run` starts its demo | Desktop apps on Windows, macOS and Linux without web technology: the same tokens, icons and motion, views and controllers composed as in UIKit, a software renderer that draws the same pixels everywhere. One implementation of the specification among several, beside the web profile and any toolkit's theme. See [core/README.md](core/README.md) and [docs/core.md](docs/core.md). |
 
 ## Using it on the web
 
