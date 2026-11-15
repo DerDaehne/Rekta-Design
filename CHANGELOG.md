@@ -44,6 +44,9 @@ dots' fade in.
 
 ### Documented
 
+- collections.md: a reordered item settles in `duration-moderate`
+  after release, as motion.md and `sortable()` have it; `duration-short`
+  is only for the others making room while the drag runs.
 - navigation.md, "Back with a router of your own": the scroll snapshot
   goes in the layout that holds `.rk-place` (the page only when it
   renders the `main` itself), and a `restore()` still waiting ends with
