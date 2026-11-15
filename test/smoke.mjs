@@ -1943,20 +1943,39 @@ await m.close();
   await sb.close();
 }
 
-// The thin scrollbar: its two sizes are tokens, every scroller asks for the native thin bar in text-contrast-low, and
-// the name --rk-scrollbar stays the sheet's hook.
+// The thin scrollbar: its two sizes are tokens, every scroller asks for the native thin bar in text-contrast-low (the
+// strip and the recent stack hide theirs), and the name --rk-scrollbar stays the sheet's hook.
 {
   const n = await open();
   const r = await n.evaluate(() => {
-    const px = (v) => Rekta.tokens.px(v), color = getComputedStyle(document.documentElement).getPropertyValue('--rk-text-contrast-low').trim();
-    const v = document.createElement('div'); v.className = 'rk-virtual'; document.body.append(v);
-    const s = getComputedStyle(v), pan = getComputedStyle(document.querySelector('#pan'));
-    const probe = document.createElement('i'); probe.style.color = color; document.body.append(probe);
-    return { thickness: px('--rk-scrollbar-thickness'), grip: px('--rk-scrollbar-grip-min'), hook: getComputedStyle(document.documentElement).getPropertyValue('--rk-scrollbar').trim(),
-      width: [s.scrollbarWidth, pan.scrollbarWidth], colour: [s.scrollbarColor, pan.scrollbarColor], low: getComputedStyle(probe).color };
+    const px = (v) => Rekta.tokens.px(v), root = getComputedStyle(document.documentElement);
+    const probe = document.createElement('i'); probe.style.color = 'var(--rk-text-contrast-low)'; document.body.append(probe);
+    const low = getComputedStyle(probe).color;
+    const fixtures = {   // a selector's element, made where the showcase has none yet
+      root: null, panorama: '#pan', section: '.rk-panorama .rk-sec', virtual: '.rk-virtual', tableWrap: '.rk-table-wrap', float: '.rk-float', sheet: '.rk-sheet',
+      sideSheet: '.rk-sheet.rk-sheet--side', session: '.rk-sheet.rk-session', palette: '.rk-palette > ul', splitList: '.rk-split > .rk-split-list', splitDetail: '.rk-split > .rk-split-detail',
+      pivot: '.rk-pivot', recent: '.rk-recent > .rk-tiles',
+    };
+    const made = { virtual: '<div class="rk-virtual"></div>', tableWrap: '<div class="rk-table-wrap"></div>', float: '<div class="rk-float"></div>', palette: '<div class="rk-palette"><ul></ul></div>',
+      splitList: '<div class="rk-split"><div class="rk-split-list"></div><div class="rk-split-detail"></div></div>', recent: '<div class="rk-recent"><div class="rk-tiles"></div></div>' };
+    const host = document.createElement('div'); document.body.append(host);
+    const seen = {};
+    for (const [k, sel] of Object.entries(fixtures)) {
+      let el = sel === null ? document.documentElement : document.querySelector(sel);
+      if (!el && made[k]) { host.insertAdjacentHTML('beforeend', made[k]); el = host.querySelector(sel); }
+      if (!el && k === 'sheet') { host.insertAdjacentHTML('beforeend', '<dialog class="rk-sheet"></dialog>'); el = host.querySelector('.rk-sheet'); }
+      if (!el && k === 'sideSheet') { host.insertAdjacentHTML('beforeend', '<dialog class="rk-sheet rk-sheet--side"></dialog>'); el = host.querySelector('.rk-sheet--side'); }
+      if (!el && k === 'session') { host.insertAdjacentHTML('beforeend', '<dialog class="rk-sheet rk-session"></dialog>'); el = host.querySelector('.rk-session'); }
+      if (!el && k === 'pivot') { host.insertAdjacentHTML('beforeend', '<nav class="rk-pivot"></nav>'); el = host.querySelector('.rk-pivot'); }
+      const s = el && getComputedStyle(el);
+      seen[k] = s ? [s.scrollbarWidth, s.scrollbarColor.startsWith(low)] : null;
+    }
+    return { thickness: px('--rk-scrollbar-thickness'), grip: px('--rk-scrollbar-grip-min'), hook: root.getPropertyValue('--rk-scrollbar').trim(), seen };
   });
+  const hidden = ['pivot', 'recent'], thin = Object.keys(r.seen).filter((k) => !hidden.includes(k));
   ok(r.thickness === 6 && r.grip === 11 && r.hook === '', 'the thin scrollbar: 6px across, a grip of at least 11px, --rk-scrollbar left to the sheet', JSON.stringify(r));
-  ok(r.width.every((w) => w === 'thin') && r.colour.every((c) => c.startsWith(r.low)), 'the thin scrollbar: the virtual list and the panorama ask for thin, in text-contrast-low', JSON.stringify(r));
+  ok(thin.every((k) => r.seen[k] && r.seen[k][0] === 'thin' && r.seen[k][1]), 'the thin scrollbar: every scroller asks for thin in text-contrast-low', JSON.stringify(r.seen));
+  ok(hidden.every((k) => r.seen[k] && r.seen[k][0] === 'none'), 'the thin scrollbar: the section strip and the recent stack hide theirs', JSON.stringify(r.seen));
   await n.close();
 }
 

@@ -1318,9 +1318,6 @@ static void test_scroll(void) {
   shot(w, "scroll");
   rk_app_run_for(1000);
   CHECK(!s->rail->passthrough, "the bar stays, however long nothing moves");
-  float gy, gh;
-  thumb_of(s, rk__window_rect(sc).h, &gy, &gh);
-  CHECK(BAR_W == 6 && BAR_MIN == 11 && gh >= 11, "the grip is the token's thickness and at least its minimum long (%g, %g)", BAR_W, gh);
   /* what shows is what a press reaches */
   rk_view *hit = rk_window_view_at(w, (rk_point){ r.x + 30, r.y + 10 });
   int expect = -1;
@@ -1355,6 +1352,74 @@ static void test_scroll(void) {
   d.type = RK_EVENT_POINTER_MOVE; d.position.y += (r.h - th) / 2; rk_window_inject(w, &d);
   d.type = RK_EVENT_POINTER_UP; rk_window_inject(w, &d);
   CHECK(fabsf(sc->value - (10 + s->max / 2)) < 2, "dragging the bar halfway down scrolls half the way (%.0f of %.0f)", sc->value, s->max);
+  done(w);
+}
+
+/* The thin bar, read from the pixels: the grip alone, in its colours, square, inset in a gutter of its own. */
+static uint32_t pixel_at(rk_window *w, float x, float y) {
+  rk_window_snapshot(w, "/dev/null");
+  return w->fb->px[(int)(y * w->scale) * w->fb->stride + (int)(x * w->scale)];
+}
+static rk_view *scroll_of(int n, rk_view **first) {
+  rk_view *list = rk_vstack();
+  for (int i = 0; i < n; i++) { rk_view *b = rk_add(list, rk_field("name", "type here")); if (!i) *first = b; }
+  rk_view *sc = rk_scroll(list);
+  rk_view_set_size(sc, 0, 200);
+  return sc;
+}
+static void bar_pointer(rk_window *w, rk_event_type type, float x, float y) {
+  rk_event e = { sizeof e, type, 0, { x, y }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
+  rk_window_inject(w, &e);
+}
+
+static void test_scroll_bar(void) {
+  rk_window *w = window(360, 300);
+  rk_view *first = NULL, *page = col(8, 16);
+  rk_view *sc = rk_add(page, scroll_of(40, &first));
+  show(w, page, "scroll bar");
+  scroller *s = sc->state;
+  rk_rect r = rk__window_rect(sc), fr = rk__window_rect(first);
+  float gy, gh, gx = r.x + r.w - (RAIL_W + BAR_W) / 2;       /* the grip's leading edge: 2px inside the gutter */
+  thumb_of(s, r.h, &gy, &gh);
+  uint32_t low = rk__pm(rk_color_of(RK_ROLE_TEXT_LOW), 1), medium = rk__pm(rk_color_of(RK_ROLE_TEXT_MEDIUM), 1);
+  CHECK(low != medium, "the two greys differ");
+  CHECK(BAR_W == 6 && BAR_MIN == 11 && RAIL_W == 10, "the grip is 6px across, at least 11px long, in a gutter of 10px (%g, %g, %g)", BAR_W, BAR_MIN, RAIL_W);
+  CHECK(CLOSE_TO(fr.x + fr.w, r.x + r.w - RAIL_W, 0.5), "the content is laid out a gutter narrower (%g of %g)", fr.x + fr.w, r.x + r.w);
+  CHECK(rk_window_view_at(w, (rk_point){ r.x + r.w - 12, r.y + 40 }) != NULL && rk_window_view_at(w, (rk_point){ r.x + r.w - 12, r.y + 40 })->cls != &rail_class, "in the content, a press reaches it");
+  CHECK(rk_window_view_at(w, (rk_point){ r.x + r.w - 5, r.y + 40 }) == s->rail, "in the gutter, a press reaches the bar");
+  float mid = r.y + gy + gh / 2;
+  CHECK(pixel_at(w, gx, mid) == low && pixel_at(w, gx + BAR_W - 1, mid) == low, "the grip rests in text-contrast-low, 6px across");
+  CHECK(pixel_at(w, gx - 1, mid) != low && pixel_at(w, gx + BAR_W, mid) != low, "and has nothing beside it: 2px of gutter on each side");
+  CHECK(pixel_at(w, gx, r.y + gy) == low && pixel_at(w, gx + BAR_W - 1, r.y + gy + gh - 1) == low, "its corners are square");
+  rk_app_run_for(50);
+  w->needs_draw = false;
+  bar_pointer(w, RK_EVENT_POINTER_MOVE, gx + 2, mid);
+  CHECK(w->needs_draw, "the pointer coming onto the bar asks for a frame");
+  CHECK(pixel_at(w, gx, mid) == medium, "under the pointer the grip is text-contrast-medium");
+  bar_pointer(w, RK_EVENT_POINTER_MOVE, r.x + 20, mid);
+  CHECK(pixel_at(w, gx, mid) == low, "and back at rest when the pointer leaves");
+  bar_pointer(w, RK_EVENT_POINTER_DOWN, gx + 2, mid);
+  CHECK(s->dragging && pixel_at(w, gx, mid) == medium, "while dragged it is text-contrast-medium");
+  bar_pointer(w, RK_EVENT_POINTER_UP, gx + 2, mid);
+  done(w);
+
+  w = window(360, 300);
+  page = col(8, 16);
+  sc = rk_add(page, scroll_of(400, &first));
+  show(w, page, "long scroll bar");
+  s = sc->state; r = rk__window_rect(sc);
+  thumb_of(s, r.h, &gy, &gh);
+  mid = r.y + gy + 5;
+  CHECK(gh == BAR_MIN && pixel_at(w, gx, mid) == low && pixel_at(w, gx, r.y + gy + BAR_MIN) != low, "content far longer than the view: the grip is never shorter than its minimum (%g)", gh);
+  done(w);
+
+  w = window(360, 300);
+  page = col(8, 16);
+  sc = rk_add(page, scroll_of(3, &first));
+  show(w, page, "short scroll");
+  s = sc->state; r = rk__window_rect(sc); fr = rk__window_rect(first);
+  rk_view *edge = rk_window_view_at(w, (rk_point){ r.x + r.w - 5, r.y + 10 });
+  CHECK(s->max <= 0 && edge && edge->cls != &rail_class && fr.x + fr.w == r.x + r.w, "nothing overflows: no gutter, no grip, nothing at the edge takes presses");
   done(w);
 }
 
@@ -3899,6 +3964,7 @@ static void launch(void *user) {
   test_controls();
   test_image();
   test_scroll();
+  test_scroll_bar();
   test_select();
   test_date();
   test_textarea();

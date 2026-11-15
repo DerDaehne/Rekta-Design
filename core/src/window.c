@@ -692,7 +692,8 @@ static void event(rk_window *w, const rk_event *e) {
     case RK_EVENT_POINTER_MOVE: {
       w->pointer = e->position;
       rk_view *h = w->capture ? w->capture : hit_window(w, e->position.x, e->position.y);
-      w->hover = h;                                            /* nothing is drawn differently under the pointer */
+      if (w->hover != h) { if (w->hover) rk__view_dirty(w->hover); if (h) rk__view_dirty(h); }   /* a view may draw itself lit under the pointer */
+      w->hover = h;
       if (!w->capture) rk__tip_hover(w, h);                    /* but a tooltip may come */
       dispatch(w, h, e);
       int shape = RK__CURSOR_ARROW;                            /* the move has told the views what lies under it */

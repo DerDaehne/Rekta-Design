@@ -967,15 +967,15 @@ static void scroll_value(rk_view *v, float to, float max, double settle) {
 /* Scroll ---------------------------------------------------------------------------------------------------------- */
 /* A view that clips its content and scrolls it up and down on the panorama's spring. The wheel moves it until an end
    (then what holds it moves); keys a focused view inside leaves (Up, Down, Page Up, Page Down, Home, End) move it;
-   focus landing inside brings the view in sight. A thin bar, the grip alone, stands while the content overflows, and drags. */
+   focus landing inside brings the view in sight. A thin bar, the grip alone, stands in a gutter of its own while the content overflows, and drags. */
 
 typedef struct scroller { float max; bool dragging; float drag_y, drag_value; rk_view *view, *rail; } scroller;
 
 #define BAR_W RK_TOK_SCROLLBAR_THICKNESS
 #define BAR_MIN RK_TOK_SCROLLBAR_GRIP_MIN
-/* The rail is wider than the grip so a thin grip can be caught by a pointer: the rail takes the press instead of what
-   lies under it, and only while the content overflows. */
-#define RAIL_W (BAR_W + 4)
+/* The gutter, as wide as Chromium's thin bar reserves: the content is laid out narrower by it while it overflows, so the
+   rail and the grip never lie over content and the rail takes presses only in space of its own. */
+#define RAIL_W 10.0f
 
 static void scroller_to(scroller *s, float to, double settle) {
   if (s->max <= 0) return;
@@ -987,9 +987,14 @@ static void scroller_layout(rk_view *v, void *st) {
   scroller *s = st;
   if (v->nkids < 2) return;
   rk_view *c = v->kids[0];
-  rk_size n = rk__measure(c, (rk_size){ v->frame.w, INFINITY });
+  float w = v->frame.w;
+  rk_size n = rk__measure(c, (rk_size){ w, INFINITY });
+  if (n.h > v->frame.h) {                                   /* narrower content is never shorter, so it still overflows */
+    w -= RAIL_W;
+    n = rk__measure(c, (rk_size){ w, INFINITY });
+  }
   float h = RK_MAX(n.h, v->frame.h);
-  rk__set_frame(c, (rk_rect){ 0, 0, v->frame.w, h });
+  rk__set_frame(c, (rk_rect){ 0, 0, w, h });
   rk__set_frame(s->rail, (rk_rect){ v->frame.w - RAIL_W, 0, RAIL_W, v->frame.h });
   s->max = RK_MAX(0.0f, h - v->frame.h);
   s->rail->passthrough = s->max <= 0;
@@ -1047,7 +1052,9 @@ static void rail_draw(rk_view *v, rk_canvas *c, void *st) {
   if (s->max <= 0) return;
   float y, h;
   thumb_of(s, v->pframe.h, &y, &h);
-  rk_canvas_fill_rect(c, (rk_rect){ v->pframe.w - BAR_W, y, BAR_W, h }, rk_color_of(RK_ROLE_TEXT_LOW));
+  rk_window *w = rk__view_window(v);
+  bool lit = s->dragging || (w && w->hover == v);
+  rk_canvas_fill_rect(c, (rk_rect){ (v->pframe.w - BAR_W) / 2, y, BAR_W, h }, rk_color_of(lit ? RK_ROLE_TEXT_MEDIUM : RK_ROLE_TEXT_LOW));
   if (s->view->pvalue != s->view->value) rk__view_dirty(v);   /* it follows the glide */
 }
 static bool rail_event(rk_view *v, const rk_event *e, void *st) {

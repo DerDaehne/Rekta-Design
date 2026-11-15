@@ -278,6 +278,9 @@ builds it from views or does without:
 
 - **The app bar** (with the live state, the places and running things):
   rekta-core has none; a native app uses its window's own chrome.
+- **The thin scrollbar outside `rk_scroll`:** rekta-core's lists and
+  tables (`rk_list`), menus, the panorama and its sections scroll
+  without a bar; only `rk_scroll` draws the grip.
 - **A side panel and choosing in place:** rekta-core's sheets come from
   the top.
 - **A launch tile:** rekta-core's tiles carry a stat, a message, a

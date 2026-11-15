@@ -39,18 +39,29 @@ links) hints at what's further along and jumps to a section.
   spacer, no scrollbar, and the strip only changes title sizes. A jump
   aligns a section flush left, or as far as the panorama can scroll.
 - **The thin scrollbar.** A scroller whose content overflows shows a thin
-  scrollbar that is only its grip: `text-contrast-low`, square corners,
-  no track, no arrows, `size.scrollbar-thickness` (6px) across and at
-  least `size.scrollbar-grip-min` (11px) along, whatever the content's
-  length. It stands as long as the content overflows and never fades in
-  or out: motion does not hide information. Pointer, hover and drag do
-  not change it. Both sizes are what Chromium paints for its native
-  `thin` scrollbar, so web and native look alike. A platform with a
-  native thin scrollbar uses it and gives it only Rekta's colour. On the
-  web: `scrollbar-width: thin; scrollbar-color: var(--rk-text-contrast-low) transparent`
-  on every scroller (rekta.css sets it on the panorama, the facets and
-  `.rk-virtual`; the sections inherit the colour). rekta-core draws the
-  grip itself, from the same two tokens.
+  scrollbar that is only its grip: no track, no arrows, square corners,
+  `size.scrollbar-thickness` (6px) across and at least
+  `size.scrollbar-grip-min` (11px) along, whatever the content's length.
+  At rest the grip is `text-contrast-low`; under the pointer and while
+  dragged it is `text-contrast-medium`. It stands as long as the content
+  overflows and never fades in or out: motion does not hide information.
+  It has a gutter of its own, as wide as the platforms' classic thin bar
+  reserves (10px), with the grip inset 2px in it: the content is narrower
+  by the gutter while it overflows, nothing lies under the bar, and
+  without overflow there is no gutter. The sizes are what Chromium paints
+  for its native `thin` scrollbar, so web and native are equally thick.
+  A platform with a native thin scrollbar uses it and gives it only
+  Rekta's colour. On the web every scroller asks for it:
+  `scrollbar-width: thin` and `scrollbar-color: var(--rk-text-contrast-low) transparent`
+  (the colour is set on the root and inherited; sheets, the side panel,
+  the session bar, `.rk-float`, the palette's list, the table wrap, the
+  split panes, the panorama and its sections and the page itself). The
+  native bar is the browser's: Chromium's `thin` also paints arrows and
+  rounds the grip's ends, and darkens the grip under the pointer. The
+  section strip and the recent stack are the exceptions: they scroll
+  sideways without a bar (`scrollbar-width: none`), by drag, keys or the
+  wheel, and say where they go by what they show. rekta-core draws the
+  grip itself for `rk_scroll`.
 - **Never flush at the edge.** When the sections reach past the window,
   the window's edge never falls on a section's edge or in the gap: it
   falls inside a section, at least `space-xl` from either of its ends,
