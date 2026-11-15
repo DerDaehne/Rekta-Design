@@ -28,6 +28,16 @@ principles.md and platforms.md say so, and platforms.md gains a glossary.
 - Tokens: `typography.font-family.sans` and `.mono` and `layer.float`
   describe their rule without CSS words; the CSS output is unchanged.
   states.md's layer table says the same of `layer.float`.
+- The six places where a rule existed only as its web mechanism now say
+  the rule first, for every platform, and the mechanism after it as "On
+  the web: …": the modal surfaces (a sheet, the side panel, the session
+  bar, the recent stack: what they hold, shade and close on), the
+  stage's height and its jumps (layout.md), the names of classes and
+  attributes (data.md, live.md, typography.md, shell.md), role, name and
+  focus path (forms.md, states.md, navigation.md), back and the history
+  (navigation.md, forms.md), and the browser capabilities named in
+  passing (anchor positioning, the top layer, view transitions, hover).
+  No rule changes; behaviour.md stays the web contract.
 
 ## 0.6.0 — 2026-11-02
 

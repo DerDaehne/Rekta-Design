@@ -16,7 +16,7 @@ and forced colours.
   The battery shows no level: the value stands beside it as a word
   ("battery 64%"), so it is read, not guessed from a fill.
 
-- **Web:** `dist/rekta.icons.svg` is a sprite of `<symbol id="rk-i-NAME">`.
+- **On the web:** `dist/rekta.icons.svg` is a sprite of `<symbol id="rk-i-NAME">`.
   Inline it once in the page (or reference the file) and use
   `<svg class="rk-icon"><use href="#rk-i-search"/></svg>`, or
   `Rekta.icon('search')`. `rk-icon--16` is the small size.
@@ -39,11 +39,12 @@ natively, whatever icon theme or tray protocol they come from.
   "symbolic" icon), use it and draw it in the text colour like Rekta's
   own (on the web an inline SVG with `currentColor`); it then follows
   every theme and forced colours.
-- **Otherwise the picture** (`img.rk-picture`), in fixed sizes: 20px in
-  rows, menus, toasts and the app bar, as Rekta's icons;
-  `size.tile-icon` (48) and `size.tile-icon-large` (96) only on a launch
-  tile ([tiles.md](tiles.md#tile-content-patterns)). Drawn from the
-  nearest larger size the source offers, never stretched up.
+- **Otherwise the picture**, in fixed sizes: 20px in rows, menus,
+  toasts and the app bar, as Rekta's icons; `size.tile-icon` (48) and
+  `size.tile-icon-large` (96) only on a launch tile
+  ([tiles.md](tiles.md#tile-content-patterns)). Drawn from the nearest
+  larger size the source offers, never stretched up. On the web:
+  `img.rk-picture`.
 - **Only on a neutral ground** (`bg`, `surface`, glass), never on a
   status fill: its own colours would fight the fill's meaning. A row
   that carries one and turns selected keeps it as it is, beside the
@@ -60,11 +61,11 @@ A title bar that draws the window's own buttons (a native app without
 the system's frame, rekta-core, a web app in a frameless native shell)
 draws minimise, maximise (restore while maximised) and close:
 
-- **Quiet icon buttons** (`.rk-btn.rk-btn--icon.rk-btn--quiet` in
-  `.rk-titlebar-win`): the bar's height and `touch-target` wide, at its
-  trailing end, each with its name ("minimize", "maximize" or "restore",
-  "close") as its accessible name. They take no focus from Tab: the
-  system's own keys and window menu do the same.
+- **Quiet icon buttons:** the bar's height and `touch-target` wide, at
+  its trailing end, each with its name ("minimize", "maximize" or
+  "restore", "close") as its accessible name. They take no focus from
+  Tab: the system's own keys and window menu do the same. On the web:
+  `.rk-btn.rk-btn--icon.rk-btn--quiet` in `.rk-titlebar-win`.
 - **Icons:** `minus`, `maximize` (one square) and `restore` (two), and
   `close`.
 - **Hover and press** as any quiet button: the hover tint and the text
@@ -140,9 +141,10 @@ question).
 - **The bar.** A sheet across the full width at the top in the banner's
   geometry: a large light word in the first tile column ("session" or
   the account's name), the actions as buttons behind it, on `surface`
-  without a status, the sheet's shading behind it
-  (`dialog.rk-sheet.rk-session`, run by `sheet()`). It comes in once as
-  the banner does, a fade and 8px over `duration-short`.
+  without a status, the sheet's shading behind it: a modal surface, as
+  every sheet (on the web `dialog.rk-sheet.rk-session`, run by
+  `sheet()`). It comes in once as the banner does, a fade and 8px over
+  `duration-short`.
 - **The actions.** The most frequent (lock) is the primary button, the
   others quiet, each an icon beside its word. Restart and power off ask
   nothing more: calling the bar was the question, and the bar is the
@@ -185,8 +187,8 @@ on the ground, with three things in three corners and nothing in the
 middle:
 
 - **Time and date**, at the leading top: the time in the display step
-  (`.rk-display`, read from across the room), the date below it as a
-  fact line.
+  (read from across the room; on the web `.rk-display`), the date below
+  it as a fact line.
 - **The account and its field**, at the leading bottom: the account's
   name as the screen's one bold title, the password field under it with
   its label, and the button. While the answer is awaited, the dots run

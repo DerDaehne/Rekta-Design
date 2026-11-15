@@ -11,15 +11,16 @@ heart-rate zones from cool to warm, the fixed colours the common
 training platforms give power and heart rate, a transit network's line
 colours. Recolouring them in ink and grey would hide what they say. For
 these, and only these, a product sets a code of up to eight colours,
-`--rk-series-1` to `--rk-series-8`, per theme (the selectors are those of
-the accent, [platforms.md](platforms.md#product-overrides)).
+numbered 1 to 8, per theme, as a product override
+([platforms.md](platforms.md#product-overrides)). On the web:
+`--rk-series-1` to `--rk-series-8`, with the selectors of the accent.
 
 - **Small marks only:** a line, a bar, a zone, a legend key, a tag's
-  square (`.rk-tag[data-rk-code="N"]`), a meter's fill
-  (`.rk-meter[data-rk-code="N"]`; a `data-status` on it still wins), a
-  share of a share bar (`.rk-shares`, below). Never a tile fill, never a
-  large area, and **text is never drawn in a code colour**: the label
-  beside the mark says what it is.
+  square, a meter's fill (a status on it still wins), a share of a share
+  bar (below). Never a tile fill, never a large area, and **text is
+  never drawn in a code colour**: the label beside the mark says what it
+  is. On the web: `data-rk-code="N"` on the `.rk-tag`, the `.rk-meter`
+  or a share of `.rk-shares`.
 - **3:1 against the ground and the surface**, in each theme.
 - **Apart under colour blindness:** every pair at least 0.09 (OKLab)
   under protanopia and deuteranopia, as the status tiles are; tritanopia
@@ -41,11 +42,12 @@ arbitrary series apart.
 
 ### Shares of a whole
 
-Time per zone, a budget by category: one bar split into its shares
-(`.rk-shares`), each child's `--rk-v` its share in any unit (minutes, a
-count) and its `data-rk-code` its colour (ink without one). The shares
-stand 2px apart like a category's bars, at least 2px wide so a small one
-still shows, `space-s` high, at most three tile units wide.
+Time per zone, a budget by category: one bar split into its shares,
+each with its share in any unit (minutes, a count) and its code as its
+colour (ink without one). The shares stand 2px apart like a category's
+bars, at least 2px wide so a small one still shows, `space-s` high, at
+most three tile units wide. On the web: `.rk-shares`, each child's
+`--rk-v` its share and its `data-rk-code` its colour.
 
 ```html
 <div class="rk-shares" role="img" aria-label="Time in zones: zone 1 12 min, zone 2 31 min, zone 3 18 min">
@@ -55,9 +57,10 @@ still shows, `space-s` high, at most three tile units wide.
 ```
 
 - **Words:** the bar is an image whose name says every share; the words
-  go beside or under it as tags (`.rk-tag[data-rk-code]`, the square in
-  the code, the words in ink), in the bar's order, `aria-hidden` when
-  they repeat the name. Never a number inside a share.
+  go beside or under it as tags (the square in the code, the words in
+  ink; on the web `.rk-tag[data-rk-code]`), in the bar's order, hidden
+  from assistive technology (`aria-hidden`) when they repeat the name.
+  Never a number inside a share.
 - **In a row of a collection.** Where every row of a list or table has
   its own bar (each ride's time in zones), five tags and a full name per
   row make the list restless and a screen reader reads every figure for
@@ -141,14 +144,15 @@ A sparkline is a trend at a glance: one series, no axis, no labels.
 
 ## Meters
 
-A quantity against its whole (`rk-meter`, `role="meter"`): a 6px
-hairline-grey track, the fill in ink, or in a domain's code
-(`data-rk-code="N"`) when the quantity belongs to one (time in zone 2). When the value means a status
+A quantity against its whole, a meter to assistive technology: a 6px
+hairline-grey track, the fill in ink, or in a domain's code when the
+quantity belongs to one (time in zone 2). When the value means a status
 (a disk nearly full, storage full), the fill takes that status's
 `full` colour, the label carries the status tag, and the accessible
 value says it in words ("81%, nearly full"). The label and the value
-sit above the meter. The page sets `--rk-v` (0 to 1); the fill follows
-in `duration-moderate`.
+sit above the meter. The app sets the value (0 to 1); the fill follows
+in `duration-moderate`. On the web: `rk-meter` with `role="meter"`,
+`--rk-v` as the value and `data-rk-code="N"` as the code.
 
 ## Progress
 
@@ -156,10 +160,10 @@ in `duration-moderate`.
 |---|---|
 | a region loading | the 2px line along its first hairline (see [states.md](states.md)) |
 | a button's action | the line under the button, its label saying what it does |
-| a known amount | `progress.rk-progress` with a value, the label and the percentage above |
-| an unknown amount, in place | `progress.rk-progress` without a value: a segment runs along it |
-| a short wait that blocks the screen (the first load, applying a change) | the dots (`rk-dots`) |
-| a long wait that holds the whole screen (starting up, signing in, installing) | the beads (`rk-dots rk-dots--beads`) |
+| a known amount | the progress bar with a value, the label and the percentage above |
+| an unknown amount, in place | the progress bar without a value: a segment runs along it |
+| a short wait that blocks the screen (the first load, applying a change) | the dots |
+| a long wait that holds the whole screen (starting up, signing in, installing) | the beads |
 
 **The dots, the Metro way:** five small squares fly in from the leading
 edge, bunch up slowly through the middle and speed off to the far edge,
@@ -168,7 +172,11 @@ short wait that blocks the screen; everywhere else, the calm line.
 
 **The beads** are the calm form of the dots, for a long wait: three
 squares cross the middle of the track one after another, each on one
-even curve, without bunching up or speeding off. Markup:
+even curve, without bunching up or speeding off. The dots and the beads
+are a progress indicator to assistive technology, named by what is
+happening. On the web: `progress.rk-progress`, with a `value` or
+without; the dots `<div class="rk-dots" role="progressbar" aria-label="…">`
+with five `<i>` inside, the beads
 `<div class="rk-dots rk-dots--beads" role="progressbar" aria-label="…"><i></i><i></i><i></i></div>`.
 
 Under reduced motion the dots and the beads stand still in the middle,

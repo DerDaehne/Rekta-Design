@@ -17,8 +17,8 @@ of four states, and says which.
   does not have. Placeholders stand still.
 - **The region starts at its first hairline.** Put the kicker above the
   region, so the line runs where the content will be.
-- Mark the loading region `aria-busy="true"` (`Rekta.busy()` does), so
-  assistive technology waits for it.
+- Tell assistive technology the region is busy, so it waits for it. On
+  the web: `aria-busy="true"`, which `Rekta.busy()` sets.
 - Under reduced motion the line stands still at full width, in
   `rk-text-contrast-medium`.
 
@@ -26,10 +26,11 @@ of four states, and says which.
 
 A button whose action is still running says what it is doing, in the
 verb's -ing form, at the same width: "save schedule" becomes "saving
-schedule…". It refuses more clicks (`aria-disabled`), and after
-`timing.busy-delay` the 2px line runs under it. No spinner: words carry
-it. When the action ends, the label comes back and a toast reports the
-result; a failure is said at the control that caused it.
+schedule…". It refuses more clicks and is disabled to assistive
+technology (on the web `aria-disabled`), and after `timing.busy-delay`
+the 2px line runs under it. No spinner: words carry it. When the action
+ends, the label comes back and a toast reports the result; a failure is
+said at the control that caused it.
 
 The line goes with the label: once shown, it stays until the label comes
 back and leaves in the same moment, never before. No `timing.busy-min`
@@ -169,8 +170,10 @@ next to the control that opened them.
 A surface that slides in from the trailing edge, full height, for
 switches, sliders and lists that belong to the whole app or system: quick
 settings, notifications ([live.md](live.md#a-notification-centre)).
-It is a sheet from the side: `<dialog class="rk-sheet rk-sheet--side">`,
-opened with `showModal()` and run by `sheet()` like any sheet.
+It is a sheet from the side, a modal surface like any sheet
+([platforms.md](platforms.md#glossary)). On the web:
+`<dialog class="rk-sheet rk-sheet--side">`, opened with `showModal()`
+and run by `sheet()` like any sheet.
 
 - **Look:** `bg`, like a sheet, with a hairline on its leading edge; no
   status fill. Two tile units wide plus its padding
@@ -182,7 +185,8 @@ opened with `showModal()` and run by `sheet()` like any sheet.
   back the same way ([motion.md](motion.md)).
 - **Behaves as a sheet:** it shades the rest (`shading` and the blur), a
   tap on the shading closes it, it holds focus, Escape closes it, it sits
-  in the top layer and has a visible way out (its close button).
+  in the platform's modal layer and has a visible way out (its close
+  button).
 - **Content:** groups, each a heading over rows with a toggle
   (`rk-toggle`) or a slider (`rk-range`); never tiles as switches (a tile
   never toggles). It may carry a pivot for its facets (settings and
@@ -226,7 +230,7 @@ From bottom to top:
 | `layer.banner` | The status banner |
 | `layer.toast` | The toast region |
 | `layer.float` | Floating surfaces (menus, lists) in an implementation that stacks them by order; not needed where the platform has a layer of its own for them (the web's popover top layer) |
-| Top layer | Sheets (modal dialogs) and side panels, floating surfaces (popovers, where the browser has them), in the order they opened |
+| Modal layer | Sheets (modal dialogs) and side panels, in the order they opened, with the floating surfaces the platform puts there (on the web the top layer, with popovers where the browser has them) |
 
 - One modal at a time. A floating surface may open from inside a sheet;
   it sits above it.
@@ -240,13 +244,16 @@ From bottom to top:
   while it leaves (the shading, Escape, another button) changes no
   answer and asks nothing: it only ends the leaving at once.
 - **Every sheet has a visible way out**: its safe answer, or a close
-  button (`.rk-btn--icon.rk-btn--quiet.rk-sheet-close`, `value="cancel"`,
-  `aria-label="close"`) at its top corner. Escape and the shading are not
-  enough: a touch screen may have neither key nor gesture, and with
-  `closedby="closerequest"` the shading does nothing. The markup is in
+  button named "close" at its top corner. Escape and the shading are not
+  enough: a touch screen may have neither key nor gesture, and a sheet
+  may refuse the shading. On the web: the button is
+  `.rk-btn--icon.rk-btn--quiet.rk-sheet-close` with `value="cancel"` and
+  `aria-label="close"`, and `closedby="closerequest"` is the sheet the
+  shading does not close; the markup is in
   [forms.md](forms.md#a-form-in-a-sheet).
-- **Toasts stay below sheets**, always: the toast region is never made a
-  popover to reach the top layer. A sheet, or the palette, that has to
+- **Toasts stay below sheets**, always: the toast region is never lifted
+  into the modal layer (on the web, never made a popover to reach the
+  top layer). A sheet, or the palette, that has to
   say something while it is open says it inside itself, where the user
   is looking: a message in place under the field or list it is about
   (`.rk-hint`, or `.rk-empty` for a list with nothing to show; motion.md,
