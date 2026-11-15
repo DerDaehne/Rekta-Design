@@ -42,6 +42,11 @@ same meanings ([below](#other-programs-windows)).
 | **Floating surface** | `motion.duration.float` (150ms) · `motion.easing.in`, fade + 4px away from its control; leaves at once | "Options for this control, right here." |
 | **State changes** (hover, border, colour, underline) | `motion.duration.short` (250ms) · `motion.easing.base` | The calm default for anything reacting to pointer/focus: nothing snaps, everything glides briefly. A column put back to its width, a value going stale, a progress bar's value glide the same way (progress over `motion.duration.moderate`). |
 
+**The end of a scroll** belongs to the platform: Rekta adds no give of
+its own there, for any input, and does not suppress the platform's own
+answer either, whether that is a bounce, a stretch, a glow or a plain
+stop.
+
 ## Place change in detail
 
 The numbers are tokens (`motion.transform.turnstile-*`, `motion.proportion.turn-*`,

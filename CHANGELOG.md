@@ -8,8 +8,9 @@ it; each entry says how.
 ## Unreleased
 
 Rekta is first the design of a desktop shell and its apps; the web is a
-profile of it, for installable apps (PWAs). No rule changes; the README,
-principles.md and platforms.md say so, and platforms.md gains a glossary.
+profile of it, for installable apps (PWAs). That changes no rule; the
+README, principles.md and platforms.md say so, and platforms.md gains a
+glossary. One motion rule is settled: the end of a scroll.
 
 ### Contributing
 
@@ -51,6 +52,9 @@ principles.md and platforms.md say so, and platforms.md gains a glossary.
   (navigation.md, forms.md), and the browser capabilities named in
   passing (anchor positioning, the top layer, view transitions, hover).
   No rule changes; behaviour.md stays the web contract.
+- motion.md: the end of a scroll belongs to the platform. Rekta adds no
+  give of its own there, for any input, and does not suppress the
+  platform's own answer (#150).
 
 ## 0.6.0 — 2026-11-02
 
