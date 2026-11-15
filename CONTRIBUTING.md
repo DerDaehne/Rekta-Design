@@ -20,16 +20,19 @@ The scan below rejects any other author or committer address.
 - A change to the public surface has its line in CHANGELOG.md under
   "Unreleased".
 - `sh scripts/scan-secrets.sh` passes. It needs git and gitleaks (with
-  Nix, it fetches gitleaks itself). CI runs the same scan.
+  Nix, it fetches gitleaks itself). CI runs the same scan. After a change
+  to the scan, `sh scripts/scan-secrets.test.sh` passes too.
 
-The scan looks at the working tree and at every commit not yet on `main`,
-and fails on:
+The scan looks at the working tree and at every commit not yet on `main`
+(what it adds, its message, author and committer), and fails on:
 
 - a secret, in the history or in staged and unstaged changes (gitleaks);
-- a local home path (`/home/…`, `/Users/…`): write `~` or a placeholder;
+- a local home path (`/home/…`, `/Users/…`), binary files included:
+  write `~` or a placeholder;
 - a mail address other than an `example.com` or a noreply one;
-- the ticket id of a private tracker (`#` and four digits) in Markdown,
-  a code comment or a commit message: refer to a GitHub issue instead;
+- the ticket id of a private tracker (`#` and four or five digits) in
+  Markdown, a code comment or a commit message: refer to a GitHub issue
+  instead;
 - an author or committer address other than a noreply one.
 
 No public file names local paths, other repositories on your machine,
