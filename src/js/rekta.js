@@ -999,7 +999,11 @@ export function panorama(el, { pivot = null } = {}) {
   // platform still answers at its end as it does anywhere (a bounce, a glow, or nothing).
   let held = null, heldWas = '', letGo = 0;
   function hold(n, latch) {
-    if (held !== n) { release(); held = n; heldWas = n.style.overscrollBehaviorY; n.style.overscrollBehaviorY = 'contain'; }
+    if (held !== n) {
+      release();
+      if (getComputedStyle(n).overscrollBehaviorY !== 'auto') return;                // a product's own value stays
+      held = n; heldWas = n.style.overscrollBehaviorY; n.style.overscrollBehaviorY = 'contain';
+    }
     clearTimeout(letGo); letGo = setTimeout(release, latch);
   }
   function release() { if (held) held.style.overscrollBehaviorY = heldWas; held = null; }

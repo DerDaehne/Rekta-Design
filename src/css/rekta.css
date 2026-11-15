@@ -1022,7 +1022,13 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 /* An icon per item (docs/states.md): at the start, after a choice's square, space-s before the words. Once one item
    of a list has one, the others keep its room, so every row's words start at one edge. */
 .rk-menu-item > .rk-icon { color: inherit; }
-:is(.rk-float, .rk-menu-level):has(> .rk-menu-item > .rk-icon) > .rk-menu-item:not(:has(> .rk-icon), .rk-menu-back) { padding-left: calc(var(--rk-space-m) + 20px + var(--rk-space-s)); }
+/* A picture icon counts like Rekta's. The square of an item without an icon stands in the icons' field; when one item has
+   square and icon together, every row keeps the square's room too. */
+:is(.rk-float, .rk-menu-level):has(> .rk-menu-item > :is(.rk-icon, .rk-picture)) > .rk-menu-item:not(:has(> :is(.rk-icon, .rk-picture)), .rk-menu-back, [role='menuitemcheckbox'], [role='menuitemradio']) { padding-left: calc(var(--rk-space-m) + 20px + var(--rk-space-s)); }
+:is(.rk-float, .rk-menu-level):has(> .rk-menu-item > :is(.rk-icon, .rk-picture)) > .rk-menu-item:is([role='menuitemcheckbox'], [role='menuitemradio']):not(:has(> :is(.rk-icon, .rk-picture)))::before { margin-right: 10px; }
+:is(.rk-float, .rk-menu-level):has(> .rk-menu-item:is([role='menuitemcheckbox'], [role='menuitemradio']) > :is(.rk-icon, .rk-picture)) > .rk-menu-item:not(:is([role='menuitemcheckbox'], [role='menuitemradio']), .rk-menu-back) { padding-left: calc(var(--rk-space-m) + 10px + var(--rk-space-s)); }
+:is(.rk-float, .rk-menu-level):has(> .rk-menu-item:is([role='menuitemcheckbox'], [role='menuitemradio']) > :is(.rk-icon, .rk-picture)) > .rk-menu-item:not(:is([role='menuitemcheckbox'], [role='menuitemradio']), :has(> :is(.rk-icon, .rk-picture)), .rk-menu-back) { padding-left: calc(var(--rk-space-m) + 10px + var(--rk-space-s) + 20px + var(--rk-space-s)); }
+:is(.rk-float, .rk-menu-level):has(> .rk-menu-item:is([role='menuitemcheckbox'], [role='menuitemradio']) > :is(.rk-icon, .rk-picture)) > .rk-menu-item:is([role='menuitemcheckbox'], [role='menuitemradio']):not(:has(> :is(.rk-icon, .rk-picture)))::before { margin-right: calc(20px + var(--rk-space-s)); }
 /* A second level stands in place of the list, in the same surface: the item that has one ends in a chevron pointing
    on (in place of a key hint); open, its level hides the rows around it and starts with a back row, a chevron
    pointing back and the level's name. rekta.js shows and hides the level (hidden); nothing moves. */
@@ -1560,7 +1566,7 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
 /* Reduced transparency: glass is the ground (rekta.tokens.css), and nothing blurs what is behind it. */
 @media (prefers-reduced-transparency: reduce) {
   :root:not([data-transparency='normal']) :is(.rk-appbar, .rk-scrim) { -webkit-backdrop-filter: none; backdrop-filter: none; }
-  :root:not([data-transparency='normal']) .rk-sheet::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  :root:not([data-transparency='normal']) :is(.rk-sheet, .rk-recent)::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 :root[data-transparency='reduce'] :is(.rk-appbar, .rk-scrim) { -webkit-backdrop-filter: none; backdrop-filter: none; }
-:root[data-transparency='reduce'] .rk-sheet::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-transparency='reduce'] :is(.rk-sheet, .rk-recent)::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }

@@ -144,14 +144,17 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
     await c.close();
   }
   const c = await open();
+  const shading = (page) => page.evaluate(() => { const d = document.createElement('dialog'); d.className = 'rk-recent'; document.body.append(d); d.showModal(); const b = getComputedStyle(d, '::backdrop').backdropFilter; d.remove(); return b; });
   const plain = await measure(c);
   ok(!plain.framed && !plain.opaque && /blur/.test(plain.blur), 'in the normal case nothing changes: no frame, glass with its blur', JSON.stringify(plain));
+  ok(/blur/.test(await shading(c)), 'in the normal case the recent stack\'s shading blurs');
   await c.evaluate(() => { Rekta.prefs.set('contrast', 'more', { remember: false }); Rekta.prefs.set('transparency', 'reduce', { remember: false }); });
   await c.waitForTimeout(400);
   const more = await measure(c);
   ok(more.low.r >= 7 && more.framed, 'contrast "more" from the prefs: 7:1 and the frames', `${more.low.what} ${more.low.r.toFixed(2)}`);
   ok(more.opaque && /^(none)?$/.test(more.blur) && await c.evaluate(() => { const s = document.createElement('div'); s.className = 'rk-scrim'; document.body.append(s); const b = getComputedStyle(s).backdropFilter; s.remove(); return b === 'none'; }),
     'transparency "reduce": glass is opaque, the bar and the scrim do not blur', more.blur);
+  ok(await shading(c) === 'none', 'transparency "reduce": the shading behind the recent stack does not blur either');
   await c.evaluate(() => { Rekta.prefs.set('contrast', 'system', { remember: false }); Rekta.prefs.set('transparency', 'system', { remember: false }); });
   await c.close();
 }
@@ -282,6 +285,19 @@ ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures fra
   ok(end.atEnd && end.pan === 0 && end.page === 0 && end.cancelled === 0 && during === 'contain' && end.after === 'auto',
     'a wheel gesture that runs a section into its end stays there, uncancelled: the section holds its scroll chain while the gesture lasts', JSON.stringify({ during, ...end }));
   await p.evaluate((x) => document.querySelector('#pan').scrollTo({ left: x, behavior: 'instant' }), xWas);
+
+  // A product that turned the platform's answer off keeps it off: the gesture holds nothing the stylesheet said `none` to.
+  const tag = await p.addStyleTag({ content: '#overview { overscroll-behavior-y: none; }' });
+  await p.evaluate(() => {
+    const sec = document.querySelector('#overview'); sec.scrollTop = sec.scrollHeight - sec.clientHeight - 40;
+    window.tSeen = []; window.tWatch = new MutationObserver(() => window.tSeen.push(sec.style.overscrollBehaviorY));
+    window.tWatch.observe(sec, { attributes: true, attributeFilter: ['style'] });
+  });
+  for (let i = 0; i < 6; i += 1) { await p.mouse.wheel(0, 100); await p.waitForTimeout(40); }
+  const kept = await p.evaluate(() => { const sec = document.querySelector('#overview'); window.tWatch.disconnect(); return { during: getComputedStyle(sec).overscrollBehaviorY, inline: sec.style.overscrollBehaviorY, seen: window.tSeen }; });
+  ok(kept.during === 'none' && kept.inline === '' && !kept.seen.includes('contain'), 'a section the stylesheet gave overscroll-behavior none stays none during a wheel gesture', JSON.stringify(kept));
+  await tag.evaluate((n) => n.remove());
+  await p.waitForTimeout(300);
 }
 
 // Tile grids (#129): one tab stop; the arrows by position, the shared row or column first, a tie to the better-aligned
@@ -1005,6 +1021,23 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
   ok(note.title === '600' && note.lines === 2 && note.whole, 'its title is semibold, its text cut after two lines and still all there', JSON.stringify(note));
   ok(note.pic && note.pic[0] === 20 && note.pic[1] === 20 && note.pic[2] === 'cover' && note.icon, 'the sender\'s icon or its own picture in the 20px field, cropped square', JSON.stringify(note));
   ok(note.button === 'BUTTON' && note.opened && note.out === 'rk-toast-edge-out' && note.closes && note.plain, 'pressing the text runs the default action (opened), else closes; it leaves the way it came; a plain toast is unchanged', JSON.stringify(note));
+
+  // A picture icon counts for the shared edge like Rekta's icon, and so does the square of a choice.
+  const edges = await p.evaluate(async () => {
+    const pic = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>');
+    const word = (b) => { const r = document.createRange(); r.selectNodeContents(b.lastChild); return Math.round(r.getBoundingClientRect().left); };
+    const run = (items) => {
+      const m = document.createElement('div'); m.className = 'rk-menu-level'; m.setAttribute('role', 'menu'); m.style.cssText = 'position:fixed;left:0;top:0;width:300px';
+      m.innerHTML = items.map(([role, picture, text]) => `<button class="rk-menu-item" role="${role}" aria-checked="false">${picture ? `<img class="rk-picture" src="${pic}" alt="">` : ''}${text}</button>`).join('');
+      document.querySelector('.rk').append(m); const out = [...m.children].map(word); m.remove(); return out.join();
+    };
+    return {
+      pictureAmongPlain: run([['menuitem', true, 'one'], ['menuitem', false, 'two']]),
+      squareWithoutIcon: run([['menuitem', true, 'one'], ['menuitemcheckbox', false, 'two'], ['menuitem', false, 'three']]),
+      squareWithIcon: run([['menuitemcheckbox', true, 'one'], ['menuitemcheckbox', false, 'two'], ['menuitem', true, 'three'], ['menuitem', false, 'four']]),
+    };
+  });
+  ok(Object.values(edges).every((e) => new Set(e.split(",")).size === 1), 'a picture icon and a choice\'s square keep every row\'s words at one edge', JSON.stringify(edges));
 
   // A menu's second level in place; an icon per item.
   await p.evaluate((icon) => {

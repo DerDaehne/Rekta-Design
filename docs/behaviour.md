@@ -222,7 +222,7 @@ them:
 | `data-rk-titlebar` | the root | Set by a native shell: show the title bar. |
 | `data-value` | a combobox's input | The chosen option's value. |
 | `--_rk-v` | a slider | How far its value is along the track, for the fill. |
-| `overscroll-behavior-y: contain` (inline style) | the section or list a panorama's wheel gesture belongs to | Only while that gesture lasts: the rest of it stays there (`panorama()`). Its own inline value comes back after. |
+| `overscroll-behavior-y: contain` (inline style) | the section or list a panorama's wheel gesture belongs to | Only while that gesture lasts, and only while its value is `auto` (a product's own value stays): the rest of it stays there (`panorama()`). Its own inline value comes back after. |
 | `data-rk-overflow` | an app-bar control | Moved into "more" (`appbar()`). |
 | `data-rk-full` | the app bar | `start`, `end` or both: around a centred control, the side that has given controls away (`appbar()`). |
 | `data-rk-away` | the app bar (written by the page) | It gives way to a full-screen window: it glides out over its edge and takes no focus. |
