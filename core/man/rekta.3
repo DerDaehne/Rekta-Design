@@ -708,11 +708,15 @@ and scrolls it up and down on the panorama's spring: the wheel until an
 end (then what holds it moves), the keys a focused view inside leaves
 (Up, Down, Page Up, Page Down, Home, End), and focus landing inside,
 which brings the view in sight.
-While the content overflows, a thin bar stands in a gutter of its own, 10px wide, and the
-content is laid out narrower by it. The bar is the grip alone, without a track, square,
-size.scrollbar-thickness wide and 2px inside the gutter and at least size.scrollbar-grip-min
-long; text-contrast-low at rest, text-contrast-medium under the pointer and while it
-drags. Without overflow there is no gutter. Lists, menus and the panorama draw no bar yet.
+While the content overflows, a thin bar stands in a gutter of its own, 10px wide,
+and the content is laid out narrower by it.
+The bar is the grip alone, without a track, square,
+size.scrollbar-thickness wide and 2px inside the gutter,
+at least size.scrollbar-grip-min long;
+text-contrast-low at rest,
+text-contrast-medium under the pointer and while it drags.
+Without overflow there is no gutter.
+Lists, menus and the panorama draw no bar yet.
 .Fn rk_view_reveal
 brings a view in sight in every scroll it is in.
 .It Fn rk_check "const char *label" "bool on" , Fn rk_toggle "const char *label" "bool on"
