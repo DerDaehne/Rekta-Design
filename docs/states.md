@@ -138,9 +138,13 @@ next to the control that opened them.
   separates groups.
 - **An icon per item** stands at the start, 20px like `.rk-icon`,
   `space-s` before the words (after a chosen option's square, which is
-  the menu's own state). Once one item of a list has an icon, every row
-  starts its words at the same edge. An icon stands beside its word,
-  never instead of it.
+  the menu's own state). A picture icon (`img.rk-picture`) counts like
+  Rekta's icon. Once one item of a list has an icon, every row starts
+  its words at the same edge. If an item has a square and an icon, every
+  row keeps the square's room and the icon stands `space-s` before the
+  words; if none has both, the square of an item without an icon stands
+  in the icons' field. An icon stands beside its word, never instead of
+  it.
 - **Words another program supplies** (a status area's menu, a plug-in's
   context menu) are content: they stand as the supplier writes them, in
   its case. The menu's own words (the back row's "back", its labels) stay lowercase.

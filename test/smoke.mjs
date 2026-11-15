@@ -1022,6 +1022,23 @@ ok(written.meta === 'Shift+Super+Z' && written.word === 'Shift+Meta+Z', 'the Met
   ok(note.pic && note.pic[0] === 20 && note.pic[1] === 20 && note.pic[2] === 'cover' && note.icon, 'the sender\'s icon or its own picture in the 20px field, cropped square', JSON.stringify(note));
   ok(note.button === 'BUTTON' && note.opened && note.out === 'rk-toast-edge-out' && note.closes && note.plain, 'pressing the text runs the default action (opened), else closes; it leaves the way it came; a plain toast is unchanged', JSON.stringify(note));
 
+  // A picture icon counts for the shared edge like Rekta's icon, and so does the square of a choice.
+  const edges = await p.evaluate(async () => {
+    const pic = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>');
+    const word = (b) => { const r = document.createRange(); r.selectNodeContents(b.lastChild); return Math.round(r.getBoundingClientRect().left); };
+    const run = (items) => {
+      const m = document.createElement('div'); m.className = 'rk-menu-level'; m.setAttribute('role', 'menu'); m.style.cssText = 'position:fixed;left:0;top:0;width:300px';
+      m.innerHTML = items.map(([role, picture, text]) => `<button class="rk-menu-item" role="${role}" aria-checked="false">${picture ? `<img class="rk-picture" src="${pic}" alt="">` : ''}${text}</button>`).join('');
+      document.querySelector('.rk').append(m); const out = [...m.children].map(word); m.remove(); return out.join();
+    };
+    return {
+      pictureAmongPlain: run([['menuitem', true, 'one'], ['menuitem', false, 'two']]),
+      squareWithoutIcon: run([['menuitem', true, 'one'], ['menuitemcheckbox', false, 'two'], ['menuitem', false, 'three']]),
+      squareWithIcon: run([['menuitemcheckbox', true, 'one'], ['menuitemcheckbox', false, 'two'], ['menuitem', true, 'three'], ['menuitem', false, 'four']]),
+    };
+  });
+  ok(Object.values(edges).every((e) => new Set(e.split(",")).size === 1), 'a picture icon and a choice\'s square keep every row\'s words at one edge', JSON.stringify(edges));
+
   // A menu's second level in place; an icon per item.
   await p.evaluate((icon) => {
     const wrap = document.createElement('div'); wrap.id = 't-menu'; wrap.style.cssText = 'position:fixed;left:40px;top:120px';

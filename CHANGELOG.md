@@ -47,6 +47,10 @@ dots' fade in.
 - Less transparency also takes the blur from the shading behind the
   recent stack (`.rk-recent::backdrop`), as for a sheet and the scrim;
   platforms.md and colour.md already said nothing blurs there.
+- A menu with icons: a picture icon (`.rk-picture`) counts for the shared
+  edge like Rekta's icon, and the square of a choice stands in the
+  icons' field (or, when an item has square and icon together, every row
+  keeps the square's room), so all rows start their words at one edge.
 
 ### Documented
 
