@@ -938,9 +938,9 @@ export function places({ root = document, mode = 'hash', base = '', home, title 
 // Panorama -----------------------------------------------------------------------------------------------------------
 // Sideways (the place is wide and the viewport tall enough) a panorama moves sideways; compact it stacks. One wheel
 // gesture (events closer than duration-wheel-latch) latches to one scroller: to a section that can still scroll in
-// its direction, and is then swallowed at that section's end instead of turning sideways; otherwise to the panorama,
-// and stays sideways while the pointer crosses sections. Horizontal input and Shift+wheel stay native; at either end
-// the wheel falls through. Keys on the focused panorama: ← → PageUp PageDown jump a section, Home End to the ends.
+// its direction, which keeps the rest of it at its end instead of turning sideways; otherwise to the panorama, and
+// stays sideways while the pointer crosses sections. Horizontal input and Shift+wheel stay native; at either end the
+// wheel falls through. Keys on the focused panorama: ← → PageUp PageDown jump a section, Home End to the ends.
 // A pivot of section links follows the scroll; choosing a link aligns that section flush left (or as far as the
 // panorama scrolls) and moves focus to its heading. When everything fits, nothing scrolls (data-rk-fit).
 export function panorama(el, { pivot = null } = {}) {
@@ -994,7 +994,15 @@ export function panorama(el, { pivot = null } = {}) {
   // first and prevents its default) is the jump itself, so its target stays marked for the whole glide.
   const userScroll = (e) => { if (e.type === 'keydown' && e.defaultPrevented) return; clicked = false; };
 
-  // One gesture, one scroller.
+  // One gesture, one scroller. The rest of a gesture that began in a section stays there without being cancelled: the
+  // section holds its scroll chain while the gesture lasts, so it moves neither the panorama nor the page, and the
+  // platform still answers at its end as it does anywhere (a bounce, a glow, or nothing).
+  let held = null, heldWas = '', letGo = 0;
+  function hold(n, latch) {
+    if (held !== n) { release(); held = n; heldWas = n.style.overscrollBehaviorY; n.style.overscrollBehaviorY = 'contain'; }
+    clearTimeout(letGo); letGo = setTimeout(release, latch);
+  }
+  function release() { if (held) held.style.overscrollBehaviorY = heldWas; held = null; }
   function wheel(e) {
     if (e.ctrlKey || !sideways()) return;                                            // pinch zoom; compact
     const now = e.timeStamp, latch = ms('--rk-duration-wheel-latch') || 200;
@@ -1002,6 +1010,7 @@ export function panorama(el, { pivot = null } = {}) {
     const down = e.deltaY > 0;
     if (!gesture || now - gesture.last > latch) {
       clicked = false;
+      release();
       gesture = { target: 'pan', inner: null };
       if (horizontal) gesture.target = 'native';
       else {
@@ -1013,12 +1022,7 @@ export function panorama(el, { pivot = null } = {}) {
     }
     gesture.last = now;
     if (gesture.target === 'native' || horizontal) return;
-    if (gesture.target === 'inner') {
-      const n = gesture.inner;
-      const room = down ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 0;
-      if (!room) e.preventDefault();                                                  // swallowed at its end
-      return;
-    }
+    if (gesture.target === 'inner') { hold(gesture.inner, latch); return; }
     const max = el.scrollWidth - el.clientWidth;
     if (down ? el.scrollLeft >= max - 1 : el.scrollLeft <= 0) return;                // falls through at the ends
     e.preventDefault();
@@ -1110,7 +1114,7 @@ export function panorama(el, { pivot = null } = {}) {
     goTo,
     get current() { return current; },
     destroy() {
-      ro.disconnect(); short.removeEventListener('change', fit);
+      ro.disconnect(); short.removeEventListener('change', fit); clearTimeout(letGo); release();
       el.removeEventListener('wheel', wheel); el.removeEventListener('keydown', key); el.removeEventListener('scroll', queue);
       removeEventListener('scroll', queue);
       if (pivot) { pivot.removeEventListener('click', pivotClick); pivot.removeEventListener('wheel', stripWheel); }

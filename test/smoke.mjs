@@ -266,6 +266,23 @@ const x0 = await p.evaluate(() => document.querySelector('#pan').scrollLeft);
 await p.mouse.move(700, 500); await p.mouse.wheel(0, 300); await p.waitForTimeout(300);
 ok((await p.evaluate(() => document.querySelector('#pan').scrollLeft)) > x0, 'a vertical wheel moves the panorama sideways');
 ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures frames', await text(p, '[data-live=fps] [data-v]'));
+{
+  // A gesture that runs a section into its end stays there, and nothing cancels it: the platform answers at the end.
+  const xWas = await p.evaluate(() => {
+    const pan = document.querySelector('#pan'), sec = document.querySelector('#overview'), was = pan.scrollLeft;
+    pan.scrollTo({ left: 0, behavior: 'instant' }); sec.scrollTop = sec.scrollHeight - sec.clientHeight - 40;
+    window.tCancelled = 0; addEventListener('wheel', (e) => { if (e.defaultPrevented) window.tCancelled += 1; });
+    return was;
+  });
+  await p.mouse.move(300, 500); await p.waitForTimeout(400);
+  for (let i = 0; i < 6; i += 1) { await p.mouse.wheel(0, 100); await p.waitForTimeout(40); }
+  const during = await p.evaluate(() => getComputedStyle(document.querySelector('#overview')).overscrollBehaviorY);
+  await p.waitForTimeout(400);
+  const end = await p.evaluate(() => { const sec = document.querySelector('#overview'); return { atEnd: sec.scrollTop >= sec.scrollHeight - sec.clientHeight - 1, pan: document.querySelector('#pan').scrollLeft, page: scrollY, cancelled: window.tCancelled, after: getComputedStyle(sec).overscrollBehaviorY }; });
+  ok(end.atEnd && end.pan === 0 && end.page === 0 && end.cancelled === 0 && during === 'contain' && end.after === 'auto',
+    'a wheel gesture that runs a section into its end stays there, uncancelled: the section holds its scroll chain while the gesture lasts', JSON.stringify({ during, ...end }));
+  await p.evaluate((x) => document.querySelector('#pan').scrollTo({ left: x, behavior: 'instant' }), xWas);
+}
 
 // Tile grids (#129): one tab stop; the arrows by position, the shared row or column first, a tie to the better-aligned
 // one, on into the next grid of the panorama, no wrap; Home End; letters jump (#134). A fixture with a known layout.

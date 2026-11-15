@@ -33,6 +33,14 @@ dots' fade in.
   `motion.dots.whole-at` named `ease-base`. An implementation that
   followed the docs now fades a dot in on `dots-ease-arrive`; the fade
   out stays on `ease-base`.
+- `panorama()` no longer cancels the rest of a wheel gesture at a
+  section's end, which took the platform's own answer there away (a
+  touchpad's bounce). The section holds its scroll chain while the
+  gesture lasts instead (`overscroll-behavior-y: contain`, inline, its
+  own value back after), so the gesture still never turns sideways or
+  reaches the page, and at the panorama's ends the wheel still falls
+  through. layout.md and behaviour.md say the rest of the gesture
+  "stays there" instead of "is swallowed" (#150).
 
 ### Documented
 
