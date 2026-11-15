@@ -247,9 +247,9 @@ inside it makes each button's `value` the sheet's answer, and
 - **A visible way out.** Every sheet has one a finger can reach: its
   safe answer ("cancel", "keep it"), or, where the sheet has no such
   answer, a close button at its top corner. A sheet the shading does not
-  close has no other way out on a touch screen, which has no Escape key.
-  On the web: `closedby="closerequest"` is that sheet; with
-  `closedby="any"` the shading closes it too.
+  close cannot be closed by Escape or the shading on a touch screen,
+  which has no Escape key. On the web: `closedby="closerequest"` is
+  that sheet; with `closedby="any"` the shading closes it too.
 
   ```html
   <dialog class="rk-sheet" closedby="closerequest" aria-labelledby="t">

@@ -137,9 +137,11 @@ places its tiles and links open, each with one parent.
   });
   ```
 
-  **The first paint** shows the addressed facet already chosen and its
-  panel alone in view, so nothing jumps once behaviour attaches. An
-  unknown facet falls back to the first, without an error. On the web:
+  **The first paint** shows the addressed facet already chosen, in the
+  layout it keeps: its panel alone or, where the facets may show side
+  by side, all of them laid out wide from the same width the pivot
+  measures; nothing jumps once behaviour attaches. An unknown facet
+  falls back to the first, without an error. On the web:
   the server (or the framework's render) marks its tab
   `aria-selected="true"` and leaves the other panels `hidden`; `pivot()`
   starts on the tab marked selected and keeps it. Where the facets may
@@ -152,7 +154,10 @@ places its tiles and links open, each with one parent.
 
 Whatever keeps the history, back restores the place as the user left
 it: every scroll offset (a panorama's sections, a wide facet row), kept
-with the history entry it belongs to. On the web `places()` does it; a
+with the history entry it belongs to. Content that arrives after the
+place is shown (data loaded on arrival, a list that loads more) gets its
+offset as it appears and grows, for up to `timing.restore`; if the user
+scrolls first, their position stays. On the web `places()` does it; a
 framework router (SvelteKit, Next) does it with `scrollState(root)`,
 kept with its history entry:
 
@@ -421,7 +426,7 @@ one way to switch between them: the **recent stack**. A key (Alt+Tab,
 or the product's own) calls it up, and it shows the most recently used
 items, the last first, as preview tiles side by side
 ([tiles.md](tiles.md#tile-content-patterns)), two units high, over the
-sheet's shading: a modal surface, as a sheet is (on the web
+sheet's shading: a modal surface, like every sheet (on the web
 `dialog.rk-recent` holding a `.rk-tiles` row, with `grid()`).
 
 - **Moving:** ← → (and the key that called it up, again), a swipe or the

@@ -88,15 +88,15 @@ detail page, a profile) shows its wide facets (`pivot()`, from
 
 - **Height.** The row is at most as tall as the window under the sticky
   chrome and above the app bar: the window's visible height, less what
-  sticks at the top while the row is in view (a sticky header, the facet
-  strip if it sticks; without it, the banner's height), less the app
-  bar. Shorter content keeps the row short. On the web:
-  `100dvh − --rk-stage-top − the app bar`, where `--rk-stage-top` is the
-  page's to set.
+  sticks at the top while the row is in view (a banner, a sticky header,
+  the facet strip if it sticks), less the app bar. Shorter content keeps
+  the row short. On the web: `100dvh − --rk-stage-top − the app bar`,
+  where `--rk-stage-top` is the page's to set; without it, the banner's
+  height.
 - **The page scrolls first.** The title block scrolls away with the
   page. While the row is not yet whole in view, a vertical wheel over it
   scrolls the window, and stops exactly where the row meets the sticky
-  chrome (`pivot()` does it). From there each facet scrolls within
+  chrome (on the web `pivot()` does it). From there each facet scrolls within
   itself. The row moves sideways by the strip (a title glides its facet
   in), the keys, a scrollbar or horizontal input (a trackpad swipe,
   Shift+wheel); a vertical wheel over the facets never moves it sideways.

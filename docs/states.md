@@ -170,7 +170,7 @@ next to the control that opened them.
 A surface that slides in from the trailing edge, full height, for
 switches, sliders and lists that belong to the whole app or system: quick
 settings, notifications ([live.md](live.md#a-notification-centre)).
-It is a sheet from the side, a modal surface like any sheet
+It is a sheet from the side: a modal surface, like every sheet
 ([platforms.md](platforms.md#glossary)). On the web:
 `<dialog class="rk-sheet rk-sheet--side">`, opened with `showModal()`
 and run by `sheet()` like any sheet.

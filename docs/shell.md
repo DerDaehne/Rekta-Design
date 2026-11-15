@@ -141,7 +141,7 @@ question).
 - **The bar.** A sheet across the full width at the top in the banner's
   geometry: a large light word in the first tile column ("session" or
   the account's name), the actions as buttons behind it, on `surface`
-  without a status, the sheet's shading behind it: a modal surface, as
+  without a status, the sheet's shading behind it: a modal surface, like
   every sheet (on the web `dialog.rk-sheet.rk-session`, run by
   `sheet()`). It comes in once as the banner does, a fade and 8px over
   `duration-short`.
