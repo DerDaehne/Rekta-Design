@@ -52,6 +52,8 @@ jobs:
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
       - name: Secrets, home paths, mail addresses, ticket ids and identities (the private patterns stay local)
         run: sh scripts/scan-secrets.sh
+      - name: The scan fails on each planted case and passes clean
+        run: sh scripts/scan-secrets.test.sh
 
   core-linux:
     runs-on: ubuntu-latest
