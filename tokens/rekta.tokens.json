@@ -1368,7 +1368,7 @@
       "whole-at": {
         "$type": "number",
         "$value": 0.06,
-        "$description": "A dot fades in until this share of its flight (ease-base)."
+        "$description": "A dot fades in until this share of its flight, on dots-ease-arrive with the flight."
       },
       "fade-at": {
         "$type": "number",

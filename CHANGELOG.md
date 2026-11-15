@@ -8,8 +8,10 @@ it; each entry says how.
 ## Unreleased
 
 Rekta is first the design of a desktop shell and its apps; the web is a
-profile of it, for installable apps (PWAs). No rule changes; the README,
-principles.md and platforms.md say so, and platforms.md gains a glossary.
+profile of it, for installable apps (PWAs). That changes no rule; the
+README, principles.md and platforms.md say so, and platforms.md gains a
+glossary. Two motion rules are settled: the end of a scroll, and the
+dots' fade in.
 
 ### Contributing
 
@@ -23,6 +25,22 @@ principles.md and platforms.md say so, and platforms.md gains a glossary.
   `.privacy-patterns`, reported by their number only.
   `scripts/scan-secrets.test.sh` plants each case in a throwaway
   repository. CI runs both, without private patterns.
+
+### Fixed
+
+- The dots fade in on `dots-ease-arrive`, with their flight, as
+  rekta.css does; data.md and the description of
+  `motion.dots.whole-at` named `ease-base`. An implementation that
+  followed the docs now fades a dot in on `dots-ease-arrive`; the fade
+  out stays on `ease-base`.
+- `panorama()` no longer cancels the rest of a wheel gesture at a
+  section's end, which took the platform's own answer there away (a
+  touchpad's bounce). The section holds its scroll chain while the
+  gesture lasts instead (`overscroll-behavior-y: contain`, inline, its
+  own value back after), so the gesture still never turns sideways or
+  reaches the page, and at the panorama's ends the wheel still falls
+  through. layout.md and behaviour.md say the rest of the gesture
+  "stays there" instead of "is swallowed" (#150).
 
 ### Documented
 
@@ -51,6 +69,9 @@ principles.md and platforms.md say so, and platforms.md gains a glossary.
   (navigation.md, forms.md), and the browser capabilities named in
   passing (anchor positioning, the top layer, view transitions, hover).
   No rule changes; behaviour.md stays the web contract.
+- motion.md: the end of a scroll belongs to the platform. Rekta adds no
+  give of its own there, for any input, and does not suppress the
+  platform's own answer (#150).
 
 ## 0.6.0 — 2026-11-02
 

@@ -60,8 +60,12 @@ belongs to one scroller. Rules, decided when a gesture starts:
 1. **Inner scroll first.** If the pointer is over a part of the page
    that still has room to scroll vertically in the wheel's direction
    (a long section, a list), the gesture belongs to it. When that part
-   reaches its end mid-gesture, the rest of the gesture is swallowed
-   there; it never turns into a sideways move.
+   reaches its end mid-gesture, the rest of the gesture stays there: it
+   never turns into a sideways move and never passes on to the page,
+   and the platform's own answer at that end is left as it is
+   ([motion.md](motion.md)). On the web: the part holds its scroll
+   chain (`overscroll-behavior-y: contain`) while the gesture lasts;
+   nothing cancels the wheel.
 2. **Otherwise the panorama.** The gesture moves the panorama sideways,
    and keeps doing so as sections pass under the pointer, even when one
    of them could scroll vertically. Inner scroll gets the *next*
