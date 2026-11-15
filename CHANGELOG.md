@@ -18,13 +18,13 @@ principles.md and platforms.md say so, and platforms.md gains a glossary.
   rekta-core, each one implementation among several.
 - principles.md: the surfaces in the order shell, app, phone, web, and
   the one sentence on what comes first.
-- platforms.md: Rekta as a specification; a glossary of the web words
-  the docs use (viewport, page scroll, hover, back and Escape,
-  `prefers-*`, tab, `<dialog>` and the top layer, URL and route, the
-  root, first paint, `.rk-*` and `data-rk-*`, `role` and `aria-*`) and
-  what each means on every platform; the CSS examples of the product
-  overrides say they are the web's; `fluidDimension` is named as Rekta's
-  own token type.
+- platforms.md: Rekta as a specification; a glossary of the words the
+  docs use (window, screen, pane, place, and the web words: viewport,
+  page scroll, hover, back and Escape, `prefers-*`, tab, `<dialog>` and
+  the top layer, popover, URL and route, the root, first paint, `.rk-*`
+  and `data-rk-*`, `role` and `aria-*`) and what each means on every
+  platform; the CSS examples of the product overrides say they are the
+  web's; `fluidDimension` is named as Rekta's own token type.
 - Tokens: `typography.font-family.sans` and `.mono` and `layer.float`
   describe their rule without CSS words; the CSS output is unchanged.
   states.md's layer table says the same of `layer.float`.

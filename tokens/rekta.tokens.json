@@ -488,7 +488,7 @@
           "Arial",
           "sans-serif"
         ],
-        "$description": "The one family. The first name is the family; the names after it are the web profile's fallback chain, ending in the platform's default sans face. Another platform draws the first family it has, else its own default sans face. Ship the font files with the app (fonts/), never from a CDN. A product may set its own (docs/typography.md, The family): with the four weights the roles use (300, 400, 500, 600), tabular figures and a licence to ship it; the type scale stays."
+        "$description": "The one family. The first name is the design's typeface; the names after it are the web profile's fallback chain, ending in the platform's default sans face. Another platform draws that typeface, else its own default sans face. Ship the font files with the app (fonts/), never from a CDN. A product may set its own (docs/typography.md, The family): with the four weights the roles use (300, 400, 500, 600), tabular figures and a licence to ship it; the type scale stays."
       },
       "mono": {
         "$type": "fontFamily",
