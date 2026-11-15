@@ -282,6 +282,19 @@ ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures fra
   ok(end.atEnd && end.pan === 0 && end.page === 0 && end.cancelled === 0 && during === 'contain' && end.after === 'auto',
     'a wheel gesture that runs a section into its end stays there, uncancelled: the section holds its scroll chain while the gesture lasts', JSON.stringify({ during, ...end }));
   await p.evaluate((x) => document.querySelector('#pan').scrollTo({ left: x, behavior: 'instant' }), xWas);
+
+  // A product that turned the platform's answer off keeps it off: the gesture holds nothing the stylesheet said `none` to.
+  const tag = await p.addStyleTag({ content: '#overview { overscroll-behavior-y: none; }' });
+  await p.evaluate(() => {
+    const sec = document.querySelector('#overview'); sec.scrollTop = sec.scrollHeight - sec.clientHeight - 40;
+    window.tSeen = []; window.tWatch = new MutationObserver(() => window.tSeen.push(sec.style.overscrollBehaviorY));
+    window.tWatch.observe(sec, { attributes: true, attributeFilter: ['style'] });
+  });
+  for (let i = 0; i < 6; i += 1) { await p.mouse.wheel(0, 100); await p.waitForTimeout(40); }
+  const kept = await p.evaluate(() => { const sec = document.querySelector('#overview'); window.tWatch.disconnect(); return { during: getComputedStyle(sec).overscrollBehaviorY, inline: sec.style.overscrollBehaviorY, seen: window.tSeen }; });
+  ok(kept.during === 'none' && kept.inline === '' && !kept.seen.includes('contain'), 'a section the stylesheet gave overscroll-behavior none stays none during a wheel gesture', JSON.stringify(kept));
+  await tag.evaluate((n) => n.remove());
+  await p.waitForTimeout(300);
 }
 
 // Tile grids (#129): one tab stop; the arrows by position, the shared row or column first, a tie to the better-aligned

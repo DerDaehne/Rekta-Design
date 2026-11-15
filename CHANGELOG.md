@@ -41,6 +41,9 @@ dots' fade in.
   reaches the page, and at the panorama's ends the wheel still falls
   through. layout.md and behaviour.md say the rest of the gesture
   "stays there" instead of "is swallowed" (#150).
+- `panorama()` holds a section's scroll chain during a gesture only
+  while its `overscroll-behavior-y` is `auto`; a product's own value
+  (`none`) stays, as motion.md says Rekta forces no answer.
 
 ### Documented
 
