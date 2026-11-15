@@ -27,10 +27,10 @@ Rekta's own.
 | one of many, a list you know | `select.rk-input` | a chevron, the platform's own list (see below) |
 | one of many, a long list or one to search | combobox (`rk-combo`, `Rekta.combobox()`) | filters as you type; floats below like a menu; without `free`, keeps only a choice from its list |
 | two to five options seen at a glance | segments (`rk-segments`) | joined buttons, the chosen one in the accent; radios underneath |
-| on or off, acting at once | toggle switch (`rk-toggle`) | `role="switch"`; outside forms that are sent |
+| on or off, acting at once | toggle switch (`rk-toggle`) | a switch to assistive technology (on the web `role="switch"`); outside forms that are sent |
 | on or off, sent with a form | checkbox (`rk-switch`) | waits for "save" |
 | a row's state (a task done, a setting on) | toggle switch (`rk-toggle`) | it acts at once, so it is a switch, never a checkbox |
-| a frequent state in a compact row of them (quick settings) | toggle button (`.rk-btn[aria-pressed]`) | acts at once; pressed in the accent; icon, word and state word |
+| a frequent state in a compact row of them (quick settings) | toggle button: a button with a pressed state (on the web `.rk-btn[aria-pressed]`) | acts at once; pressed in the accent; icon, word and state word |
 | a whole number | stepper (`rk-stepper`) | − field +, repeats while held, says when its limit is reached |
 | a value on a scale | slider (`rk-range`) | the accent fills up to the value; an `<output>` shows it |
 | a date or a time | `input[type=date | time].rk-input` | the browser's own pickers |
@@ -169,17 +169,21 @@ for a form sent without the script:
 </form>
 ```
 
-- It is the form's **first child**, a `group` named by its sentence,
-  focusable (`tabindex="-1"`) but not in the tab order.
-- **Focus:** it takes focus as the page arrives (a server-rendered
-  refusal: `autofocus` on it, or `focus()` on load) and each time the
-  form is sent with errors.
+- It is the form's **first child**, a group named by its sentence to
+  assistive technology, focusable but not a tab stop. On the web:
+  `role="group"`, `tabindex="-1"`.
+- **Focus:** it takes focus as the place arrives with a refusal (the
+  first paint already carries it) and each time the form is sent with
+  errors. On the web: a server-rendered refusal puts `autofocus` on it,
+  or calls `focus()` on load.
 - Each link names the field's label, a colon, then the field's own
-  sentence, and points at the field's `id`; following it moves focus to
-  the field (without the script, the fragment link does).
+  sentence, and leads to the field; following it moves focus to the
+  field. On the web: a fragment link to the field's `id`, which works
+  without the script.
 - A refusal for the whole form is the sentence alone, without a list.
-- The fields keep their own errors (`data-status="error"`,
-  `aria-invalid`, the hint), so the summary is never the only place.
+- The fields keep their own errors (the status, the hint, and the field
+  is invalid to assistive technology), so the summary is never the only
+  place. On the web: `data-status="error"` and `aria-invalid`.
 
 The showcase's accent form shows it: send it with an empty name.
 
@@ -195,12 +199,12 @@ thrown away by a refusal.
 ## Leaving with unsaved input
 
 While a form differs from how it was loaded or last saved, leaving its
-place (a link, back, Escape, the browser's back or forward) asks first,
+place (a link, back, Escape, the platform's back or forward) asks first,
 in a sheet: "Leave without saving?", with "keep editing" as the safe,
 primary answer and "discard changes" beside it, as the destructive
 button. Escape and a tap on the shading keep editing. Discarding puts
-the form back as it was. Closing the window asks the browser's own
-question. An unchanged form never asks.
+the form back as it was. Closing the window asks as well; on the web
+that is the browser's own question. An unchanged form never asks.
 
 ## Dialog levels
 
@@ -231,10 +235,21 @@ an undoable action (archive) never wears it.
 
 ## A form in a sheet
 
+A sheet is a modal surface ([platforms.md](platforms.md#glossary)): it
+holds focus, shades what lies under it, is closed by Escape, by its
+visible way out and, where the sheet allows it, by a press on the
+shading, and gives focus back where it was; assistive technology hears
+it as a dialog named by its title. On the web: `<dialog class="rk-sheet">`,
+opened with `showModal()` and run by `sheet()`; a `<form method="dialog">`
+inside it makes each button's `value` the sheet's answer, and
+`aria-labelledby` names it by its title.
+
 - **A visible way out.** Every sheet has one a finger can reach: its
   safe answer ("cancel", "keep it"), or, where the sheet has no such
-  answer, a close button at its top corner. On a touch screen with
-  `closedby="closerequest"` neither Escape nor the shading closes it.
+  answer, a close button at its top corner. A sheet the shading does not
+  close cannot be closed by Escape or the shading on a touch screen,
+  which has no Escape key. On the web: `closedby="closerequest"` is
+  that sheet; with `closedby="any"` the shading closes it too.
 
   ```html
   <dialog class="rk-sheet" closedby="closerequest" aria-labelledby="t">
@@ -250,17 +265,20 @@ an undoable action (archive) never wears it.
 
 - **Unsaved input asks before it goes.** One modal at a time, so the
   question is not a second sheet: it takes the sheet's place, inside it.
-  `sheet(dialog, { dirty: () => … })` asks while `dirty()` is true, on
-  every close request (Escape, the shading, a `value="cancel"` button):
+  While the form differs from how it was loaded, every close request
+  (Escape, the shading, the cancel button, the platform's back) asks:
   "unsaved · Discard what you entered?", with "keep editing" as the
   primary, focused answer and "discard changes" beside it. Escape or the
   shading while it asks keep editing; focus goes back where it was. A
-  save closes without asking; so does `dialog.close()`, the app's own
-  decision. An unchanged form never asks. Escape, Escape, Escape keeps
-  asking and keeping: `sheet()` takes Escape on its `keydown`, where a
-  page can always stop it. (A system back gesture reaches the page only
-  as the dialog's `cancel` event, which a browser lets a page stop once
-  per click or key; a second gesture in a row closes the sheet.)
+  save closes without asking; so does the app's own decision to close.
+  An unchanged form never asks. Escape, Escape, Escape keeps asking and
+  keeping. On the web: `sheet(dialog, { dirty: () => … })` asks while
+  `dirty()` is true, on every close request (Escape, the shading, a
+  `value="cancel"` button); `dialog.close()` is the app's own decision;
+  `sheet()` takes Escape on its `keydown`, where a page can always stop
+  it, while a system back gesture reaches the page only as the dialog's
+  `cancel` event, which a browser lets a page stop once per click or
+  key, so a second gesture in a row closes the sheet.
 
 ## One size of control
 
@@ -296,23 +314,25 @@ the button's own.
 
 A control that cannot act now stays visible and says why in a hint next
 to it ("Archive needs at least one done job."), linked to it, so the
-reason is read with it. It stays focusable (`aria-disabled`), unlike a
-native `disabled` control, which a keyboard user could not reach to
-hear the reason. No tooltips: a pointer rests, a finger does not, so on
-touch a tooltip never shows.
+reason is read with it. It stays focusable and is disabled to assistive
+technology, unlike a control the platform disables outright, which a
+keyboard user could not reach to hear the reason (on the web
+`aria-disabled`, never `disabled`). No tooltips: a pointer rests, a
+finger does not, so on touch a tooltip never shows.
 
 One exception: **the app bar.** There is no room beside a control in
 it, and a reason there would push the middle out and the controls into
 "more". A disabled app-bar control shows its glyph and word in
 `disabled`, takes no hover or press tint and stays focusable; its
-reason is its tooltip, read with it (`aria-describedby`), shown after
+reason is its tooltip, read with it as its description (on the web
+`aria-describedby`), shown after
 `timing.tip-delay` under a resting pointer, at once on keyboard focus,
 and on touch when the control is tapped: it cannot act anyway, so the
 tap takes nothing away. Moved into "more", the reason goes with it: the
 menu names it in the label, "print (needs a printer)", like every
 disabled item ([states.md](states.md#floating-surfaces)).
 
-`disable(control, reason)` does this: it writes the reason into a
+On the web, `disable(control, reason)` does this: it writes the reason into a
 `.rk-hint.rk-why` placed right after the control and linked by
 `aria-describedby` (the control's `data-rk-why` names it, so a page can
 place the hint itself), and `disable(control, false)` takes it away. On
@@ -322,8 +342,9 @@ instead of a hint beside it. In
 a `.rk-actions` row the hint takes the rest of the row beside the
 buttons (`.rk-actions > .rk-why`).
 
-**The disabled look** is the same whether a control is disabled
-natively or with a reason (`aria-disabled="true"`): the parts below turn
+**The disabled look** is the same whether a control is disabled by the
+platform or with a reason (on the web `disabled` or
+`aria-disabled="true"`): the parts below turn
 `disabled`, nothing else changes, and hover and press tints stop.
 
 | Control | What turns grey |
@@ -335,10 +356,10 @@ natively or with a reason (`aria-disabled="true"`): the parts below turn
 | combobox (`.rk-combo`) | the field as above, and its chevron |
 | stepper (`.rk-stepper`) | the field as above, both buttons' frames and signs |
 | slider (`.rk-range`) | the thumb, the fill up to the value and the `<output>` beside it; the empty track stays a hairline |
-| segments (`.rk-segments`) | every frame and word; the chosen one keeps a `disabled` fill, its word in the ground colour. One option, or the whole group with `aria-disabled` on the fieldset |
+| segments (`.rk-segments`) | every frame and word; the chosen one keeps a `disabled` fill, its word in the ground colour. One option, or the whole group (on the web `aria-disabled` on the fieldset) |
 | drop zone (`.rk-drop`) | the frame and every word; it takes no files |
 
-`aria-disabled` alone changes the look and what assistive technology
-hears, not what the control does: `disable()` also refuses its clicks
+On the web, `aria-disabled` alone changes the look and what assistive
+technology hears, not what the control does: `disable()` also refuses its clicks
 (the stepper's buttons and the drop zone refuse by themselves); a
 product that sets the attribute itself keeps the control from acting.

@@ -53,8 +53,9 @@ reach.
 
 ## Pointer and touch
 
-- **Hover is never the only way.** Hover tints exist only where hover
-  exists (`(hover: hover)`); on touch they would stick after a tap.
+- **Hover is never the only way.** Hover tints exist only where a
+  pointer can rest (on the web `(hover: hover)`); on touch they would
+  stick after a tap.
 - **Dragging never activates.** A drag that starts on a tile or row, or
   a text selection inside one, cancels the click. A fine pointer can
   select text in tiles and rows; touch gets no selection and no

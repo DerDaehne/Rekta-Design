@@ -93,8 +93,8 @@ places its tiles and links open, each with one parent.
   jumping to a section or scrolling replaces nothing and adds nothing:
   one back always means one place back.
 - **One back for everything.** The app bar's back, the crumb, Escape,
-  the browser's back, the system's back (Android's gesture, the mouse
-  back button, Alt+Left) all do the same thing: go back one place, with
+  the platform's back (Android's gesture, the mouse back button,
+  Alt+Left, the browser's back) all do the same thing: go back one place, with
   the back turnstile, to the scroll position, facet and focus the user
   left. Focus returns to the link or tile that opened the place.
 - **Back stays in the app.** A cold entry (a deep link, a reload, a
@@ -113,14 +113,15 @@ places its tiles and links open, each with one parent.
   item replaces the address while the list stays in view, and is a step
   of its own where the item replaces the list (compact); see
   [collections.md](collections.md#split-view).
-- **A facet is part of the address, as a query**, like filters:
-  `#runs?facet=history` (`/runs?facet=history` in path mode). Choosing a
-  facet replaces the address and never adds a history entry; a reload or
-  a shared link opens that facet. The first facet is the default and
-  leaves the parameter out. A pivot that is the place's whole content
-  uses `facet`; a place with two pivots names each (`?view=…`). A path
-  segment would make each facet a place of its own (and back would step
-  through them); a hash is the place's already.
+- **A facet is part of the address, as a parameter**, like filters (on
+  the web a query: `#runs?facet=history`, `/runs?facet=history` in path
+  mode). Choosing a facet replaces the address and never adds a history
+  entry; a reload or a shared link opens that facet. The first facet is
+  the default and leaves the parameter out. A pivot that is the place's
+  whole content uses `facet`; a place with two pivots names each
+  (`?view=…`). On the web a path segment would make each facet a place
+  of its own (and back would step through them); a hash is the place's
+  already.
 
   ```js
   const tabs = Rekta.pivot(strip, {
@@ -136,22 +137,29 @@ places its tiles and links open, each with one parent.
   });
   ```
 
-  **The first paint** renders the addressed facet: the
-  server (or the framework's render) marks its tab `aria-selected="true"`
-  and leaves the other panels `hidden`; `pivot()` starts on the tab
-  marked selected and keeps it, so nothing jumps when the script arrives.
-  An unknown facet falls back to the first, without an error. Where the
-  facets may show side by side, `.rk-facets` around the panels' parent
-  and `data-rk-reveal` on the hidden panels let the first paint lay them
-  out wide from the same width `pivot()` measures
+  **The first paint** shows the addressed facet already chosen, in the
+  layout it keeps: its panel alone or, where the facets may show side
+  by side, all of them laid out wide from the same width the pivot
+  measures; nothing jumps once behaviour attaches. An unknown facet
+  falls back to the first, without an error. On the web:
+  the server (or the framework's render) marks its tab
+  `aria-selected="true"` and leaves the other panels `hidden`; `pivot()`
+  starts on the tab marked selected and keeps it. Where the facets may
+  show side by side, `.rk-facets` around the panels' parent and
+  `data-rk-reveal` on the hidden panels let the first paint lay them out
+  wide from the same width `pivot()` measures
   ([behaviour.md](behaviour.md), `pivot()`).
 
 ### Back with a router of your own
 
-`places()` puts every scroll offset back on back. A framework router
-(SvelteKit, Next) does it with `scrollState(root)`, kept with its
-history entry, so a panorama's sections and a wide facet row come back
-where the user left them:
+Whatever keeps the history, back restores the place as the user left
+it: every scroll offset (a panorama's sections, a wide facet row), kept
+with the history entry it belongs to. Content that arrives after the
+place is shown (data loaded on arrival, a list that loads more) gets its
+offset as it appears and grows, for up to `timing.restore`; if the user
+scrolls first, their position stays. On the web `places()` does it; a
+framework router (SvelteKit, Next) does it with `scrollState(root)`,
+kept with its history entry:
 
 ```js
 // SvelteKit: +page.svelte
@@ -226,8 +234,8 @@ with an icon over a lowercase word.
   A landscape phone (wide but short) keeps the pivot.
 - **Where you are:** the place you are in is in `text-primary`, the
   others in `text-contrast-high` (on glass nothing lower, [colour.md](colour.md#text-on-glass));
-  `aria-current="page"` marks it, and
-  `places()` keeps the mark on the bar's links. On a place below it (a
+  it is the current place to assistive technology (on the web
+  `aria-current="page"`, which `places()` keeps on the bar's links). On a place below it (a
   detail), the place you came from stays marked, and choosing it goes
   back to its top.
 - **Back** stays the leading item, before the places.
@@ -243,8 +251,8 @@ with an icon over a lowercase word.
   script the strip stays, which is safe. Sideways the strip is the
   navigation.
 - **What names the place then.** The marked place in the bar is its
-  visible name: the icon and word in `text-primary`, with
-  `aria-current="page"`. The page still starts with a heading: a place
+  visible name: the icon and word in `text-primary`, marked current (on
+  the web `aria-current="page"`). The page still starts with a heading: a place
   whose first section opens with its own visible title needs nothing
   more; one whose title was only the strip gives it
   `<h1 class="rk-place-name">`, which `rekta.css` keeps for screen
@@ -278,8 +286,9 @@ and before the product's commands.
 
 - **Order of start,** never re-sorted, never most-recently-used: like a
   pivot, a fixed order says where each one is.
-- **The one in front** is marked as a place in the bar is: `text-primary`
-  and `aria-current="true"`; the others in `text-contrast-high` (on glass
+- **The one in front** is marked as a place in the bar is: `text-primary`,
+  and current to assistive technology (on the web `aria-current="true"`);
+  the others in `text-contrast-high` (on glass
   nothing lower). Choosing one brings it to the front; choosing the one
   in front may minimise it.
 - **No groups per app** in the bar: two windows of one program are two
@@ -405,9 +414,10 @@ Controls that do not fit move into "more", the least important first
 (`data-rk-priority`), and its menu repeats their words. Back, the live
 state and a selection's controls never move. Nothing is hidden for good:
 every control is reachable at every width. The menu rises from the bar
-at its trailing edge (`.rk-ab-menu`: `rekta.css` places it, anchored to
-`.rk-ab-more` where the browser has anchor positioning); its keys are
-those of every floating surface ([states.md](states.md#floating-surfaces)).
+at its trailing edge, anchored to the "more" control (on the web
+`.rk-ab-menu`, which `rekta.css` places, anchored to `.rk-ab-more` where
+the browser has anchor positioning); its keys are those of every
+floating surface ([states.md](states.md#floating-surfaces)).
 
 ## The recent stack
 
@@ -416,8 +426,8 @@ one way to switch between them: the **recent stack**. A key (Alt+Tab,
 or the product's own) calls it up, and it shows the most recently used
 items, the last first, as preview tiles side by side
 ([tiles.md](tiles.md#tile-content-patterns)), two units high, over the
-sheet's shading (`dialog.rk-recent` holding a `.rk-tiles` row, with
-`grid()`).
+sheet's shading: a modal surface, like every sheet (on the web
+`dialog.rk-recent` holding a `.rk-tiles` row, with `grid()`).
 
 - **Moving:** ← → (and the key that called it up, again), a swipe or the
   wheel move the focus from tile to tile; the row scrolls to keep it in
@@ -490,8 +500,9 @@ separator: ⌘K, ⇧⌘Z. The Meta key outside Apple is "Win" on Windows and
 the word from its catalogue (`keyMeta`). Keys that are alternatives or a
 sequence stand apart, with a space ("← →", "Space ↑ ↓"). These pages
 write "Ctrl/Cmd+K" for a key that is Ctrl on one platform and ⌘ on the
-other; an app shows the one for where it runs, as `tips()` and the app
-bar's menu do from `aria-keyshortcuts` ("Control+K Meta+K").
+other; an app shows the one for where it runs, from the keys it tells
+assistive technology (on the web `tips()` and the app bar's menu read
+`aria-keyshortcuts`, "Control+K Meta+K").
 
 ### Typing: filter or jump
 

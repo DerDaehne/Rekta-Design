@@ -87,21 +87,23 @@ detail page, a profile) shows its wide facets (`pivot()`, from
 `size.pivot-wide`) as a **stage** under that block:
 
 - **Height.** The row is at most as tall as the window under the sticky
-  chrome and above the app bar: `100dvh − --rk-stage-top − the app
-  bar`. `--rk-stage-top` is the page's to set, the height of what sticks
-  at the top while the row is in view (a sticky header, the facet strip
-  if it sticks); without it, the banner's height. Shorter content keeps
-  the row short.
+  chrome and above the app bar: the window's visible height, less what
+  sticks at the top while the row is in view (a banner, a sticky header,
+  the facet strip if it sticks), less the app bar. Shorter content keeps
+  the row short. On the web: `100dvh − --rk-stage-top − the app bar`,
+  where `--rk-stage-top` is the page's to set; without it, the banner's
+  height.
 - **The page scrolls first.** The title block scrolls away with the
   page. While the row is not yet whole in view, a vertical wheel over it
   scrolls the window, and stops exactly where the row meets the sticky
-  chrome (`pivot()` does it). From there each facet scrolls within
+  chrome (on the web `pivot()` does it). From there each facet scrolls within
   itself. The row moves sideways by the strip (a title glides its facet
   in), the keys, a scrollbar or horizontal input (a trackpad swipe,
   Shift+wheel); a vertical wheel over the facets never moves it sideways.
-- **Jumps land clear of the chrome.** The row and its facets carry
-  `scroll-margin-top: var(--rk-stage-top)`, so a jump or a focus never
-  hides a facet's title under the sticky header.
+- **Jumps land clear of the chrome.** A jump to the row or to a facet,
+  or a focus in it, lands its target just below the sticky chrome, so a
+  facet's title is never hidden under the sticky header. On the web: the
+  row and its facets carry `scroll-margin-top: var(--rk-stage-top)`.
 
 ```css
 .record { --rk-stage-top: calc(var(--rk-banner-h, 0px) + 56px); }   /* the record's sticky header */
