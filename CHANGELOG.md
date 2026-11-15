@@ -10,7 +10,8 @@ it; each entry says how.
 Rekta is first the design of a desktop shell and its apps; the web is a
 profile of it, for installable apps (PWAs). That changes no rule; the
 README, principles.md and platforms.md say so, and platforms.md gains a
-glossary. One motion rule is settled: the end of a scroll.
+glossary. Two motion rules are settled: the end of a scroll, and the
+dots' fade in.
 
 ### Contributing
 
@@ -24,6 +25,14 @@ glossary. One motion rule is settled: the end of a scroll.
   `.privacy-patterns`, reported by their number only.
   `scripts/scan-secrets.test.sh` plants each case in a throwaway
   repository. CI runs both, without private patterns.
+
+### Fixed
+
+- The dots fade in on `dots-ease-arrive`, with their flight, as
+  rekta.css does; data.md and the description of
+  `motion.dots.whole-at` named `ease-base`. An implementation that
+  followed the docs now fades a dot in on `dots-ease-arrive`; the fade
+  out stays on `ease-base`.
 
 ### Documented
 
