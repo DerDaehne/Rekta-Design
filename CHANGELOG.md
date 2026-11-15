@@ -44,6 +44,9 @@ dots' fade in.
 - `panorama()` holds a section's scroll chain during a gesture only
   while its `overscroll-behavior-y` is `auto`; a product's own value
   (`none`) stays, as motion.md says Rekta forces no answer.
+- Less transparency also takes the blur from the shading behind the
+  recent stack (`.rk-recent::backdrop`), as for a sheet and the scrim;
+  platforms.md and colour.md already said nothing blurs there.
 
 ### Documented
 

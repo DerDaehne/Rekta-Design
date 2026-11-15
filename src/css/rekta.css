@@ -1560,7 +1560,7 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
 /* Reduced transparency: glass is the ground (rekta.tokens.css), and nothing blurs what is behind it. */
 @media (prefers-reduced-transparency: reduce) {
   :root:not([data-transparency='normal']) :is(.rk-appbar, .rk-scrim) { -webkit-backdrop-filter: none; backdrop-filter: none; }
-  :root:not([data-transparency='normal']) .rk-sheet::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  :root:not([data-transparency='normal']) :is(.rk-sheet, .rk-recent)::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 :root[data-transparency='reduce'] :is(.rk-appbar, .rk-scrim) { -webkit-backdrop-filter: none; backdrop-filter: none; }
-:root[data-transparency='reduce'] .rk-sheet::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-transparency='reduce'] :is(.rk-sheet, .rk-recent)::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }

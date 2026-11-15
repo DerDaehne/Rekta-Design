@@ -144,14 +144,17 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
     await c.close();
   }
   const c = await open();
+  const shading = (page) => page.evaluate(() => { const d = document.createElement('dialog'); d.className = 'rk-recent'; document.body.append(d); d.showModal(); const b = getComputedStyle(d, '::backdrop').backdropFilter; d.remove(); return b; });
   const plain = await measure(c);
   ok(!plain.framed && !plain.opaque && /blur/.test(plain.blur), 'in the normal case nothing changes: no frame, glass with its blur', JSON.stringify(plain));
+  ok(/blur/.test(await shading(c)), 'in the normal case the recent stack\'s shading blurs');
   await c.evaluate(() => { Rekta.prefs.set('contrast', 'more', { remember: false }); Rekta.prefs.set('transparency', 'reduce', { remember: false }); });
   await c.waitForTimeout(400);
   const more = await measure(c);
   ok(more.low.r >= 7 && more.framed, 'contrast "more" from the prefs: 7:1 and the frames', `${more.low.what} ${more.low.r.toFixed(2)}`);
   ok(more.opaque && /^(none)?$/.test(more.blur) && await c.evaluate(() => { const s = document.createElement('div'); s.className = 'rk-scrim'; document.body.append(s); const b = getComputedStyle(s).backdropFilter; s.remove(); return b === 'none'; }),
     'transparency "reduce": glass is opaque, the bar and the scrim do not blur', more.blur);
+  ok(await shading(c) === 'none', 'transparency "reduce": the shading behind the recent stack does not blur either');
   await c.evaluate(() => { Rekta.prefs.set('contrast', 'system', { remember: false }); Rekta.prefs.set('transparency', 'system', { remember: false }); });
   await c.close();
 }
