@@ -1314,10 +1314,13 @@ static void test_scroll(void) {
   rk_event wh = { sizeof wh, RK_EVENT_WHEEL, 0, { r.x + 40, r.y + 100 }, 0, 0, 0, 0, 0, NULL, NULL, 0 };
   wh.wheel_y = 300; rk_window_inject(w, &wh);
   rk_app_run_for(500);
-  CHECK(sc->pvalue == 300 && s->bar, "the wheel glides it, the bar shows (%.0f)", sc->pvalue);
+  CHECK(sc->pvalue == 300, "the wheel glides it (%.0f)", sc->pvalue);
   shot(w, "scroll");
   rk_app_run_for(1000);
-  CHECK(!s->bar && s->rail->passthrough, "a moment later the bar goes");
+  CHECK(!s->rail->passthrough, "the bar stays, however long nothing moves");
+  float gy, gh;
+  thumb_of(s, rk__window_rect(sc).h, &gy, &gh);
+  CHECK(BAR_W == 6 && BAR_MIN == 11 && gh >= 11, "the grip is the token's thickness and at least its minimum long (%g, %g)", BAR_W, gh);
   /* what shows is what a press reaches */
   rk_view *hit = rk_window_view_at(w, (rk_point){ r.x + 30, r.y + 10 });
   int expect = -1;

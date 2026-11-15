@@ -13,6 +13,18 @@ README, principles.md and platforms.md say so, and platforms.md gains a
 glossary. Two motion rules are settled: the end of a scroll, and the
 dots' fade in.
 
+### Added
+
+- **The thin scrollbar** (layout.md): only the grip, `text-contrast-low`,
+  square, always visible while the content overflows. Tokens
+  `size.scrollbar-thickness` (6px) and `size.scrollbar-grip-min` (11px),
+  measured from Chromium's native `thin`. On the web it stays the native
+  `thin` bar in Rekta's colour; `.rk-virtual` now sets the colour too.
+  rekta-core draws its scrollbar from these tokens (it was 4px, a grip of at
+  least 24px, `text-contrast-medium` and `text-primary` while dragged, hidden
+  900ms after the last scroll); `rekta.3` and `rekta.h` say so.
+  `--rk-scrollbar` stays the sheet's hook, so no size is named `scrollbar`.
+
 ### Contributing
 
 - CONTRIBUTING.md: the noreply identity in a fresh clone, the checks

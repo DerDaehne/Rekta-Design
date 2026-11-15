@@ -67,6 +67,8 @@ export function coreTokens(json) {
   for (const [k, v] of Object.entries(json.breakpoint)) defs.push(`#define RK_TOK_${C(k)} ${f(v)}`);
   defs.push(`#define RK_TOK_TILE_UNIT_ULTRAWIDE ${f(json.size['tile-unit-ultrawide'])}`);
   defs.push(`#define RK_TOK_TIP_GAP ${f(json.size['tip-gap'])}`);
+  defs.push(`#define RK_TOK_SCROLLBAR_THICKNESS ${f(json.size['scrollbar-thickness'])}`);
+  defs.push(`#define RK_TOK_SCROLLBAR_GRIP_MIN ${f(json.size['scrollbar-grip-min'])}`);
   defs.push(`#define RK_TOK_DAY_CELL ${f(json.size['day-cell'])}`);
   // The named accents (rk_app_set_accent_named): per theme and contrast set, the accent and the text on it.
   const accents = Object.entries(json.accents).map(([name, a]) => `  { "${name}", { ${['light', 'dark', 'light-contrast', 'dark-contrast'].map((t) => `{ ${rgba(a[t].accent)}, ${rgba(a[t]['on-accent'])} }`).join(', ')} } }`);

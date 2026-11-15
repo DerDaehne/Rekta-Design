@@ -708,7 +708,9 @@ and scrolls it up and down on the panorama's spring: the wheel until an
 end (then what holds it moves), the keys a focused view inside leaves
 (Up, Down, Page Up, Page Down, Home, End), and focus landing inside,
 which brings the view in sight.
-A 4px bar shows while it moves and a moment after; it drags.
+A thin bar stands while the content overflows: the grip alone in text-contrast-low,
+square, size.scrollbar-thickness wide and at least size.scrollbar-grip-min long, without
+a track; it drags.
 .Fn rk_view_reveal
 brings a view in sight in every scroll it is in.
 .It Fn rk_check "const char *label" "bool on" , Fn rk_toggle "const char *label" "bool on"
