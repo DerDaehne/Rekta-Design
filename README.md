@@ -88,6 +88,7 @@ node scripts/build.mjs --accent '#049896'   # an accent for every theme from one
 node scripts/build-site.mjs      # dist/ plus the showcase site in _site/
 node scripts/build-site.mjs --serve
 PLAYWRIGHT=/path/to/playwright/index.mjs node test/smoke.mjs   # clicks through the showcase in Chromium
+sh scripts/scan-secrets.sh       # before every push: secrets and private details (CONTRIBUTING.md)
 ```
 
 Node 20 or later. The smoke test needs Playwright, which the repository

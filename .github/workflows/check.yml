@@ -1,5 +1,5 @@
 # Checks every push and pull request: tokens and stylesheet, the build, and a click-through of the demo in Chromium;
-# rekta-core built and tested on Linux, macOS and Windows.
+# secrets and private details (scripts/scan-secrets.sh); rekta-core built and tested on Linux, macOS and Windows.
 name: check
 
 on:
@@ -31,6 +31,29 @@ jobs:
         run: node test/smoke.mjs
       - name: The reference gallery (rekta-core and rekta.css draw the same specimens alike)
         run: make -C core gallery && node test/gallery.mjs core/build/gallery
+
+  scan:
+    runs-on: ubuntu-latest
+    env:
+      # Kept by hand; the checksum is the linux_x64 line of the release's gitleaks_8.30.1_checksums.txt.
+      GITLEAKS_VERSION: '8.30.1'
+      GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks reads the whole history, the scan every commit after origin/main
+          persist-credentials: false
+      - name: Install gitleaks (checksum checked)
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | sha256sum -c -
+          tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+      - name: Secrets, home paths, mail addresses, ticket ids and identities (the private patterns stay local)
+        run: sh scripts/scan-secrets.sh
+      - name: The scan fails on each planted case and passes clean
+        run: sh scripts/scan-secrets.test.sh
 
   core-linux:
     runs-on: ubuntu-latest

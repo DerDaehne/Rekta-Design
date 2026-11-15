@@ -11,6 +11,19 @@ Rekta is first the design of a desktop shell and its apps; the web is a
 profile of it, for installable apps (PWAs). No rule changes; the README,
 principles.md and platforms.md say so, and platforms.md gains a glossary.
 
+### Contributing
+
+- CONTRIBUTING.md: the noreply identity in a fresh clone, the checks
+  before every push, findings as review comments that the author fixes,
+  merge commits on GitHub and the branch deleted after.
+- `scripts/scan-secrets.sh`: gitleaks, local home paths (in binary files
+  too), mail addresses, a private tracker's ticket ids and non-noreply
+  identities, in the working tree and in what each commit not yet on
+  `main` adds, and the patterns of a local, gitignored
+  `.privacy-patterns`, reported by their number only.
+  `scripts/scan-secrets.test.sh` plants each case in a throwaway
+  repository. CI runs both, without private patterns.
+
 ### Documented
 
 - README: what Rekta is for, in the first lines; "What's in the box" by
