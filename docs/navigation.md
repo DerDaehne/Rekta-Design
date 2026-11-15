@@ -162,7 +162,7 @@ framework router (SvelteKit, Next) does it with `scrollState(root)`,
 kept with its history entry:
 
 ```js
-// SvelteKit: +page.svelte
+// SvelteKit: +layout.svelte, the one that holds main.rk-place
 import { scrollState } from 'rekta-design';
 let place;                                    // bind:this on the place's <main>
 export const snapshot = {
@@ -170,6 +170,13 @@ export const snapshot = {
   restore: (s) => requestAnimationFrame(() => scrollState(place).restore(s)),
 };
 ```
+
+Whoever owns the place's box (`.rk-place`) keeps and restores the
+scroll state: the layout when it holds `.rk-place`, as it does with a
+framework router ([below](#places-in-the-bar-compact)), so one
+snapshot covers every place below it and no page has to do anything;
+the page when it renders the `main` itself, with the same `snapshot` in
+`+page.svelte`.
 
 With `history.state` (Next, or no framework), store `capture()` in the
 entry before leaving (`history.replaceState({ ...history.state, rk: s }, '')`)
@@ -183,12 +190,25 @@ loads more) has no sections yet, or short ones, when the router
 restores. Call `restore()` as early as above anyway: it sets what it
 can and waits for the rest, setting each box as it appears and grows,
 for up to `timing.restore` (5s). If the user scrolls first, their
-position stays. Keep the handle when the place can go before then:
+position stays. Keep the handle: a `restore()` still waiting ends with
+the next change of place, never only with the destruction of a
+component, because a layout stays when the place changes and the wait
+would run into the next place:
 
 ```js
-const run = scrollState(place).restore(s);   // run.pending: still waiting
-onDestroy(() => run.cancel());
+// SvelteKit: +layout.svelte
+import { onNavigate } from '$app/navigation';
+let restoring;                                // restoring.pending: still waiting
+onNavigate(() => restoring?.cancel());        // Next: router.events 'routeChangeStart'
+export const snapshot = {
+  capture: () => scrollState(place).capture(),
+  restore: (s) => requestAnimationFrame(() => { restoring = scrollState(place).restore(s); }),
+};
 ```
+
+A page that renders the `main` itself puts the same `snapshot` and
+`onNavigate` line in `+page.svelte`: SvelteKit reuses a page component
+between places of one route, so `onDestroy` would not run there.
 
 ### Crumb
 

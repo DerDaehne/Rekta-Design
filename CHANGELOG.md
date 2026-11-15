@@ -44,6 +44,11 @@ dots' fade in.
 
 ### Documented
 
+- navigation.md, "Back with a router of your own": the scroll snapshot
+  goes in the layout that holds `.rk-place` (the page only when it
+  renders the `main` itself), and a `restore()` still waiting ends with
+  the next navigation (`onNavigate`, `routeChangeStart`), in the layout
+  and in the page alike, never only with the destruction of a component.
 - README: what Rekta is for, in the first lines; "What's in the box" by
   layer: the specification, tokens and icons, the web profile,
   rekta-core, each one implementation among several.
