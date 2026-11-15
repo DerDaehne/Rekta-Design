@@ -185,9 +185,9 @@ rekta-core's lists and tables take Delete with `rk_list_on_remove()`
 Items that can be reordered carry a grip (`rk-grip`: six squares) at
 their leading edge; dragging anywhere else never moves them, so a click
 still selects. Dragged, the item lifts as a floating surface (bg and a
-1px edge, no shadow), the others make room, and on release everything
-settles in `duration-short`. From the keyboard: Space or Enter on the
-grip picks the item up, ↑ ↓ move it, Space or Enter puts it down, Escape
+1px edge, no shadow), the others make room in `duration-short` while
+the drag runs, and on release everything settles in `duration-moderate`.
+From the keyboard: Space or Enter on the grip picks the item up, ↑ ↓ move it, Space or Enter puts it down, Escape
 puts it back; Alt+↑ ↓ moves it at once. Each step is said in a live
 region. A move lands in the undo history.
 
