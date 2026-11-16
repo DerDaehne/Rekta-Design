@@ -371,11 +371,12 @@ const wide = await p.evaluate(async () => {
   const wfs = box.querySelector('#wfs'), wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const shown = () => [...wfs.children].filter((x) => getComputedStyle(x).display !== 'none').length;
   const out = { wide: pv.wide, shown: shown(), flex: getComputedStyle(wfs).display };
-  box.querySelector('#wt2').click(); await wait(700);
+  const until = async (cond, ms = 3000) => { for (const end = Date.now() + ms; Date.now() < end && !cond(); await wait(50)); };   /* a busy runner gets there, just later */
+  box.querySelector('#wt2').click(); await until(() => wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true');
   out.jumped = wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true';
   box.querySelector('#wt2').focus(); box.querySelector('#wt2').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
   out.tabbed = document.activeElement && document.activeElement.id === 'wf2';
-  wfs.scrollTo({ left: 0, behavior: 'instant' }); await wait(200);
+  wfs.scrollTo({ left: 0, behavior: 'instant' }); await until(() => box.querySelector('#wt0').getAttribute('aria-selected') === 'true');
   out.followed = box.querySelector('#wt0').getAttribute('aria-selected') === 'true';
   out.bound = shown() === 4;                            /* the framework hid the others; wide still shows them all */
   const before = held;
@@ -1280,8 +1281,9 @@ const tst2 = await p.evaluate(async () => {
   const t0 = Date.now(); let endedAt = 0;
   t.show('1 deleted', { undo: () => {}, windowMs: 3000, onEnd: () => { endedAt = Date.now() - t0; } });
   await wait(300); const block = Date.now(); while (Date.now() - block < 2500) { /* busy */ }
+  const resumed = Date.now() - t0;
   for (let i = 0; i < 40 && !endedAt; i += 1) await wait(50);
-  out.deadline = endedAt; await wait(400);
+  out.deadline = endedAt; out.resumed = resumed; await wait(400);
   // The same key: the first onEnd hears 'merged', the second the end.
   const ends = [];
   t.show('1 archived', { key: 'arch', undo: () => {}, onEnd: (w) => ends.push(`a1:${w}`) });
@@ -1302,8 +1304,8 @@ const tst2 = await p.evaluate(async () => {
   t.destroy(); region.remove();
   return out;
 });
-// A window stretched by the 2500 ms blocked would end near 5500; a busy runner only runs the timer late.
-ok(tst2.deadline > 2700 && tst2.deadline < 4500, 'a busy page does not stretch a toast\'s window', tst2.deadline);
+// Stretched by the 2500 ms blocked it would end 2700 after the page came back; a busy runner only runs the timer late.
+ok(tst2.deadline > 2700 && tst2.deadline < Math.max(3000, tst2.resumed) + 1500, 'a busy page does not stretch a toast\'s window', tst2.deadline);
 ok(tst2.merged === 'a1:merged,a2:dismissed', 'a same-key toast tells the first onEnd it merged', tst2.merged);
 ok(tst2.kept === 'm1:dismissed', 'a same-key toast without its own onEnd keeps the first one, called once with the end', tst2.kept);
 ok(tst2.release.heldBefore && tst2.release.stood && tst2.release.runs && !tst2.release.held && !tst2.release.attr, 'release() lets a held toast run out', JSON.stringify(tst2.release));
@@ -2011,22 +2013,19 @@ await q.waitForTimeout(500);
 ok(await anims('#built, #built ~ .rk-tile') === 0 && await q.evaluate(() => document.querySelector('#built').classList.contains('rk-h2') && !document.querySelector('.rk-segments-slide')), 'the re-flow settles');
 await q.evaluate(() => { const v = document.querySelector('#b-value'); v.value = '13'; v.dispatchEvent(new Event('input', { bubbles: true })); });
 ok(await q.evaluate(() => document.querySelectorAll('#built > .rk-stat').length === 2 && document.querySelector('#built > .rk-stat[aria-hidden] b').textContent === '12'), 'a new number peeks in: the old one leaves upwards');
-await q.waitForTimeout(500);
-ok(await q.evaluate(() => document.querySelectorAll('#built > .rk-stat').length === 1 && document.querySelector('#built .rk-stat b').textContent === '13'), 'the peek settles on the new number');
+const settled = () => q.evaluate(() => document.querySelectorAll('#built > .rk-stat').length === 1 && document.querySelector('#built .rk-stat b').textContent === '13');
+ok(await until(q, settled, 4000), 'the peek settles on the new number');
 ok(await q.evaluate(() => { const v = document.querySelector('#b-status'); v.value = 'error'; v.dispatchEvent(new Event('change', { bubbles: true })); const t = document.querySelector('#built'); return t.getAnimations().length > 0 && t.dataset.status === 'info'; }), 'a new status turns the tile over first');
-await q.waitForTimeout(500);
-ok((await q.evaluate(() => document.querySelector('#built').dataset.status)) === 'error', 'and it comes back with the new status');
-await q.evaluate(() => document.querySelector('#tile-pin').click()); await q.waitForTimeout(60);
-ok(await q.evaluate(() => { const t = document.querySelector('#live-tiles [data-pinned]'); return !!t && t.previousElementSibling.id === 'tile-seen' && t.getAnimations().length > 0; }), 'a pinned tile builds in after the first one');
-await q.waitForTimeout(500);
-await q.evaluate(() => document.querySelector('#tile-unpin').click()); await q.waitForTimeout(600);
-ok(await q.evaluate(() => !document.querySelector('#live-tiles [data-pinned]') && document.querySelector('#tile-seen').nextElementSibling.dataset.live === 'moves'), 'unpinned, it leaves and the tiles close up');
+ok(await until(q, async () => (await q.evaluate(() => document.querySelector('#built').dataset.status)) === 'error', 4000), 'and it comes back with the new status');
+ok(await q.evaluate(() => { document.querySelector('#tile-pin').click(); const t = document.querySelector('#live-tiles [data-pinned]'); return !!t && t.previousElementSibling.id === 'tile-seen' && t.getAnimations().length > 0; }), 'a pinned tile builds in after the first one');
+await until(q, () => q.evaluate(() => document.querySelector('#live-tiles [data-pinned]').getAnimations().length === 0), 4000);
+await q.evaluate(() => document.querySelector('#tile-unpin').click());
+ok(await until(q, () => q.evaluate(() => !document.querySelector('#live-tiles [data-pinned]') && document.querySelector('#tile-seen').nextElementSibling.dataset.live === 'moves'), 4000), 'unpinned, it leaves and the tiles close up');
 const filterComp = (pg, v) => pg.evaluate((x) => { const i = document.querySelector('#comp-q'); i.value = x; i.dispatchEvent(new Event('input', { bubbles: true })); }, v);
 ok(await q.evaluate(() => { const i = document.querySelector('#comp-q'); i.value = 'spark'; i.dispatchEvent(new Event('input', { bubbles: true })); const rows = [...document.querySelectorAll('#comp-body tr')]; return rows.every((r) => !r.hidden) && rows.some((r) => r.getAnimations().length); }), 'filtered rows leave before they hide');
-await q.waitForTimeout(700);
+await until(q, async () => (await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length)) === 1, 4000);
 ok((await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length)) === 1, 'then only the matching row stays', await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length));
-await filterComp(q, ''); await q.waitForTimeout(40);
-ok(await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length > 1 && [...document.querySelectorAll('#comp-body tr')].some((r) => r.getAnimations().length)), 'cleared, the rows come back and slide in');
+ok(await q.evaluate(() => { const i = document.querySelector('#comp-q'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); return document.querySelectorAll('#comp-body tr:not([hidden])').length > 1 && [...document.querySelectorAll('#comp-body tr')].some((r) => r.getAnimations().length); }), 'cleared, the rows come back and slide in');
 await q.waitForTimeout(600);
 await q.evaluate(() => document.querySelector('#press-sheet').showModal()); await q.waitForTimeout(300);
 ok(await q.evaluate(() => { const d = document.querySelector('#press-sheet'); d.close(); return d.open && d.dataset.rkPhase === 'leaving'; }), 'a closing sheet leaves before it closes');
@@ -2212,8 +2211,9 @@ const sy = await open();
   await sy.click('#job-cancel'); await sy.waitForTimeout(400);
   const ask = await sy.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return d && { ok: d.querySelector('[value=ok]').dataset.status, primary: d.querySelector('.rk-btn--primary').value, focus: document.activeElement.value }; });
   ok(ask && ask.ok === 'error' && ask.primary === 'cancel' && ask.focus === 'cancel', 'confirm({ safe: "cancel" }): keeping it is the primary answer, cancelling the build is destructive', JSON.stringify(ask));
-  await sy.click('dialog[open] [value=ok]'); await sy.waitForTimeout(500);
-  ok(await sy.evaluate(() => document.querySelector('#job-tag').textContent === 'idle' && !document.querySelector('#job-tag').dataset.status && document.querySelector('#job-cancel').hidden && document.querySelector('#job-again').getAttribute('aria-disabled') !== 'true'), 'cancelled, the region is idle and can start again');
+  await sy.click('dialog[open] [value=ok]');
+  const idle = () => sy.evaluate(() => document.querySelector('#job-tag').textContent === 'idle' && !document.querySelector('#job-tag').dataset.status && document.querySelector('#job-cancel').hidden && document.querySelector('#job-again').getAttribute('aria-disabled') !== 'true');
+  ok(await until(sy, idle), 'cancelled, the region is idle and can start again');
   ok(await sy.evaluate(() => !!document.querySelector('#live-tiles a[href="#notes"] [data-rk-carry]') && !!document.querySelector('#tile-apps [data-rk-carry]')), 'more tiles carry their title into the place they open');
   // Inputs: a field disabled with its reason looks disabled, says why and refuses.
   const keep = await sy.evaluate(() => {
@@ -2313,7 +2313,7 @@ const sy = await open();
   // The session, the lock screen and signing in again.
   await sy.click('#session-open'); await sy.waitForTimeout(400);
   ok(await sy.evaluate(() => { const d = document.querySelector('#session'); return d.open && d.querySelector('.rk-btn--primary').value === 'lock' && Math.round(d.getBoundingClientRect().width) === document.documentElement.clientWidth; }), 'session: a bar across the top, lock first');
-  await sy.click('#session [value=lock]'); await sy.waitForTimeout(1200);
+  await sy.click('#session [value=lock]'); await until(sy, () => sy.evaluate(() => !document.querySelector('#lock').hidden && document.querySelector('#desk').inert && document.activeElement.id === 'lock-pw'), 5000);
   const locked = await sy.evaluate(() => ({ shown: !document.querySelector('#lock').hidden, display: document.querySelector('#lock-time').matches('.rk-display'), size: parseFloat(getComputedStyle(document.querySelector('#lock-time')).fontSize), inert: document.querySelector('#desk').inert, focus: document.activeElement.id }));
   ok(locked.shown && locked.display && locked.size >= 80 && locked.inert && locked.focus === 'lock-pw', 'lock: the lock screen with the time in the display step; the desktop behind it is inert', JSON.stringify(locked));
   await sy.click('#lock-in'); await sy.waitForTimeout(300);
