@@ -57,6 +57,7 @@ const until = async (p, cond, ms = 2000) => {
 const sheetTitle = (p) => p.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return d ? d.querySelector('h2').textContent : null; });
 const go = async (p, id) => { await p.click(`#nav a[href="#${id}"]`); await p.waitForTimeout(900); };
 const TURN = 1300;
+const WHEEL_LATCH = 1500;
 
 // Rest looks: no horizontal page overflow in either theme, on a desktop, a phone and a short window.
 for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 844, 'light'], [390, 844, 'dark'], [844, 390, 'light']]) {
@@ -277,10 +278,14 @@ ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures fra
     window.tCancelled = 0; addEventListener('wheel', (e) => { if (e.defaultPrevented) window.tCancelled += 1; });
     return was;
   });
-  await p.mouse.move(300, 500); await p.waitForTimeout(400);
-  for (let i = 0; i < 6; i += 1) { await p.mouse.wheel(0, 100); await p.waitForTimeout(40); }
+  // The events of one gesture must lie closer than the latch, and the one before it further: the latch is raised over any
+  // gap a busy runner makes, the pause that starts a new gesture is longer than it, and the end waits on the release.
+  await p.mouse.move(300, 500);
+  await p.evaluate((ms) => document.documentElement.style.setProperty('--rk-duration-wheel-latch', `${ms}ms`), WHEEL_LATCH);
+  await p.waitForTimeout(WHEEL_LATCH + 100);
+  for (let i = 0; i < 6; i += 1) await p.mouse.wheel(0, 100);
   const during = await p.evaluate(() => getComputedStyle(document.querySelector('#overview')).overscrollBehaviorY);
-  await p.waitForTimeout(400);
+  await until(p, () => p.evaluate(() => getComputedStyle(document.querySelector('#overview')).overscrollBehaviorY === 'auto'), WHEEL_LATCH + 3000);
   const end = await p.evaluate(() => { const sec = document.querySelector('#overview'); return { atEnd: sec.scrollTop >= sec.scrollHeight - sec.clientHeight - 1, pan: document.querySelector('#pan').scrollLeft, page: scrollY, cancelled: window.tCancelled, after: getComputedStyle(sec).overscrollBehaviorY }; });
   ok(end.atEnd && end.pan === 0 && end.page === 0 && end.cancelled === 0 && during === 'contain' && end.after === 'auto',
     'a wheel gesture that runs a section into its end stays there, uncancelled: the section holds its scroll chain while the gesture lasts', JSON.stringify({ during, ...end }));
@@ -293,11 +298,12 @@ ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures fra
     window.tSeen = []; window.tWatch = new MutationObserver(() => window.tSeen.push(sec.style.overscrollBehaviorY));
     window.tWatch.observe(sec, { attributes: true, attributeFilter: ['style'] });
   });
-  for (let i = 0; i < 6; i += 1) { await p.mouse.wheel(0, 100); await p.waitForTimeout(40); }
+  await p.waitForTimeout(WHEEL_LATCH + 100);
+  for (let i = 0; i < 6; i += 1) await p.mouse.wheel(0, 100);
   const kept = await p.evaluate(() => { const sec = document.querySelector('#overview'); window.tWatch.disconnect(); return { during: getComputedStyle(sec).overscrollBehaviorY, inline: sec.style.overscrollBehaviorY, seen: window.tSeen }; });
   ok(kept.during === 'none' && kept.inline === '' && !kept.seen.includes('contain'), 'a section the stylesheet gave overscroll-behavior none stays none during a wheel gesture', JSON.stringify(kept));
   await tag.evaluate((n) => n.remove());
-  await p.waitForTimeout(300);
+  await p.evaluate(() => document.documentElement.style.removeProperty('--rk-duration-wheel-latch'));
 }
 
 // Tile grids (#129): one tab stop; the arrows by position, the shared row or column first, a tie to the better-aligned
@@ -860,14 +866,25 @@ await p.evaluate(() => { document.querySelector('#comp-table').style.transform =
 
 // Desktop: tooltips, the tree, a sortable list, ten thousand lines.
 await go(p, 'desktop');
-await p.hover('#tree-open'); await p.waitForTimeout(250);
-ok(!(await p.evaluate(() => document.querySelector('.rk-tip') && document.querySelector('.rk-tip').matches(':popover-open'))), 'no tooltip before the pointer rests');
-await p.waitForTimeout(500);
-ok((await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open') && document.querySelector('.rk-tip').textContent)) === 'open every folder *', 'a tooltip after a rest, with its key', await p.evaluate(() => document.querySelector('.rk-tip') && document.querySelector('.rk-tip').textContent));
-await p.hover('#tree-close'); await p.waitForTimeout(60);
-ok((await p.evaluate(() => document.querySelector('.rk-tip').textContent)) === 'close every folder', 'the next tooltip comes at once');
-await p.keyboard.press('Escape'); await p.waitForTimeout(100);
-ok(!(await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open'))) && await visible(p, 'home'), 'Escape hides the tooltip, nothing more');
+// Half the delay is timed in the page by a timer set as the pointer arrives: it runs before the tip's own timer however
+// late a busy runner is, where a wait from here would be a wall-clock guess.
+await p.evaluate(() => {
+  const tip = () => document.querySelector('.rk-tip'), half = Rekta.tokens.ms('--rk-duration-tip-delay') / 2;
+  const early = (sel) => { window.tEarly = null; document.querySelector(sel).addEventListener('pointerover', () => setTimeout(() => { window.tEarly = tip().matches(':popover-open') && tip().textContent; }, half), { once: true }); };
+  window.tEarlyOn = early;
+  early('#tree-open');
+});
+await p.hover('#tree-open');
+const tipText = () => p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open') && document.querySelector('.rk-tip').textContent);
+await until(p, async () => (await p.evaluate(() => window.tEarly)) !== null && (await tipText()) !== false, 5000);
+ok((await p.evaluate(() => window.tEarly)) === false, 'no tooltip before the pointer rests');
+ok((await tipText()) === 'open every folder *', 'a tooltip after a rest, with its key', String(await tipText()));
+await p.evaluate(() => window.tEarlyOn('#tree-close'));
+await p.hover('#tree-close');
+await until(p, async () => (await p.evaluate(() => window.tEarly)) !== null, 5000);
+ok((await p.evaluate(() => window.tEarly)) === 'close every folder', 'the next tooltip comes at once');
+await p.keyboard.press('Escape');
+ok(await until(p, async () => (await tipText()) === false) && await visible(p, 'home'), 'Escape hides the tooltip, nothing more');
 // A key combination is written one way: Ctrl, Alt, Shift, Meta, then the key, joined by "+"; Meta outside Apple is the
 // catalogue's keyMeta, "Super" here on Linux (#141).
 await p.evaluate(() => {
@@ -877,7 +894,7 @@ await p.evaluate(() => {
     + '<button class="rk-btn" type="button" data-rk-tip="find" aria-keyshortcuts="Shift+Alt+Control+f">c</button>';
   document.querySelector('.rk').append(box);
 });
-const keyOf = async (n) => { await p.hover(`#keys-fixture > :nth-child(${n})`); await p.waitForTimeout(900); const k = await text(p, '.rk-tip .rk-key'); await p.mouse.move(5, 5); await p.waitForTimeout(200); return k; };
+const keyOf = async (n) => { await p.hover(`#keys-fixture > :nth-child(${n})`); await until(p, async () => (await tipText()) !== false, 5000); const k = await text(p, '.rk-tip .rk-key'); await p.mouse.move(5, 5); await until(p, async () => (await tipText()) === false); return k; };
 const written = { both: await keyOf(1), meta: await keyOf(2), order: await keyOf(3) };
 await p.evaluate(() => Rekta.setStrings({ keyMeta: (os) => (os === 'windows' ? 'Win' : 'Meta') }));
 written.word = await keyOf(2);
@@ -1179,21 +1196,21 @@ ok(!(await mode()), 'Escape ends it');
 // Live and undo: fresh, held, stale, offline; the history.
 await go(p, 'live-undo');
 ok((await p.getAttribute('#live-region', 'data-rk-live')) === 'fresh' && (await text(p, '#live-region .rk-age')).startsWith('updated'), 'a live region says how fresh it is');
-await p.hover('#lv-rps'); await p.waitForTimeout(3300);
+await p.hover('#lv-rps'); await until(p, async () => /updates? waiting/.test(await text(p, '.rk-live-more')), 10000);
 ok((await p.evaluate(() => document.querySelector('#live-region').hasAttribute('data-rk-held'))) && /updates? waiting/.test(await text(p, '.rk-live-more')), 'pointing holds it still; updates wait behind a button', await text(p, '.rk-live-more'));
 const heldValue = await text(p, '#lv-rps');
 await p.waitForTimeout(1600);
 ok((await text(p, '#lv-rps')) === heldValue, 'held values do not change');
-await p.mouse.move(5, 5); await p.waitForTimeout(200);
+await p.mouse.move(5, 5); await until(p, () => p.evaluate(() => !document.querySelector('#live-region').hasAttribute('data-rk-held')));
 ok(!(await p.evaluate(() => document.querySelector('#live-region').hasAttribute('data-rk-held'))) && (await p.evaluate(() => document.querySelector('.rk-live-more').hidden)), 'let go, the waiting updates apply');
-await p.click('label.rk-toggle:has(#lv-online)'); await p.waitForTimeout(300);
+await p.click('label.rk-toggle:has(#lv-online)'); await until(p, async () => (await p.getAttribute('#live-region', 'data-rk-live')) === 'offline');
 ok((await p.getAttribute('#live-region', 'data-rk-live')) === 'offline' && (await text(p, '#live-region .rk-age')).startsWith('offline'), 'offline says so');
-await p.click('label.rk-toggle:has(#lv-online)'); await p.click('label.rk-toggle:has(#lv-feed)'); await p.waitForTimeout(9800);
+await p.click('label.rk-toggle:has(#lv-online)'); await p.click('label.rk-toggle:has(#lv-feed)'); await until(p, async () => (await p.getAttribute('#live-region', 'data-rk-live')) === 'stale', 20000);
 ok((await p.getAttribute('#live-region', 'data-rk-live')) === 'stale' && (await text(p, '#live-region .rk-age')).startsWith('stale · no update for'), 'no update for a while: stale, and it says so', await text(p, '#live-region .rk-age'));
-await p.click('label.rk-toggle:has(#lv-feed)'); await p.waitForTimeout(1700);
+await p.click('label.rk-toggle:has(#lv-feed)'); await until(p, async () => (await p.getAttribute('#live-region', 'data-rk-live')) === 'fresh', 5000);
 ok((await p.getAttribute('#live-region', 'data-rk-live')) === 'fresh', 'fresh again with the next update');
 ok((await p.evaluate(() => [...document.querySelectorAll('#h-list li')].map((l) => l.firstChild.textContent))).includes('Moved Tile to “surfaces”'), 'the history lists what you did');
-await p.click('#h-undo'); await p.waitForTimeout(300);
+await p.click('#h-undo'); await until(p, () => p.evaluate(() => !!document.querySelector('#h-list li[data-undone]')));
 ok((await p.evaluate(() => !!document.querySelector('#h-list li[data-undone]'))) && (await p.getAttribute('#h-redo', 'aria-disabled')) === 'false', 'undo from the history; redo can act');
 
 // Feedback: toasts with undo, pending, the banner.
@@ -1201,22 +1218,22 @@ await go(p, 'feedback');
 await p.click('#f-undo'); await p.waitForTimeout(300);
 await p.click('#feedback-title'); await p.keyboard.press('Control+z'); await p.waitForTimeout(500);
 ok((await toast(p)) === 'It is back.', 'Ctrl+Z undoes', await toast(p));
-await p.click('#f-pending'); await p.waitForTimeout(100);
+await p.click('#f-pending');
 ok((await text(p, '#f-pending')) === 'saving…', 'pending: the button says what it does', await text(p, '#f-pending'));
-await p.waitForTimeout(1700);
+await until(p, async () => (await toast(p)) === 'Saved.', 5000);
 ok((await toast(p)) === 'Saved.' && (await text(p, '#f-pending')) === 'save', 'pending ends, label back');
-await p.check('#s-halted'); await p.waitForTimeout(500);
+await p.check('#s-halted'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'halted');
 ok((await text(p, '.rk-banner-word')) === 'halted' && await p.evaluate(() => !!document.querySelector('#banner [role=alert] .rk-banner-word')) && (await p.getAttribute('#bar', 'data-rk-state')) === 'halted', 'halted: an alert, the app bar follows');
-await p.click('#ab-pause'); await p.waitForTimeout(400);
+await p.click('#ab-pause'); await until(p, async () => (await toast(p)).startsWith('Live data paused'));
 ok((await text(p, '.rk-banner-word')) === 'halted' && (await toast(p)).startsWith('Live data paused'), 'pause under halt: the banner holds, a toast says so', await toast(p));
 await p.screenshot({ path: join(shots, 'halted.png') });
-await p.click('#remedy'); await p.waitForTimeout(600);
+await p.click('#remedy'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused');
 ok((await text(p, '.rk-banner-word')) === 'paused', 'release steps down to paused');
-await p.click('#remedy'); await p.waitForTimeout(800);
+await p.click('#remedy'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'resume clears the banner');
-await p.check('#s-offline'); await p.waitForTimeout(400);
+await p.check('#s-offline'); await until(p, async () => (await text(p, '#data-now')) === 'frozen');
 ok((await text(p, '#data-now')) === 'frozen', 'offline freezes the figures');
-await p.click('#remedy'); await p.waitForTimeout(1500);
+await p.click('#remedy'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 5000);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'retry reconnects');
 
 // The toaster for server-side undo and failures; the focus fallback; the banner's real start and a remedy that links.
@@ -1285,7 +1302,8 @@ const tst2 = await p.evaluate(async () => {
   t.destroy(); region.remove();
   return out;
 });
-ok(tst2.deadline > 2700 && tst2.deadline < 3500, 'a busy page does not stretch a toast\'s window', tst2.deadline);
+// A window stretched by the 2500 ms blocked would end near 5500; a busy runner only runs the timer late.
+ok(tst2.deadline > 2700 && tst2.deadline < 4500, 'a busy page does not stretch a toast\'s window', tst2.deadline);
 ok(tst2.merged === 'a1:merged,a2:dismissed', 'a same-key toast tells the first onEnd it merged', tst2.merged);
 ok(tst2.kept === 'm1:dismissed', 'a same-key toast without its own onEnd keeps the first one, called once with the end', tst2.kept);
 ok(tst2.release.heldBefore && tst2.release.stood && tst2.release.runs && !tst2.release.held && !tst2.release.attr, 'release() lets a held toast run out', JSON.stringify(tst2.release));
@@ -1443,10 +1461,11 @@ const lineGoes = await p.evaluate(async () => {
   const b = document.createElement('button'); b.className = 'rk-btn'; b.type = 'button'; b.textContent = 'save';
   document.querySelector('#forms').append(b);
   const line = () => { const a = getComputedStyle(b, '::after'); return a.content !== 'none' && a.visibility === 'visible'; };
-  let release; const run = Rekta.pending(b, new Promise((r) => { release = r; }));
+  let release; const t0 = performance.now(); const run = Rekta.pending(b, new Promise((r) => { release = r; }));
   const early = line();
-  await new Promise((r) => setTimeout(r, Rekta.tokens.ms('--rk-duration-busy-delay') + 200));
-  const shown = line(), during = b.textContent;
+  // The line is shown by a CSS animation that starts with the next frame: a busy runner shows it late, never early.
+  while (!line() && performance.now() - t0 < 5000) await new Promise((r) => requestAnimationFrame(r));
+  const delay = Rekta.tokens.ms('--rk-duration-busy-delay'), shown = line() && performance.now() - t0 >= delay - 20, during = b.textContent;
   release(); await run;
   const out = { early, shown, during, after: line(), label: b.textContent };
   b.remove();
@@ -2106,7 +2125,7 @@ const dragRow = async (sel, dx) => {
   return mid;
 };
 const followed = await dragRow('#t-r-c', 60);
-await sp.waitForTimeout(400);
+await until(sp, async () => (await sp.evaluate(() => new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#t-r-c')).transform).m41)) === 0, 3000);
 const short = await sp.evaluate(() => ({ removed: window.tRemoved.length, there: !!document.querySelector('#t-r-c'), x: new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#t-r-c')).transform).m41, clicks: window.tClicks }));
 ok(Math.round(followed) === 60 && short.removed === 2 && short.there && short.x === 0 && short.clicks === 1, 'dragged a little, the entry follows and glides back; the drag clicks nothing', JSON.stringify({ followed, ...short }));
 await dragRow('#t-r-d', 200);
