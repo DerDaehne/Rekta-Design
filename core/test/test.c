@@ -1396,8 +1396,16 @@ static void test_scroll_bar(void) {
   bar_pointer(w, RK_EVENT_POINTER_MOVE, gx + 2, mid);
   CHECK(w->needs_draw, "the pointer coming onto the bar asks for a frame");
   CHECK(pixel_at(w, gx, mid) == medium, "under the pointer the grip is text-contrast-medium");
+  w->needs_draw = false;
   bar_pointer(w, RK_EVENT_POINTER_MOVE, r.x + 20, mid);
-  CHECK(pixel_at(w, gx, mid) == low, "and back at rest when the pointer leaves");
+  CHECK(w->needs_draw, "the pointer leaving the bar asks for a frame");
+  CHECK(pixel_at(w, gx, mid) == low, "and the grip is back at rest");
+  rk_app_run_for(50);
+  w->needs_draw = false;
+  bar_pointer(w, RK_EVENT_POINTER_MOVE, r.x + 20, mid - 40);
+  bar_pointer(w, RK_EVENT_POINTER_MOVE, r.x + 30, mid + 40);
+  CHECK(w->hover != s->rail && !w->needs_draw, "the pointer moving between two plain views asks for no frame");
+  bar_pointer(w, RK_EVENT_POINTER_MOVE, gx + 2, mid);
   bar_pointer(w, RK_EVENT_POINTER_DOWN, gx + 2, mid);
   CHECK(s->dragging && pixel_at(w, gx, mid) == medium, "while dragged it is text-contrast-medium");
   bar_pointer(w, RK_EVENT_POINTER_UP, gx + 2, mid);

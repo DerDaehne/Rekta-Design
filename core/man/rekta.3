@@ -717,6 +717,9 @@ text-contrast-low at rest,
 text-contrast-medium under the pointer and while it drags.
 Without overflow there is no gutter.
 Lists, menus and the panorama draw no bar yet.
+No platform reports the pointer leaving the window yet,
+so a grip lit under the pointer stays lit when the pointer leaves the window over the gutter,
+until the pointer comes back.
 .Fn rk_view_reveal
 brings a view in sight in every scroll it is in.
 .It Fn rk_check "const char *label" "bool on" , Fn rk_toggle "const char *label" "bool on"

@@ -692,7 +692,10 @@ static void event(rk_window *w, const rk_event *e) {
     case RK_EVENT_POINTER_MOVE: {
       w->pointer = e->position;
       rk_view *h = w->capture ? w->capture : hit_window(w, e->position.x, e->position.y);
-      if (w->hover != h) { if (w->hover) rk__view_dirty(w->hover); if (h) rk__view_dirty(h); }   /* a view may draw itself lit under the pointer */
+      if (w->hover != h) {                                     /* only a view that draws itself lit pays a frame for it */
+        if (w->hover && w->hover->hover_lit) rk__view_dirty(w->hover);
+        if (h && h->hover_lit) rk__view_dirty(h);
+      }
       w->hover = h;
       if (!w->capture) rk__tip_hover(w, h);                    /* but a tooltip may come */
       dispatch(w, h, e);

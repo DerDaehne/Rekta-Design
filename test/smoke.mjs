@@ -1953,10 +1953,10 @@ await m.close();
     const low = getComputedStyle(probe).color;
     const fixtures = {   // a selector's element, made where the showcase has none yet
       root: null, panorama: '#pan', section: '.rk-panorama .rk-sec', virtual: '.rk-virtual', tableWrap: '.rk-table-wrap', float: '.rk-float', sheet: '.rk-sheet',
-      sideSheet: '.rk-sheet.rk-sheet--side', session: '.rk-sheet.rk-session', palette: '.rk-palette > ul', splitList: '.rk-split > .rk-split-list', splitDetail: '.rk-split > .rk-split-detail',
+      facet: "[data-rk-wide]:not(.rk-pivot) > [role='tabpanel']", sideSheet: '.rk-sheet.rk-sheet--side', session: '.rk-sheet.rk-session', palette: '.rk-palette > ul', splitList: '.rk-split > .rk-split-list', splitDetail: '.rk-split > .rk-split-detail',
       pivot: '.rk-pivot', recent: '.rk-recent > .rk-tiles',
     };
-    const made = { virtual: '<div class="rk-virtual"></div>', tableWrap: '<div class="rk-table-wrap"></div>', float: '<div class="rk-float"></div>', palette: '<div class="rk-palette"><ul></ul></div>',
+    const made = { facet: '<div data-rk-wide><div role="tabpanel"></div></div>', virtual: '<div class="rk-virtual"></div>', tableWrap: '<div class="rk-table-wrap"></div>', float: '<div class="rk-float"></div>', palette: '<div class="rk-palette"><ul></ul></div>',
       splitList: '<div class="rk-split"><div class="rk-split-list"></div><div class="rk-split-detail"></div></div>', recent: '<div class="rk-recent"><div class="rk-tiles"></div></div>' };
     const host = document.createElement('div'); document.body.append(host);
     const seen = {};

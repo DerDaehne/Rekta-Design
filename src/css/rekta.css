@@ -10,7 +10,7 @@
    - Rekta defines only .rk-* classes and --rk-* properties. data-status, data-theme, data-density and data-motion
      apply on .rk and inside it; the theme, density and motion switches go on the root element.
    - Rules outside .rk-*, on purpose (docs/behaviour.md lists them): :root's scroll-padding below the banner and above
-     the app bar; :root stops scrolling while a .rk-sheet is open; [data-status] sets only internal --_rk-* properties,
+     the app bar; :root asks for the thin scrollbar in text-contrast-low, which every scroller inherits; :root stops scrolling while a .rk-sheet is open; [data-status] sets only internal --_rk-* properties,
      inert outside Rekta's components; the root's data-theme, data-density, data-motion, data-contrast,
      data-transparency and data-rk-titlebar switches; the view-transition timing, only while rekta.js marks the root
      data-rk-crossfade.
@@ -42,11 +42,11 @@
 .rk :where(h1, h2, h3, p, ul, ol) { margin: 0; }
 .rk :where(a) { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; transition: text-decoration-thickness var(--rk-duration-short) var(--rk-ease-base); }
 .rk :focus-visible { outline: 2px solid var(--rk-focus); outline-offset: 2px; }
-/* Keyboard focus never lands under the banner, a sticky strip or the app bar. */
 /* The thin scrollbar (layout.md): every scroller asks for the native thin bar in text-contrast-low. The colour inherits from
    the root; the width does not, so each scroller names it. The pivot strip and the recent stack hide theirs (none). */
 :root { scrollbar-width: thin; scrollbar-color: var(--rk-text-contrast-low) transparent; }
 .rk-table-wrap, .rk-float, .rk-sheet, .rk-palette > :is(ul, ol), .rk-split > :is(.rk-split-list, .rk-split-detail) { scrollbar-width: thin; }
+/* Keyboard focus never lands under the banner, a sticky strip or the app bar. */
 :root { scroll-padding-block: calc(var(--rk-banner-h, 0px) + var(--rk-pivot-h, 0px)) calc(var(--rk-appbar-height) + env(safe-area-inset-bottom)); }
 
 /* A place is one screen of the app: one <main>, labelled by its .rk-title, and a size container. */

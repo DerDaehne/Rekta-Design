@@ -281,6 +281,10 @@ builds it from views or does without:
 - **The thin scrollbar outside `rk_scroll`:** rekta-core's lists and
   tables (`rk_list`), menus, the panorama and its sections scroll
   without a bar; only `rk_scroll` draws the grip.
+- **The pointer leaving the window:** no platform layer sends
+  `RK_EVENT_POINTER_LEAVE` yet, so a view that draws itself lit under the
+  pointer (the scrollbar's grip) stays lit when the pointer leaves the
+  window over it, until the pointer comes back.
 - **A side panel and choosing in place:** rekta-core's sheets come from
   the top.
 - **A launch tile:** rekta-core's tiles carry a stat, a message, a

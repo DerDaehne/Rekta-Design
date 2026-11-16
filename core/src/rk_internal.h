@@ -237,6 +237,7 @@ struct rk_view {
   rk_role fill_role;
   float radius;
   bool rule_top, rule_bottom, hidden, clip, focusable, leaving, entering, placed, fill_anim;
+  bool hover_lit;                                          /* draws itself differently under the pointer: a change of hover redraws it */
   bool passthrough;                                        /* a layer: only its children take the pointer */
   bool carry;                                              /* the title of its part, carried into a place it opens */
   bool hug;                                                /* keeps its own width across a stack, as a button */

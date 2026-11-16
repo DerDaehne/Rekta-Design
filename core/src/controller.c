@@ -1091,6 +1091,7 @@ rk_view *rk_scroll(rk_view *content) {
   if (content) { rk__view_add(v, content); rk_release(content); }
   else { rk_view *empty = rk_view_create(); rk__view_add(v, empty); rk_release(empty); }
   s->rail = rk__view_create(&rail_class, s);
+  s->rail->hover_lit = true;
   s->rail->passthrough = true;                             /* until the layout finds it overflows */
   rk__view_add(v, s->rail); rk_release(s->rail);
   return v;
