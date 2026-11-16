@@ -173,6 +173,7 @@ them:
 | Rule | Why |
 |---|---|
 | `:root { scroll-padding-block: … }` | Anchors and focus scroll clear of the banner and section strip above (`--rk-banner-h`, `--rk-pivot-h`) and the app bar below. |
+| `:root { scrollbar-width: thin; scrollbar-color: … }` | The page's own scrollbar is the thin one in `text-contrast-low`, and the colour reaches every scroller below by inheritance ([layout.md](layout.md)). |
 | `:root:has(dialog.rk-sheet[open])` | The page under an open sheet stops scrolling; the root keeps its scrollbar's room as right padding (`--rk-scrollbar`, measured by `sheet()` as it opens), so nothing shifts and the sheet spans the viewport. |
 | `[data-status='…']` | Sets only the internal `--_rk-fill`, `--_rk-mark` and `--_rk-soft`, which nothing outside Rekta's components reads. |
 | `:root[data-theme]`, `[data-density]`, `[data-motion]`, `[data-contrast]`, `[data-transparency]`, `[data-rk-titlebar]` | The switches `prefs` and the installed app's title bar write on the root. |

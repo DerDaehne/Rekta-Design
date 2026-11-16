@@ -967,36 +967,37 @@ static void scroll_value(rk_view *v, float to, float max, double settle) {
 /* Scroll ---------------------------------------------------------------------------------------------------------- */
 /* A view that clips its content and scrolls it up and down on the panorama's spring. The wheel moves it until an end
    (then what holds it moves); keys a focused view inside leaves (Up, Down, Page Up, Page Down, Home, End) move it;
-   focus landing inside brings the view in sight. A 4px bar shows while it moves and a moment after, and drags. */
+   focus landing inside brings the view in sight. A thin bar, the grip alone, stands in a gutter of its own while the content overflows, and drags. */
 
-typedef struct scroller { float max; bool bar, dragging; uint32_t hide; float drag_y, drag_value; rk_view *view, *rail; } scroller;
+typedef struct scroller { float max; bool dragging; float drag_y, drag_value; rk_view *view, *rail; } scroller;
 
-#define BAR_W 4.0f
-#define BAR_MIN 24.0f
+#define BAR_W RK_TOK_SCROLLBAR_THICKNESS
+#define BAR_MIN RK_TOK_SCROLLBAR_GRIP_MIN
+/* The gutter, as wide as Chromium's thin bar reserves: the content is laid out narrower by it while it overflows, so the
+   rail and the grip never lie over content and the rail takes presses only in space of its own. */
+#define RAIL_W 10.0f
 
-static void scroller_hide(void *user) { scroller *s = user; s->hide = 0; if (s->dragging) return; s->bar = false; s->rail->passthrough = true; rk__view_dirty(s->rail); }
-static void scroller_show(scroller *s) {   /* the bar shows, and takes the pointer while it does */
-  s->bar = true;
-  s->rail->passthrough = false;
-  if (s->hide) rk_app_cancel(s->hide);
-  s->hide = rk__after_quiet(900, false, scroller_hide, s);
-  rk__view_dirty(s->rail);
-}
 static void scroller_to(scroller *s, float to, double settle) {
   if (s->max <= 0) return;
   scroll_value(s->view, to, s->max, settle);
-  scroller_show(s);
+  rk__view_dirty(s->rail);
 }
 
 static void scroller_layout(rk_view *v, void *st) {
   scroller *s = st;
   if (v->nkids < 2) return;
   rk_view *c = v->kids[0];
-  rk_size n = rk__measure(c, (rk_size){ v->frame.w, INFINITY });
+  float w = v->frame.w;
+  rk_size n = rk__measure(c, (rk_size){ w, INFINITY });
+  if (n.h > v->frame.h) {                                   /* narrower content is never shorter, so it still overflows */
+    w -= RAIL_W;
+    n = rk__measure(c, (rk_size){ w, INFINITY });
+  }
   float h = RK_MAX(n.h, v->frame.h);
-  rk__set_frame(c, (rk_rect){ 0, 0, v->frame.w, h });
-  rk__set_frame(s->rail, (rk_rect){ v->frame.w - BAR_W - 4, 0, BAR_W + 4, v->frame.h });
+  rk__set_frame(c, (rk_rect){ 0, 0, w, h });
+  rk__set_frame(s->rail, (rk_rect){ v->frame.w - RAIL_W, 0, RAIL_W, v->frame.h });
   s->max = RK_MAX(0.0f, h - v->frame.h);
+  s->rail->passthrough = s->max <= 0;
   if (v->value > s->max) v->value = v->pvalue = s->max;
 }
 
@@ -1038,20 +1039,22 @@ static bool scroller_event(rk_view *v, const rk_event *e, void *st) {
   return true;
 }
 
-static void scroller_free(void *st) { scroller *s = st; if (s->hide) rk_app_cancel(s->hide); free(s); }
+static void scroller_free(void *st) { free(st); }
 static const rk_class scroll_class = { { sizeof(rk_view_class), "rk_scroll", scroller_draw, scroller_measure, scroller_layout, scroller_event, scroller_free }, NULL, NULL };
 
-/* The bar: a rail along the right edge that draws the thumb while it shows and drags it. */
+/* The bar: a rail along the right edge that draws the grip and drags it. */
 static void thumb_of(scroller *s, float H, float *y, float *h) {
   *h = RK_MAX(BAR_MIN, H * H / (H + s->max));
   *y = s->max > 0 ? (H - *h) * s->view->pvalue / s->max : 0;
 }
 static void rail_draw(rk_view *v, rk_canvas *c, void *st) {
   scroller *s = st;
-  if (s->max <= 0 || !(s->bar || s->dragging)) return;
+  if (s->max <= 0) return;
   float y, h;
   thumb_of(s, v->pframe.h, &y, &h);
-  rk_canvas_fill_rect(c, (rk_rect){ v->pframe.w - BAR_W, y, BAR_W, h }, rk_color_of(s->dragging ? RK_ROLE_TEXT : RK_ROLE_TEXT_MEDIUM));
+  rk_window *w = rk__view_window(v);
+  bool lit = s->dragging || (w && w->hover == v);
+  rk_canvas_fill_rect(c, (rk_rect){ (v->pframe.w - BAR_W) / 2, y, BAR_W, h }, rk_color_of(lit ? RK_ROLE_TEXT_MEDIUM : RK_ROLE_TEXT_LOW));
   if (s->view->pvalue != s->view->value) rk__view_dirty(v);   /* it follows the glide */
 }
 static bool rail_event(rk_view *v, const rk_event *e, void *st) {
@@ -1061,7 +1064,7 @@ static bool rail_event(rk_view *v, const rk_event *e, void *st) {
   thumb_of(s, H, &y, &h);
   switch (e->type) {
     case RK_EVENT_POINTER_DOWN:
-      if (e->button || !s->bar) return false;                  /* only a bar in sight takes a press */
+      if (e->button) return false;
       if (e->position.y < y || e->position.y > y + h) { scroller_to(s, s->max * (e->position.y - h / 2) / (H - h), SETTLE_GO); return true; }
       s->dragging = true; s->drag_y = e->position.y; s->drag_value = s->view->value;
       rk__view_dirty(v);
@@ -1070,10 +1073,9 @@ static bool rail_event(rk_view *v, const rk_event *e, void *st) {
       if (!s->dragging) return false;
       s->view->value = s->view->pvalue = RK_CLAMP(s->drag_value + (e->position.y - s->drag_y) * s->max / RK_MAX(1.0f, H - h), 0.0f, s->max);
       rk__anim_cancel(s->view, RK_PROP_VALUE);
-      scroller_show(s);
       rk__view_dirty(s->view);
       return true;
-    case RK_EVENT_POINTER_UP: if (!s->dragging) return false; s->dragging = false; rk__view_dirty(v); scroller_show(s); return true;
+    case RK_EVENT_POINTER_UP: if (!s->dragging) return false; s->dragging = false; rk__view_dirty(v); return true;
     default: return false;
   }
 }
@@ -1089,7 +1091,8 @@ rk_view *rk_scroll(rk_view *content) {
   if (content) { rk__view_add(v, content); rk_release(content); }
   else { rk_view *empty = rk_view_create(); rk__view_add(v, empty); rk_release(empty); }
   s->rail = rk__view_create(&rail_class, s);
-  s->rail->passthrough = true;
+  s->rail->hover_lit = true;
+  s->rail->passthrough = true;                             /* until the layout finds it overflows */
   rk__view_add(v, s->rail); rk_release(s->rail);
   return v;
 }

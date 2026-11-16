@@ -877,6 +877,22 @@
       },
       "$description": "Between a tooltip and its control: a little more than a floating surface's space-xs, so the ink strip does not touch the control's focus ring."
     },
+    "scrollbar-thickness": {
+      "$type": "dimension",
+      "$value": {
+        "value": 6,
+        "unit": "px"
+      },
+      "$description": "The thin scrollbar's grip across its axis (the width of a vertical bar, the height of a horizontal one). Measured from Chromium 156's native `scrollbar-width: thin` on Linux with classic scrollbars: the grip paints about 6px."
+    },
+    "scrollbar-grip-min": {
+      "$type": "dimension",
+      "$value": {
+        "value": 11,
+        "unit": "px"
+      },
+      "$description": "The shortest the thin scrollbar's grip gets along its axis, however long the content. Measured from Chromium 156's native `scrollbar-width: thin` on Linux with classic scrollbars."
+    },
     "day-cell": {
       "$type": "dimension",
       "$value": {

@@ -524,7 +524,8 @@ RK_API void rk_menu_set_align(rk_view *menu, rk_align align);      /* RK_ALIGN_C
 RK_API void rk_menu_set_icon(rk_view *menu, int item, const char *icon);   /* from the icon set, at the start; NULL removes it */
 
 /* A view that scrolls its content up and down: the wheel, the keys a focused view inside leaves, and focus landing
-   inside move it, on the panorama's spring; a thin bar shows while it moves. Takes content. */
+   inside move it, on the panorama's spring; a thin bar, the grip alone, stands in a gutter of its own (the content is narrower
+   by it) while the content overflows; text-contrast-low, medium under the pointer and while dragged. Takes content. */
 RK_API rk_view *rk_scroll(rk_view *content);
 RK_API void rk_view_reveal(rk_view *view);                 /* every scroll it is in brings it in sight */
 
