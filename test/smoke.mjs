@@ -372,7 +372,8 @@ const wide = await p.evaluate(async () => {
   const shown = () => [...wfs.children].filter((x) => getComputedStyle(x).display !== 'none').length;
   const out = { wide: pv.wide, shown: shown(), flex: getComputedStyle(wfs).display };
   const until = async (cond, ms = 3000) => { for (const end = Date.now() + ms; Date.now() < end && !cond(); await wait(50)); };   /* a busy runner gets there, just later */
-  box.querySelector('#wt2').click(); await until(() => wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true');
+  box.querySelector('#wt2').click();
+  for (let last = -1, end = Date.now() + 4000; Date.now() < end && !(wfs.scrollLeft > 0 && wfs.scrollLeft === last); await wait(100)) last = wfs.scrollLeft;   /* the jump has ended */
   out.jumped = wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true';
   box.querySelector('#wt2').focus(); box.querySelector('#wt2').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
   out.tabbed = document.activeElement && document.activeElement.id === 'wf2';
@@ -2025,7 +2026,14 @@ const filterComp = (pg, v) => pg.evaluate((x) => { const i = document.querySelec
 ok(await q.evaluate(() => { const i = document.querySelector('#comp-q'); i.value = 'spark'; i.dispatchEvent(new Event('input', { bubbles: true })); const rows = [...document.querySelectorAll('#comp-body tr')]; return rows.every((r) => !r.hidden) && rows.some((r) => r.getAnimations().length); }), 'filtered rows leave before they hide');
 await until(q, async () => (await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length)) === 1, 4000);
 ok((await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length)) === 1, 'then only the matching row stays', await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length));
-ok(await q.evaluate(() => { const i = document.querySelector('#comp-q'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); return document.querySelectorAll('#comp-body tr:not([hidden])').length > 1 && [...document.querySelectorAll('#comp-body tr')].some((r) => r.getAnimations().length); }), 'cleared, the rows come back and slide in');
+ok(await q.evaluate(async () => {
+  const i = document.querySelector('#comp-q'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true }));
+  for (let n = 0; n < 120; n += 1) {   // frame by frame: the rows are back while some still slide, however late the first frame
+    if (document.querySelectorAll('#comp-body tr:not([hidden])').length > 1 && [...document.querySelectorAll('#comp-body tr')].some((r) => r.getAnimations().length)) return true;
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+  return false;
+}), 'cleared, the rows come back and slide in');
 await q.waitForTimeout(600);
 await q.evaluate(() => document.querySelector('#press-sheet').showModal()); await q.waitForTimeout(300);
 ok(await q.evaluate(() => { const d = document.querySelector('#press-sheet'); d.close(); return d.open && d.dataset.rkPhase === 'leaving'; }), 'a closing sheet leaves before it closes');
