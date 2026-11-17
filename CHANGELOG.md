@@ -15,6 +15,22 @@ dots' fade in.
 
 ### Added
 
+- **Opener tiles in a side panel** (states.md, tiles.md, motion.md): a
+  panel whose areas no longer fit its height may put each area behind a
+  tile at its foot, with the area's icon, name and state word. A press
+  opens the area's level and never switches; the area is switched in
+  the level. The level grows out of the tile over the panel below its
+  head and shrinks back into it ("Growing into a level": resize and
+  re-flow, `duration-moderate` on `ease-base`, no new token); focus goes
+  into the level and back to the tile at once; under reduced motion the
+  level stands at once. Toggle buttons stay for the two to four most
+  frequent states, with one action (forms.md). states.md no longer says
+  "never tiles" for a side panel; a tile still never toggles. On the
+  web: `.rk-opener` with `.rk-opener-name` and `.rk-opener-state`, and
+  `.rk-levels` around the panel's content and its levels; `inPlace()`
+  grows a level out of a tile that opens it and keeps the content
+  `inert` under it instead of `hidden`. The showcase's quick settings
+  have two.
 - **The thin scrollbar** (layout.md): only the grip, no track, square,
   `text-contrast-low` at rest and `text-contrast-medium` under the pointer
   and while dragged, always visible while the content overflows, in a

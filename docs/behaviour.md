@@ -147,7 +147,8 @@ state's `word`) are the caller's, in its own language.
 - **Classes are yours.** Rekta defines only `.rk-*` classes and never
   adds or removes a class itself. Everything the script writes is a
   `data-rk-*` attribute, a `--_rk-*` property (internal), one of the
-  public hooks below, or `hidden`.
+  public hooks below, or `hidden` (`inert` for what an opener tile's
+  level covers).
 - **Hide with `hidden`.** Inside an `.rk` root, `hidden` wins over every
   `display` rule, Rekta's and the page's alike: `rekta.css` sets
   `display: none !important` on it, so no layout of Rekta's can show a
@@ -828,7 +829,13 @@ none), and focus goes to the list's chosen entry or its first control.
 The name is the control's `data-rk-in-name`, else the list's
 `aria-label`, else the control's text. The back row, Escape and ← go
 back one level, with focus on the control that opened it; levels may
-nest. Returns `{ depth, back(), reset(), destroy }`.
+nest. A control that is a tile (an opener tile,
+[states.md](states.md#opener-tiles)) grows into its level instead: the
+group stays where it is, `inert`, under the level (both in one
+`.rk-levels`), and the level scales from the tile's box to its own over
+`duration-moderate` on `ease-base`, its fill from the tile's to its own,
+its content fading in over the last 45%; back, the tile does the same
+from the level's box. Returns `{ depth, back(), reset(), destroy }`.
 
 ### `busy(region, work)`
 

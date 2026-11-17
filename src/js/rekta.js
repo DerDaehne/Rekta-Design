@@ -1927,12 +1927,28 @@ export function sheet(dialog, opts = {}) {
 // That row, Escape and ← (outside a text field) go back one level: the list hides, the group shows, focus returns to
 // the control that opened it. Levels may nest. Each step slides in like the next item of a place, back from the other
 // side. Escape here goes back before it would close the sheet or panel around it.
+// A tile that opens a level (an opener tile, docs/states.md) grows into it instead: its group stays where it is, inert,
+// under the level (they share one place, .rk-levels), and the level starts on the tile's box; back, the tile starts on
+// the level's box.
 export function inPlace(scope) {
-  const open = [];                                     // { control, group, list }, innermost last
+  const open = [];                                     // { control, group, list, tile }, innermost last
   const slide = (el, dir) => {
     const d = ms('--rk-duration-moderate') * 0.75;
     if (d) el.animate([{ transform: `translateX(${dir * num('--rk-slide-distance')}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: d, easing: css('--rk-ease-out') });
   };
+  // Resize and re-flow from one box to another (docs/motion.md, "Growing into a level"): el scales from the box `from`
+  // to its own and its fill from `fill` to its own, above what it passes over; its content fades in over the last 45%.
+  const grow = (el, from, fill) => {
+    const d = ms('--rk-duration-moderate'), b = el.getBoundingClientRect();
+    if (!d || !b.width || !b.height || !from.width) return;
+    const own = getComputedStyle(el).backgroundColor, ease = css('--rk-ease-base');
+    el.animate([
+      { transformOrigin: '0 0', transform: `translate(${from.left - b.left}px, ${from.top - b.top}px) scale(${from.width / b.width}, ${from.height / b.height})`, backgroundColor: fill, zIndex: 2 },
+      { transformOrigin: '0 0', transform: 'none', backgroundColor: own, zIndex: 2 },
+    ], { duration: d, easing: ease });
+    for (const c of el.children) c.animate([{ opacity: 0 }, { opacity: 0, offset: 0.55 }, { opacity: 1 }], { duration: d, easing: 'linear' });
+  };
+  const box = (el) => [el.getBoundingClientRect(), getComputedStyle(el).backgroundColor];
   const focusIn = (el) => { const f = el.querySelector('[aria-selected="true"], [aria-checked="true"], :checked, a[href], button:not(.rk-in-back), input, select, [tabindex]:not([tabindex="-1"])') || el.querySelector('.rk-in-back'); if (f) f.focus(); };
   function go(control) {
     const list = document.getElementById(control.dataset.rkIn);
@@ -1945,15 +1961,19 @@ export function inPlace(scope) {
       back.append(icon('chevron-left'), tx('inBack', control.dataset.rkInName || list.getAttribute('aria-label') || control.textContent.replace(/\s+/g, ' ').trim()));
       list.prepend(back);
     }
-    open.push({ control, group, list });
-    group.hidden = true; list.hidden = false;
-    slide(list, 1); focusIn(list);
+    const tile = control.matches('.rk-tile'), from = tile && box(control);
+    open.push({ control, group, list, tile });
+    if (tile) group.inert = true; else group.hidden = true;
+    list.hidden = false;
+    if (tile) grow(list, ...from); else slide(list, 1);
+    focusIn(list);
   }
   function out() {
     const top = open.pop();
     if (!top) return false;
-    top.list.hidden = true; top.group.hidden = false;
-    slide(top.group, -1);
+    const from = top.tile && box(top.list);
+    top.list.hidden = true;
+    if (top.tile) { top.group.inert = false; grow(top.control, ...from); } else { top.group.hidden = false; slide(top.group, -1); }
     if (top.control.isConnected) top.control.focus();
     return true;
   }

@@ -189,6 +189,12 @@ a.rk-tile, button.rk-tile { cursor: pointer; touch-action: manipulation; -webkit
 }
 .rk-launch:not(.rk-w2, .rk-w3, .rk-w4) > .rk-launch-peek { display: none; }
 .rk-launch-name { grid-area: name; align-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--rk-font-weight-semibold); }
+/* An opener tile (docs/tiles.md): an area of a side panel. Its icon at the top leading corner, its name at the foot
+   and its state word right under it, one line each at every width; no count, no chevron, no pressed state. */
+.rk-opener { gap: 0; }
+.rk-opener > .rk-icon { width: var(--rk-tile-icon); height: var(--rk-tile-icon); margin-bottom: auto; }
+.rk-opener-name, .rk-opener-state { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk-opener-name { font-weight: var(--rk-font-weight-semibold); }
 @keyframes rk-build-in { from { transform: translateY(var(--rk-arrive-distance)); } }
 @keyframes rk-build-in-fade { from { opacity: 0; } }
 /* Press: a tile nudges back where it is pressed, as a Metro tile does. rekta.js sets --_rk-px and --_rk-py (-1 to 1
@@ -1123,6 +1129,15 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   font: inherit; font-weight: var(--rk-font-weight-semibold); text-align: start; cursor: pointer;
 }
 .rk-in-back > svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; }
+/* Opener tiles (docs/states.md): after the panel's head, its content ([data-rk-group]) and the levels its tiles open
+   share one place, .rk-levels, which fills the rest of the panel, so the tiles (the content's last child) stand at its
+   foot. A level covers the content on the panel's ground, at least as tall; the content stays where it was under it. */
+.rk-sheet--side > form:has(> .rk-levels) { display: flex; flex-direction: column; min-height: 100%; }
+.rk-levels { flex: 1 0 auto; display: grid; }
+.rk-levels > * { grid-area: 1 / 1; min-width: 0; isolation: isolate; background-color: var(--rk-bg); }
+.rk-levels > [data-rk-group] { display: flex; flex-direction: column; gap: var(--rk-space-m); }
+.rk-levels > [data-rk-group] > .rk-tiles:last-child { margin-top: auto; }
+.rk-levels > :not([data-rk-group]) > * + * { margin-top: var(--rk-space-m); }
 .rk-scrim { position: fixed; inset: 0; background: var(--rk-shading); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 @keyframes rk-from-top { from { opacity: 0; transform: translateY(-16px); } }
 /* Something that appears in place to say a thing (an error summary, a refusal, waiting updates): a fade and 8px. */

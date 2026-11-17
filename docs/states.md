@@ -192,9 +192,11 @@ and run by `sheet()` like any sheet.
   in the platform's modal layer and has a visible way out (its close
   button).
 - **Content:** groups, each a heading over rows with a toggle
-  (`rk-toggle`) or a slider (`rk-range`); never tiles as switches (a tile
-  never toggles). It may carry a pivot for its facets (settings and
-  notifications), in the facet level.
+  (`rk-toggle`) or a slider (`rk-range`). A panel whose areas no longer
+  fit its height puts them behind opener tiles at its foot
+  ([below](#opener-tiles)): a tile there opens, it never switches.
+  It may carry a pivot for its facets (settings and notifications), in
+  the facet level.
 - **Input it cannot hold** (a password for a new network) is asked in a
   sheet over it.
 
@@ -217,6 +219,78 @@ work the same way.
   <ul class="rk-rows"><li><button class="rk-btn rk-btn--quiet" data-rk-in="nets" data-rk-in-name="wi-fi">wi-fi · home</button></li></ul>
 </section>
 <section class="rk-region" id="nets" aria-label="wi-fi" hidden>…the networks…</section>
+```
+
+### Opener tiles
+
+A panel whose areas no longer fit its height (sound, network, display,
+the session) does not make its user scroll through all of their groups:
+each area gets a tile that says how it stands and opens the area's level
+in the panel.
+
+- **The tile opens; it never switches.** A press opens the area's level
+  and does nothing else. What the area holds is switched in the level:
+  its toggle switch first, then its rows. The tile has no pressed state
+  and no accent fill: its state is a word, so a tile that says "off"
+  looks like one that says "on". It takes a status fill and word only
+  for a real status (the network failed), as any tile.
+- **On it:** the area's icon at the top leading corner
+  (`size.tile-icon`), its name at the foot and its state word under the
+  name ("bluetooth" over "off", "wi-fi" over "Home"), each one line, cut
+  with an ellipsis. No chevron: its press and its growing say that it
+  opens, as a tile's press and turn do. Its name is read first, then
+  its state: a button named "bluetooth, off".
+- **Sizes:** one tile unit (half the panel's width) or two units wide
+  (its whole width), the wider for an area that says more; one unit
+  high, so the panel keeps its room above the grid.
+- **At the foot.** The tiles are one grid at the panel's bottom edge,
+  inside its padding, in a fixed order. What is not in a tile stands
+  above it, from the top, and the free space lies between the two. A
+  panel taller than the window scrolls as one, the grid last. The grid
+  is one tab stop, as every grid of tiles
+  ([navigation.md](navigation.md#a-grid-of-tiles)).
+- **Above the grid** stays what is used most and acts at once: the most
+  frequent sliders (volume, brightness) and, where wanted, toggle
+  buttons ([forms.md](forms.md#inputs)) for the two to four most
+  frequent on/off states, besides any group with rows that has no tile.
+  A toggle button switches and does nothing else; its area's details
+  are in that area's level. A state that is only on or off, with nothing
+  more to it, has no tile of its own: it is a toggle button, or a toggle
+  switch in a level that holds it.
+- **The level grows out of the tile.** A press makes the tile grow in
+  place into its level. The level covers the panel below its head (the
+  title or the facet pivot, and the close button, stay), on the panel's
+  ground; what it covers stays where it was, out of reach. It starts
+  with the back row "back · name", then the area's groups with rows;
+  choosing in place works inside it. A level longer than that room
+  scrolls with the panel. The back row, Escape and ← shrink it back
+  into the tile; Escape on the tile closes the panel. The motion is
+  "Growing into a level" ([motion.md](motion.md)).
+- **Focus** goes into the level as it opens (its chosen entry, else its
+  first control) and back to the tile as it closes, at once: no key
+  waits for the motion.
+- **Reduced motion:** the level stands at once, and on the way back the
+  tile does.
+- **The state word follows the level:** what is switched there, the
+  tile says once the level has shrunk back.
+
+On the web: `button.rk-tile.rk-opener` with the icon, `.rk-opener-name`
+and `.rk-opener-state`, an `aria-label` ("bluetooth, off") and
+`data-rk-in` naming its level; its grid is a `.rk-tiles`, the last child
+of the panel's content. The content (`[data-rk-group]`) and the levels
+share one place, `.rk-levels`, in the panel's form after its head.
+`inPlace(scope)` grows the level out of the tile.
+
+```html
+<div class="rk-levels">
+  <div data-rk-group>
+    …sliders, toggle buttons, groups…
+    <div class="rk-tiles">
+      <button class="rk-tile rk-opener" type="button" data-rk-in="bt" aria-label="bluetooth, off"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-bluetooth"/></svg><span class="rk-opener-name">bluetooth</span><span class="rk-opener-state">off</span></button>
+    </div>
+  </div>
+  <section class="rk-region" id="bt" aria-label="bluetooth" hidden>…its toggle switch, its devices…</section>
+</div>
 ```
 
 rekta-core has no side panel yet: its sheets come from the top

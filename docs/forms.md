@@ -58,7 +58,11 @@ it chooses rows, it sets nothing.
   (`.rk-btn-state`: "on", "off", or a short value such as the network's
   name). Pressed, it takes the accent fill with on-accent words, as a
   chosen segment does; not pressed, it is a quiet button. A press
-  switches it at once and, like the toggle switch, needs no undo. Focus,
+  switches it at once and, like the toggle switch, needs no undo. It
+  has one action: the details of what it switches (the networks behind
+  wireless) are never a second part of the button; in a side panel they
+  are the level of the area's opener tile
+  ([states.md](states.md#opener-tiles)). Focus,
   and disabled with a reason, are every button's; disabled, it keeps
   its state (pressed, a `disabled` fill). A state word that only says
   on or off is `aria-hidden`, since `aria-pressed` says it; with

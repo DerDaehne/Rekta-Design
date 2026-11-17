@@ -2326,6 +2326,33 @@ const sy = await open();
   ok(await sy.evaluate(() => !document.querySelector('#qs-nets').hidden && document.querySelector('#qs-nets > .rk-in-back').textContent === 'back · wi-fi'), 'wi-fi opens its networks in place, under "back · wi-fi"');
   await sy.click('label:has(> input[value="Office 5G"])'); await sy.waitForTimeout(400);
   ok(await sy.evaluate(() => document.querySelector('#qs-nets').hidden && document.querySelector('#qs-net-v').textContent === 'Office 5G' && document.activeElement.id === 'qs-net'), 'choosing one goes back to the group, which says it');
+  // Opener tiles at the panel's foot: a press grows the area's level out of the tile and switches nothing; the level
+  // covers the content, which stays where it was; Escape shrinks it back into the tile, whose word says what was set.
+  const foot = await sy.evaluate(() => {
+    const d = document.querySelector('#quick-panel'), t = document.querySelector('#qs-bt-tile');
+    return Math.round(d.getBoundingClientRect().bottom - parseFloat(getComputedStyle(d).paddingBottom) - t.getBoundingClientRect().bottom);
+  });
+  ok(foot === 0, 'opener tiles stand at the panel\'s foot', foot);
+  const grew = await sy.evaluate(() => {
+    const l = document.querySelector('#qs-bt-level'), t = document.querySelector('#qs-bt-tile'), content = document.querySelector('#quick-panel .rk-levels > [data-rk-group]');
+    const at = t.getBoundingClientRect(); t.click();
+    const a = l.getAnimations()[0], first = a ? a.effect.getKeyframes()[0] : {};
+    return { shown: !l.hidden, fromTile: /scale\(0\.\d+, 0\.\d+\)/.test(first.transform || '') && first.backgroundColor === getComputedStyle(t).backgroundColor, covers: l.offsetTop === content.offsetTop && l.offsetHeight === content.offsetHeight, stays: t.getBoundingClientRect().top === at.top, inert: content.inert, focus: document.activeElement.id, on: document.querySelector('#qs-bt').checked, back: (l.querySelector('.rk-in-back') || {}).textContent };
+  });
+  ok(grew.shown && grew.fromTile && grew.covers && grew.stays && grew.inert && grew.focus === 'qs-bt' && !grew.on && grew.back === 'back · bluetooth', 'a press grows the level out of the tile over the content, which stays put; focus in it; nothing switched', JSON.stringify(grew));
+  await sy.keyboard.press('Space'); await sy.keyboard.press('Escape');
+  const shrank = await sy.evaluate(() => {
+    const t = document.querySelector('#qs-bt-tile'), a = t.getAnimations().find((x) => !(x instanceof CSSTransition));
+    return { hidden: document.querySelector('#qs-bt-level').hidden, grows: !!a && /scale/.test(a.effect.getKeyframes()[0].transform), focus: document.activeElement.id, inert: document.querySelector('#quick-panel .rk-levels > [data-rk-group]').inert, label: t.getAttribute('aria-label'), word: t.querySelector('.rk-opener-state').textContent };
+  });
+  ok(shrank.hidden && shrank.grows && shrank.focus === 'qs-bt-tile' && !shrank.inert && shrank.label === 'bluetooth, on' && shrank.word === 'on', 'switched in the level; Escape shrinks it back into the tile, focus on it, its word says "on"', JSON.stringify(shrank));
+  const still = await sy.evaluate(() => {
+    document.documentElement.dataset.motion = 'off'; document.querySelector('#qs-mic-tile').click();
+    const n = document.querySelector('#qs-mic-level').getAnimations().length, shown = !document.querySelector('#qs-mic-level').hidden;
+    window.site.quickIn.back(); delete document.documentElement.dataset.motion;
+    return { n, shown };
+  });
+  ok(still.shown && still.n === 0, 'motion off: the level stands at once', JSON.stringify(still));
   await sy.keyboard.press('Escape'); await sy.waitForTimeout(700);
   // The session, the lock screen and signing in again.
   await sy.click('#session-open'); await sy.waitForTimeout(400);

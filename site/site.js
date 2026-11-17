@@ -1026,6 +1026,15 @@
   for (const [name, out] of [['qs-net', '#qs-net-v'], ['qs-out', '#qs-out-v']]) {
     $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => { $(out).textContent = r.value; quickIn.back(); }));
   }
+  // Opener tiles: the area is switched in its level, and the tile's state word follows.
+  for (const [tile, input] of [['#qs-bt-tile', '#qs-bt'], ['#qs-mic-tile', '#qs-mic']]) {
+    const t = $(tile), name = t.querySelector('.rk-opener-name').textContent;
+    $(input).addEventListener('change', (e) => {
+      const word = e.target.checked ? 'on' : 'off';
+      t.querySelector('.rk-opener-state').textContent = word;
+      t.setAttribute('aria-label', `${name}, ${word}`);
+    });
+  }
   // The session: lock, switch, sign out, restart, power off; a choice, not a question.
   $('#session-open').addEventListener('click', () => $('#session').showModal());
   $('#session').addEventListener('close', () => {

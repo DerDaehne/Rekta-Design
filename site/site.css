@@ -199,6 +199,6 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
 .mock { display: grid; align-content: start; gap: var(--rk-space-xs); padding: var(--rk-space-s) 12px; background: var(--rk-bg); font-size: var(--rk-font-size-xxs); line-height: var(--rk-line-height-compact); overflow: hidden; }
 .mock > :first-child { font-weight: var(--rk-font-weight-semibold); }
 .mock > :not(:first-child) { color: var(--rk-text-contrast-high); }
-.quick > section { display: grid; gap: var(--rk-space-s); }
-.quick > section > h3 { margin: 0; }
+.quick [data-rk-group] > section { display: grid; gap: var(--rk-space-s); }
+.quick [data-rk-group] > section > h3 { margin: 0; }
 .qs-in > span { flex: 1 1 auto; text-align: start; }
