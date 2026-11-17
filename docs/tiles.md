@@ -164,6 +164,13 @@ rather than ad-hoc layout per tile type:
   </a>
   ```
 
+- **Opener** — an area of a side panel (sound, network, display) that
+  opens the area's level in the panel: its icon at the top leading
+  corner (`size.tile-icon`), its name at the foot and its state word
+  under the name ("off", "Home"), one line each, at every width. It
+  never switches: the area is switched in its level, which grows out of
+  the tile ([states.md](states.md#opener-tiles)).
+
 A tile combines at most two or three of these — a tile that tries to
 show a stat pair, a sparkline, a progress meter and a long status
 description all at once has stopped being a tile and become a page that
@@ -175,9 +182,10 @@ A tile **opens** something, or it is only information. It never changes
 data.
 
 - **A tile that opens** is a link (to a place) or a button (that opens a
-  sheet). It nudges back where it is pressed, and a link turns the place
-  (see [motion.md](motion.md)). A grid of them is one tab stop, the
-  arrows moving to the nearest tile that way
+  sheet, or in a side panel the level it grows into:
+  [states.md](states.md#opener-tiles)). It nudges back where it is
+  pressed, and a link turns the place (see [motion.md](motion.md)). A
+  grid of them is one tab stop, the arrows moving to the nearest tile that way
   ([navigation.md](navigation.md#a-grid-of-tiles)). There is no arrow glyph on it: the press
   and the turn say that it goes somewhere.
 - **A tile that only informs** is not a control. It does not press and

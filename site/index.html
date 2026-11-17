@@ -239,6 +239,7 @@
             <tr><th scope="row">data morph</th><td>{{duration-long}}</td><td>the same thing, measured again</td></tr>
             <tr><th scope="row">sheet, toast</th><td>{{duration-short}}</td><td>a short question; something happened</td></tr>
             <tr><th scope="row">side panel</th><td>{{duration-moderate}}, whole from the side</td><td>settings for everything, from the side</td></tr>
+            <tr><th scope="row">growing into a level</th><td>{{duration-moderate}}, as resize</td><td>this area, opened where it stood</td></tr>
             <tr><th scope="row">gesture hint</th><td>{{nudge-distance}} and back, {{duration-short}} each way</td><td>something goes this way here</td></tr>
             <tr><th scope="row">floating list</th><td>{{duration-float}}</td><td>options for this control</td></tr>
             <tr><th scope="row">loading</th><td>after {{duration-busy-delay}}, a line every {{duration-busy}}</td><td>working on it</td></tr>
@@ -741,7 +742,7 @@
           </div>
         </fieldset>
         <p class="rk-sr" role="status" id="level-said"></p>
-        <p class="note">The buttons stand in for a keyboard's volume keys: the level shows in a toast, or for a moment in place of the clock, one form per product. The clock opens this month, to read, not to choose. The window's buttons minimize, maximize and restore, and close; a press on the desktop makes the window inactive, and its name steps back. “cast” cannot act now: rest on it, or find it in “more”.</p>
+        <p class="note">The buttons stand in for a keyboard's volume keys: the level shows in a toast, or for a moment in place of the clock, one form per product. The clock opens this month, to read, not to choose. The window's buttons minimize, maximize and restore, and close; a press on the desktop makes the window inactive, and its name steps back. “cast” cannot act now: rest on it, or find it in “more”. In quick settings, a tile at the foot grows into its area, where it is switched; Escape shrinks it back.</p>
         <p class="rk-kicker group-label">notifications, newest on top</p>
         <p class="rk-actions"><button class="rk-btn" type="button" id="n-message">a message arrives</button><button class="rk-btn" type="button" id="n-backup">a backup finishes</button></p>
         <ul class="rk-rows centre" id="centre" aria-label="notifications">
@@ -964,39 +965,53 @@
   </dialog>
 
   <!-- The desktop's quick settings: a side panel from the trailing edge. A group gives its place to the list it opens
-       (inPlace()), under a row "back · name". -->
+       (inPlace()), under a row "back · name"; an opener tile at the foot grows into its area's level. -->
   <dialog class="rk-sheet rk-sheet--side" id="quick-panel" closedby="any" aria-labelledby="quick-title">
     <form method="dialog" class="quick">
       <p class="rk-kicker">the desktop</p>
       <h2 class="rk-group" id="quick-title">Quick settings</h2>
-      <section class="rk-region" data-rk-group aria-labelledby="qs-net-k">
-        <h3 class="rk-kicker" id="qs-net-k">network</h3>
-        <label class="rk-toggle"><span class="rk-toggle-label">wi-fi</span><input type="checkbox" id="qs-wifi" checked><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
-        <button class="rk-btn rk-btn--quiet qs-in" type="button" id="qs-net" data-rk-in="qs-nets" data-rk-in-name="wi-fi"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-wireless"/></svg><span>wi-fi · <span id="qs-net-v">Home</span></span><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-chevron-right"/></svg></button>
-      </section>
-      <section class="rk-region" id="qs-nets" aria-label="wi-fi" hidden>
-        <fieldset class="rk-choices"><legend class="rk-label">networks nearby</legend>
-          <label class="rk-switch"><input type="radio" name="qs-net" value="Home" checked> Home</label>
-          <label class="rk-switch"><input type="radio" name="qs-net" value="Office 5G"> Office 5G</label>
-          <label class="rk-switch"><input type="radio" name="qs-net" value="Café Corner"> Café Corner</label>
-        </fieldset>
-      </section>
-      <section class="rk-region" data-rk-group aria-labelledby="qs-sound-k">
-        <h3 class="rk-kicker" id="qs-sound-k">sound</h3>
-        <div class="rk-slider"><input class="rk-range" type="range" id="qs-vol" min="0" max="100" step="10" value="60" aria-label="volume"><output data-unit="%">60%</output></div>
-        <button class="rk-btn rk-btn--quiet qs-in" type="button" id="qs-out" data-rk-in="qs-outs" data-rk-in-name="output"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-speaker"/></svg><span>output · <span id="qs-out-v">speakers</span></span><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-chevron-right"/></svg></button>
-      </section>
-      <section class="rk-region" id="qs-outs" aria-label="output" hidden>
-        <fieldset class="rk-choices"><legend class="rk-label">play the sound on</legend>
-          <label class="rk-switch"><input type="radio" name="qs-out" value="speakers" checked> speakers</label>
-          <label class="rk-switch"><input type="radio" name="qs-out" value="headphones"> headphones</label>
-        </fieldset>
-      </section>
-      <section class="rk-region" aria-labelledby="qs-more-k">
-        <h3 class="rk-kicker" id="qs-more-k">this desktop</h3>
-        <label class="rk-toggle"><span class="rk-toggle-label">bluetooth</span><input type="checkbox" id="qs-bt"><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
-        <label class="rk-toggle"><span class="rk-toggle-label">microphone</span><input type="checkbox" id="qs-mic" checked><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
-      </section>
+      <div class="rk-levels">
+        <div data-rk-group>
+          <section class="rk-region" data-rk-group aria-labelledby="qs-net-k">
+            <h3 class="rk-kicker" id="qs-net-k">network</h3>
+            <label class="rk-toggle"><span class="rk-toggle-label">wi-fi</span><input type="checkbox" id="qs-wifi" checked><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+            <button class="rk-btn rk-btn--quiet qs-in" type="button" id="qs-net" data-rk-in="qs-nets" data-rk-in-name="wi-fi"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-wireless"/></svg><span>wi-fi · <span id="qs-net-v">Home</span></span><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-chevron-right"/></svg></button>
+          </section>
+          <section class="rk-region" id="qs-nets" aria-label="wi-fi" hidden>
+            <fieldset class="rk-choices"><legend class="rk-label">networks nearby</legend>
+              <label class="rk-switch"><input type="radio" name="qs-net" value="Home" checked> Home</label>
+              <label class="rk-switch"><input type="radio" name="qs-net" value="Office 5G"> Office 5G</label>
+              <label class="rk-switch"><input type="radio" name="qs-net" value="Café Corner"> Café Corner</label>
+            </fieldset>
+          </section>
+          <section class="rk-region" data-rk-group aria-labelledby="qs-sound-k">
+            <h3 class="rk-kicker" id="qs-sound-k">sound</h3>
+            <div class="rk-slider"><input class="rk-range" type="range" id="qs-vol" min="0" max="100" step="10" value="60" aria-label="volume"><output data-unit="%">60%</output></div>
+            <button class="rk-btn rk-btn--quiet qs-in" type="button" id="qs-out" data-rk-in="qs-outs" data-rk-in-name="output"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-speaker"/></svg><span>output · <span id="qs-out-v">speakers</span></span><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-chevron-right"/></svg></button>
+          </section>
+          <section class="rk-region" id="qs-outs" aria-label="output" hidden>
+            <fieldset class="rk-choices"><legend class="rk-label">play the sound on</legend>
+              <label class="rk-switch"><input type="radio" name="qs-out" value="speakers" checked> speakers</label>
+              <label class="rk-switch"><input type="radio" name="qs-out" value="headphones"> headphones</label>
+            </fieldset>
+          </section>
+          <div class="rk-tiles">
+            <button class="rk-tile rk-opener" type="button" id="qs-bt-tile" data-rk-in="qs-bt-level" aria-label="bluetooth, off"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-bluetooth"/></svg><span class="rk-opener-name">bluetooth</span><span class="rk-opener-state">off</span></button>
+            <button class="rk-tile rk-opener" type="button" id="qs-mic-tile" data-rk-in="qs-mic-level" aria-label="microphone, on"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-microphone"/></svg><span class="rk-opener-name">microphone</span><span class="rk-opener-state">on</span></button>
+          </div>
+        </div>
+        <section class="rk-region" id="qs-bt-level" aria-label="bluetooth" hidden>
+          <label class="rk-toggle"><span class="rk-toggle-label">bluetooth</span><input type="checkbox" id="qs-bt"><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+          <ul class="rk-rows"><li>Headphones<span>paired</span></li><li>Keyboard<span>paired</span></li></ul>
+        </section>
+        <section class="rk-region" id="qs-mic-level" aria-label="microphone" hidden>
+          <label class="rk-toggle"><span class="rk-toggle-label">microphone</span><input type="checkbox" id="qs-mic" checked><span class="rk-toggle-track" aria-hidden="true"></span><span class="rk-toggle-word" data-on="on" data-off="off" aria-hidden="true"></span></label>
+          <fieldset class="rk-choices"><legend class="rk-label">record from</legend>
+            <label class="rk-switch"><input type="radio" name="qs-rec" value="built-in" checked> built-in</label>
+            <label class="rk-switch"><input type="radio" name="qs-rec" value="headset"> headset</label>
+          </fieldset>
+        </section>
+      </div>
       <button class="rk-btn rk-btn--icon rk-btn--quiet rk-sheet-close" value="cancel" aria-label="close" data-rk-tip="close"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-close"/></svg></button>
     </form>
   </dialog>
