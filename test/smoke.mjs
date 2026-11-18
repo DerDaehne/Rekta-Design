@@ -57,6 +57,7 @@ const until = async (p, cond, ms = 2000) => {
 const sheetTitle = (p) => p.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return d ? d.querySelector('h2').textContent : null; });
 const go = async (p, id) => { await p.click(`#nav a[href="#${id}"]`); await p.waitForTimeout(900); };
 const TURN = 1300;
+const WHEEL_LATCH = 1500;
 
 // Rest looks: no horizontal page overflow in either theme, on a desktop, a phone and a short window.
 for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 844, 'light'], [390, 844, 'dark'], [844, 390, 'light']]) {
@@ -277,10 +278,14 @@ ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures fra
     window.tCancelled = 0; addEventListener('wheel', (e) => { if (e.defaultPrevented) window.tCancelled += 1; });
     return was;
   });
-  await p.mouse.move(300, 500); await p.waitForTimeout(400);
-  for (let i = 0; i < 6; i += 1) { await p.mouse.wheel(0, 100); await p.waitForTimeout(40); }
+  // The events of one gesture must lie closer than the latch, and the one before it further: the latch is raised over any
+  // gap a busy runner makes, the pause that starts a new gesture is longer than it, and the end waits on the release.
+  await p.mouse.move(300, 500);
+  await p.evaluate((ms) => document.documentElement.style.setProperty('--rk-duration-wheel-latch', `${ms}ms`), WHEEL_LATCH);
+  await p.waitForTimeout(WHEEL_LATCH + 100);
+  for (let i = 0; i < 6; i += 1) await p.mouse.wheel(0, 100);
   const during = await p.evaluate(() => getComputedStyle(document.querySelector('#overview')).overscrollBehaviorY);
-  await p.waitForTimeout(400);
+  await until(p, () => p.evaluate(() => getComputedStyle(document.querySelector('#overview')).overscrollBehaviorY === 'auto'), WHEEL_LATCH + 3000);
   const end = await p.evaluate(() => { const sec = document.querySelector('#overview'); return { atEnd: sec.scrollTop >= sec.scrollHeight - sec.clientHeight - 1, pan: document.querySelector('#pan').scrollLeft, page: scrollY, cancelled: window.tCancelled, after: getComputedStyle(sec).overscrollBehaviorY }; });
   ok(end.atEnd && end.pan === 0 && end.page === 0 && end.cancelled === 0 && during === 'contain' && end.after === 'auto',
     'a wheel gesture that runs a section into its end stays there, uncancelled: the section holds its scroll chain while the gesture lasts', JSON.stringify({ during, ...end }));
@@ -293,11 +298,12 @@ ok(+(await text(p, '[data-live=fps] [data-v]')) > 0, 'the live tile measures fra
     window.tSeen = []; window.tWatch = new MutationObserver(() => window.tSeen.push(sec.style.overscrollBehaviorY));
     window.tWatch.observe(sec, { attributes: true, attributeFilter: ['style'] });
   });
-  for (let i = 0; i < 6; i += 1) { await p.mouse.wheel(0, 100); await p.waitForTimeout(40); }
+  await p.waitForTimeout(WHEEL_LATCH + 100);
+  for (let i = 0; i < 6; i += 1) await p.mouse.wheel(0, 100);
   const kept = await p.evaluate(() => { const sec = document.querySelector('#overview'); window.tWatch.disconnect(); return { during: getComputedStyle(sec).overscrollBehaviorY, inline: sec.style.overscrollBehaviorY, seen: window.tSeen }; });
   ok(kept.during === 'none' && kept.inline === '' && !kept.seen.includes('contain'), 'a section the stylesheet gave overscroll-behavior none stays none during a wheel gesture', JSON.stringify(kept));
   await tag.evaluate((n) => n.remove());
-  await p.waitForTimeout(300);
+  await p.evaluate(() => document.documentElement.style.removeProperty('--rk-duration-wheel-latch'));
 }
 
 // Tile grids (#129): one tab stop; the arrows by position, the shared row or column first, a tie to the better-aligned
@@ -365,11 +371,13 @@ const wide = await p.evaluate(async () => {
   const wfs = box.querySelector('#wfs'), wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const shown = () => [...wfs.children].filter((x) => getComputedStyle(x).display !== 'none').length;
   const out = { wide: pv.wide, shown: shown(), flex: getComputedStyle(wfs).display };
-  box.querySelector('#wt2').click(); await wait(700);
+  const until = async (cond, ms = 3000) => { for (const end = Date.now() + ms; Date.now() < end && !cond(); await wait(50)); };   /* a busy runner gets there, just later */
+  box.querySelector('#wt2').click();
+  for (let last = -1, end = Date.now() + 4000; Date.now() < end && !(wfs.scrollLeft > 0 && wfs.scrollLeft === last); await wait(100)) last = wfs.scrollLeft;   /* the jump has ended */
   out.jumped = wfs.scrollLeft > 0 && box.querySelector('#wt2').getAttribute('aria-selected') === 'true';
   box.querySelector('#wt2').focus(); box.querySelector('#wt2').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
   out.tabbed = document.activeElement && document.activeElement.id === 'wf2';
-  wfs.scrollTo({ left: 0, behavior: 'instant' }); await wait(200);
+  wfs.scrollTo({ left: 0, behavior: 'instant' }); await until(() => box.querySelector('#wt0').getAttribute('aria-selected') === 'true');
   out.followed = box.querySelector('#wt0').getAttribute('aria-selected') === 'true';
   out.bound = shown() === 4;                            /* the framework hid the others; wide still shows them all */
   const before = held;
@@ -860,14 +868,25 @@ await p.evaluate(() => { document.querySelector('#comp-table').style.transform =
 
 // Desktop: tooltips, the tree, a sortable list, ten thousand lines.
 await go(p, 'desktop');
-await p.hover('#tree-open'); await p.waitForTimeout(250);
-ok(!(await p.evaluate(() => document.querySelector('.rk-tip') && document.querySelector('.rk-tip').matches(':popover-open'))), 'no tooltip before the pointer rests');
-await p.waitForTimeout(500);
-ok((await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open') && document.querySelector('.rk-tip').textContent)) === 'open every folder *', 'a tooltip after a rest, with its key', await p.evaluate(() => document.querySelector('.rk-tip') && document.querySelector('.rk-tip').textContent));
-await p.hover('#tree-close'); await p.waitForTimeout(60);
-ok((await p.evaluate(() => document.querySelector('.rk-tip').textContent)) === 'close every folder', 'the next tooltip comes at once');
-await p.keyboard.press('Escape'); await p.waitForTimeout(100);
-ok(!(await p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open'))) && await visible(p, 'home'), 'Escape hides the tooltip, nothing more');
+// Half the delay is timed in the page by a timer set as the pointer arrives: it runs before the tip's own timer however
+// late a busy runner is, where a wait from here would be a wall-clock guess.
+await p.evaluate(() => {
+  const tip = () => document.querySelector('.rk-tip'), half = Rekta.tokens.ms('--rk-duration-tip-delay') / 2;
+  const early = (sel) => { window.tEarly = null; document.querySelector(sel).addEventListener('pointerover', () => setTimeout(() => { window.tEarly = tip().matches(':popover-open') && tip().textContent; }, half), { once: true }); };
+  window.tEarlyOn = early;
+  early('#tree-open');
+});
+await p.hover('#tree-open');
+const tipText = () => p.evaluate(() => document.querySelector('.rk-tip').matches(':popover-open') && document.querySelector('.rk-tip').textContent);
+await until(p, async () => (await p.evaluate(() => window.tEarly)) !== null && (await tipText()) !== false, 5000);
+ok((await p.evaluate(() => window.tEarly)) === false, 'no tooltip before the pointer rests');
+ok((await tipText()) === 'open every folder *', 'a tooltip after a rest, with its key', String(await tipText()));
+await p.evaluate(() => window.tEarlyOn('#tree-close'));
+await p.hover('#tree-close');
+await until(p, async () => (await p.evaluate(() => window.tEarly)) !== null, 5000);
+ok((await p.evaluate(() => window.tEarly)) === 'close every folder', 'the next tooltip comes at once');
+await p.keyboard.press('Escape');
+ok(await until(p, async () => (await tipText()) === false) && await visible(p, 'home'), 'Escape hides the tooltip, nothing more');
 // A key combination is written one way: Ctrl, Alt, Shift, Meta, then the key, joined by "+"; Meta outside Apple is the
 // catalogue's keyMeta, "Super" here on Linux (#141).
 await p.evaluate(() => {
@@ -877,7 +896,7 @@ await p.evaluate(() => {
     + '<button class="rk-btn" type="button" data-rk-tip="find" aria-keyshortcuts="Shift+Alt+Control+f">c</button>';
   document.querySelector('.rk').append(box);
 });
-const keyOf = async (n) => { await p.hover(`#keys-fixture > :nth-child(${n})`); await p.waitForTimeout(900); const k = await text(p, '.rk-tip .rk-key'); await p.mouse.move(5, 5); await p.waitForTimeout(200); return k; };
+const keyOf = async (n) => { await p.hover(`#keys-fixture > :nth-child(${n})`); await until(p, async () => (await tipText()) !== false, 5000); const k = await text(p, '.rk-tip .rk-key'); await p.mouse.move(5, 5); await until(p, async () => (await tipText()) === false); return k; };
 const written = { both: await keyOf(1), meta: await keyOf(2), order: await keyOf(3) };
 await p.evaluate(() => Rekta.setStrings({ keyMeta: (os) => (os === 'windows' ? 'Win' : 'Meta') }));
 written.word = await keyOf(2);
@@ -1179,21 +1198,21 @@ ok(!(await mode()), 'Escape ends it');
 // Live and undo: fresh, held, stale, offline; the history.
 await go(p, 'live-undo');
 ok((await p.getAttribute('#live-region', 'data-rk-live')) === 'fresh' && (await text(p, '#live-region .rk-age')).startsWith('updated'), 'a live region says how fresh it is');
-await p.hover('#lv-rps'); await p.waitForTimeout(3300);
+await p.hover('#lv-rps'); await until(p, async () => /updates? waiting/.test(await text(p, '.rk-live-more')), 10000);
 ok((await p.evaluate(() => document.querySelector('#live-region').hasAttribute('data-rk-held'))) && /updates? waiting/.test(await text(p, '.rk-live-more')), 'pointing holds it still; updates wait behind a button', await text(p, '.rk-live-more'));
 const heldValue = await text(p, '#lv-rps');
 await p.waitForTimeout(1600);
 ok((await text(p, '#lv-rps')) === heldValue, 'held values do not change');
-await p.mouse.move(5, 5); await p.waitForTimeout(200);
+await p.mouse.move(5, 5); await until(p, () => p.evaluate(() => !document.querySelector('#live-region').hasAttribute('data-rk-held')));
 ok(!(await p.evaluate(() => document.querySelector('#live-region').hasAttribute('data-rk-held'))) && (await p.evaluate(() => document.querySelector('.rk-live-more').hidden)), 'let go, the waiting updates apply');
-await p.click('label.rk-toggle:has(#lv-online)'); await p.waitForTimeout(300);
+await p.click('label.rk-toggle:has(#lv-online)'); await until(p, async () => (await p.getAttribute('#live-region', 'data-rk-live')) === 'offline');
 ok((await p.getAttribute('#live-region', 'data-rk-live')) === 'offline' && (await text(p, '#live-region .rk-age')).startsWith('offline'), 'offline says so');
-await p.click('label.rk-toggle:has(#lv-online)'); await p.click('label.rk-toggle:has(#lv-feed)'); await p.waitForTimeout(9800);
+await p.click('label.rk-toggle:has(#lv-online)'); await p.click('label.rk-toggle:has(#lv-feed)'); await until(p, async () => (await p.getAttribute('#live-region', 'data-rk-live')) === 'stale', 20000);
 ok((await p.getAttribute('#live-region', 'data-rk-live')) === 'stale' && (await text(p, '#live-region .rk-age')).startsWith('stale · no update for'), 'no update for a while: stale, and it says so', await text(p, '#live-region .rk-age'));
-await p.click('label.rk-toggle:has(#lv-feed)'); await p.waitForTimeout(1700);
+await p.click('label.rk-toggle:has(#lv-feed)'); await until(p, async () => (await p.getAttribute('#live-region', 'data-rk-live')) === 'fresh', 5000);
 ok((await p.getAttribute('#live-region', 'data-rk-live')) === 'fresh', 'fresh again with the next update');
 ok((await p.evaluate(() => [...document.querySelectorAll('#h-list li')].map((l) => l.firstChild.textContent))).includes('Moved Tile to “surfaces”'), 'the history lists what you did');
-await p.click('#h-undo'); await p.waitForTimeout(300);
+await p.click('#h-undo'); await until(p, () => p.evaluate(() => !!document.querySelector('#h-list li[data-undone]')));
 ok((await p.evaluate(() => !!document.querySelector('#h-list li[data-undone]'))) && (await p.getAttribute('#h-redo', 'aria-disabled')) === 'false', 'undo from the history; redo can act');
 
 // Feedback: toasts with undo, pending, the banner.
@@ -1201,22 +1220,22 @@ await go(p, 'feedback');
 await p.click('#f-undo'); await p.waitForTimeout(300);
 await p.click('#feedback-title'); await p.keyboard.press('Control+z'); await p.waitForTimeout(500);
 ok((await toast(p)) === 'It is back.', 'Ctrl+Z undoes', await toast(p));
-await p.click('#f-pending'); await p.waitForTimeout(100);
+await p.click('#f-pending');
 ok((await text(p, '#f-pending')) === 'saving…', 'pending: the button says what it does', await text(p, '#f-pending'));
-await p.waitForTimeout(1700);
+await until(p, async () => (await toast(p)) === 'Saved.', 5000);
 ok((await toast(p)) === 'Saved.' && (await text(p, '#f-pending')) === 'save', 'pending ends, label back');
-await p.check('#s-halted'); await p.waitForTimeout(500);
+await p.check('#s-halted'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'halted');
 ok((await text(p, '.rk-banner-word')) === 'halted' && await p.evaluate(() => !!document.querySelector('#banner [role=alert] .rk-banner-word')) && (await p.getAttribute('#bar', 'data-rk-state')) === 'halted', 'halted: an alert, the app bar follows');
-await p.click('#ab-pause'); await p.waitForTimeout(400);
+await p.click('#ab-pause'); await until(p, async () => (await toast(p)).startsWith('Live data paused'));
 ok((await text(p, '.rk-banner-word')) === 'halted' && (await toast(p)).startsWith('Live data paused'), 'pause under halt: the banner holds, a toast says so', await toast(p));
 await p.screenshot({ path: join(shots, 'halted.png') });
-await p.click('#remedy'); await p.waitForTimeout(600);
+await p.click('#remedy'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused');
 ok((await text(p, '.rk-banner-word')) === 'paused', 'release steps down to paused');
-await p.click('#remedy'); await p.waitForTimeout(800);
+await p.click('#remedy'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'resume clears the banner');
-await p.check('#s-offline'); await p.waitForTimeout(400);
+await p.check('#s-offline'); await until(p, async () => (await text(p, '#data-now')) === 'frozen');
 ok((await text(p, '#data-now')) === 'frozen', 'offline freezes the figures');
-await p.click('#remedy'); await p.waitForTimeout(1500);
+await p.click('#remedy'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 5000);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'retry reconnects');
 
 // The toaster for server-side undo and failures; the focus fallback; the banner's real start and a remedy that links.
@@ -1263,8 +1282,9 @@ const tst2 = await p.evaluate(async () => {
   const t0 = Date.now(); let endedAt = 0;
   t.show('1 deleted', { undo: () => {}, windowMs: 3000, onEnd: () => { endedAt = Date.now() - t0; } });
   await wait(300); const block = Date.now(); while (Date.now() - block < 2500) { /* busy */ }
+  const resumed = Date.now() - t0;
   for (let i = 0; i < 40 && !endedAt; i += 1) await wait(50);
-  out.deadline = endedAt; await wait(400);
+  out.deadline = endedAt; out.resumed = resumed; await wait(400);
   // The same key: the first onEnd hears 'merged', the second the end.
   const ends = [];
   t.show('1 archived', { key: 'arch', undo: () => {}, onEnd: (w) => ends.push(`a1:${w}`) });
@@ -1285,7 +1305,8 @@ const tst2 = await p.evaluate(async () => {
   t.destroy(); region.remove();
   return out;
 });
-ok(tst2.deadline > 2700 && tst2.deadline < 3500, 'a busy page does not stretch a toast\'s window', tst2.deadline);
+// Stretched by the 2500 ms blocked it would end 2700 after the page came back; a busy runner only runs the timer late.
+ok(tst2.deadline > 2700 && tst2.deadline < Math.max(3000, tst2.resumed) + 1500, 'a busy page does not stretch a toast\'s window', tst2.deadline);
 ok(tst2.merged === 'a1:merged,a2:dismissed', 'a same-key toast tells the first onEnd it merged', tst2.merged);
 ok(tst2.kept === 'm1:dismissed', 'a same-key toast without its own onEnd keeps the first one, called once with the end', tst2.kept);
 ok(tst2.release.heldBefore && tst2.release.stood && tst2.release.runs && !tst2.release.held && !tst2.release.attr, 'release() lets a held toast run out', JSON.stringify(tst2.release));
@@ -1443,10 +1464,11 @@ const lineGoes = await p.evaluate(async () => {
   const b = document.createElement('button'); b.className = 'rk-btn'; b.type = 'button'; b.textContent = 'save';
   document.querySelector('#forms').append(b);
   const line = () => { const a = getComputedStyle(b, '::after'); return a.content !== 'none' && a.visibility === 'visible'; };
-  let release; const run = Rekta.pending(b, new Promise((r) => { release = r; }));
+  let release; const t0 = performance.now(); const run = Rekta.pending(b, new Promise((r) => { release = r; }));
   const early = line();
-  await new Promise((r) => setTimeout(r, Rekta.tokens.ms('--rk-duration-busy-delay') + 200));
-  const shown = line(), during = b.textContent;
+  // The line is shown by a CSS animation that starts with the next frame: a busy runner shows it late, never early.
+  while (!line() && performance.now() - t0 < 5000) await new Promise((r) => requestAnimationFrame(r));
+  const delay = Rekta.tokens.ms('--rk-duration-busy-delay'), shown = line() && performance.now() - t0 >= delay - 20, during = b.textContent;
   release(); await run;
   const out = { early, shown, during, after: line(), label: b.textContent };
   b.remove();
@@ -2028,22 +2050,26 @@ await q.waitForTimeout(500);
 ok(await anims('#built, #built ~ .rk-tile') === 0 && await q.evaluate(() => document.querySelector('#built').classList.contains('rk-h2') && !document.querySelector('.rk-segments-slide')), 'the re-flow settles');
 await q.evaluate(() => { const v = document.querySelector('#b-value'); v.value = '13'; v.dispatchEvent(new Event('input', { bubbles: true })); });
 ok(await q.evaluate(() => document.querySelectorAll('#built > .rk-stat').length === 2 && document.querySelector('#built > .rk-stat[aria-hidden] b').textContent === '12'), 'a new number peeks in: the old one leaves upwards');
-await q.waitForTimeout(500);
-ok(await q.evaluate(() => document.querySelectorAll('#built > .rk-stat').length === 1 && document.querySelector('#built .rk-stat b').textContent === '13'), 'the peek settles on the new number');
+const settled = () => q.evaluate(() => document.querySelectorAll('#built > .rk-stat').length === 1 && document.querySelector('#built .rk-stat b').textContent === '13');
+ok(await until(q, settled, 4000), 'the peek settles on the new number');
 ok(await q.evaluate(() => { const v = document.querySelector('#b-status'); v.value = 'error'; v.dispatchEvent(new Event('change', { bubbles: true })); const t = document.querySelector('#built'); return t.getAnimations().length > 0 && t.dataset.status === 'info'; }), 'a new status turns the tile over first');
-await q.waitForTimeout(500);
-ok((await q.evaluate(() => document.querySelector('#built').dataset.status)) === 'error', 'and it comes back with the new status');
-await q.evaluate(() => document.querySelector('#tile-pin').click()); await q.waitForTimeout(60);
-ok(await q.evaluate(() => { const t = document.querySelector('#live-tiles [data-pinned]'); return !!t && t.previousElementSibling.id === 'tile-seen' && t.getAnimations().length > 0; }), 'a pinned tile builds in after the first one');
-await q.waitForTimeout(500);
-await q.evaluate(() => document.querySelector('#tile-unpin').click()); await q.waitForTimeout(600);
-ok(await q.evaluate(() => !document.querySelector('#live-tiles [data-pinned]') && document.querySelector('#tile-seen').nextElementSibling.dataset.live === 'moves'), 'unpinned, it leaves and the tiles close up');
+ok(await until(q, async () => (await q.evaluate(() => document.querySelector('#built').dataset.status)) === 'error', 4000), 'and it comes back with the new status');
+ok(await q.evaluate(() => { document.querySelector('#tile-pin').click(); const t = document.querySelector('#live-tiles [data-pinned]'); return !!t && t.previousElementSibling.id === 'tile-seen' && t.getAnimations().length > 0; }), 'a pinned tile builds in after the first one');
+await until(q, () => q.evaluate(() => document.querySelector('#live-tiles [data-pinned]').getAnimations().length === 0), 4000);
+await q.evaluate(() => document.querySelector('#tile-unpin').click());
+ok(await until(q, () => q.evaluate(() => !document.querySelector('#live-tiles [data-pinned]') && document.querySelector('#tile-seen').nextElementSibling.dataset.live === 'moves'), 4000), 'unpinned, it leaves and the tiles close up');
 const filterComp = (pg, v) => pg.evaluate((x) => { const i = document.querySelector('#comp-q'); i.value = x; i.dispatchEvent(new Event('input', { bubbles: true })); }, v);
 ok(await q.evaluate(() => { const i = document.querySelector('#comp-q'); i.value = 'spark'; i.dispatchEvent(new Event('input', { bubbles: true })); const rows = [...document.querySelectorAll('#comp-body tr')]; return rows.every((r) => !r.hidden) && rows.some((r) => r.getAnimations().length); }), 'filtered rows leave before they hide');
-await q.waitForTimeout(700);
+await until(q, async () => (await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length)) === 1, 4000);
 ok((await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length)) === 1, 'then only the matching row stays', await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length));
-await filterComp(q, ''); await q.waitForTimeout(40);
-ok(await q.evaluate(() => document.querySelectorAll('#comp-body tr:not([hidden])').length > 1 && [...document.querySelectorAll('#comp-body tr')].some((r) => r.getAnimations().length)), 'cleared, the rows come back and slide in');
+ok(await q.evaluate(async () => {
+  const i = document.querySelector('#comp-q'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true }));
+  for (let n = 0; n < 120; n += 1) {   // frame by frame: the rows are back while some still slide, however late the first frame
+    if (document.querySelectorAll('#comp-body tr:not([hidden])').length > 1 && [...document.querySelectorAll('#comp-body tr')].some((r) => r.getAnimations().length)) return true;
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+  return false;
+}), 'cleared, the rows come back and slide in');
 await q.waitForTimeout(600);
 await q.evaluate(() => document.querySelector('#press-sheet').showModal()); await q.waitForTimeout(300);
 ok(await q.evaluate(() => { const d = document.querySelector('#press-sheet'); d.close(); return d.open && d.dataset.rkPhase === 'leaving'; }), 'a closing sheet leaves before it closes');
@@ -2142,7 +2168,7 @@ const dragRow = async (sel, dx) => {
   return mid;
 };
 const followed = await dragRow('#t-r-c', 60);
-await sp.waitForTimeout(400);
+await until(sp, async () => (await sp.evaluate(() => new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#t-r-c')).transform).m41)) === 0, 3000);
 const short = await sp.evaluate(() => ({ removed: window.tRemoved.length, there: !!document.querySelector('#t-r-c'), x: new DOMMatrixReadOnly(getComputedStyle(document.querySelector('#t-r-c')).transform).m41, clicks: window.tClicks }));
 ok(Math.round(followed) === 60 && short.removed === 2 && short.there && short.x === 0 && short.clicks === 1, 'dragged a little, the entry follows and glides back; the drag clicks nothing', JSON.stringify({ followed, ...short }));
 await dragRow('#t-r-d', 200);
@@ -2229,8 +2255,9 @@ const sy = await open();
   await sy.click('#job-cancel'); await sy.waitForTimeout(400);
   const ask = await sy.evaluate(() => { const d = [...document.querySelectorAll('dialog')].find((x) => x.open); return d && { ok: d.querySelector('[value=ok]').dataset.status, primary: d.querySelector('.rk-btn--primary').value, focus: document.activeElement.value }; });
   ok(ask && ask.ok === 'error' && ask.primary === 'cancel' && ask.focus === 'cancel', 'confirm({ safe: "cancel" }): keeping it is the primary answer, cancelling the build is destructive', JSON.stringify(ask));
-  await sy.click('dialog[open] [value=ok]'); await sy.waitForTimeout(500);
-  ok(await sy.evaluate(() => document.querySelector('#job-tag').textContent === 'idle' && !document.querySelector('#job-tag').dataset.status && document.querySelector('#job-cancel').hidden && document.querySelector('#job-again').getAttribute('aria-disabled') !== 'true'), 'cancelled, the region is idle and can start again');
+  await sy.click('dialog[open] [value=ok]');
+  const idle = () => sy.evaluate(() => document.querySelector('#job-tag').textContent === 'idle' && !document.querySelector('#job-tag').dataset.status && document.querySelector('#job-cancel').hidden && document.querySelector('#job-again').getAttribute('aria-disabled') !== 'true');
+  ok(await until(sy, idle), 'cancelled, the region is idle and can start again');
   ok(await sy.evaluate(() => !!document.querySelector('#live-tiles a[href="#notes"] [data-rk-carry]') && !!document.querySelector('#tile-apps [data-rk-carry]')), 'more tiles carry their title into the place they open');
   // Inputs: a field disabled with its reason looks disabled, says why and refuses.
   const keep = await sy.evaluate(() => {
@@ -2357,7 +2384,7 @@ const sy = await open();
   // The session, the lock screen and signing in again.
   await sy.click('#session-open'); await sy.waitForTimeout(400);
   ok(await sy.evaluate(() => { const d = document.querySelector('#session'); return d.open && d.querySelector('.rk-btn--primary').value === 'lock' && Math.round(d.getBoundingClientRect().width) === document.documentElement.clientWidth; }), 'session: a bar across the top, lock first');
-  await sy.click('#session [value=lock]'); await sy.waitForTimeout(1200);
+  await sy.click('#session [value=lock]'); await until(sy, () => sy.evaluate(() => !document.querySelector('#lock').hidden && document.querySelector('#desk').inert && document.activeElement.id === 'lock-pw'), 5000);
   const locked = await sy.evaluate(() => ({ shown: !document.querySelector('#lock').hidden, display: document.querySelector('#lock-time').matches('.rk-display'), size: parseFloat(getComputedStyle(document.querySelector('#lock-time')).fontSize), inert: document.querySelector('#desk').inert, focus: document.activeElement.id }));
   ok(locked.shown && locked.display && locked.size >= 80 && locked.inert && locked.focus === 'lock-pw', 'lock: the lock screen with the time in the display step; the desktop behind it is inert', JSON.stringify(locked));
   await sy.click('#lock-in'); await sy.waitForTimeout(300);
