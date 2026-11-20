@@ -39,7 +39,7 @@ static rk_view *col(float gap, float pad) {
 /* Tokens, easing ------------------------------------------------------------------------------------------------- */
 
 static void test_tokens(void) {
-  CHECK(rk_color_of(RK_ROLE_BG) == 0xffffffffu, "light bg %08x", rk_color_of(RK_ROLE_BG));
+  CHECK(rk_color_of(RK_ROLE_BG) == 0xfaf8f4ffu, "light bg %08x", rk_color_of(RK_ROLE_BG));
   CHECK(rk_color_of(RK_ROLE_INFO_TILE) == 0x7da1f4ffu, "info tile");
   CHECK(rk_metric_of(RK_TILE_UNIT) == 150, "tile unit");
   CHECK(rk_metric_of(RK_CONTROL_HEIGHT) == 32, "compact control height on a desktop: %g", rk_metric_of(RK_CONTROL_HEIGHT));
@@ -51,7 +51,7 @@ static void test_tokens(void) {
   CHECK(rk_duration_of(RK_DURATION_SHORT) == 0 && rk_duration_of(RK_TIMING_TOAST) == 5000, "reduced motion zeroes motion, keeps timings");
   rk_app_set_motion(RK_MOTION_PREF_SYSTEM);
   rk_app_set_theme(RK_THEME_DARK);
-  CHECK(rk_color_of(RK_ROLE_BG) == 0x0e0e12ffu, "dark bg");
+  CHECK(rk_color_of(RK_ROLE_BG) == 0x1b1916ffu, "dark bg");
   rk_app_set_theme(RK_THEME_SYSTEM);
   /* CSS ease at its half way and a few known points */
   CHECK(CLOSE_TO(rk__ease(rk__ease_base, 0.5f), 0.8024f, 0.003), "ease 0.5 = %f", rk__ease(rk__ease_base, 0.5f));
@@ -1176,7 +1176,7 @@ static void test_controls(void) {
   segments *sg = seg->state;
   click(w, (rk_point){ r.x + sg->x[2] + 10, r.y + r.h / 2 }, 10);
   rk_app_run_for(rk_duration_of(RK_DURATION_SHORT) / 2);
-  CHECK(rk_control_value(seg) == 2 && seg->pvalue > 0.1f && seg->pvalue < 0.9f, "a segment is chosen, the accent sliding (%.2f)", seg->pvalue);
+  CHECK(rk_control_value(seg) == 2 && seg->pvalue > 0.1f && seg->pvalue < 0.9f, "a segment is chosen, the ink block sliding (%.2f)", seg->pvalue);
   rk_window_focus(w, seg);
   key(w, RK_KEY_LEFT, 0); CHECK(rk_control_value(seg) == 1, "Left: the one before");
   key(w, RK_KEY_HOME, 0); key(w, RK_KEY_END, 0); CHECK(rk_control_value(seg) == 2, "Home and End");
@@ -2863,14 +2863,12 @@ static void hello_declared(void *user) {
   char builds[16];
   (void)user;
   snprintf(builds, sizeof builds, "%d", hello_declared_count);
-  RK_VSTACK() {
-    RK_LABEL("Today", .style = RK_TEXT_GROUP);
-    RK_TILES() {
-      RK_TILE(builds, .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
-      RK_TILE("0.3", .label = "release notes");
-    }
-    RK_BUTTON("build one", .on_press = hello_declared_press);
+  RK_LABEL("Today", .style = RK_TEXT_GROUP);                    /* the section's own title: space-l to what follows */
+  RK_TILES() {
+    RK_TILE(builds, .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
+    RK_TILE("0.3", .label = "release notes");
   }
+  RK_BUTTON("build one", .on_press = hello_declared_press);
 }
 static bool same_pixels(rk_window *a, rk_window *b) {
   if (a->fb->w != b->fb->w || a->fb->h != b->fb->h) return false;
@@ -3600,7 +3598,7 @@ static void test_product_codes(void) {
   CHECK(logged > was && strstr(logged_last, "code 6") && strstr(logged_last, "3:1"), "a code too faint on the ground is said: %s", logged_last);
   CHECK(rk_series_of(6) == 0xd8d8dbffu, "and still set");
   rk_app_set_series(6, 0, 0);
-  static const rk_color zones[5][2] = { { 0x5489b6ffu, 0x4f8ac6ffu }, { 0x147175ffu, 0x3ebfc6ffu }, { 0x7d8d5effu, 0xa3e4a4ffu }, { 0x805b21ffu, 0xd79f4affu }, { 0x6d2a27ffu, 0xc9635dffu } };
+  static const rk_color zones[5][2] = { { 0x5489b6ffu, 0x4f8ac6ffu }, { 0x147175ffu, 0x3ebfc6ffu }, { 0x7c8c5dffu, 0xa3e4a4ffu }, { 0x805b21ffu, 0xd79f4affu }, { 0x6d2a27ffu, 0xc9635dffu } };
   was = logged;
   for (int i = 0; i < 5; i++) rk_app_set_series(i + 1, zones[i][0], zones[i][1]);
   CHECK(logged == was, "the showcase's five heart-rate zones pass, as build.mjs --check holds them (%s)", logged == was ? "" : logged_last);
@@ -3707,6 +3705,68 @@ static void test_contrast(void) {
   done(w);
 }
 
+/* The black ground (docs/colour.md): the dark theme on black, over more contrast too; the light theme keeps its own. */
+static void test_black(void) {
+  rk_color light = rk_color_of(RK_ROLE_BG);
+  rk_app_set_black(true);
+  CHECK(rk_color_of(RK_ROLE_BG) == light, "the light theme keeps its ground");
+  rk_app_set_theme(RK_THEME_DARK);
+  CHECK(rk_color_of(RK_ROLE_BG) == 0x000000ffu && rk_color_of(RK_ROLE_GLASS) == 0x000000ffu, "dark: the ground and glass are black");
+  CHECK(rk_color_of(RK_ROLE_SURFACE) == 0x2a2723ffu && rk_color_of(RK_ROLE_TEXT) == 0xf5f1eaffu, "surface and text stay the dark theme's");
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == rk_color_of(RK_ROLE_TEXT) && rk_color_of(RK_ROLE_ON_ACCENT) == 0x000000ffu, "ink, with the black ground's colour on it");
+  rk_app_set_contrast(true);
+  CHECK(rk_color_of(RK_ROLE_BG) == 0x000000ffu && rk__contrast(rk_color_of(RK_ROLE_TEXT_MEDIUM), rk_color_of(RK_ROLE_SURFACE)) >= 7, "over more contrast too");
+  CHECK(rk_app_set_accent_named("teal") && rk_color_of(RK_ROLE_ACCENT) == 0x0daeacffu, "a named accent takes its dark pair");
+  rk_app_set_accent(0, 0);
+  rk_app_set_contrast(false);
+  rk_app_set_black(false);
+  CHECK(rk_color_of(RK_ROLE_BG) == 0x1b1916ffu, "and back to the dark ground");
+  rk_app_set_theme(RK_THEME_SYSTEM);
+}
+
+/* A section's space (docs/layout.md): its content space-xl from the top, its group title space-l from what follows,
+   any other two blocks the column's own gap. */
+static void test_section_space(void) {
+  rk_window *w = window(900, 600);
+  rk_controller *pano = rk_panorama();
+  rk_view *s = col(16, 0);
+  rk_view *title = rk_add(s, rk_label("Space", RK_TEXT_GROUP));
+  rk_view *one = rk_add(s, rk_label("one", RK_TEXT_BODY)), *two = rk_add(s, rk_label("two", RK_TEXT_BODY));
+  rk_panorama_add(pano, "space", s, 0);
+  rk_window_show(w, pano);
+  rk_app_run_for(100);
+  rk_rect box = rk__window_rect(s->parent), t = rk__window_rect(title), a = rk__window_rect(one), b = rk__window_rect(two);
+  float l = rk_metric_of(RK_SPACE_L), xl = rk_metric_of(RK_SPACE_XL);
+  CHECK(CLOSE_TO(t.y - box.y, xl, 0.5), "the section's content stands space-xl from its top (%g)", t.y - box.y);
+  CHECK(CLOSE_TO(a.y - (t.y + t.h), l, 0.5), "its title stands space-l from what follows (%g)", a.y - (t.y + t.h));
+  CHECK(CLOSE_TO(b.y - (a.y + a.h), 16, 0.5), "any other two blocks keep the column's gap (%g)", b.y - (a.y + a.h));
+  done(w);
+}
+
+/* Checked controls stand in ink with the ground on them; a named accent fills only the primary button (docs/colour.md). */
+static void test_checked_ink(void) {
+  CHECK(rk_app_set_accent_named("teal"), "teal");
+  rk_window *w = window(500, 400);
+  rk_view *page = col(16, 16);
+  static const char *const options[] = { "one", "two" };
+  rk_view *check = rk_add(page, rk_check("done", true)), *radio = rk_add(page, rk_choices(options, 2, 0));
+  rk_view *toggle = rk_add(page, rk_toggle("calm", true)), *segments = rk_add(page, rk_segments(options, 2, 0));
+  rk_view *slider = rk_add(page, rk_slider(0, 100, 1, 60)), *primary = rk_add(page, rk_button("go", NULL, NULL));
+  rk_button_set_kind(primary, RK_BUTTON_PRIMARY);
+  show(w, page, "checked");
+  rk_app_run_for(400);
+  rk_color ink = rk_color_of(RK_ROLE_TEXT), accent = rk_color_of(RK_ROLE_ACCENT);
+  CHECK(accent != ink && pixels_of(w, rk__window_rect(primary), accent) > 200, "the primary button takes the accent");
+  rk_view *checked[] = { check, radio, toggle, segments, slider };
+  static const char *const name[] = { "a checked box", "a chosen radio", "a toggle that is on", "a chosen segment", "a slider's fill" };
+  for (int i = 0; i < 5; i++) {
+    rk_rect r = rk__window_rect(checked[i]);
+    CHECK(pixels_of(w, r, accent) == 0 && pixels_of(w, r, ink) > 20, "%s stands in ink (%d accent pixels)", name[i], pixels_of(w, r, accent));
+  }
+  rk_app_set_accent(0, 0);
+  done(w);
+}
+
 /* The accent's rules and the named accents (docs/colour.md), and content fills in a tile grid (docs/tiles.md). */
 static void test_accents(void) {
   double chroma;
@@ -3714,13 +3774,13 @@ static void test_accents(void) {
   int was = logged;
   rk_app_set_accent(0x7a2a8cffu, 0xd39be0ffu);
   CHECK(logged == was, "the docs' plum holds every rule (%s)", logged == was ? "" : logged_last);
-  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x7a2a8cffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0xffffffffu, "the text on a dark accent is the ground");
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x7a2a8cffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0xfaf8f4ffu, "the text on a dark accent is the ground");
   rk_app_set_accent(0x2762ecffu, 0);
   CHECK(logged > was && strstr(logged_last, "hue") && strstr(logged_last, "info"), "an accent in a status's hue is said: %s", logged_last);
   CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x2762ecffu, "and still set");
   was = logged;
   CHECK(rk_app_set_accent_named("teal") && logged == was, "a named accent");
-  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x049896ffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0x010205ffu, "teal with ink on it in light");
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x009694ffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0x010205ffu, "teal with ink on it in light");
   rk_app_set_theme(RK_THEME_DARK);
   CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x00aba9ffu, "its dark value in dark");
   rk_app_set_contrast(true);
@@ -3728,7 +3788,7 @@ static void test_accents(void) {
   rk_app_set_contrast(false);
   rk_app_set_theme(RK_THEME_SYSTEM);
   was = logged;
-  CHECK(!rk_app_set_accent_named("plum") && logged == was + 1 && rk_color_of(RK_ROLE_ACCENT) == 0x049896ffu, "a name that is not one: said, the accent stays");
+  CHECK(!rk_app_set_accent_named("plum") && logged == was + 1 && rk_color_of(RK_ROLE_ACCENT) == 0x009694ffu, "a name that is not one: said, the accent stays");
   rk_app_set_accent(0, 0);
   CHECK(rk_color_of(RK_ROLE_ACCENT) == rk_color_of(RK_ROLE_TEXT), "0, 0: ink again");
 
@@ -4019,6 +4079,9 @@ static void launch(void *user) {
   test_product_overrides();
   test_product_codes();
   test_contrast();
+  test_black();
+  test_section_space();
+  test_checked_ink();
   test_accents();
   test_type_ahead();
   test_wide_pivot();

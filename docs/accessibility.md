@@ -22,8 +22,10 @@ it's on (inside the element, as an inset ring) rather than in a single
 fixed accent colour, since text colour was already chosen to clear AA
 against every fill it can appear on (see [colour.md](colour.md)). A
 fixed-colour ring is acceptable only on neutral surfaces where it is
-separately contrast-checked (`focus` clears ≥ 3:1 against both `bg` and
-`surface` in both themes in the source tokens).
+separately contrast-checked: there the ring is the accent (`focus`),
+which clears ≥ 3:1 against both `bg` and `surface` in every theme by
+the accent's own rule. On a fill of the accent itself (a selected row,
+the accent surface) it takes the fill's text colour, as on any fill.
 
 ## Reduced motion
 

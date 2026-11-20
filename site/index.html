@@ -8,8 +8,8 @@
 <meta name="referrer" content="no-referrer">
 <meta name="description" content="Rekta Design, a platform-neutral design language of panoramas, pivots, full-colour live tiles and meaningful motion, shown in itself.">
 <title>Rekta Design</title>
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0e0e12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#faf8f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1916" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -113,7 +113,7 @@
 
       <section class="rk-sec sec-wide" id="colour" aria-labelledby="colour-title">
         <h2 class="rk-group" id="colour-title">Status is a fill, not an accent.</h2>
-        <p>Neutral ground, no brand hue. Four status colours carry meaning and only meaning: large fills use the dampened <code>tile</code> form, small marks the saturated <code>full</code> form. Primary text sits on every fill and must clear AA; the ratios below are measured live, in the theme you are looking at.</p>
+        <p>A warm neutral ground, no brand hue. Four status colours carry meaning and only meaning: large fills use the dampened <code>tile</code> form, small marks the saturated <code>full</code> form. Primary text sits on every fill and must clear AA; the ratios below are measured live, in the theme you are looking at.</p>
         <div class="rk-tiles"><!--@status--></div>
         <p class="rk-actions tag-row"><span class="rk-tag" data-status="info">active</span><span class="rk-tag" data-status="warning">waiting</span><span class="rk-tag" data-status="error">failed</span><span class="rk-tag" data-status="success">done</span><span class="rk-tag">idle</span></p>
         <p>In running text a status takes a soft tint: the import <span class="rk-tag rk-tag--soft" data-status="error">failed</span>, the review is <span class="rk-tag rk-tag--soft" data-status="warning">waiting</span>.</p>
@@ -121,7 +121,7 @@
         <!--@swatches-->
         <p class="rk-kicker group-label">contrast on neutral ground</p>
         <!--@pairs-->
-        <p class="note">One slot is a product's own: the <b>accent</b>, ink until a product sets it. It fills the primary button, checked controls, a selected row and one accent surface per place; never a tile or a status, and it keeps apart from every status colour. Try another in <a href="#look" data-goto="look">look</a>, or make your own in <a href="#forms" data-goto="forms">forms</a>; <a href="#apps">all apps</a> opens on its accent surface.</p>
+        <p class="note">One slot is a product's own: the <b>accent</b>, ink until a product sets it. It fills the primary button, a selected row and one accent surface per place, and it is the focus ring; checked controls stand in ink. Never a tile or a status, and it keeps apart from every status colour. Try another in <a href="#look" data-goto="look">look</a>, or make your own in <a href="#forms" data-goto="forms">forms</a>; <a href="#apps">all apps</a> opens on its accent surface.</p>
         <p class="rk-kicker group-label">content fills · a set without a status</p>
         <div class="rk-tiles small-tiles" id="launcher" data-rk-fills="content">
           <div class="rk-tile" data-rk-fill="teal"><span class="rk-stat"><b>mail</b></span></div>
@@ -528,7 +528,7 @@
           <div class="rk-field">
             <span class="rk-label" id="quick-label">quick settings</span>
             <p class="rk-actions" id="quick" role="group" aria-labelledby="quick-label"><button class="rk-btn" type="button" aria-pressed="true"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-bell"/></svg><span>alerts<span class="rk-btn-state" data-on="on" data-off="off" aria-hidden="true"></span></span></button><button class="rk-btn" type="button" aria-pressed="false"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-motion"/></svg><span>calm<span class="rk-btn-state" data-on="on" data-off="off" aria-hidden="true"></span></span></button><button class="rk-btn" type="button" aria-pressed="true" id="quick-pin"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-pin"/></svg><span>pinned<span class="rk-btn-state">3 tiles</span></span></button></p>
-            <span class="rk-hint">Toggle buttons: a press switches each at once; pressed, it takes the accent.</span>
+            <span class="rk-hint">Toggle buttons: a press switches each at once; pressed, it stands in ink.</span>
           </div>
           <div class="rk-field">
             <label class="rk-label" for="keep-days">keep the logs, days</label>
@@ -598,6 +598,11 @@
             <label class="rk-switch"><input type="radio" name="theme" value="light"> light</label>
             <label class="rk-switch"><input type="radio" name="theme" value="dark"> dark</label>
           </fieldset>
+          <fieldset class="rk-choices"><legend class="rk-label">ground in dark</legend>
+            <label class="rk-switch"><input type="radio" name="ground" value="normal"> normal</label>
+            <label class="rk-switch"><input type="radio" name="ground" value="black"> black</label>
+          </fieldset>
+          <span class="rk-hint">Black puts the dark theme on a black ground, for OLED screens: surfaces, text and status stay as they are, and the app bar turns solid. Light keeps its own ground.</span>
           <fieldset class="rk-choices"><legend class="rk-label">density</legend>
             <label class="rk-switch"><input type="radio" name="density" value="auto"> by pointer</label>
             <label class="rk-switch"><input type="radio" name="density" value="comfortable"> comfortable</label>

@@ -15,11 +15,19 @@ int rk__density_index(void) {
   return rk__prefs.density == RK_DENSITY_COMPACT || (rk__prefs.density == RK_DENSITY_SYSTEM && rk__prefs.system_compact) ? 1 : 0;
 }
 
+/* Light 0, dark 1, both under more contrast 2 and 3; the black ground, which only the dark theme has, 4 and 5. */
+int rk__theme_index(void) {
+  if (rk__dark() && rk__prefs.black) return 4 + rk__prefs.contrast;
+  return (rk__dark() ? 1 : 0) + (rk__prefs.contrast ? 2 : 0);
+}
+const rk_color *rk__theme_colors(int k) { return k >= 4 ? rk_tok_colors_black[k - 4] : (k >= 2 ? rk_tok_colors_contrast : rk_tok_colors)[k & 1]; }
+
 rk_color rk_color_of(rk_role role) {
   if (role <= RK_ROLE_NONE || role >= RK__ROLE_COUNT) return 0;
-  int t = rk__dark() ? 1 : 0, k = t + (rk__prefs.contrast ? 2 : 0);
+  int k = rk__theme_index();
+  if (role == RK_ROLE_FOCUS) role = RK_ROLE_ACCENT;          /* the focus ring is the accent (docs/colour.md) */
   if ((role == RK_ROLE_ACCENT || role == RK_ROLE_ON_ACCENT) && rk__prefs.accent[k][0]) return rk__prefs.accent[k][role == RK_ROLE_ON_ACCENT];
-  return (rk__prefs.contrast ? rk_tok_colors_contrast : rk_tok_colors)[t][role];
+  return rk__theme_colors(k)[role];
 }
 
 float rk_metric_of(rk_metric metric) {

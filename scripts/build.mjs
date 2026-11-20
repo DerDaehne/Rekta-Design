@@ -7,8 +7,9 @@
 //                         pointer (unless [data-density="comfortable"]) and for [data-density="compact"], every
 //                         motion duration 0s under reduced motion (unless [data-motion="on"]) and [data-motion="off"],
 //                         the contrast colours for more contrast (unless [data-contrast="normal"]) and for
-//                         [data-contrast="more"], opaque glass for reduced transparency (unless
-//                         [data-transparency="normal"]) and for [data-transparency="reduce"], and each named accent
+//                         [data-contrast="more"], the black ground over dark for [data-ground="black"], opaque glass for
+//                         reduced transparency (unless [data-transparency="normal"]) and for
+//                         [data-transparency="reduce"], and each named accent
 //                         (tokens/rekta.accents.json) for [data-accent="NAME"] in each theme and contrast
 //     rekta.tokens.json   resolved, platform-neutral values for other frameworks (see docs/platforms.md)
 //     rekta.css           the components (src/css/rekta.css)
@@ -126,6 +127,7 @@ export function buildTokensCss(tokens) {
   const durations = collect(tokens, tokens.motion.duration, ['motion', 'duration']);
   const zero = durations.map(({ name }) => `  --${PREFIX}-${name}: 0s;`).join('\n');
   const { contrastLight, contrastDark } = contrastLists(tokens);
+  const black = collect(tokens, tokens.color[BLACK], ['color', BLACK]);
   return `/* Rekta Design tokens. Generated from tokens/rekta.tokens.json by scripts/build.mjs; do not edit. */
 
 /* Light, comfortable, full motion. */
@@ -200,6 +202,17 @@ ${decl(tokens, contrastDark).replace(/^/gm, '  ')}
 ${decl(tokens, contrastDark)}
 }
 
+/* The black ground (prefs: ground), a choice of the person's that no system setting makes: over the dark theme only,
+   after the contrast colours so it lies over them alike. */
+@media (prefers-color-scheme: dark) {
+  :root[data-ground="black"]:not([data-theme="light"]) {
+${decl(tokens, black).replace(/^/gm, '  ')}
+  }
+}
+:root[data-ground="black"][data-theme="dark"] {
+${decl(tokens, black)}
+}
+
 /* Reduced transparency: glass is the ground (rekta.css takes the blur away). */
 @media (prefers-reduced-transparency: reduce) {
   :root:not([data-transparency="normal"]) {
@@ -269,6 +282,21 @@ ${dc}
 // contrast set where it has one and from the theme itself where not. The accent is never in them, so a product's
 // accent stays.
 export const CONTRAST = { light: 'light-contrast', dark: 'dark-contrast' };
+// The black ground: a set over the dark theme (docs/colour.md), never a theme of its own. Its two resolved themes take
+// the dark pairs of each named accent, and the text contrast of the set below them.
+export const BLACK = 'black';
+const BLACK_THEMES = { black: { from: 'dark', sets: [BLACK], text: TEXT.dark }, 'black-contrast': { from: 'dark-contrast', sets: [CONTRAST.dark, BLACK], text: TEXT['dark-contrast'] } };
+const ALL_TEXT = { ...TEXT, ...Object.fromEntries(Object.entries(BLACK_THEMES).map(([k, v]) => [k, v.text])) };
+// A theme with sets laid over it, as a token tree in which an alias to the theme resolves to the set's value: under the
+// black ground, an alias to color.dark.bg is black.
+function overlay(tokens, theme, sets) {
+  const lay = (base, top) => {
+    const out = { ...base };
+    for (const [k, v] of Object.entries(top)) if (!k.startsWith('$')) out[k] = v && typeof v === 'object' && !('$value' in v) && base[k] ? lay(base[k], v) : v;
+    return out;
+  };
+  return { ...tokens, color: { ...tokens.color, [theme]: sets.reduce((n, set) => lay(n, tokens.color[set]), tokens.color[theme]) } };
+}
 function contrastLists(tokens) {
   const names = new Set();
   for (const set of Object.values(CONTRAST)) walk(tokens.color[set], ['color', set], (p) => names.add(tokenName(p)));
@@ -284,9 +312,9 @@ function contrastLists(tokens) {
 // Resolved, platform-neutral values: colours as #rrggbb or #rrggbbaa, lengths in logical px, durations in ms,
 // easings as [x1, y1, x2, y2], angles in degrees, fluid sizes as {min, max, viewport}.
 export function buildTokensJson(tokens, version) {
-  const plain = (path, token) => {
+  const plain = (path, token, tk = tokens) => {
     let t = token;
-    while (typeof t.$value === 'string' && t.$value.startsWith('{')) t = resolveAlias(tokens, t.$value);
+    while (typeof t.$value === 'string' && t.$value.startsWith('{')) t = resolveAlias(tk, t.$value);
     const v = t.$value;
     switch (t.$type) {
       case 'color': return toHex8(parse(v));
@@ -296,11 +324,13 @@ export function buildTokensJson(tokens, version) {
       default: return v;
     }
   };
-  const group = (node, base) => {
+  const group = (node, base, tk = tokens) => {
     const out = {};
-    walk(node, base, (path, token) => { out[tokenName(path)] = plain(path, token); });
+    walk(node, base, (path, token) => { out[tokenName(path)] = plain(path, token, tk); });
     return out;
   };
+  // A theme with its sets over it, every alias resolved in it.
+  const themed = (theme, ...sets) => { const tk = overlay(tokens, theme, sets); return group(tk.color[theme], ['color', theme], tk); };
   const describe = (node, base) => {
     const out = {};
     walk(node, base, (path, token) => { if (token.$description) out[tokenName(path)] = token.$description; });
@@ -313,11 +343,12 @@ export function buildTokensJson(tokens, version) {
     name: 'Rekta Design',
     version,
     units: { length: 'logical px (CSS px, Android dp, Apple pt)', duration: 'ms', angle: 'deg', easing: 'cubic-bezier [x1, y1, x2, y2]', fluid: '{min, max, viewport}: interpolate between min and max at viewport × hosting box width' },
-    // light-contrast and dark-contrast: the whole theme for more contrast, its contrast set over it (docs/colour.md).
+    // light-contrast and dark-contrast: the whole theme for more contrast, its contrast set over it; black and
+    // black-contrast: the dark ones with the black ground over them (docs/colour.md).
     themes: {
-      light: group(tokens.color.light, ['color', 'light']), dark: group(tokens.color.dark, ['color', 'dark']),
-      'light-contrast': { ...group(tokens.color.light, ['color', 'light']), ...group(tokens.color[CONTRAST.light], ['color', CONTRAST.light]) },
-      'dark-contrast': { ...group(tokens.color.dark, ['color', 'dark']), ...group(tokens.color[CONTRAST.dark], ['color', CONTRAST.dark]) },
+      light: themed('light'), dark: themed('dark'),
+      'light-contrast': themed('light', CONTRAST.light), 'dark-contrast': themed('dark', CONTRAST.dark),
+      ...Object.fromEntries(Object.entries(BLACK_THEMES).map(([k, v]) => [k, themed('dark', ...v.sets)])),
     },
     densities: { comfortable: group(tokens.density.comfortable, ['density', 'comfortable']), compact: group(tokens.density.compact, ['density', 'compact']) },
     typography: group(tokens.typography, ['typography']),
@@ -330,10 +361,12 @@ export function buildTokensJson(tokens, version) {
     breakpoint: group(tokens.breakpoint, ['breakpoint']),
     descriptions: all,
     hooks: Object.fromEntries(Object.entries(loadHooks()).map(([k, v]) => [`--rk-${k}`, v])),
-    // The named accents (tokens/rekta.accents.json), resolved: per theme the accent and the text on it.
+    // The named accents (tokens/rekta.accents.json), resolved: per theme the accent and the text on it; under the black
+    // ground the dark pair, its aliases resolved there.
     accents: Object.fromEntries(Object.entries(loadAccents()).map(([name, a]) => [name, {
       description: a.$description,
       ...Object.fromEntries(Object.keys(TEXT).map((theme) => [theme, Object.fromEntries(Object.entries(a[theme] || {}).map(([k, v]) => [k, resolveColor(tokens, v)]))])),
+      ...Object.fromEntries(Object.entries(BLACK_THEMES).map(([theme, b]) => [theme, Object.fromEntries(Object.entries(a[b.from] || {}).map(([k, v]) => [k, resolveColor(overlay(tokens, 'dark', b.sets), v)]))])),
     }])),
   };
 }
@@ -383,7 +416,13 @@ function check(tokens) {
       if (n === 'accent' || n === 'on-accent') problems.push(`color.${set} sets ${n}: the accent is the product's (docs/platforms.md)`);
     });
   }
-  for (const theme of ['light', 'dark', CONTRAST.light, CONTRAST.dark]) {
+  // The black ground changes only colours the dark theme has, and never the accent.
+  walk(tokens.color[BLACK], ['color', BLACK], (p) => {
+    const n = tokenName(p);
+    if (!(n in t.themes.dark)) problems.push(`color.${BLACK} sets ${n}, which color.dark does not have`);
+    if (n === 'accent' || n === 'on-accent') problems.push(`color.${BLACK} sets ${n}: the accent is the product's (docs/platforms.md)`);
+  });
+  for (const theme of ['light', 'dark', CONTRAST.light, CONTRAST.dark, ...Object.keys(BLACK_THEMES)]) {
     const c = t.themes[theme];
     // More contrast holds every text pair at 7:1 (WCAG AAA); marks keep 3:1.
     const text = theme.endsWith('-contrast') ? 7 : 4.5;
@@ -399,14 +438,17 @@ function check(tokens) {
       need('status-error-full', bg, 4.5, 'a destructive button\'s words (.rk-btn[data-status=error])');
     }
     need('on-accent', 'accent', text, 'text');
-    // The plain toast is ink with ground-coloured words; a tag in it keeps its neutral square (rekta.css).
-    need('bg', 'text-primary', text, 'a tag\'s word in an ink toast');
-    // Under more contrast that square takes the toast's words' colour (rekta.css), checked by the line above.
-    if (!theme.endsWith('-contrast')) need('text-contrast-medium', 'text-primary', 3, 'a neutral tag\'s square in an ink toast');
+    // The plain toast is ink with ground-coloured words; a neutral tag's square in it takes the words' colour (rekta.css).
+    need('bg', 'text-primary', text, 'a tag\'s word and neutral square in an ink toast');
     for (const s of STATUS) {
       need('text-primary', `status-${s}-tile`, text, 'tile text');
       need('text-primary', `status-${s}-soft`, text, 'soft label');
       need(`status-${s}-full`, `status-${s}-soft`, 3, 'mark on its soft tint');
+    }
+    // On black, a surface and a hairline stand off the ground at least as far as on the dark ground (docs/colour.md).
+    if (BLACK_THEMES[theme]) {
+      const d = t.themes[BLACK_THEMES[theme].from];
+      for (const fg of ['surface', 'text-contrast-low']) need(fg, 'bg', +contrast(d[fg], d.bg).toFixed(2), `as on the dark ground, ${fg === 'surface' ? 'a surface' : 'a hairline'}`);
     }
     // Text on glass: the blur averages what is behind, so all white and all black are the limits. Only text-primary
     // and text-contrast-high may stand on it (docs/colour.md); rekta.css is held to that below.
@@ -440,8 +482,8 @@ function check(tokens) {
   // Every named accent holds the accent rules in each theme and contrast set (docs/colour.md).
   for (const [name, a] of Object.entries(t.accents)) {
     if (!/^[a-z][a-z-]*$/.test(name)) problems.push(`tokens/rekta.accents.json: "${name}" is not a lowercase name`);
-    for (const [theme, text] of Object.entries(TEXT)) {
-      if (!a[theme] || !a[theme].accent || !a[theme]['on-accent']) { problems.push(`tokens/rekta.accents.json: ${name} has no accent and on-accent for ${theme}`); continue; }
+    for (const [theme, text] of Object.entries(ALL_TEXT)) {
+      if (!a[theme] || !a[theme].accent || !a[theme]['on-accent']) { problems.push(`tokens/rekta.accents.json: ${name} has no accent and on-accent for ${BLACK_THEMES[theme]?.from ?? theme}`); continue; }
       for (const p of accentCheck(a[theme].accent, a[theme]['on-accent'], t.themes[theme], text).problems) problems.push(`${theme}: accent ${name} ${a[theme].accent}: ${p}`);
     }
   }

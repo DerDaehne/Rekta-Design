@@ -144,6 +144,19 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
     ok(n.low.r < 7 && !n.framed && !n.opaque && n.glassLow >= 4.5, `${scheme}: contrast "normal" keeps the design's colours against the system's setting; text on glass over white and black holds 4.5:1`, `${n.low.r.toFixed(2)} ${n.framed} ${n.opaque} ${n.glassLow.toFixed(2)}`);
     await c.close();
   }
+  // The black ground: a pref, only under the dark theme; glass is the ground and the bar does not blur.
+  {
+    const d = await open({ colorScheme: 'dark' }), ground = () => d.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-bg').trim());
+    await d.evaluate(() => Rekta.prefs.set('ground', 'black', { remember: false })); await d.waitForTimeout(400);
+    const b = await measure(d);
+    ok(await ground() === '#000000' && b.opaque && /^(none)?$/.test(b.blur) && b.low.r >= 4.5 && b.glassLow >= 4.5, 'dark, ground "black": a black ground, glass opaque and the bar unblurred, every text pair at 4.5:1', `${await ground()} ${b.opaque} ${b.blur} ${b.low.what} ${b.low.r.toFixed(2)}`);
+    await d.evaluate(() => Rekta.prefs.set('contrast', 'more', { remember: false })); await d.waitForTimeout(400);
+    const bm = await measure(d);
+    ok(await ground() === '#000000' && bm.low.r >= 7 && bm.framed, 'black with more contrast: still black, every text pair at 7:1, the frames', `${await ground()} ${bm.low.what} ${bm.low.r.toFixed(2)}`);
+    await d.evaluate(() => { Rekta.prefs.set('contrast', 'system', { remember: false }); Rekta.prefs.set('theme', 'light', { remember: false }); }); await d.waitForTimeout(400);
+    ok(await ground() !== '#000000' && /blur/.test((await measure(d)).blur), 'the light theme keeps its own ground and glass under "black"', await ground());
+    await d.close();
+  }
   const c = await open();
   const shading = (page) => page.evaluate(() => { const d = document.createElement('dialog'); d.className = 'rk-recent'; document.body.append(d); d.showModal(); const b = getComputedStyle(d, '::backdrop').backdropFilter; d.remove(); return b; });
   const plain = await measure(c);
@@ -162,6 +175,22 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
 
 const p = await open();
 ok(await p.evaluate(() => getComputedStyle(document.querySelector('#pan')).display === 'flex'), 'desktop panorama is sideways');
+// A section's space (layout.md): space-xl above and below its content, space-l from its title to what follows, space-m
+// between two other blocks; rows and the tile gap keep space-s.
+{
+  const space = await p.evaluate(() => {
+    const sec = document.querySelector('#colour'), [title, text, tiles] = sec.children, cs = getComputedStyle(sec), r = (e) => e.getBoundingClientRect();
+    const px = (n) => Rekta.tokens.px(`--rk-space-${n}`), row = getComputedStyle(document.querySelector('.rk-sec .rk-rows > li'));
+    return {
+      padding: parseFloat(cs.paddingTop) === px('xl') && parseFloat(cs.paddingBottom) === px('xl'),
+      title: title.classList.contains('rk-group') && Math.abs(r(text).top - r(title).bottom - px('l')) < 0.5,
+      blocks: Math.abs(r(tiles).top - r(text).bottom - px('m')) < 0.5,
+      rows: parseFloat(row.paddingTop) === px('s'), tiles: parseFloat(getComputedStyle(tiles).rowGap) === px('s'),
+      gaps: [r(text).top - r(title).bottom, r(tiles).top - r(text).bottom].map((x) => +x.toFixed(1)),
+    };
+  });
+  ok(space.padding && space.title && space.blocks && space.rows && space.tiles, 'a section: space-xl above and below, space-l after its title, space-m between other blocks, rows and tiles at space-s', JSON.stringify(space));
+}
 ok(await p.evaluate(() => document.querySelector('#back').hidden), 'app bar back hidden at home');
 ok(await p.evaluate(() => { const n = document.querySelector('#nav'); return n.scrollHeight <= n.clientHeight + 1; }), 'the section strip is not cut');
 
@@ -1171,7 +1200,9 @@ await p.keyboard.press('Escape'); await p.waitForTimeout(150);
 const order = () => p.evaluate(() => [...document.querySelectorAll('#steps b')].map((b) => b.textContent));
 await p.focus('#steps li:nth-child(1) .rk-grip'); await p.keyboard.press(' '); await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.keyboard.press(' '); await p.waitForTimeout(400);
 ok((await order())[2] === 'write the release notes' && (await p.evaluate(() => document.activeElement.classList.contains('rk-grip'))), 'Space picks up, ↓ moves, Space puts down; focus stays on the grip');
-const g = await p.$('#steps li:nth-child(5) .rk-grip'), gb = await g.boundingBox(), topBox = await (await p.$('#steps li:nth-child(1)')).boundingBox();
+const g = await p.$('#steps li:nth-child(5) .rk-grip');
+await g.scrollIntoViewIfNeeded(); await p.waitForTimeout(100);   /* the section's space may put the last step below its edge */
+const gb = await g.boundingBox(), topBox = await (await p.$('#steps li:nth-child(1)')).boundingBox();
 await p.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2); await p.mouse.down();
 await p.mouse.move(gb.x + gb.width / 2, gb.y - 20, { steps: 4 }); await p.mouse.move(gb.x + gb.width / 2, topBox.y + 4, { steps: 8 }); await p.waitForTimeout(150);
 ok(await p.evaluate(() => document.querySelector('#steps [data-rk-dragging]') !== null), 'a dragged item lifts');
@@ -1594,7 +1625,7 @@ await p.fill('#b-value', '999'); await p.dispatchEvent('#b-value', 'input');
 ok((await p.getAttribute('.rk-stepper [data-rk-step="1"]', 'aria-disabled')) === 'true', 'the stepper says when its limit is reached');
 await p.click('#builder .rk-segments label:nth-child(3)'); await p.waitForTimeout(100);
 ok(await p.evaluate(() => document.querySelector('#built').matches('.rk-w2.rk-h2')), 'segments choose the size');
-// Toggle buttons: pressed in the accent like a chosen segment, not pressed a quiet button; icon beside the word, the
+// Toggle buttons: pressed in ink like a chosen segment, not pressed a quiet button; icon beside the word, the
 // state word below; a press switches at once (#140).
 const quick = () => p.evaluate(() => {
   const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
@@ -1602,18 +1633,42 @@ const quick = () => p.evaluate(() => {
   const icon = on.querySelector('svg').getBoundingClientRect(), w = word.getBoundingClientRect(), st = state.getBoundingClientRect();
   return {
     pressed: on.getAttribute('aria-pressed'), state: getComputedStyle(state, '::before').content,
-    on: getComputedStyle(on).backgroundColor === rgb('var(--rk-accent)') && getComputedStyle(on).color === rgb('var(--rk-on-accent)') && getComputedStyle(on).borderTopColor === rgb('var(--rk-accent)'),
+    on: getComputedStyle(on).backgroundColor === rgb('var(--rk-text-primary)') && getComputedStyle(on).color === rgb('var(--rk-bg)') && getComputedStyle(on).borderTopColor === rgb('var(--rk-text-primary)'),
     off: getComputedStyle(off).borderTopColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(off).color === rgb('var(--rk-text-contrast-high)') && getComputedStyle(off).backgroundColor === 'rgba(0, 0, 0, 0)',
     beside: icon.right <= w.left, below: st.top >= w.top + 8 && st.left === w.left,
   };
 });
 const q0 = await quick();
-ok(q0.on && q0.off, 'a toggle button: pressed takes the accent, not pressed is quiet', JSON.stringify(q0));
+ok(q0.on && q0.off, 'a toggle button: pressed stands in ink, not pressed is quiet', JSON.stringify(q0));
 ok(q0.beside && q0.below && q0.state === '"on"', 'its icon beside the word, the state word below', JSON.stringify(q0));
 await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
 const q1 = await quick();
 ok(q1.pressed === 'false' && q1.state === '"off"', 'a press switches it at once; the state word follows', JSON.stringify(q1));
 await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
+// The accent only on the primary button and the focus ring: checked controls stand in ink with the ground on them,
+// with a named accent too.
+{
+  const sparse = await p.evaluate(() => {
+    Rekta.prefs.set('accent', 'teal', { remember: false });
+    const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+    const host = document.createElement('div');
+    host.className = 'rk';
+    host.innerHTML = '<label class="rk-switch"><input type="checkbox" checked> a</label><div class="rk-segments"><label><input type="radio" name="sparse" checked>a</label><label><input type="radio" name="sparse">b</label></div>'
+      + '<button class="rk-btn rk-btn--primary" type="button">go</button><button class="rk-btn" type="button" aria-pressed="true">on</button>';
+    document.body.append(host);
+    const box = host.querySelector('.rk-switch input'), seg = host.querySelector('.rk-segments > label'), [primary, pressed] = host.querySelectorAll('.rk-btn');
+    const ink = rgb('var(--rk-text-primary)'), ground = rgb('var(--rk-bg)'), accent = rgb('var(--rk-accent)');
+    const out = {
+      teal: accent !== ink, box: getComputedStyle(box).backgroundColor === ink,
+      segment: getComputedStyle(seg).backgroundColor === ink && getComputedStyle(seg).color === ground,
+      pressed: getComputedStyle(pressed).backgroundColor === ink && getComputedStyle(pressed).color === ground,
+      primary: getComputedStyle(primary).backgroundColor === accent, focus: rgb('var(--rk-focus)') === accent,
+    };
+    host.remove(); Rekta.prefs.set('accent', 'product', { remember: false });
+    return out;
+  });
+  ok(Object.values(sparse).every(Boolean), 'a named accent fills only the primary button and draws the focus ring; a checked box, a chosen segment and a pressed toggle button stand in ink', JSON.stringify(sparse));
+}
 await p.click('#builder .rk-toggle'); await p.waitForTimeout(100);
 ok((await p.getAttribute('#b-spark', 'role')) === 'switch' && !!(await p.$('#built .rk-spark')), 'a toggle is a switch; it adds a sparkline at once');
 await p.selectOption('#b-status', 'success'); await p.waitForTimeout(100);
@@ -1623,7 +1678,7 @@ ok((await p.evaluate(() => getComputedStyle(document.querySelector('#builder .rk
 await p.click('#find-token'); await p.keyboard.type('focus'); await p.waitForTimeout(150);
 ok((await p.getAttribute('#find-token', 'aria-expanded')) === 'true' && (await p.evaluate(() => document.querySelector(`#${document.querySelector('#find-token').getAttribute('aria-activedescendant')}`).textContent)).startsWith('--rk-focus'), 'the combobox filters as you type');
 await p.keyboard.press('Enter'); await p.waitForTimeout(100);
-ok((await p.inputValue('#find-token')) === '--rk-focus' && (await text(p, '#find-hint')).startsWith('#1a44ea'), 'Enter chooses; the hint shows the value', await text(p, '#find-hint'));
+ok((await p.inputValue('#find-token')) === '--rk-focus' && (await text(p, '#find-hint')).startsWith('var(--rk-accent)'), 'Enter chooses; the hint shows the value', await text(p, '#find-hint'));
 await p.fill('#find-token', 'nonsense'); await p.keyboard.press('Tab'); await p.waitForTimeout(100);
 ok((await p.inputValue('#find-token')) === '--rk-focus', 'leaving with other text puts the choice back');
 await p.focus('#find-token'); await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(100);

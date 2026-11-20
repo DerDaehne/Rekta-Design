@@ -907,7 +907,7 @@ static float pano_gap(panorama *p, float W) {
 static int pano_active(panorama *p, float scroll);
 static void pano_layout(rk_view *v, void *st) {
   panorama *p = st;
-  float W = v->frame.w, H = v->frame.h, xl = rk_metric_of(RK_SPACE_XL), l = rk_metric_of(RK_SPACE_L), sp = rk_metric_of(RK_SPACE_S);
+  float W = v->frame.w, H = v->frame.h, xl = rk_metric_of(RK_SPACE_XL), sp = rk_metric_of(RK_SPACE_S);
   float gap = pano_gap(p, W);
   int keep = p->n && v->value > 0 && p->gap > 0 && gap != p->gap ? pano_active(p, v->value) : -1;   /* a new gap keeps the section */
   p->gap = gap;
@@ -923,9 +923,9 @@ static void pano_layout(rk_view *v, void *st) {
     rk__set_frame(s->box, (rk_rect){ x, 0, w, th });
     float inner = w - sp;                                       /* room for the scroll edge, as padding-right */
     rk_size n = rk__measure(s->view, (rk_size){ inner, INFINITY });
-    float h = RK_MAX(n.h, th - 2 * l);
-    rk__set_frame(s->view, (rk_rect){ 0, l, inner, h });
-    s->max = RK_MAX(0.0f, h + 2 * l - th);
+    float h = RK_MAX(n.h, th - 2 * xl);                         /* space-xl above and below a section's content */
+    rk__set_frame(s->view, (rk_rect){ 0, xl, inner, h });
+    s->max = RK_MAX(0.0f, h + 2 * xl - th);
     if (s->box->value > s->max) s->box->value = s->box->pvalue = s->max;
     x += w + gap;
   }
@@ -1191,6 +1191,7 @@ void rk_panorama_insert(rk_controller *c, int index, const char *title, rk_view 
   section *s = &p->secs[index];
   memset(s, 0, sizeof *s);
   s->title = rk__strdup(title); s->view = section_view; s->width = width;
+  section_view->section = true;
   s->box = rk__view_create(&secbox_class, NULL);
   s->box->clip = true;
   s->box->access = RK_ACCESS_GROUP;

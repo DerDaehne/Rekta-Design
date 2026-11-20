@@ -3,12 +3,21 @@
 ## Neutral surfaces
 
 The ground (`color.*.bg`), surface (`color.*.surface`) and its hover
-step (`color.*.surface-2`) are all neutral — near-white/near-black and
-two close greys. Rekta Design does not pick a hue to represent "the
+step (`color.*.surface-2`) are all neutral, and so are the text steps
+on them (`text-primary`, `text-contrast-high`, `-medium`, `-low`):
+paper and two close warm greys in light, a warm near-black and two close
+steps above it in dark. The neutrals carry a **warm cast**, one
+yellow-red hue (OKLCH about 72° to 85°) at a chroma of at most 0.022, so
+the frame stays quiet and the content is what stands out. The cast is
+not a hue: it stays below 0.05, the chroma under which Rekta counts a
+colour as grey ([Apart from status](#apart-from-status)), it never
+stands for the product, a status or a selection, and nothing is told
+apart by it. Rekta Design does not pick a hue to represent "the
 product": its one product slot, the **accent** (`color.*.accent` with
 `on-accent`), is ink until a product sets it per theme or picks a named
-one. It fills the primary button, checked controls, a selected item and
-at most one accent surface per place, never a tile or a status, and
+one. It fills the primary button, a selected item and at most one
+accent surface per place, and it is the focus ring; checked controls
+stand in ink. It is never a tile or a status, and
 must hold 3:1 on the ground and stay apart from status
 ([The accent](#the-accent)). Hierarchy between
 content comes from typography, spacing and hairlines
@@ -78,9 +87,9 @@ to read.
 
 `color.dark.*` is an independently chosen token set, not a formula
 applied to `color.light.*`, and the margins are not symmetric. Primary
-text on the tile fills measures, at the time of writing: dark success
-4.99:1, the tightest pair; light error 5.25:1, the next; dark warning
-6.62:1 against light warning 14.83:1. That is why the self-check measures
+text on the tile fills measures, at the time of writing: light error
+4.51:1, the tightest pair; dark success 4.55:1, the next; dark warning
+6.03:1 against light warning 12.34:1. That is why the self-check measures
 every pair rather than assuming symmetry, and why the numbers here are an
 illustration: `node scripts/build.mjs --check` is the authority.
 Under more contrast every one of them holds 7:1 (below).
@@ -94,10 +103,11 @@ the normal case no value changes.
   the prefs): each theme takes its contrast set, `color.light-contrast`
   or `color.dark-contrast`, which holds only the values that change.
   Every text pair holds **7:1** (WCAG AAA): `text-contrast-high` and
-  `text-contrast-medium` are raised, ink on every tile and soft tint
-  holds 7:1, and the tiles where it did not (light error, dark success
-  and warning) are shifted until it does, with their neighbours moved
-  just enough to stay 0.09 apart under red-green colour blindness. Each
+  `text-contrast-medium` are raised (in the same warm cast), ink on
+  every tile and soft tint holds 7:1, and the tiles where it did not
+  (light info and error, dark success and warning) are shifted until it
+  does, with their neighbours moved just enough to stay 0.09 apart under
+  red-green colour blindness and the error tile still the darkest. Each
   status tile gains a **2px frame in its full colour**, and its word
   stays: the frame and the word now carry the status, not the calm fill
   alone. A destructive button's words take ink inside its error frame.
@@ -117,12 +127,53 @@ distances. Forced colours (Windows contrast themes) stay as they are:
 the system's colours replace Rekta's there, and the frame goes with
 every other shadow.
 
+## The black ground
+
+A person with an OLED screen may pick the **black ground** (`ground:
+black` in the prefs; rekta-core `rk_app_set_black`): the dark theme on
+`#000000`, whose pixels stay off. It is a choice, never the default,
+and no system setting asks for it; the light theme keeps its own ground.
+`color.black` holds only what changes from `color.dark`: the ground,
+and glass, which is the ground. Everything else stays the dark theme's,
+so on black each part stands off the ground by more than in dark:
+
+- **Surfaces** keep their step: `surface` and `surface-2` are the dark
+  ones, 1.41:1 and 1.60:1 on black against 1.18:1 for `surface` on the
+  dark ground, and the hairline (`text-contrast-low`, 1px) measures
+  2.24:1 against 1.87:1. `--check` holds both at least to the dark
+  ground's.
+- **Text, status and the accent** are the dark theme's and gain on
+  black: `text-contrast-medium` 6.82:1, every status mark above 6:1,
+  ink (the default accent and focus ring) 18.65:1. Status tiles and soft tints are mixed toward the
+  surface and keep their ink at the dark theme's ratios. Named accents
+  take their dark pair; ink takes black words.
+- **Glass is the ground**, as under less transparency: a blur over black
+  shows nothing, so the app bar does not blur.
+- **The shading** stays the dark theme's warm grey: over black it veils
+  the page, and a sheet (black, with its hairline) stands off the veil
+  at 1.20:1, against 1.10:1 in dark.
+
+Under more contrast the black ground lies over the dark contrast set
+(`themes.black-contrast`): its values with black under them. Less
+transparency changes nothing that shows. Forced colours replace it as
+every other colour. `node scripts/build.mjs --check` measures both
+black sets like the themes.
+
 ## The accent
 
 One hue is the product's: the accent and the text on it, per theme. It
-fills the primary button, checked controls, a selected item, selected
-text and at most one accent surface per place. It is never a tile fill
-and never a status. Ink is the default.
+fills the primary button, a selected item, selected text and at most
+one accent surface per place, and it is the focus ring. It is never a
+tile fill and never a status. Ink is the default.
+
+The accent is the one loud place: the action and where focus is.
+Checked controls are states, not actions, so they stand in ink: a
+checked checkbox or radio, a toggle switch that is on, a slider's fill,
+a chosen segment and a pressed toggle button take `text-primary` with
+`bg` on it (the mark, the words), in every theme and contrast set; a
+pressed, hovered, focused or disabled one keeps its rules. Ink on the
+ground holds 15:1 and more in every theme, above the 7:1 of more
+contrast.
 
 ### Apart from status
 
@@ -141,7 +192,7 @@ Tritanopia is measured and reported, not required, as for the statuses
 among themselves. 0.09 is the distance the statuses keep from each
 other. Under red-green colour blindness the accent asks less (0.05)
 because it is never the only signal: a selection has its checkmark, a
-button its words, a checked control its mark. At 0.09 there, almost only
+button its words, a focus ring its shape around the control. At 0.09 there, almost only
 violets would be left.
 
 Each number can be recomputed without JavaScript: OKLab and OKLCH from
@@ -167,12 +218,12 @@ product or its user picks a name instead of four pairs:
 | Name | Light | Dark | Text on it |
 |---|---|---|---|
 | `ink` | `text-primary` | `text-primary` | `bg`: the default |
-| `teal` | `#049896` | `#00aba9` | dark |
+| `teal` | `#009694` | `#00aba9` | dark |
 | `steel` | `#637586` | `#6c7e8f` | white in light, dark in dark |
 | `violet` | `#65389f` | `#c2a7f4` | white in light, dark in dark |
-| `mauve` | `#756089` | `#7a648e` | white |
-| `pink` | `#d858b6` | `#f472d0` | dark |
-| `magenta` | `#d70473` | `#d70473` | white |
+| `mauve` | `#756089` | `#7e6892` | white |
+| `pink` | `#d556b4` | `#f472d0` | dark |
+| `magenta` | `#d70473` | `#d90a74` | white |
 
 Under more contrast each has its own darker or lighter pair at 7:1 (in
 the file). On the web, `data-accent="teal"` on the root picks one, or
@@ -268,10 +319,14 @@ picks a tile's fill.
 
 ## Focus, hover, disabled
 
-`focus` differs between themes (a darker blue in light, a brighter blue
-in dark) specifically so the focus ring clears AA against whatever it's
-drawn on in that theme — a single focus colour used in both themes failed
-contrast on at least one surface in testing. `hover` is a translucent
+The focus ring is the accent: `focus` takes the accent's value, ink until
+a product sets one or a named accent is picked. The accent holds 3:1 on
+`bg` and `surface` in every theme, contrast set and on the black ground
+(its own rule), so the ring does too, for the default and for every
+named accent; `--check` measures them. Where the ring stands on a fill
+of the accent itself (a selected row, the accent surface) it takes the
+fill's text colour, `on-accent`, as on a status tile it takes the
+tile's ink ([accessibility.md](accessibility.md#focus-on-fills)). `hover` is a translucent
 neutral overlay (same rgba value in both themes, since it is applied on
 top of the theme's own surface colour). `disabled` is a single flat grey
 per theme, used for text and borders, never as a fill.
@@ -311,7 +366,7 @@ for line and square). The square turns `success` only where it reports
 A product has two colour slots of its own, both set per theme:
 
 - **The accent** (`--rk-accent`, `--rk-on-accent`): its one hue, for the
-  primary button, checked controls, a selected item and one accent
+  primary button, the focus ring, a selected item and one accent
   surface per place; its own pairs or a named one
   ([The accent](#the-accent)). `build.mjs --check-product` checks a
   product's values.

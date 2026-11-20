@@ -26,13 +26,13 @@ Rekta's own.
 |---|---|---|
 | one of many, a list you know | `select.rk-input` | a chevron, the platform's own list (see below) |
 | one of many, a long list or one to search | combobox (`rk-combo`, `Rekta.combobox()`) | filters as you type; floats below like a menu; without `free`, keeps only a choice from its list |
-| two to five options seen at a glance | segments (`rk-segments`) | joined buttons, the chosen one in the accent; radios underneath |
+| two to five options seen at a glance | segments (`rk-segments`) | joined buttons, the chosen one in ink; radios underneath |
 | on or off, acting at once | toggle switch (`rk-toggle`) | a switch to assistive technology (on the web `role="switch"`); outside forms that are sent |
 | on or off, sent with a form | checkbox (`rk-switch`) | waits for "save" |
 | a row's state (a task done, a setting on) | toggle switch (`rk-toggle`) | it acts at once, so it is a switch, never a checkbox |
-| a frequent state in a compact row of them (quick settings) | toggle button: a button with a pressed state (on the web `.rk-btn[aria-pressed]`) | acts at once; pressed in the accent; icon, word and state word |
+| a frequent state in a compact row of them (quick settings) | toggle button: a button with a pressed state (on the web `.rk-btn[aria-pressed]`) | acts at once; pressed in ink; icon, word and state word |
 | a whole number | stepper (`rk-stepper`) | − field +, repeats while held, says when its limit is reached |
-| a value on a scale | slider (`rk-range`) | the accent fills up to the value; an `<output>` shows it |
+| a value on a scale | slider (`rk-range`) | ink fills up to the value; an `<output>` shows it |
 | a date or a time | `input[type=date | time].rk-input` | the browser's own pickers |
 | files | drop zone (`rk-drop`, `Rekta.drop()`) | dashed until files are dragged over it; dropping files elsewhere never opens them |
 
@@ -47,8 +47,8 @@ not the look wanted. A checkbox in a selection (`.rk-check`) is neither:
 it chooses rows, it sets nothing.
 
 - **Toggle switch, the Metro way:** a square-cornered frame (2px
-  `text-primary`), the `accent` fill growing from the leading edge when
-  on, a solid ink bar as the thumb, and the state word ("on", "off")
+  `text-primary`), an ink fill (`text-primary`) growing from the leading
+  edge when on, a solid ink bar as the thumb, and the state word ("on", "off")
   beside it. It acts at once, so it never sits in a form that waits for
   "save": use a checkbox there.
 - **Toggle button:** where a row of frequent on/off states has no room
@@ -56,7 +56,7 @@ it chooses rows, it sets nothing.
   button with `aria-pressed` (the platform's pressed state elsewhere):
   its icon beside its word, a state word below in `font-size-xs`
   (`.rk-btn-state`: "on", "off", or a short value such as the network's
-  name). Pressed, it takes the accent fill with on-accent words, as a
+  name). Pressed, it takes an ink fill with words in `bg`, as a
   chosen segment does; not pressed, it is a quiet button. A press
   switches it at once and, like the toggle switch, needs no undo. It
   has one action: the details of what it switches (the networks behind

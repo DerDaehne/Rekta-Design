@@ -13,8 +13,76 @@ README, principles.md and platforms.md say so, and platforms.md gains a
 glossary. Two motion rules are settled: the end of a scroll, and the
 dots' fade in.
 
+### Changed
+
+- **Warm neutrals** (colour.md): the seven neutral tokens of each theme
+  carry one warm cast, a yellow-red hue at a chroma of at most 0.021,
+  below the 0.05 under which Rekta counts a colour as grey. Light:
+  `bg` `#faf8f4`, `surface` `#efeae1`, `surface-2` `#e5dfd3`,
+  `text-primary` `#1f1a14`, `text-contrast-high` `#554e45`,
+  `-medium` `#6a6258`, `-low` `#d8d0c3`. Dark: `#1b1916`,
+  `#2a2723`, `#34302b`, `#f5f1ea`, `#b8b0a4`, `#9a9285`,
+  `#4b463e`. `glass` is the new ground at 82%, `shading` the warm ink
+  (light) and a warm step above the ground (dark) at 67%. The contrast
+  sets raise `text-contrast-medium` and `-high` in the same cast, at
+  7:1 or more on `bg` and `surface`. Status colours, content fills,
+  `focus`, `hover` and `disabled` keep their values, except where
+  `--check` asked: the light error tile `#cb6267` (ink at 4.5:1), the
+  dark `status-error-full` `#ff4d49` (a destructive button's words at
+  4.5:1 on the lighter surface), and under more contrast the light info
+  `#83a7fa`, success `#7ce0b8` and error `#ed8a89` tiles and the
+  dark success `#1e5a56` and warning `#664d06` tiles (ink at 7:1, 0.09
+  apart under red-green colour blindness, error still the darkest). Four
+  named accents move just enough to keep 3:1 on the new surfaces: teal
+  light `#009694`, pink light `#d556b4`, mauve dark `#7e6892`, magenta
+  dark `#d90a74`. The neutral square of a tag in the ink toast takes the
+  toast's words' colour in every contrast setting (the warm placeholder
+  grey sinks into the ink). rekta-core's reference images are drawn
+  again in the new colours; the showcase's icons and manifest take the
+  warm ink and ground.
+- **More space around sections and their titles** (layout.md, "A
+  section's space", now a rule of its own): a section's content stands
+  `space-xl` from its top and bottom (was `space-l`), and its title
+  `space-l` from what follows (was `space-m`). Other blocks of a
+  section keep `space-m`, rows and tiles `space-s`; no token changes.
+  On the web `.rk-sec` and `.rk-sec > .rk-group + *`, and a table head
+  sticking in a section moves with the padding. rekta-core: a panorama's
+  section sets its content `space-xl` in, and a group title that is a
+  direct child of the section stands `space-l` from what follows; three
+  reference images show it (`motion-turn-out`, `sheet`, `toast`).
+- **A sparser accent** (colour.md, forms.md): the accent fills only the
+  primary button, a selected item, selected text and the accent surface,
+  and it is the focus ring. `focus` now takes the accent's value (ink by
+  default, so the blue ring is gone); every accent holds 3:1 on `bg` and
+  `surface` in each theme, contrast set and on the black ground, so the
+  ring does too (lowest: 3.01:1, pink in light and magenta in dark). On
+  a selected row or tree row the ring inside takes `on-accent`. Checked
+  controls are states, not actions, and stand in ink: a checked
+  checkbox or radio, a toggle switch's fill, the slider's fill, a chosen
+  segment and a pressed toggle button take `text-primary` with `bg` on
+  it (`accent-color` too). With the default accent (ink) they look as
+  before; with a product's or a named accent they no longer take it.
+  rekta-core draws the same; its chosen day keeps the accent and, with
+  focus, an inset ring in `on-accent`. Nine reference images show the
+  ink ring.
+
 ### Added
 
+- **The black ground** (colour.md, platforms.md, behaviour.md): a
+  person with an OLED screen may put the dark theme on `#000000`. A
+  choice, never the default and never from a system setting; the light
+  theme keeps its own. Token set `color.black` holds only what changes
+  from `color.dark`: `bg` and `glass` (the ground, as under less
+  transparency); surfaces, text, hairlines, shading, status and the
+  accent stay the dark theme's, and measure more on black (surface
+  1.41:1 against 1.18:1, hairline 2.24:1 against 1.87:1). It lies over
+  the dark contrast set alike. `rekta.tokens.json` gains the resolved
+  themes `black` and `black-contrast` and each named accent's pair
+  for them; `--check` measures both like the themes and holds surface
+  and hairline on black at least to the dark ground's. On the web:
+  `prefs` `ground` (`normal`, `black`), `:root[data-ground="black"]`,
+  and the app bar does not blur there. rekta-core:
+  `rk_app_set_black(bool)`; the demo and the showcase offer it.
 - **Opener tiles in a side panel** (states.md, tiles.md, motion.md): a
   panel whose areas no longer fit its height may put each area behind a
   tile at its foot, with the area's icon, name and state word. A press

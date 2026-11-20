@@ -73,6 +73,28 @@ links) hints at what's further along and jumps to a section.
   start, and with any section a jump aligns there when the sections are
   all as wide. No motion; when everything fits, it does not apply.
 
+## A section's space
+
+Sections, and the titles in them, are set apart by space, not by
+frames. The large steps go between the large things; rows and tiles
+stay close, so a list and a tile grid keep what they hold:
+
+| Between | Token |
+|---|---|
+| A section's content and its top and bottom edge | `space-xl` |
+| A section's title and what follows it | `space-l` |
+| Any other two blocks of a section | `space-m` |
+| A kicker and what follows it | `space-xs` |
+| Rows (above and below each) | `space-s` |
+| Tiles in a grid | `space-s` |
+
+Compact, a hairline parts one stacked section from the next. Sideways,
+the sections stand `space-xl` apart, as above. A table's head that
+sticks in a section sticks to the section's top edge, above the
+`space-xl`. The title is the section's own, one of its direct children.
+On the web: `.rk-sec`, its title a `.rk-group`. rekta-core: a
+panorama's section, its title a label in `RK_TEXT_GROUP`.
+
 ## Sideways scrolling by mouse wheel
 
 Sideways, a plain vertical wheel gesture over a panorama moves it

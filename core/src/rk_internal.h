@@ -84,8 +84,10 @@ void *rk__expect(void *state, const void *view, const char *fn, const char *kind
 typedef struct rk_prefs {
   rk_theme theme; rk_motion_pref motion; rk_density density;
   bool system_dark, system_reduced, system_compact;
-  rk_color accent[4][2];                                   /* [light, dark, and more contrast][accent, on-accent]; 0: ink */
+  rk_color accent[6][2];                                   /* [light, dark, both under more contrast, black, black under more
+                                                              contrast][accent, on-accent]; 0: ink */
   bool contrast;                                           /* more contrast (rk_app_set_contrast) */
+  bool black;                                              /* the black ground under the dark theme (rk_app_set_black) */
   rk_color series[8][2];                                   /* a domain's colour code, light and dark; 0: ink */
   bool metric_set[RK__METRIC_COUNT]; float metric[RK__METRIC_COUNT];         /* a product's own (rk_app_set_metric) */
   bool timing_set[RK__DURATION_COUNT]; double timing[RK__DURATION_COUNT];    /* (rk_app_set_timing) */
@@ -101,6 +103,8 @@ const char *rk__type_ahead(rk__typed *t, const char *text, double now, bool *aga
 bool rk__starts_with(const char *s, const char *prefix);   /* leading spaces skipped, ASCII case folded */
 
 bool rk__dark(void);
+int rk__theme_index(void);                                 /* the theme in use: an index into rk_prefs.accent */
+const rk_color *rk__theme_colors(int index);               /* its colours by rk_role */
 bool rk__reduced(void);
 int rk__density_index(void);
 float rk__ease(const float bezier[4], float t);            /* cubic-bezier timing, t in 0..1 */
@@ -245,6 +249,7 @@ struct rk_view {
   bool draws_focus;                                        /* draws its own focus ring (a field: around its input) */
   bool disabled;                                           /* it and what it holds take no input (rk_view_set_enabled) */
   bool content_fills;                                      /* a tile grid: its tiles may take content fills */
+  bool section;                                            /* a panorama's section: space-l after a group title in it */
   char *tooltip;
   uint8_t cursor;                                          /* the pointer's shape over it, as its last move left it */
   rk_view *menu;                                           /* a button opens it; any other view on a right click */
@@ -448,6 +453,7 @@ void rk__menu_choose(rk_view *menu, int item);                    /* focus insid
 bool rk__is_tile(rk_view *v);
 rk_role rk__tile_fill(rk_view *v);                         /* a tile's fill now: its status's, its content's or surface */
 bool rk__is_title(rk_view *v);                             /* a label in RK_TEXT_TITLE: a place's title */
+bool rk__is_group(rk_view *v);                             /* a label in RK_TEXT_GROUP: a section's or a sheet's title */
 void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r);
 void rk__focus_ring(rk_canvas *c, rk_rect r, float out);  /* 2px in the focus colour, out px outside r */
 bool rk__shows_focus(rk_view *v);                         /* v has focus and the keyboard is in use */
