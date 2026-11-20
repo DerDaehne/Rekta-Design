@@ -101,7 +101,7 @@ not set.
 
 | Token | Property | What a product decides | rekta-core |
 |---|---|---|---|
-| `color.*.accent`, `on-accent` | `--rk-accent`, `--rk-on-accent` | Its one hue: primary button, checked controls, a selected item, one accent surface per place. Per theme and contrast set; or a named accent (`data-accent`, `prefs` `accent`). Checked with `build.mjs --check-product`; `build.mjs --accent COLOUR` derives the pairs from one colour. | `rk_app_set_accent(light, dark)`, held to the same rules (said through the log); `rk_app_set_accent_named(name)` |
+| `color.*.accent`, `on-accent` | `--rk-accent`, `--rk-on-accent` | Its one hue: primary button, focus ring, a selected item, one accent surface per place; checked controls stay ink. Per theme and contrast set; or a named accent (`data-accent`, `prefs` `accent`). Checked with `build.mjs --check-product`; `build.mjs --accent COLOUR` derives the pairs from one colour. | `rk_app_set_accent(light, dark)`, held to the same rules (said through the log); `rk_app_set_accent_named(name)` |
 | `timing.toast` | `--rk-duration-toast` | How long a toast stays, and so the undo window (say 10s instead of 5s). Read when a toast opens. | `rk_app_set_timing(RK_TIMING_TOAST, ms)` |
 | `timing.stale` | `--rk-duration-stale` | When live data without an update counts as stale. A live region's own `stale` option wins. | `rk_app_set_timing(RK_TIMING_STALE, ms)`; `rk_duration_of` reads it |
 | `size.tile-unit`, `size.tile-unit-ultrawide` | `--rk-tile-unit`, `--rk-tile-unit-ultrawide` | The tile grid's cell, below and from 2560px. Set both: from 2560px the stylesheet sets the first from the second. | `rk_app_set_metric(RK_TILE_UNIT, px)` (the ultrawide cell stays the token's) |
@@ -154,7 +154,8 @@ family's width are measured again ([typography.md](typography.md#the-family)).
 Everything else is the design, not a setting. In particular, do not
 override:
 
-- **The status colours, text, `bg`, `surface` and `focus`.** Their AA
+- **The status colours, text, `bg`, `surface` and `focus`** (the
+  accent's: set the accent instead). Their AA
   contrast and their separation under colour blindness are measured
   together by `--check`; one changed value can break a pair it cannot see.
 - **`motion.duration.*` and the easings.** Each motion has one meaning

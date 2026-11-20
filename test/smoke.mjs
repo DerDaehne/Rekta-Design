@@ -1625,7 +1625,7 @@ await p.fill('#b-value', '999'); await p.dispatchEvent('#b-value', 'input');
 ok((await p.getAttribute('.rk-stepper [data-rk-step="1"]', 'aria-disabled')) === 'true', 'the stepper says when its limit is reached');
 await p.click('#builder .rk-segments label:nth-child(3)'); await p.waitForTimeout(100);
 ok(await p.evaluate(() => document.querySelector('#built').matches('.rk-w2.rk-h2')), 'segments choose the size');
-// Toggle buttons: pressed in the accent like a chosen segment, not pressed a quiet button; icon beside the word, the
+// Toggle buttons: pressed in ink like a chosen segment, not pressed a quiet button; icon beside the word, the
 // state word below; a press switches at once (#140).
 const quick = () => p.evaluate(() => {
   const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
@@ -1633,18 +1633,42 @@ const quick = () => p.evaluate(() => {
   const icon = on.querySelector('svg').getBoundingClientRect(), w = word.getBoundingClientRect(), st = state.getBoundingClientRect();
   return {
     pressed: on.getAttribute('aria-pressed'), state: getComputedStyle(state, '::before').content,
-    on: getComputedStyle(on).backgroundColor === rgb('var(--rk-accent)') && getComputedStyle(on).color === rgb('var(--rk-on-accent)') && getComputedStyle(on).borderTopColor === rgb('var(--rk-accent)'),
+    on: getComputedStyle(on).backgroundColor === rgb('var(--rk-text-primary)') && getComputedStyle(on).color === rgb('var(--rk-bg)') && getComputedStyle(on).borderTopColor === rgb('var(--rk-text-primary)'),
     off: getComputedStyle(off).borderTopColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(off).color === rgb('var(--rk-text-contrast-high)') && getComputedStyle(off).backgroundColor === 'rgba(0, 0, 0, 0)',
     beside: icon.right <= w.left, below: st.top >= w.top + 8 && st.left === w.left,
   };
 });
 const q0 = await quick();
-ok(q0.on && q0.off, 'a toggle button: pressed takes the accent, not pressed is quiet', JSON.stringify(q0));
+ok(q0.on && q0.off, 'a toggle button: pressed stands in ink, not pressed is quiet', JSON.stringify(q0));
 ok(q0.beside && q0.below && q0.state === '"on"', 'its icon beside the word, the state word below', JSON.stringify(q0));
 await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
 const q1 = await quick();
 ok(q1.pressed === 'false' && q1.state === '"off"', 'a press switches it at once; the state word follows', JSON.stringify(q1));
 await p.click('#quick .rk-btn'); await p.waitForTimeout(100);
+// The accent only on the primary button and the focus ring: checked controls stand in ink with the ground on them,
+// with a named accent too.
+{
+  const sparse = await p.evaluate(() => {
+    Rekta.prefs.set('accent', 'teal', { remember: false });
+    const rgb = (c) => { const e = document.createElement('i'); e.style.color = c; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+    const host = document.createElement('div');
+    host.className = 'rk';
+    host.innerHTML = '<label class="rk-switch"><input type="checkbox" checked> a</label><div class="rk-segments"><label><input type="radio" name="sparse" checked>a</label><label><input type="radio" name="sparse">b</label></div>'
+      + '<button class="rk-btn rk-btn--primary" type="button">go</button><button class="rk-btn" type="button" aria-pressed="true">on</button>';
+    document.body.append(host);
+    const box = host.querySelector('.rk-switch input'), seg = host.querySelector('.rk-segments > label'), [primary, pressed] = host.querySelectorAll('.rk-btn');
+    const ink = rgb('var(--rk-text-primary)'), ground = rgb('var(--rk-bg)'), accent = rgb('var(--rk-accent)');
+    const out = {
+      teal: accent !== ink, box: getComputedStyle(box).backgroundColor === ink,
+      segment: getComputedStyle(seg).backgroundColor === ink && getComputedStyle(seg).color === ground,
+      pressed: getComputedStyle(pressed).backgroundColor === ink && getComputedStyle(pressed).color === ground,
+      primary: getComputedStyle(primary).backgroundColor === accent, focus: rgb('var(--rk-focus)') === accent,
+    };
+    host.remove(); Rekta.prefs.set('accent', 'product', { remember: false });
+    return out;
+  });
+  ok(Object.values(sparse).every(Boolean), 'a named accent fills only the primary button and draws the focus ring; a checked box, a chosen segment and a pressed toggle button stand in ink', JSON.stringify(sparse));
+}
 await p.click('#builder .rk-toggle'); await p.waitForTimeout(100);
 ok((await p.getAttribute('#b-spark', 'role')) === 'switch' && !!(await p.$('#built .rk-spark')), 'a toggle is a switch; it adds a sparkline at once');
 await p.selectOption('#b-status', 'success'); await p.waitForTimeout(100);
@@ -1654,7 +1678,7 @@ ok((await p.evaluate(() => getComputedStyle(document.querySelector('#builder .rk
 await p.click('#find-token'); await p.keyboard.type('focus'); await p.waitForTimeout(150);
 ok((await p.getAttribute('#find-token', 'aria-expanded')) === 'true' && (await p.evaluate(() => document.querySelector(`#${document.querySelector('#find-token').getAttribute('aria-activedescendant')}`).textContent)).startsWith('--rk-focus'), 'the combobox filters as you type');
 await p.keyboard.press('Enter'); await p.waitForTimeout(100);
-ok((await p.inputValue('#find-token')) === '--rk-focus' && (await text(p, '#find-hint')).startsWith('#1a44ea'), 'Enter chooses; the hint shows the value', await text(p, '#find-hint'));
+ok((await p.inputValue('#find-token')) === '--rk-focus' && (await text(p, '#find-hint')).startsWith('var(--rk-accent)'), 'Enter chooses; the hint shows the value', await text(p, '#find-hint'));
 await p.fill('#find-token', 'nonsense'); await p.keyboard.press('Tab'); await p.waitForTimeout(100);
 ok((await p.inputValue('#find-token')) === '--rk-focus', 'leaving with other text puts the choice back');
 await p.focus('#find-token'); await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(100);

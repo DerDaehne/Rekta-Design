@@ -50,6 +50,21 @@ dots' fade in.
   section sets its content `space-xl` in, and a group title that is a
   direct child of the section stands `space-l` from what follows; three
   reference images show it (`motion-turn-out`, `sheet`, `toast`).
+- **A sparser accent** (colour.md, forms.md): the accent fills only the
+  primary button, a selected item, selected text and the accent surface,
+  and it is the focus ring. `focus` now takes the accent's value (ink by
+  default, so the blue ring is gone); every accent holds 3:1 on `bg` and
+  `surface` in each theme, contrast set and on the black ground, so the
+  ring does too (lowest: 3.01:1, pink in light and magenta in dark). On
+  a selected row or tree row the ring inside takes `on-accent`. Checked
+  controls are states, not actions, and stand in ink: a checked
+  checkbox or radio, a toggle switch's fill, the slider's fill, a chosen
+  segment and a pressed toggle button take `text-primary` with `bg` on
+  it (`accent-color` too). With the default accent (ink) they look as
+  before; with a product's or a named accent they no longer take it.
+  rekta-core draws the same; its chosen day keeps the accent and, with
+  focus, an inset ring in `on-accent`. Nine reference images show the
+  ink ring.
 
 ### Added
 

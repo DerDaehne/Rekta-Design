@@ -33,7 +33,7 @@
 
 /* Root ---------------------------------------------------------------------------------------------------------- */
 .rk {
-  background: var(--rk-bg); color: var(--rk-text-primary); accent-color: var(--rk-accent);
+  background: var(--rk-bg); color: var(--rk-text-primary); accent-color: var(--rk-text-primary);
   font-family: var(--rk-font-sans); font-size: var(--rk-font-size-s); line-height: var(--rk-line-height-body);
   -webkit-text-size-adjust: 100%;
 }
@@ -343,10 +343,10 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
    colours by itself, and only the line and the cursor say it runs. */
 .rk-btn:disabled, .rk-btn[aria-disabled='true']:not([data-rk-pending]) { border-color: var(--rk-disabled); background: none; color: var(--rk-disabled); cursor: not-allowed; }
 /* A toggle button (aria-pressed): one state a press switches at once, for a compact row of them (quick settings).
-   Pressed, the accent fill with on-accent words, like a chosen segment; not pressed, a quiet button. The icon sits
+   Pressed, an ink fill with ground-coloured words, like a chosen segment; not pressed, a quiet button. The icon sits
    beside the word, a state word (.rk-btn-state: "on", a network's name) below it; with data-on and data-off it writes
    the one that holds, as the toggle switch does. Disabled, it keeps its state: pressed, a disabled fill. */
-.rk-btn[aria-pressed='true'], .rk-btn[aria-pressed='true']:active { border-color: var(--rk-accent); background-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk-btn[aria-pressed='true'], .rk-btn[aria-pressed='true']:active { border-color: var(--rk-text-primary); background-color: var(--rk-text-primary); color: var(--rk-bg); }
 .rk-btn[aria-pressed='true']:active { background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
 .rk-btn[aria-pressed='false'] { border-color: transparent; color: var(--rk-text-contrast-high); }
 .rk-btn[aria-pressed='true']:is(:disabled, [aria-disabled='true']:not([data-rk-pending])) { border-color: var(--rk-disabled); background-color: var(--rk-disabled); color: var(--rk-bg); }
@@ -363,20 +363,20 @@ a.rk-tile > :not(.rk-tile-word), button.rk-tile > :not(.rk-tile-word) { position
 .rk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rk-space-s); }
 /* A checkbox or radio with its label; a group of them goes in .rk-choices. */
 .rk-switch { display: inline-flex; align-items: center; gap: var(--rk-space-s); min-height: var(--rk-control-height); font-weight: var(--rk-font-weight-semibold); cursor: pointer; }
-/* Drawn by Rekta, as rekta-core draws it, the same in every browser: a 20px square with a 2px frame; checked, the
-   accent with an on-accent mark (on the label, as inputs take no pseudo-elements everywhere). A radio is a ring, and
-   checked an accent ring around an accent dot. Pressed, the hover fill around it; never a hover tint. */
+/* Drawn by Rekta, as rekta-core draws it, the same in every browser: a 20px square with a 2px frame; checked, ink
+   with a ground-coloured mark (on the label, as inputs take no pseudo-elements everywhere). A radio is a ring, and
+   checked an ink ring around an ink dot. Pressed, the hover fill around it; never a hover tint. */
 .rk-switch { position: relative; }
 .rk-switch input {
   -webkit-appearance: none; appearance: none; flex: none; width: 20px; height: 20px; margin: 0;
   border: 2px solid var(--rk-text-primary); border-radius: 0; background: transparent; color: inherit; cursor: inherit;
 }
 .rk-switch input[type='radio'] { border-radius: 50%; }
-.rk-switch input:checked { border-color: var(--rk-accent); background-color: var(--rk-accent); }
-.rk-switch input[type='radio']:checked { background: radial-gradient(circle, var(--rk-accent) 0 4.5px, transparent 5.5px); }
+.rk-switch input:checked { border-color: var(--rk-text-primary); background-color: var(--rk-text-primary); }
+.rk-switch input[type='radio']:checked { background: radial-gradient(circle, var(--rk-text-primary) 0 4.5px, transparent 5.5px); }
 .rk-switch:has(> input[type='checkbox']:first-child:checked)::before {
   content: ''; position: absolute; left: 0; top: 50%; width: 20px; height: 20px; margin-top: -10px; pointer-events: none;
-  background-color: var(--rk-on-accent);
+  background-color: var(--rk-bg);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10l3.5 3.5L15 6.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") center / 20px no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10l3.5 3.5L15 6.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") center / 20px no-repeat;
 }
@@ -478,13 +478,13 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   background: linear-gradient(var(--rk-text-primary), var(--rk-text-primary)) no-repeat var(--_rk-busy-from) 0 / var(--_rk-busy-size) 100%; animation: rk-busy var(--rk-duration-busy) linear infinite;
 }
 
-/* Toggle switch, the Metro way: a square-cornered frame, the accent fill growing from the leading edge when on, a solid
+/* Toggle switch, the Metro way: a square-cornered frame, an ink fill growing from the leading edge when on, a solid
    ink bar as the thumb, and the state word beside it. The checkbox (role="switch") stays the real control. */
 .rk-toggle { position: relative; display: inline-flex; align-items: center; gap: var(--rk-space-s); min-height: var(--rk-control-height); font-weight: var(--rk-font-weight-semibold); cursor: pointer; }
 .rk-toggle > input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
 .rk-toggle-track {
   position: relative; flex: none; width: 46px; height: 22px; padding: 2px; border: 2px solid var(--rk-text-primary);
-  background: linear-gradient(var(--rk-accent), var(--rk-accent)) no-repeat; background-origin: content-box; background-clip: content-box; background-size: 0 100%;
+  background: linear-gradient(var(--rk-text-primary), var(--rk-text-primary)) no-repeat; background-origin: content-box; background-clip: content-box; background-size: 0 100%;
   transition: background-size var(--rk-duration-short) var(--rk-ease-base);
 }
 .rk-toggle-track::after {
@@ -516,11 +516,11 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 /* A disabled stepper: the field and both buttons, frames and signs. */
 .rk-stepper:has(> .rk-input:is(:disabled, [aria-disabled='true'])) > [data-rk-step] { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
 
-/* Slider: a 6px track filled with the accent up to the value, an ink bar as the thumb (rekta.js writes --_rk-v). */
+/* Slider: a 6px track filled with ink up to the value, an ink bar as the thumb (rekta.js writes --_rk-v). */
 .rk-range { -webkit-appearance: none; appearance: none; width: 100%; height: var(--rk-control-height); margin: 0; background: none; cursor: pointer; --_rk-v: 50%; }
-.rk-range::-webkit-slider-runnable-track { height: 6px; background: linear-gradient(var(--rk-accent), var(--rk-accent)) 0 / var(--_rk-v) 100% no-repeat, var(--rk-text-contrast-low); }
+.rk-range::-webkit-slider-runnable-track { height: 6px; background: linear-gradient(var(--rk-text-primary), var(--rk-text-primary)) 0 / var(--_rk-v) 100% no-repeat, var(--rk-text-contrast-low); }
 .rk-range::-moz-range-track { height: 6px; background: var(--rk-text-contrast-low); }
-.rk-range::-moz-range-progress { height: 6px; background: var(--rk-accent); }
+.rk-range::-moz-range-progress { height: 6px; background: var(--rk-text-primary); }
 .rk-range::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 24px; margin-top: -9px; border: 0; border-radius: 0; background: var(--rk-text-primary); }
 .rk-range::-moz-range-thumb { width: 10px; height: 24px; border: 0; border-radius: 0; background: var(--rk-text-primary); }
 .rk-range:focus-visible { outline: none; }
@@ -536,14 +536,14 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-range + output { min-width: 3.5em; font-weight: var(--rk-font-weight-medium); font-variant-numeric: tabular-nums; text-align: right; }
 .rk-slider { display: flex; align-items: center; gap: var(--rk-space-m); }
 
-/* Segments: two to five options side by side, one chosen; a row of joined buttons, the chosen one in the accent. */
+/* Segments: two to five options side by side, one chosen; a row of joined buttons, the chosen one in ink. */
 .rk-segments { position: relative; display: inline-flex; flex-wrap: wrap; margin: 0; padding: 0; border: 0; min-width: 0; }
-.rk-segments-slide { position: absolute; z-index: 0; background: var(--rk-accent); transform-origin: 0 50%; pointer-events: none; }
+.rk-segments-slide { position: absolute; z-index: 0; background: var(--rk-text-primary); transform-origin: 0 50%; pointer-events: none; }
 /* Joined frames overlap by their width: every label lies above the sliding block, the chosen one above its
    neighbours, so its accent frame shows at both joints, and the focus ring above all. */
 .rk-segments > label { z-index: 1; }
 .rk-segments[data-rk-sliding] > label { transition: none; }
-/* While the accent block slides in, the chosen label waits for it: no fill of its own, its text turns light halfway. */
+/* While the ink block slides in, the chosen label waits for it: no fill of its own, its text turns light halfway. */
 .rk-segments > label[data-rk-sliding]:has(> input:checked) { background-color: transparent; transition: color 0s linear calc(var(--rk-duration-short) / 2); }
 .rk-segments > label {
   position: relative; display: inline-flex; align-items: center; min-height: var(--rk-control-height); padding: 0 var(--rk-control-padding);
@@ -554,7 +554,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-segments > label:first-of-type { border-radius: var(--rk-radius-s) 0 0 var(--rk-radius-s); }
 .rk-segments > label:last-of-type { border-radius: 0 var(--rk-radius-s) var(--rk-radius-s) 0; }
 .rk-segments > label > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
-.rk-segments > label:has(> input:checked) { z-index: 2; border-color: var(--rk-accent); background-color: var(--rk-accent); color: var(--rk-on-accent); }
+.rk-segments > label:has(> input:checked) { z-index: 2; border-color: var(--rk-text-primary); background-color: var(--rk-text-primary); color: var(--rk-bg); }
 .rk-segments > label:has(> input:focus-visible) { z-index: 3; outline: 2px solid var(--rk-focus); outline-offset: 2px; }
 /* Disabled, one option or the whole group (aria-disabled on the fieldset): frames and words grey; the chosen one keeps
    its place as a grey fill. */
@@ -614,6 +614,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 [aria-expanded='true'] > .rk-tree-row > .rk-tree-twisty::before { transform: translate(1px, 1px) rotate(135deg); }
 .rk-tree [role='treeitem'][aria-selected='true'] > .rk-tree-row {
   --rk-text-primary: var(--rk-on-accent); --rk-text-contrast-high: var(--rk-on-accent); --rk-text-contrast-medium: var(--rk-on-accent);
+  --rk-focus: var(--rk-on-accent);
   background-color: var(--rk-accent); color: var(--rk-on-accent);
 }
 .rk-tree [role='treeitem']:focus-visible > .rk-tree-row { outline: 2px solid var(--rk-focus); outline-offset: -2px; }
@@ -946,8 +947,9 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 
 /* Selection, the Metro way: a selected row or entry takes the accent fill (ink unless the product sets an accent)
    with on-accent text and a checkmark at its leading edge, no box. It nudges where it is pressed (data-rk-press):
-   less than a tile, rows being long and low. Its colour changes after the nudge. The text tokens follow the fill,
-   so tags, facts and links stay readable on it; a status square keeps its colour inside an on-accent ring. */
+   less than a tile, rows being long and low. Its colour changes after the nudge. The text tokens and the focus ring
+   (the accent, which would sink into its own fill) follow the fill, so tags, facts, links and a ring inside stay
+   readable on it; a status square keeps its colour inside an on-accent ring. */
 [data-rk-press]:not(.rk-tile) {
   transition: transform var(--rk-duration-short) var(--rk-ease-base), background-color var(--rk-duration-short) var(--rk-ease-base), color var(--rk-duration-short) var(--rk-ease-base);
   -webkit-tap-highlight-color: transparent; cursor: pointer;
@@ -958,6 +960,7 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 }
 [data-rk-select] > [aria-selected='true'], .rk-virtual-row[aria-selected='true'] {
   --rk-text-primary: var(--rk-on-accent); --rk-text-contrast-high: var(--rk-on-accent); --rk-text-contrast-medium: var(--rk-on-accent); --rk-text-contrast-low: transparent;
+  --rk-focus: var(--rk-on-accent);
   background-color: var(--rk-accent); color: var(--rk-on-accent);
 }
 :is([data-rk-select] > [aria-selected='true'], .rk-virtual-row[aria-selected='true'], .rk-tree [aria-selected='true'] > .rk-tree-row) .rk-tag::before { box-shadow: 0 0 0 1px var(--rk-on-accent); }
@@ -1358,7 +1361,7 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
   .rk-btn--primary:hover { background-color: var(--rk-accent); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
   .rk-accent-surface .rk-btn--primary:hover { background-color: var(--rk-on-accent); }
   .rk-btn:disabled:hover, .rk-btn[aria-disabled='true']:not([data-rk-pending]):hover { background: none; }
-  .rk-btn[aria-pressed='true']:hover { background-color: var(--rk-accent); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
+  .rk-btn[aria-pressed='true']:hover { background-color: var(--rk-text-primary); background-image: linear-gradient(var(--rk-hover), var(--rk-hover)); }
   .rk-btn[aria-pressed='true']:is(:disabled, [aria-disabled='true']:not([data-rk-pending])):hover { background: var(--rk-disabled); }
   .rk-btn[aria-pressed='false']:hover { color: var(--rk-text-primary); }
   .rk-input:hover:not(:disabled, [aria-disabled='true']) { border-color: var(--rk-text-primary); }

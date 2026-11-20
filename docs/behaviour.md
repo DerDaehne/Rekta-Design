@@ -213,7 +213,7 @@ them:
 | `data-rk-phase="leaving"` | a sheet | Leaving, before it closes. |
 | `data-rk-asking` | a sheet | It asks before unsaved input goes (`sheet(dialog, { dirty })`). |
 | `data-rk-unselecting` | the app bar | Its own commands coming back after the selection mode. |
-| `data-rk-sliding` | segments, the chosen label | The accent block is sliding to the new choice. |
+| `data-rk-sliding` | segments, the chosen label | The ink block is sliding to the new choice. |
 | `data-rk-grow` | a chart's bars | Growing in on the first draw. |
 | `data-rk-dragging`, `data-rk-grabbed` | a sortable item | Being dragged; picked up from the keyboard. |
 | `data-rk-sorting` | a sortable list | An item is being dragged. |

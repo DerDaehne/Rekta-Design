@@ -25,6 +25,7 @@ const rk_color *rk__theme_colors(int k) { return k >= 4 ? rk_tok_colors_black[k 
 rk_color rk_color_of(rk_role role) {
   if (role <= RK_ROLE_NONE || role >= RK__ROLE_COUNT) return 0;
   int k = rk__theme_index();
+  if (role == RK_ROLE_FOCUS) role = RK_ROLE_ACCENT;          /* the focus ring is the accent (docs/colour.md) */
   if ((role == RK_ROLE_ACCENT || role == RK_ROLE_ON_ACCENT) && rk__prefs.accent[k][0]) return rk__prefs.accent[k][role == RK_ROLE_ON_ACCENT];
   return rk__theme_colors(k)[role];
 }

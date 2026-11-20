@@ -15,8 +15,9 @@ stands for the product, a status or a selection, and nothing is told
 apart by it. Rekta Design does not pick a hue to represent "the
 product": its one product slot, the **accent** (`color.*.accent` with
 `on-accent`), is ink until a product sets it per theme or picks a named
-one. It fills the primary button, checked controls, a selected item and
-at most one accent surface per place, never a tile or a status, and
+one. It fills the primary button, a selected item and at most one
+accent surface per place, and it is the focus ring; checked controls
+stand in ink. It is never a tile or a status, and
 must hold 3:1 on the ground and stay apart from status
 ([The accent](#the-accent)). Hierarchy between
 content comes from typography, spacing and hairlines
@@ -142,8 +143,8 @@ so on black each part stands off the ground by more than in dark:
   2.24:1 against 1.87:1. `--check` holds both at least to the dark
   ground's.
 - **Text, status and the accent** are the dark theme's and gain on
-  black: `text-contrast-medium` 6.82:1, `focus` 6.17:1, every status
-  mark above 5:1. Status tiles and soft tints are mixed toward the
+  black: `text-contrast-medium` 6.82:1, every status mark above 6:1,
+  ink (the default accent and focus ring) 18.65:1. Status tiles and soft tints are mixed toward the
   surface and keep their ink at the dark theme's ratios. Named accents
   take their dark pair; ink takes black words.
 - **Glass is the ground**, as under less transparency: a blur over black
@@ -161,9 +162,18 @@ black sets like the themes.
 ## The accent
 
 One hue is the product's: the accent and the text on it, per theme. It
-fills the primary button, checked controls, a selected item, selected
-text and at most one accent surface per place. It is never a tile fill
-and never a status. Ink is the default.
+fills the primary button, a selected item, selected text and at most
+one accent surface per place, and it is the focus ring. It is never a
+tile fill and never a status. Ink is the default.
+
+The accent is the one loud place: the action and where focus is.
+Checked controls are states, not actions, so they stand in ink: a
+checked checkbox or radio, a toggle switch that is on, a slider's fill,
+a chosen segment and a pressed toggle button take `text-primary` with
+`bg` on it (the mark, the words), in every theme and contrast set; a
+pressed, hovered, focused or disabled one keeps its rules. Ink on the
+ground holds 15:1 and more in every theme, above the 7:1 of more
+contrast.
 
 ### Apart from status
 
@@ -182,7 +192,7 @@ Tritanopia is measured and reported, not required, as for the statuses
 among themselves. 0.09 is the distance the statuses keep from each
 other. Under red-green colour blindness the accent asks less (0.05)
 because it is never the only signal: a selection has its checkmark, a
-button its words, a checked control its mark. At 0.09 there, almost only
+button its words, a focus ring its shape around the control. At 0.09 there, almost only
 violets would be left.
 
 Each number can be recomputed without JavaScript: OKLab and OKLCH from
@@ -309,10 +319,14 @@ picks a tile's fill.
 
 ## Focus, hover, disabled
 
-`focus` differs between themes (a darker blue in light, a brighter blue
-in dark) specifically so the focus ring clears AA against whatever it's
-drawn on in that theme — a single focus colour used in both themes failed
-contrast on at least one surface in testing. `hover` is a translucent
+The focus ring is the accent: `focus` takes the accent's value, ink until
+a product sets one or a named accent is picked. The accent holds 3:1 on
+`bg` and `surface` in every theme, contrast set and on the black ground
+(its own rule), so the ring does too, for the default and for every
+named accent; `--check` measures them. Where the ring stands on a fill
+of the accent itself (a selected row, the accent surface) it takes the
+fill's text colour, `on-accent`, as on a status tile it takes the
+tile's ink ([accessibility.md](accessibility.md#focus-on-fills)). `hover` is a translucent
 neutral overlay (same rgba value in both themes, since it is applied on
 top of the theme's own surface colour). `disabled` is a single flat grey
 per theme, used for text and borders, never as a fill.
@@ -352,7 +366,7 @@ for line and square). The square turns `success` only where it reports
 A product has two colour slots of its own, both set per theme:
 
 - **The accent** (`--rk-accent`, `--rk-on-accent`): its one hue, for the
-  primary button, checked controls, a selected item and one accent
+  primary button, the focus ring, a selected item and one accent
   surface per place; its own pairs or a named one
   ([The accent](#the-accent)). `build.mjs --check-product` checks a
   product's values.

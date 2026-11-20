@@ -2,14 +2,15 @@
    segments. Every one holds a number - 0 or 1, the chosen index - read and set with rk_control_value and
    rk_control_set_value; rk_control_on_change hears what the user changes (not what the app sets).
 
-   Checkbox: a 20px square with a 2px ink border, filled with the accent and checked when on; Space toggles.
-   Options: a 20px circle each, the chosen one ringed and dotted in the accent; the group is one stop for Tab, the
-   arrows choose. Toggle: a 46 x 22 square-cornered frame, the accent growing from the leading edge, an ink bar as the
+   Checked controls are states, not actions: they stand in ink with the ground's colour on them (docs/colour.md).
+   Checkbox: a 20px square with a 2px ink border, filled with ink and checked when on; Space toggles.
+   Options: a 20px circle each, the chosen one ringed and dotted in ink; the group is one stop for Tab, the
+   arrows choose. Toggle: a 46 x 22 square-cornered frame, ink growing from the leading edge, an ink bar as the
    thumb, the state word beside it; the thumb moves over duration-short. Segments: two to five options side by side
-   in joined 2px frames, the chosen one in the accent; the accent block slides to a new choice, and the text turns
+   in joined 2px frames, the chosen one in ink; the ink block slides to a new choice, and the text turns
    light halfway.
 
-   Slider: a 6px track filled with the accent up to the value, a 10 x 24 ink bar as the thumb, the value beside it in
+   Slider: a 6px track filled with ink up to the value, a 10 x 24 ink bar as the thumb, the value beside it in
    tabular figures; a press anywhere moves it there and a drag follows. Stepper: minus, the number, plus, joined in
    1px frames; a press steps, a held one repeats; typing a number and Enter (or leaving) takes it, Escape puts it
    back. Both snap to their step between their minimum and maximum, and know Up, Down, Page Up, Page Down, Home and
@@ -66,9 +67,9 @@ static rk_size check_measure(rk_view *v, rk_size avail, void *st) {
 static void draw_box(rk_canvas *c, rk_rect b, bool on, bool off) {
   rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
   if (on) {
-    rk_canvas_fill_rect(c, b, off ? ink : rk_color_of(RK_ROLE_ACCENT));
+    rk_canvas_fill_rect(c, b, ink);                        /* checked: ink, the ground's colour for the mark */
     rk_point mark[3] = { { b.x + 5, b.y + 10 }, { b.x + 8.5f, b.y + 13.5f }, { b.x + 15, b.y + 6.5f } };
-    rk_canvas_polyline(c, mark, 3, 2, rk_color_of(RK_ROLE_ON_ACCENT));
+    rk_canvas_polyline(c, mark, 3, 2, rk_color_of(RK_ROLE_BG));
   } else rk_canvas_stroke_rect(c, b, 2, ink);
 }
 
@@ -136,14 +137,14 @@ static void choices_draw(rk_view *v, rk_canvas *c, void *st) {
   choices *o = st;
   float s = box_size(), H = row_h();
   rk_textfmt f = strong_fmt();
-  rk_color ink = rk_color_of(rk__view_disabled(v) ? RK_ROLE_DISABLED : RK_ROLE_TEXT), accent = rk__view_disabled(v) ? ink : rk_color_of(RK_ROLE_ACCENT);
+  rk_color ink = rk_color_of(rk__view_disabled(v) ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
   for (int i = 0; i < o->n; i++) {
     rk_rect b = { 0, i * H + (H - s) / 2, s, s };
     bool on = i == (int)o->c.value;
     if (i == o->down && !rk__view_disabled(v)) rk_canvas_fill_round_rect(c, (rk_rect){ b.x - 4, b.y - 4, s + 8, s + 8 }, s / 2 + 4, rk_color_of(RK_ROLE_HOVER));
-    rk_canvas_fill_round_rect(c, b, s / 2, on ? accent : ink);
+    rk_canvas_fill_round_rect(c, b, s / 2, ink);
     rk_canvas_fill_round_rect(c, (rk_rect){ b.x + 2, b.y + 2, s - 4, s - 4 }, s / 2 - 2, rk_color_of(RK_ROLE_BG));
-    if (on) rk_canvas_fill_round_rect(c, (rk_rect){ b.x + 5, b.y + 5, s - 10, s - 10 }, s / 2 - 5, accent);
+    if (on) rk_canvas_fill_round_rect(c, (rk_rect){ b.x + 5, b.y + 5, s - 10, s - 10 }, s / 2 - 5, ink);
     rk__text_draw(c, o->labels[i], -1, s + rk_metric_of(RK_SPACE_S), i * H + (H - f.size) / 2, &f, ink);
   }
   if (rk__shows_focus(v)) {
@@ -227,7 +228,7 @@ static void toggle_draw(rk_view *v, rk_canvas *c, void *st) {
   rk_rect track = { x, y, TRACK_W, TRACK_H };
   if (t->down && !off) rk_canvas_fill_rect(c, track, rk_color_of(RK_ROLE_HOVER));
   rk_canvas_stroke_rect(c, track, 2, ink);
-  if (p > 0 && !off) rk_canvas_fill_rect(c, (rk_rect){ x + 4, y + 4, p * (TRACK_W - 8 - 14), TRACK_H - 8 }, rk_color_of(RK_ROLE_ACCENT));
+  if (p > 0 && !off) rk_canvas_fill_rect(c, (rk_rect){ x + 4, y + 4, p * (TRACK_W - 8 - 14), TRACK_H - 8 }, ink);
   rk_canvas_fill_rect(c, (rk_rect){ x + p * (TRACK_W - 12), y, 12, TRACK_H }, ink);
   rk__text_draw(c, t->c.value ? rk__words()->on : rk__words()->off, -1, x + TRACK_W + rk_metric_of(RK_SPACE_S), (h - wf.size) / 2, &wf, rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT_HIGH));
   if (rk__shows_focus(v)) rk__focus_ring(c, (rk_rect){ x, y, TRACK_W, TRACK_H }, 4);
@@ -299,34 +300,26 @@ static void segments_draw(rk_view *v, rk_canvas *c, void *st) {
   float h = v->pframe.h, p = RK_CLAMP(v->pvalue, 0.0f, 1.0f);
   int to = (int)s->c.value;
   bool off = rk__view_disabled(v);
-  rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT), accent = off ? ink : rk_color_of(RK_ROLE_ACCENT);
+  rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
   float rad = rk_metric_of(RK_RADIUS_S);
   rk_rect all = { 0, 0, s->x[s->n], h };                   /* one frame, rounded at its ends, with lines between */
   if (s->down >= 0 && s->down != to && !off) { rk_canvas_push_clip(c, seg_rect(s, s->down, h)); rk_canvas_fill_round_rect(c, all, rad, rk_color_of(RK_ROLE_HOVER)); rk_canvas_pop_clip(c); }
-  if (to >= 0) {                                           /* the accent block, sliding from where it was */
+  if (to >= 0) {                                           /* the ink block, sliding from where it was */
     rk_rect b = seg_rect(s, to, h), a = s->from >= 0 && s->from < s->n ? seg_rect(s, s->from, h) : b;
     float x0 = a.x + (b.x - a.x) * p, x1 = x0 + a.w + (b.w - a.w) * p, W = all.w;
     float l = RK_MAX(x0, rad), r = RK_MIN(x1, W - rad);   /* the middle exact to the subpixel while it slides */
-    if (r > l) rk_canvas_fill_rect(c, (rk_rect){ l, 0, r - l, h }, accent);
-    if (x0 < rad) { rk_canvas_push_clip(c, (rk_rect){ x0, 0, RK_MIN(x1, rad) - x0, h }); rk_canvas_fill_round_rect(c, all, rad, accent); rk_canvas_pop_clip(c); }
-    if (x1 > W - rad) { float e = RK_MAX(x0, W - rad); rk_canvas_push_clip(c, (rk_rect){ e, 0, x1 - e, h }); rk_canvas_fill_round_rect(c, all, rad, accent); rk_canvas_pop_clip(c); }
+    if (r > l) rk_canvas_fill_rect(c, (rk_rect){ l, 0, r - l, h }, ink);
+    if (x0 < rad) { rk_canvas_push_clip(c, (rk_rect){ x0, 0, RK_MIN(x1, rad) - x0, h }); rk_canvas_fill_round_rect(c, all, rad, ink); rk_canvas_pop_clip(c); }
+    if (x1 > W - rad) { float e = RK_MAX(x0, W - rad); rk_canvas_push_clip(c, (rk_rect){ e, 0, x1 - e, h }); rk_canvas_fill_round_rect(c, all, rad, ink); rk_canvas_pop_clip(c); }
   }
   rk__canvas_ring(c, all, rad, 2, ink);
   for (int i = 1; i < s->n; i++) rk_canvas_fill_rect(c, (rk_rect){ s->x[i], 0, 2, h }, ink);
-  if (to >= 0) {                                           /* the chosen one's frame is the accent's, over its neighbours */
-    rk_rect b = seg_rect(s, to, h);
-    rk_canvas_push_clip(c, b);
-    rk__canvas_ring(c, all, rad, 2, accent);
-    rk_canvas_fill_rect(c, (rk_rect){ b.x, 0, 2, h }, accent);
-    rk_canvas_fill_rect(c, (rk_rect){ b.x + b.w - 2, 0, 2, h }, accent);
-    rk_canvas_pop_clip(c);
-  }
   for (int i = 0; i < s->n; i++) {
     rk_rect b = seg_rect(s, i, h);
     rk_textfmt f = strong_fmt();
     bool lit = i == to && p >= 0.5f;
     float tw = rk__text_width(s->labels[i], -1, &f);
-    rk__text_draw(c, s->labels[i], -1, b.x + (b.w - tw) / 2, (h - f.size) / 2, &f, lit ? rk_color_of(RK_ROLE_ON_ACCENT) : ink);
+    rk__text_draw(c, s->labels[i], -1, b.x + (b.w - tw) / 2, (h - f.size) / 2, &f, lit ? rk_color_of(RK_ROLE_BG) : ink);
   }
   if (rk__shows_focus(v)) rk__focus_ring(c, seg_rect(s, to >= 0 ? to : 0, h), 4);
 }
@@ -454,7 +447,7 @@ static void slider_draw(rk_view *v, rk_canvas *c, void *st) {
   bool off = rk__view_disabled(v);
   rk_color ink = rk_color_of(off ? RK_ROLE_DISABLED : RK_ROLE_TEXT);
   rk_canvas_fill_rect(c, (rk_rect){ x0 - 5, cy - 3, x1 - x0 + 10, 6 }, rk_color_of(RK_ROLE_TEXT_LOW));
-  rk_canvas_fill_rect(c, (rk_rect){ x0 - 5, cy - 3, vx - x0 + 5, 6 }, off ? ink : rk_color_of(RK_ROLE_ACCENT));
+  rk_canvas_fill_rect(c, (rk_rect){ x0 - 5, cy - 3, vx - x0 + 5, 6 }, ink);
   rk_rect thumb = { vx - 5, cy - 12, 10, 24 };
   rk_canvas_fill_rect(c, thumb, ink);
   char text[32];
@@ -929,7 +922,8 @@ static void month_body(rk_canvas *c, float W, int cur, int chosen, bool ring, bo
     rk_color k = ink;
     if (value == chosen) { rk_canvas_fill_rect(c, in, rk_color_of(RK_ROLE_ACCENT)); k = rk_color_of(RK_ROLE_ON_ACCENT); }
     else if (value == now) rk_canvas_stroke_rect(c, in, 1, ink);
-    if (value == cur && ring) rk__focus_ring(c, cell, 0);
+    if (value == cur && ring && value == chosen) rk_canvas_stroke_rect(c, (rk_rect){ in.x + 2, in.y + 2, in.w - 4, in.h - 4 }, 2, k);
+    else if (value == cur && ring) rk__focus_ring(c, cell, 0);
     char text[12];
     snprintf(text, sizeof text, "%d", d);
     rk__text_draw(c, text, -1, cell.x + (cell.w - rk__text_width(text, -1, &f)) / 2, cell.y + (cell.h - f.size) / 2, &f, k);

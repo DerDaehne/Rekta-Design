@@ -309,7 +309,7 @@ static void draw_row(rk_view *v, rk_canvas *c, list *l, int i, float y, bool rin
       rk__text_draw(c, s, -1, col->flags & RK_COLUMN_NUMERIC ? cx + cw - tw : cx, y + (H - f.size * f.line) / 2, &f, ink);
       rk_canvas_pop_clip(c);
     }
-    if (ring) rk__focus_ring(c, (rk_rect){ 0, y, W, H }, 0);
+    if (ring) rk_canvas_stroke_rect(c, on ? (rk_rect){ 2, y + 2, W - 4, H - 4 } : (rk_rect){ 0, y, W, H }, 2, on ? ink : rk_color_of(RK_ROLE_FOCUS));
     return;
   }
   /* the meta or status on the right, then the title in what is left */
@@ -333,7 +333,7 @@ static void draw_row(rk_view *v, rk_canvas *c, list *l, int i, float y, bool rin
     rk__text_draw(c, it.title, -1, left, y + (H - f.size * f.line) / 2, &f, ink);
     rk_canvas_pop_clip(c);
   }
-  if (ring) rk__focus_ring(c, (rk_rect){ 0, y, W, H }, 0);
+  if (ring) rk_canvas_stroke_rect(c, on ? (rk_rect){ 2, y + 2, W - 4, H - 4 } : (rk_rect){ 0, y, W, H }, 2, on ? ink : rk_color_of(RK_ROLE_FOCUS));
 }
 
 /* Only the rows the frame draws: those between the top and the bottom of the canvas's clip. */

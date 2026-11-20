@@ -4442,7 +4442,7 @@ export function stepper(el) {
   return { destroy() { stop(); el.removeEventListener('pointerdown', down); el.removeEventListener('click', click); input.removeEventListener('input', paint); } };
 }
 
-// Segments: the accent block slides from the old choice to the new one over duration-short; the new segment takes
+// Segments: the ink block slides from the old choice to the new one over duration-short; the new segment takes
 // its fill when the block arrives.
 const segChosen = new WeakMap();
 const segOf = (g) => { const i = g.querySelector('input:checked'); return i ? i.closest('label') : null; };

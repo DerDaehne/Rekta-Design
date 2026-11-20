@@ -43,7 +43,7 @@
       "accent": {
         "$type": "color",
         "$value": "{color.light.text.primary}",
-        "$description": "Optional product accent slot: primary button fill, checked controls, a selected item's fill, one accent surface per place, a link colour if the product wants one. Ink until a product sets it per theme or picks a named accent (tokens/rekta.accents.json). Never a tile, never a status. Must hold 3:1 on bg and surface and stay apart from status: 0.09 (OKLab) from every status-*-full and -tile, 0.05 under protanopia and deuteranopia, and its hue 20° from each status hue unless its chroma is below 0.05 (docs/colour.md)."
+        "$description": "Optional product accent slot: primary button fill, the focus ring (focus), a selected item's fill, one accent surface per place, a link colour if the product wants one. Ink until a product sets it per theme or picks a named accent (tokens/rekta.accents.json). Never a tile, never a status, never a checked control (those are ink). Must hold 3:1 on bg and surface and stay apart from status: 0.09 (OKLab) from every status-*-full and -tile, 0.05 under protanopia and deuteranopia, and its hue 20° from each status hue unless its chroma is below 0.05 (docs/colour.md)."
       },
       "on-accent": {
         "$type": "color",
@@ -149,8 +149,8 @@
       },
       "focus": {
         "$type": "color",
-        "$value": "#1a44ea",
-        "$description": "Focus ring on neutral surfaces (bg, surface), 3:1 or better in both themes. On a status tile use the tile's own text colour as an inset ring instead."
+        "$value": "{color.light.accent}",
+        "$description": "Focus ring: the accent, ink until a product sets one or a named accent is picked. It holds 3:1 or better on bg and surface in every theme by the accent's rule. On a fill of the accent itself (a selected item, the accent surface) and on a status tile, the fill's own text colour as an inset ring instead."
       },
       "hover": {
         "$type": "color",
@@ -214,7 +214,7 @@
       "accent": {
         "$type": "color",
         "$value": "{color.dark.text.primary}",
-        "$description": "Optional product accent slot: primary button fill, checked controls, a selected item's fill, one accent surface per place, a link colour if the product wants one. Ink until a product sets it per theme or picks a named accent (tokens/rekta.accents.json). Never a tile, never a status. Must hold 3:1 on bg and surface and stay apart from status: 0.09 (OKLab) from every status-*-full and -tile, 0.05 under protanopia and deuteranopia, and its hue 20° from each status hue unless its chroma is below 0.05 (docs/colour.md)."
+        "$description": "Optional product accent slot: primary button fill, the focus ring (focus), a selected item's fill, one accent surface per place, a link colour if the product wants one. Ink until a product sets it per theme or picks a named accent (tokens/rekta.accents.json). Never a tile, never a status, never a checked control (those are ink). Must hold 3:1 on bg and surface and stay apart from status: 0.09 (OKLab) from every status-*-full and -tile, 0.05 under protanopia and deuteranopia, and its hue 20° from each status hue unless its chroma is below 0.05 (docs/colour.md)."
       },
       "on-accent": {
         "$type": "color",
@@ -320,8 +320,8 @@
       },
       "focus": {
         "$type": "color",
-        "$value": "#178bff",
-        "$description": "Focus ring on neutral surfaces (bg, surface), 3:1 or better in both themes. On a status tile use the tile's own text colour as an inset ring instead."
+        "$value": "{color.dark.accent}",
+        "$description": "Focus ring: the accent, ink until a product sets one or a named accent is picked. It holds 3:1 or better on bg and surface in every theme by the accent's rule. On a fill of the accent itself (a selected item, the accent surface) and on a status tile, the fill's own text colour as an inset ring instead."
       },
       "hover": {
         "$type": "color",

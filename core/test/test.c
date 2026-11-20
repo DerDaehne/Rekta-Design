@@ -1176,7 +1176,7 @@ static void test_controls(void) {
   segments *sg = seg->state;
   click(w, (rk_point){ r.x + sg->x[2] + 10, r.y + r.h / 2 }, 10);
   rk_app_run_for(rk_duration_of(RK_DURATION_SHORT) / 2);
-  CHECK(rk_control_value(seg) == 2 && seg->pvalue > 0.1f && seg->pvalue < 0.9f, "a segment is chosen, the accent sliding (%.2f)", seg->pvalue);
+  CHECK(rk_control_value(seg) == 2 && seg->pvalue > 0.1f && seg->pvalue < 0.9f, "a segment is chosen, the ink block sliding (%.2f)", seg->pvalue);
   rk_window_focus(w, seg);
   key(w, RK_KEY_LEFT, 0); CHECK(rk_control_value(seg) == 1, "Left: the one before");
   key(w, RK_KEY_HOME, 0); key(w, RK_KEY_END, 0); CHECK(rk_control_value(seg) == 2, "Home and End");
@@ -3743,6 +3743,30 @@ static void test_section_space(void) {
   done(w);
 }
 
+/* Checked controls stand in ink with the ground on them; a named accent fills only the primary button (docs/colour.md). */
+static void test_checked_ink(void) {
+  CHECK(rk_app_set_accent_named("teal"), "teal");
+  rk_window *w = window(500, 400);
+  rk_view *page = col(16, 16);
+  static const char *const options[] = { "one", "two" };
+  rk_view *check = rk_add(page, rk_check("done", true)), *radio = rk_add(page, rk_choices(options, 2, 0));
+  rk_view *toggle = rk_add(page, rk_toggle("calm", true)), *segments = rk_add(page, rk_segments(options, 2, 0));
+  rk_view *slider = rk_add(page, rk_slider(0, 100, 1, 60)), *primary = rk_add(page, rk_button("go", NULL, NULL));
+  rk_button_set_kind(primary, RK_BUTTON_PRIMARY);
+  show(w, page, "checked");
+  rk_app_run_for(400);
+  rk_color ink = rk_color_of(RK_ROLE_TEXT), accent = rk_color_of(RK_ROLE_ACCENT);
+  CHECK(accent != ink && pixels_of(w, rk__window_rect(primary), accent) > 200, "the primary button takes the accent");
+  rk_view *checked[] = { check, radio, toggle, segments, slider };
+  static const char *const name[] = { "a checked box", "a chosen radio", "a toggle that is on", "a chosen segment", "a slider's fill" };
+  for (int i = 0; i < 5; i++) {
+    rk_rect r = rk__window_rect(checked[i]);
+    CHECK(pixels_of(w, r, accent) == 0 && pixels_of(w, r, ink) > 20, "%s stands in ink (%d accent pixels)", name[i], pixels_of(w, r, accent));
+  }
+  rk_app_set_accent(0, 0);
+  done(w);
+}
+
 /* The accent's rules and the named accents (docs/colour.md), and content fills in a tile grid (docs/tiles.md). */
 static void test_accents(void) {
   double chroma;
@@ -4057,6 +4081,7 @@ static void launch(void *user) {
   test_contrast();
   test_black();
   test_section_space();
+  test_checked_ink();
   test_accents();
   test_type_ahead();
   test_wide_pivot();
