@@ -144,6 +144,19 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
     ok(n.low.r < 7 && !n.framed && !n.opaque && n.glassLow >= 4.5, `${scheme}: contrast "normal" keeps the design's colours against the system's setting; text on glass over white and black holds 4.5:1`, `${n.low.r.toFixed(2)} ${n.framed} ${n.opaque} ${n.glassLow.toFixed(2)}`);
     await c.close();
   }
+  // The black ground: a pref, only under the dark theme; glass is the ground and the bar does not blur.
+  {
+    const d = await open({ colorScheme: 'dark' }), ground = () => d.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--rk-bg').trim());
+    await d.evaluate(() => Rekta.prefs.set('ground', 'black', { remember: false })); await d.waitForTimeout(400);
+    const b = await measure(d);
+    ok(await ground() === '#000000' && b.opaque && /^(none)?$/.test(b.blur) && b.low.r >= 4.5 && b.glassLow >= 4.5, 'dark, ground "black": a black ground, glass opaque and the bar unblurred, every text pair at 4.5:1', `${await ground()} ${b.opaque} ${b.blur} ${b.low.what} ${b.low.r.toFixed(2)}`);
+    await d.evaluate(() => Rekta.prefs.set('contrast', 'more', { remember: false })); await d.waitForTimeout(400);
+    const bm = await measure(d);
+    ok(await ground() === '#000000' && bm.low.r >= 7 && bm.framed, 'black with more contrast: still black, every text pair at 7:1, the frames', `${await ground()} ${bm.low.what} ${bm.low.r.toFixed(2)}`);
+    await d.evaluate(() => { Rekta.prefs.set('contrast', 'system', { remember: false }); Rekta.prefs.set('theme', 'light', { remember: false }); }); await d.waitForTimeout(400);
+    ok(await ground() !== '#000000' && /blur/.test((await measure(d)).blur), 'the light theme keeps its own ground and glass under "black"', await ground());
+    await d.close();
+  }
   const c = await open();
   const shading = (page) => page.evaluate(() => { const d = document.createElement('dialog'); d.className = 'rk-recent'; document.body.append(d); d.showModal(); const b = getComputedStyle(d, '::backdrop').backdropFilter; d.remove(); return b; });
   const plain = await measure(c);

@@ -49,15 +49,15 @@
     const h = Math.round(tok.px('--rk-control-height'));
     $('#env-density').textContent = `${prefs.get('density') === 'auto' ? 'by pointer' : prefs.get('density')} · ${h}px controls`;
     const dark = root.dataset.theme === 'dark' || (root.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-    $('#env-theme').textContent = `${prefs.get('theme')} · ${dark ? 'dark' : 'light'}`;
+    $('#env-theme').textContent = `${prefs.get('theme')} · ${dark ? (prefs.get('ground') === 'black' ? 'dark on black' : 'dark') : 'light'}`;
     const m = prefs.get('motion');
     $('#env-motion').textContent = m === 'system' ? (reduced.matches ? 'system · reduced' : 'system · on') : m;
     $('#env-class').textContent = `${getComputedStyle($('#pan')).display === 'flex' ? 'sideways' : 'compact'} · ${innerWidth} × ${innerHeight}`;
   }
   addEventListener('resize', env);
 
-  /* ---------- look: theme, density, motion, contrast, transparency (Rekta prefs) and the accent slot ---------- */
-  const PREFS = ['theme', 'density', 'motion', 'contrast', 'transparency', 'accent'];
+  /* ---------- look: theme, ground, density, motion, contrast, transparency (Rekta prefs) and the accent slot ---------- */
+  const PREFS = ['theme', 'ground', 'density', 'motion', 'contrast', 'transparency', 'accent'];
   function paintPrefs() {
     for (const name of PREFS) { const r = $(`input[name=${name}][value="${prefs.get(name)}"]`); if (r) r.checked = true; }
     $('#theme-word').textContent = prefs.get('theme');

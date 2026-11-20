@@ -13,7 +13,7 @@ the same sources without reading a line of CSS. This page is the guide.
 | File | What it is | Who reads it |
 |---|---|---|
 | `tokens/rekta.tokens.json` | The source, in [DTCG](https://tr.designtokens.org/format/) format, with aliases and a `$description` on every token. One type is Rekta's own, not DTCG's: `fluidDimension`, a length between `min` and `max` that follows the width of its box ([Values and units](#values-and-units)). | Token tools (Style Dictionary, Tokens Studio, Figma plugins), and anyone generating code. |
-| `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme (`light`, `dark`, and `light-contrast`, `dark-contrast` for more contrast, each complete) and density. | Native implementations. Start here. |
+| `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme (`light`, `dark`, and `light-contrast`, `dark-contrast` for more contrast, `black`, `black-contrast` for the black ground, each complete) and density. | Native implementations. Start here. |
 | `dist/rekta.tokens.css` | The resolved values as `--rk-` custom properties, with theme, density and reduced-motion switching. | Web projects. |
 | `tokens/rekta.accents.json` | The named accents: an accent and the text on it per theme and contrast set, checked ([colour.md](colour.md#named-accents)). Resolved as `accents` in `dist/rekta.tokens.json`. | Anyone offering an accent by name. |
 | `dist/rekta.color.js` | The colour rules as a module without dependencies: contrast, OKLab distance and colour blindness, apart from status, an accent's check and derivation. | A product that checks or derives colours at run time; the reference for porting them. |
@@ -31,7 +31,7 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 
 | Source path | Name | Example |
 |---|---|---|
-| `color.<theme>.<a>.<b>` | `a-b` | `color.light.status.error.tile` → `status-error-tile`; `color.light-contrast.*` holds the same names, for more contrast |
+| `color.<theme>.<a>.<b>` | `a-b` | `color.light.status.error.tile` → `status-error-tile`; `color.light-contrast.*` holds the same names, for more contrast, and `color.black.*` for the black ground |
 | `typography.font-family.<x>` | `font-<x>` | `font-sans` |
 | `typography.weight.<x>` | `font-weight-<x>` | `font-weight-semibold` |
 | `typography.size.<x>` | `font-size-<x>` | `font-size-title` |
@@ -66,12 +66,13 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 ## Switching
 
 Six inputs pick values. Each has a system source and an in-app
-override; the override wins. A seventh, the accent, has no system
-source (below).
+override; the override wins. Two more, the ground and the accent, have
+no system source (below).
 
 | Input | System source | Override | Effect |
 |---|---|---|---|
 | Theme | The OS light/dark appearance. | `system`, `light`, `dark` | Picks `themes.light` or `themes.dark`. Dark is designed separately, never derived. |
+| Ground | None: a choice of the person's, for an OLED screen. | `normal`, `black` | Black, while the theme is dark: picks `themes.black` (or `themes.black-contrast` under more contrast), the dark theme on a black ground with opaque glass. The light theme keeps its own. |
 | Density | The pointer: a fine pointer with no touch screen is compact; anything with touch is comfortable. | `auto`, `comfortable`, `compact` | Picks `densities.*`: 32 or 44 px controls and rows. The app bar stays 56 px high with 48 px controls in both. |
 | Motion | The OS reduced-motion setting. | `system`, `on`, `off` | Reduced: every `motion.duration.*` becomes 0. `timing.*` stays: the undo window is wall time, not motion. |
 | Contrast | The OS "increase contrast" setting (`NSWorkspace.accessibilityDisplayShouldIncreaseContrast` on macOS, `UIAccessibility.isDarkerSystemColorsEnabled` on iOS, GNOME's `high-contrast`). Not Windows' contrast themes: those are forced colours, the system's own. | `system`, `more`, `normal` | More: picks `themes.light-contrast` or `themes.dark-contrast` (the theme with its contrast set over it): every text pair at 7:1, opaque glass. Each status tile gets a 2px frame in its `status-*-full` colour. |
@@ -86,7 +87,8 @@ A native implementation honours the system's contrast and transparency
 settings where the platform has them, and follows a change while it
 runs. rekta-core takes the contrast setting from the app,
 `rk_app_set_contrast(bool)`: no platform layer of it reads the system's
-yet, and it draws no glass.
+yet, and it draws no glass. The black ground is the app's to pass on as
+well, `rk_app_set_black(bool)`.
 
 ## Product overrides
 

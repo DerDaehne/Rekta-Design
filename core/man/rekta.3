@@ -277,6 +277,13 @@ in its full colour on each status tile.
 Off until set; an app that reads the system's high-contrast setting passes it
 on.
 A change cross-fades the windows.
+.It Fn rk_app_set_black "bool black"
+The black ground, for OLED screens: in the dark theme the ground and glass are
+black, and surfaces, text, status and the accent stay the dark theme's; it lies
+over more contrast too.
+Off until set: a person's choice, which no system setting makes.
+The light theme stays as it is.
+A change that shows cross-fades the windows.
 .It Fn rk_app_set_series "int code" "rk_color light" "rk_color dark"
 A domain's colour code, as the web's
 .Li --rk-series-1

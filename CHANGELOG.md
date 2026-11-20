@@ -43,6 +43,21 @@ dots' fade in.
 
 ### Added
 
+- **The black ground** (colour.md, platforms.md, behaviour.md): a
+  person with an OLED screen may put the dark theme on `#000000`. A
+  choice, never the default and never from a system setting; the light
+  theme keeps its own. Token set `color.black` holds only what changes
+  from `color.dark`: `bg` and `glass` (the ground, as under less
+  transparency); surfaces, text, hairlines, shading, status and the
+  accent stay the dark theme's, and measure more on black (surface
+  1.41:1 against 1.18:1, hairline 2.24:1 against 1.87:1). It lies over
+  the dark contrast set alike. `rekta.tokens.json` gains the resolved
+  themes `black` and `black-contrast` and each named accent's pair
+  for them; `--check` measures both like the themes and holds surface
+  and hairline on black at least to the dark ground's. On the web:
+  `prefs` `ground` (`normal`, `black`), `:root[data-ground="black"]`,
+  and the app bar does not blur there. rekta-core:
+  `rk_app_set_black(bool)`; the demo and the showcase offer it.
 - **Opener tiles in a side panel** (states.md, tiles.md, motion.md): a
   panel whose areas no longer fit its height may put each area behind a
   tile at its foot, with the area's icon, name and state word. A press

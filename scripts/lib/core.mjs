@@ -43,7 +43,7 @@ export function coreTokens(json) {
     for (const k of Object.keys(theme)) if (!ROLES.includes(k)) problems.push(`colour ${k} has no rk_role in core/include/rekta.h`);
     return `  { 0x00000000u, ${ROLES.map((r) => rgba(theme[r])).join(', ')} }`;
   });
-  const themes = table(['light', 'dark']), contrast = table(['light-contrast', 'dark-contrast']);
+  const themes = table(['light', 'dark']), contrast = table(['light-contrast', 'dark-contrast']), black = table(['black', 'black-contrast']);
   const densities = ['comfortable', 'compact'].map((d) => `  { ${METRICS.map(([g, k]) => f(g === 'density' ? json.densities[d][k] : json[g][k])).join(', ')} }`);
   const durations = DURATIONS.map(([g, k]) => f(json[g][k])).join(', ');
   const defs = [];
@@ -71,13 +71,14 @@ export function coreTokens(json) {
   defs.push(`#define RK_TOK_SCROLLBAR_GRIP_MIN ${f(json.size['scrollbar-grip-min'])}`);
   defs.push(`#define RK_TOK_DAY_CELL ${f(json.size['day-cell'])}`);
   // The named accents (rk_app_set_accent_named): per theme and contrast set, the accent and the text on it.
-  const accents = Object.entries(json.accents).map(([name, a]) => `  { "${name}", { ${['light', 'dark', 'light-contrast', 'dark-contrast'].map((t) => `{ ${rgba(a[t].accent)}, ${rgba(a[t]['on-accent'])} }`).join(', ')} } }`);
+  const accents = Object.entries(json.accents).map(([name, a]) => `  { "${name}", { ${['light', 'dark', 'light-contrast', 'dark-contrast', 'black', 'black-contrast'].map((t) => `{ ${rgba(a[t].accent)}, ${rgba(a[t]['on-accent'])} }`).join(', ')} } }`);
   const out = HEAD(`Rekta Design ${json.version} tokens for rekta-core`)
     + `#ifndef RK_TOKENS_H\n#define RK_TOKENS_H\n\n#define RK_TOKENS_VERSION "${json.version}"\n\n`
     + `/* [theme: light, dark][rk_role], 0xRRGGBBAA */\nstatic const rk_color rk_tok_colors[2][RK__ROLE_COUNT] = {\n${themes.join(',\n')}\n};\n\n`
     + `/* The same for more contrast (rk_app_set_contrast): every text pair at 7:1, opaque glass */\nstatic const rk_color rk_tok_colors_contrast[2][RK__ROLE_COUNT] = {\n${contrast.join(',\n')}\n};\n\n`
-    + `/* The named accents: [light, dark, light-contrast, dark-contrast][accent, on-accent] */\n`
-    + `#define RK_TOK_ACCENT_COUNT ${accents.length}\nstatic const struct { const char *name; rk_color c[4][2]; } rk_tok_accents[RK_TOK_ACCENT_COUNT] = {\n${accents.join(',\n')}\n};\n\n`
+    + `/* The black ground over the dark theme (rk_app_set_black): [normal, more contrast][rk_role] */\nstatic const rk_color rk_tok_colors_black[2][RK__ROLE_COUNT] = {\n${black.join(',\n')}\n};\n\n`
+    + `/* The named accents: [light, dark, light-contrast, dark-contrast, black, black-contrast][accent, on-accent] */\n`
+    + `#define RK_TOK_ACCENT_COUNT ${accents.length}\nstatic const struct { const char *name; rk_color c[6][2]; } rk_tok_accents[RK_TOK_ACCENT_COUNT] = {\n${accents.join(',\n')}\n};\n\n`
     + `/* [density: comfortable, compact][rk_metric], logical px */\nstatic const float rk_tok_metrics[2][RK__METRIC_COUNT] = {\n${densities.join(',\n')}\n};\n\n`
     + `/* [rk_duration], ms; the first RK_TOK_MOTION_COUNT are motion (0 under reduced motion), the rest wall-clock timings */\n`
     + `#define RK_TOK_MOTION_COUNT ${MOTION_COUNT}\nstatic const float rk_tok_durations[RK__DURATION_COUNT] = { ${durations} };\n\n`

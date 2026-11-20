@@ -84,8 +84,10 @@ void *rk__expect(void *state, const void *view, const char *fn, const char *kind
 typedef struct rk_prefs {
   rk_theme theme; rk_motion_pref motion; rk_density density;
   bool system_dark, system_reduced, system_compact;
-  rk_color accent[4][2];                                   /* [light, dark, and more contrast][accent, on-accent]; 0: ink */
+  rk_color accent[6][2];                                   /* [light, dark, both under more contrast, black, black under more
+                                                              contrast][accent, on-accent]; 0: ink */
   bool contrast;                                           /* more contrast (rk_app_set_contrast) */
+  bool black;                                              /* the black ground under the dark theme (rk_app_set_black) */
   rk_color series[8][2];                                   /* a domain's colour code, light and dark; 0: ink */
   bool metric_set[RK__METRIC_COUNT]; float metric[RK__METRIC_COUNT];         /* a product's own (rk_app_set_metric) */
   bool timing_set[RK__DURATION_COUNT]; double timing[RK__DURATION_COUNT];    /* (rk_app_set_timing) */
@@ -101,6 +103,8 @@ const char *rk__type_ahead(rk__typed *t, const char *text, double now, bool *aga
 bool rk__starts_with(const char *s, const char *prefix);   /* leading spaces skipped, ASCII case folded */
 
 bool rk__dark(void);
+int rk__theme_index(void);                                 /* the theme in use: an index into rk_prefs.accent */
+const rk_color *rk__theme_colors(int index);               /* its colours by rk_role */
 bool rk__reduced(void);
 int rk__density_index(void);
 float rk__ease(const float bezier[4], float t);            /* cubic-bezier timing, t in 0..1 */

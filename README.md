@@ -73,7 +73,8 @@ implementation — the web profile, rekta-core, a toolkit's theme, a shell
 Theme, density, motion, contrast and transparency follow the system and
 can be overridden on the root element (`data-theme`, `data-density`,
 `data-motion`, `data-contrast`, `data-transparency`) or with
-`Rekta.prefs.set()`. Script state lives in `data-rk-*` attributes, never
+`Rekta.prefs.set()`. The black ground for OLED screens
+(`data-ground="black"`) is a choice no system setting makes. Script state lives in `data-rk-*` attributes, never
 in classes, so a framework that owns `className` keeps working. The
 whole contract, with every hook, attribute and event, is in
 [docs/behaviour.md](docs/behaviour.md).

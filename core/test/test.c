@@ -3707,6 +3707,25 @@ static void test_contrast(void) {
   done(w);
 }
 
+/* The black ground (docs/colour.md): the dark theme on black, over more contrast too; the light theme keeps its own. */
+static void test_black(void) {
+  rk_color light = rk_color_of(RK_ROLE_BG);
+  rk_app_set_black(true);
+  CHECK(rk_color_of(RK_ROLE_BG) == light, "the light theme keeps its ground");
+  rk_app_set_theme(RK_THEME_DARK);
+  CHECK(rk_color_of(RK_ROLE_BG) == 0x000000ffu && rk_color_of(RK_ROLE_GLASS) == 0x000000ffu, "dark: the ground and glass are black");
+  CHECK(rk_color_of(RK_ROLE_SURFACE) == 0x2a2723ffu && rk_color_of(RK_ROLE_TEXT) == 0xf5f1eaffu, "surface and text stay the dark theme's");
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == rk_color_of(RK_ROLE_TEXT) && rk_color_of(RK_ROLE_ON_ACCENT) == 0x000000ffu, "ink, with the black ground's colour on it");
+  rk_app_set_contrast(true);
+  CHECK(rk_color_of(RK_ROLE_BG) == 0x000000ffu && rk__contrast(rk_color_of(RK_ROLE_TEXT_MEDIUM), rk_color_of(RK_ROLE_SURFACE)) >= 7, "over more contrast too");
+  CHECK(rk_app_set_accent_named("teal") && rk_color_of(RK_ROLE_ACCENT) == 0x0daeacffu, "a named accent takes its dark pair");
+  rk_app_set_accent(0, 0);
+  rk_app_set_contrast(false);
+  rk_app_set_black(false);
+  CHECK(rk_color_of(RK_ROLE_BG) == 0x1b1916ffu, "and back to the dark ground");
+  rk_app_set_theme(RK_THEME_SYSTEM);
+}
+
 /* The accent's rules and the named accents (docs/colour.md), and content fills in a tile grid (docs/tiles.md). */
 static void test_accents(void) {
   double chroma;
@@ -4019,6 +4038,7 @@ static void launch(void *user) {
   test_product_overrides();
   test_product_codes();
   test_contrast();
+  test_black();
   test_accents();
   test_type_ahead();
   test_wide_pivot();

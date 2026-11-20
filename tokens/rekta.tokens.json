@@ -1,7 +1,7 @@
 {
   "$description": "Rekta Design tokens: the single source. W3C Design Tokens (DTCG) format. Dimensions are logical pixels (CSS px, Android dp, Apple pt); the web build converts type, control and tile sizes to rem. Colour comes in two independent sets (light, dark) and control sizes in two densities (comfortable, compact). Fluid sizes use $type \"fluidDimension\" (a documented extension): min and max in logical px plus the share of the hosting box's width between them. Every token's usage text is its $description. Generated outputs: dist/rekta.tokens.css (web, --rk- prefix), dist/rekta.tokens.json (resolved, platform-neutral). See docs/platforms.md.",
   "color": {
-    "$description": "Light and dark are two independent sets, not variants of one token. Status colours are corrected from the prototype for contrast and colour blindness (see CHANGELOG). light-contrast and dark-contrast hold only what changes for more contrast (docs/colour.md).",
+    "$description": "Light and dark are two independent sets, not variants of one token. Status colours are corrected from the prototype for contrast and colour blindness (see CHANGELOG). light-contrast and dark-contrast hold only what changes for more contrast, black what changes for the black ground of the dark theme (docs/colour.md).",
     "light": {
       "bg": {
         "$type": "color",
@@ -482,6 +482,19 @@
         "$type": "color",
         "$value": "{color.dark.bg}",
         "$description": "Opaque: the ground, as macOS takes away transparency with increased contrast."
+      }
+    },
+    "black": {
+      "$description": "The black ground (for OLED screens): the values that change from color.dark when the person picks it (the ground pref, never a default and never from a system setting). Only the dark theme has it, and it lies over dark-contrast as over dark. Surfaces, text, hairlines, shading, status and the accent stay the dark theme's: on black each stands off the ground by more than in dark. Glass is the ground, and nothing blurs behind it.",
+      "bg": {
+        "$type": "color",
+        "$value": "#000000",
+        "$description": "Black: an OLED screen's pixels stay off. Everything sits directly on it; text-primary reads on it."
+      },
+      "glass": {
+        "$type": "color",
+        "$value": "{color.dark.bg}",
+        "$description": "Opaque: the ground, as under reduced transparency; a blur over black shows nothing."
       }
     }
   },

@@ -11,7 +11,7 @@
      apply on .rk and inside it; the theme, density and motion switches go on the root element.
    - Rules outside .rk-*, on purpose (docs/behaviour.md lists them): :root's scroll-padding below the banner and above
      the app bar; :root asks for the thin scrollbar in text-contrast-low, which every scroller inherits; :root stops scrolling while a .rk-sheet is open; [data-status] sets only internal --_rk-* properties,
-     inert outside Rekta's components; the root's data-theme, data-density, data-motion, data-contrast,
+     inert outside Rekta's components; the root's data-theme, data-ground, data-density, data-motion, data-contrast,
      data-transparency and data-rk-titlebar switches; the view-transition timing, only while rekta.js marks the root
      data-rk-crossfade.
    - Hide with the hidden attribute: inside .rk it wins over every display rule, Rekta's and the page's (!important).
@@ -1579,6 +1579,13 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
 }
 :root[data-contrast='more'] .rk-tile[data-status] { box-shadow: inset 0 0 0 2px var(--_rk-mark); }
 :root[data-contrast='more'] .rk-btn[data-status='error']:not(:disabled, [aria-disabled='true']) { color: var(--rk-text-primary); }
+
+/* The black ground (data-ground="black", dark only): glass is the ground (rekta.tokens.css), so the app bar does not blur
+   what is behind it, as under reduced transparency. The shading behind a sheet keeps its blur: it lies over the page. */
+@media (prefers-color-scheme: dark) {
+  :root[data-ground='black']:not([data-theme='light']) .rk-appbar { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+:root[data-ground='black'][data-theme='dark'] .rk-appbar { -webkit-backdrop-filter: none; backdrop-filter: none; }
 
 /* Reduced transparency: glass is the ground (rekta.tokens.css), and nothing blurs what is behind it. */
 @media (prefers-reduced-transparency: reduce) {

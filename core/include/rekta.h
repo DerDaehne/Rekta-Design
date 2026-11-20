@@ -160,6 +160,10 @@ RK_API void rk_app_set_accent(rk_color light, rk_color dark);
 /* More contrast (docs/colour.md): the contrast colours, every text pair at 7:1, and a 2px frame in its full colour on
    each status tile. Off until set: an app that reads the system's high-contrast setting passes it on. */
 RK_API void rk_app_set_contrast(bool more);
+/* The black ground (docs/colour.md): in the dark theme the ground and glass are black, for OLED screens; surfaces, text,
+   status and the accent stay the dark theme's, and it lies over more contrast too. Off until set: a person's choice,
+   no system setting asks for it. The light theme stays as it is. */
+RK_API void rk_app_set_black(bool black);
 /* A domain's colour code, as the web's --rk-series-1 to -8 (docs/data.md): colours its users already read, such as
    heart-rate zones, for small marks only - a tile's sparkline, a row's tag square (rk_tile_set_code, rk_row_set_code),
    a custom view's marks - never text, never a fill. Per theme, as the accent; dark 0 takes light; 0, 0: ink again.

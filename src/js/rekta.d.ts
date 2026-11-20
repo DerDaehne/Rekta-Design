@@ -36,7 +36,7 @@ export declare const tokens: {
   px(name: string, el?: Element): number;
 };
 
-type PrefName = 'theme' | 'density' | 'motion' | 'contrast' | 'transparency' | 'accent';
+type PrefName = 'theme' | 'ground' | 'density' | 'motion' | 'contrast' | 'transparency' | 'accent';
 /** A named accent of tokens/rekta.accents.json, or `product`: the product's own `--rk-accent` (ink when it sets none). */
 type AccentName = 'product' | 'ink' | 'teal' | 'steel' | 'violet' | 'mauve' | 'pink' | 'magenta';
 export declare const prefs: {
@@ -44,12 +44,15 @@ export declare const prefs: {
   read(): Partial<Record<PrefName, string>>;
   write(all: Partial<Record<PrefName, string>>): void;
   get(name: 'theme'): 'system' | 'light' | 'dark';
+  get(name: 'ground'): 'normal' | 'black';
   get(name: 'density'): 'auto' | 'comfortable' | 'compact';
   get(name: 'motion'): 'system' | 'on' | 'off';
   get(name: 'contrast'): 'system' | 'more' | 'normal';
   get(name: 'transparency'): 'system' | 'reduce' | 'normal';
   get(name: 'accent'): AccentName | (string & {});
   set(name: 'theme', value: 'system' | 'light' | 'dark', options?: { remember?: boolean }): void;
+  /** black: the dark theme on a black ground (for OLED screens), its glass the ground; the light theme keeps its own. */
+  set(name: 'ground', value: 'normal' | 'black', options?: { remember?: boolean }): void;
   set(name: 'density', value: 'auto' | 'comfortable' | 'compact', options?: { remember?: boolean }): void;
   set(name: 'motion', value: 'system' | 'on' | 'off', options?: { remember?: boolean }): void;
   /** more: every text pair at 7:1 and a frame on status tiles; normal: as designed, whatever the system asks. */

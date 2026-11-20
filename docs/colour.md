@@ -126,6 +126,38 @@ distances. Forced colours (Windows contrast themes) stay as they are:
 the system's colours replace Rekta's there, and the frame goes with
 every other shadow.
 
+## The black ground
+
+A person with an OLED screen may pick the **black ground** (`ground:
+black` in the prefs; rekta-core `rk_app_set_black`): the dark theme on
+`#000000`, whose pixels stay off. It is a choice, never the default,
+and no system setting asks for it; the light theme keeps its own ground.
+`color.black` holds only what changes from `color.dark`: the ground,
+and glass, which is the ground. Everything else stays the dark theme's,
+so on black each part stands off the ground by more than in dark:
+
+- **Surfaces** keep their step: `surface` and `surface-2` are the dark
+  ones, 1.41:1 and 1.60:1 on black against 1.18:1 for `surface` on the
+  dark ground, and the hairline (`text-contrast-low`, 1px) measures
+  2.24:1 against 1.87:1. `--check` holds both at least to the dark
+  ground's.
+- **Text, status and the accent** are the dark theme's and gain on
+  black: `text-contrast-medium` 6.82:1, `focus` 6.17:1, every status
+  mark above 5:1. Status tiles and soft tints are mixed toward the
+  surface and keep their ink at the dark theme's ratios. Named accents
+  take their dark pair; ink takes black words.
+- **Glass is the ground**, as under less transparency: a blur over black
+  shows nothing, so the app bar does not blur.
+- **The shading** stays the dark theme's warm grey: over black it veils
+  the page, and a sheet (black, with its hairline) stands off the veil
+  at 1.20:1, against 1.10:1 in dark.
+
+Under more contrast the black ground lies over the dark contrast set
+(`themes.black-contrast`): its values with black under them. Less
+transparency changes nothing that shows. Forced colours replace it as
+every other colour. `node scripts/build.mjs --check` measures both
+black sets like the themes.
+
 ## The accent
 
 One hue is the product's: the accent and the text on it, per theme. It

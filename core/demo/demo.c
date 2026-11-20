@@ -51,7 +51,7 @@ static struct {
   int file, steps[4], shown, dir; uint32_t picks;   /* the file in the detail, the way the last pick went, how many */
   bool detail, open_src, open_ui, open_docs;
   /* settings */
-  int theme, density, motion, accent, digest;
+  int theme, ground, density, motion, accent, digest;
   bool notify, sounds;
   /* how it runs */
   const char *shots;
@@ -526,6 +526,7 @@ static void type_section(void) {
 /* settings ------------------------------------------------------------------------------------------------------- */
 
 static void set_theme(rk_view *v, void *u) { (void)v; (void)u; rk_app_set_theme((rk_theme)D.theme); }
+static void set_ground(rk_view *v, void *u) { (void)v; (void)u; rk_app_set_black(D.ground == 1); }
 static void set_density(rk_view *v, void *u) { (void)v; (void)u; rk_app_set_density((rk_density)D.density); }
 static void set_motion(rk_view *v, void *u) { (void)v; (void)u; rk_app_set_motion((rk_motion_pref)D.motion); }
 static void set_accent(rk_view *v, void *u) { (void)v; (void)u; if (D.accent) rk_app_set_accent(0x8a2d6bffu, 0xd99ac6ffu); else rk_app_set_accent(0, 0); }
@@ -544,12 +545,13 @@ static void choice(const char *title, const char *const names[], int count, int 
 }
 
 static void settings_section(void) {
-  static const char *const theme[] = { "system", "light", "dark" }, *const density[] = { "as the pointer", "comfortable", "compact" };
+  static const char *const theme[] = { "system", "light", "dark" }, *const ground[] = { "normal", "black" }, *const density[] = { "as the pointer", "comfortable", "compact" };
   static const char *const motion[] = { "as the system", "on", "off" }, *const accent[] = { "ink", "plum" };
   static const char *const digest[] = { "every morning", "on Mondays", "never" };
   RK_LABEL("Yours to choose.", .style = RK_TEXT_GROUP);
   RK_LABEL("Each follows the system until you choose. A change of theme or accent cross-fades; reduced motion makes every transition instant, never skipped.");
   choice("theme", theme, 3, &D.theme, set_theme);
+  choice("ground in dark", ground, 2, &D.ground, set_ground);
   choice("density", density, 3, &D.density, set_density);
   choice("motion", motion, 3, &D.motion, set_motion);
   choice("accent", accent, 2, &D.accent, set_accent);

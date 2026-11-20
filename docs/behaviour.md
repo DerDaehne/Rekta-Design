@@ -177,7 +177,7 @@ them:
 | `:root { scrollbar-width: thin; scrollbar-color: … }` | The page's own scrollbar is the thin one in `text-contrast-low`, and the colour reaches every scroller below by inheritance ([layout.md](layout.md)). |
 | `:root:has(dialog.rk-sheet[open])` | The page under an open sheet stops scrolling; the root keeps its scrollbar's room as right padding (`--rk-scrollbar`, measured by `sheet()` as it opens), so nothing shifts and the sheet spans the viewport. |
 | `[data-status='…']` | Sets only the internal `--_rk-fill`, `--_rk-mark` and `--_rk-soft`, which nothing outside Rekta's components reads. |
-| `:root[data-theme]`, `[data-density]`, `[data-motion]`, `[data-contrast]`, `[data-transparency]`, `[data-rk-titlebar]` | The switches `prefs` and the installed app's title bar write on the root. |
+| `:root[data-theme]`, `[data-ground]`, `[data-density]`, `[data-motion]`, `[data-contrast]`, `[data-transparency]`, `[data-rk-titlebar]` | The switches `prefs` and the installed app's title bar write on the root. |
 | `:root[data-accent='…']` (in `rekta.tokens.css`) | A named accent (`prefs` `accent`): sets `--rk-accent` and `--rk-on-accent` per theme and contrast set, over the product's own. |
 | `:root[data-rk-places]` | `appbar()` writes it while the bar holds the places: the places' top strip (`.rk-place > .rk-pivot--nav`) steps aside and `.rk-place-name` shows (`docs/navigation.md`). |
 | `:root[data-rk-crossfade]::view-transition-old(root)` and `-new(root)` | Rekta's cross-fade timing, only while `crossfade()` (or a theme change through `prefs`) runs its own view transition: an app's own root view transitions keep their timing. |
@@ -235,7 +235,7 @@ them:
 | `data-rk-inactive` | a title bar | Another window is the active one: the name steps back (`titlebar()`). |
 | `data-rk-removable` | a list | Its entries can be dragged away (`removable()`): the browser keeps only the vertical scroll on them. |
 | `data-rk-held` | a toast | Its window holds: the pointer rests on it or focus is in it. |
-| `data-theme`, `data-density`, `data-motion`, `data-contrast`, `data-transparency`, `data-accent` | the root | Prefs overrides (see `prefs`). |
+| `data-theme`, `data-ground`, `data-density`, `data-motion`, `data-contrast`, `data-transparency`, `data-accent` | the root | Prefs overrides (see `prefs`). |
 
 ### Public hooks
 
@@ -307,20 +307,25 @@ element that cannot take focus gets `tabindex="-1"`.
 | Name | Values | Default |
 |---|---|---|
 | `theme` | `system`, `light`, `dark` | `system` |
+| `ground` | `normal`, `black` | `normal`: no system setting asks for black |
 | `density` | `auto`, `comfortable`, `compact` | `auto`: compact for a fine pointer with no touch screen |
 | `motion` | `system`, `on`, `off` | `system` |
 | `contrast` | `system`, `more`, `normal` | `system`: more when the system asks (`prefers-contrast: more`) |
 | `transparency` | `system`, `reduce`, `normal` | `system`: reduced when the system asks (`prefers-reduced-transparency: reduce`) |
 | `accent` | `product`, or a named accent: `ink`, `teal`, `steel`, `violet`, `mauve`, `pink`, `magenta` | `product`: the product's own `--rk-accent`, ink when it sets none |
 
-More contrast takes the contrast colours (every text pair at 7:1, opaque
+The black ground lays black under the dark theme (and its contrast
+colours), for OLED screens; its glass is the ground, so the app bar does
+not blur, and the light theme keeps its own ground
+([colour.md](colour.md#the-black-ground)). More contrast takes the
+contrast colours (every text pair at 7:1, opaque
 glass) and frames each status tile in its full colour; reduced
 transparency makes glass the ground and takes every blur away
 ([colour.md](colour.md#more-contrast-less-transparency)). A named
 accent holds every accent rule in each theme and contrast set
 ([colour.md](colour.md#named-accents)); a product that offers its own
 names styles `:root[data-accent="NAME"]` itself, and `prefs` writes any
-name. A theme, contrast or accent the user picks cross-fades. The default removes the attribute from the root. Values are remembered
+name. A theme, ground, contrast or accent the user picks cross-fades. The default removes the attribute from the root. Values are remembered
 in `localStorage` under `rekta-prefs`; pass `{ remember: false }` to
 skip that.
 
