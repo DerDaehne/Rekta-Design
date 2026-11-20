@@ -175,6 +175,22 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
 
 const p = await open();
 ok(await p.evaluate(() => getComputedStyle(document.querySelector('#pan')).display === 'flex'), 'desktop panorama is sideways');
+// A section's space (layout.md): space-xl above and below its content, space-l from its title to what follows, space-m
+// between two other blocks; rows and the tile gap keep space-s.
+{
+  const space = await p.evaluate(() => {
+    const sec = document.querySelector('#colour'), [title, text, tiles] = sec.children, cs = getComputedStyle(sec), r = (e) => e.getBoundingClientRect();
+    const px = (n) => Rekta.tokens.px(`--rk-space-${n}`), row = getComputedStyle(document.querySelector('.rk-sec .rk-rows > li'));
+    return {
+      padding: parseFloat(cs.paddingTop) === px('xl') && parseFloat(cs.paddingBottom) === px('xl'),
+      title: title.classList.contains('rk-group') && Math.abs(r(text).top - r(title).bottom - px('l')) < 0.5,
+      blocks: Math.abs(r(tiles).top - r(text).bottom - px('m')) < 0.5,
+      rows: parseFloat(row.paddingTop) === px('s'), tiles: parseFloat(getComputedStyle(tiles).rowGap) === px('s'),
+      gaps: [r(text).top - r(title).bottom, r(tiles).top - r(text).bottom].map((x) => +x.toFixed(1)),
+    };
+  });
+  ok(space.padding && space.title && space.blocks && space.rows && space.tiles, 'a section: space-xl above and below, space-l after its title, space-m between other blocks, rows and tiles at space-s', JSON.stringify(space));
+}
 ok(await p.evaluate(() => document.querySelector('#back').hidden), 'app bar back hidden at home');
 ok(await p.evaluate(() => { const n = document.querySelector('#nav'); return n.scrollHeight <= n.clientHeight + 1; }), 'the section strip is not cut');
 
@@ -1184,7 +1200,9 @@ await p.keyboard.press('Escape'); await p.waitForTimeout(150);
 const order = () => p.evaluate(() => [...document.querySelectorAll('#steps b')].map((b) => b.textContent));
 await p.focus('#steps li:nth-child(1) .rk-grip'); await p.keyboard.press(' '); await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.keyboard.press(' '); await p.waitForTimeout(400);
 ok((await order())[2] === 'write the release notes' && (await p.evaluate(() => document.activeElement.classList.contains('rk-grip'))), 'Space picks up, ↓ moves, Space puts down; focus stays on the grip');
-const g = await p.$('#steps li:nth-child(5) .rk-grip'), gb = await g.boundingBox(), topBox = await (await p.$('#steps li:nth-child(1)')).boundingBox();
+const g = await p.$('#steps li:nth-child(5) .rk-grip');
+await g.scrollIntoViewIfNeeded(); await p.waitForTimeout(100);   /* the section's space may put the last step below its edge */
+const gb = await g.boundingBox(), topBox = await (await p.$('#steps li:nth-child(1)')).boundingBox();
 await p.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2); await p.mouse.down();
 await p.mouse.move(gb.x + gb.width / 2, gb.y - 20, { steps: 4 }); await p.mouse.move(gb.x + gb.width / 2, topBox.y + 4, { steps: 8 }); await p.waitForTimeout(150);
 ok(await p.evaluate(() => document.querySelector('#steps [data-rk-dragging]') !== null), 'a dragged item lifts');

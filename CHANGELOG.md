@@ -40,6 +40,16 @@ dots' fade in.
   grey sinks into the ink). rekta-core's reference images are drawn
   again in the new colours; the showcase's icons and manifest take the
   warm ink and ground.
+- **More space around sections and their titles** (layout.md, "A
+  section's space", now a rule of its own): a section's content stands
+  `space-xl` from its top and bottom (was `space-l`), and its title
+  `space-l` from what follows (was `space-m`). Other blocks of a
+  section keep `space-m`, rows and tiles `space-s`; no token changes.
+  On the web `.rk-sec` and `.rk-sec > .rk-group + *`, and a table head
+  sticking in a section moves with the padding. rekta-core: a panorama's
+  section sets its content `space-xl` in, and a group title that is a
+  direct child of the section stands `space-l` from what follows; three
+  reference images show it (`motion-turn-out`, `sheet`, `toast`).
 
 ### Added
 

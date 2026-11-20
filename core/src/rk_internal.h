@@ -249,6 +249,7 @@ struct rk_view {
   bool draws_focus;                                        /* draws its own focus ring (a field: around its input) */
   bool disabled;                                           /* it and what it holds take no input (rk_view_set_enabled) */
   bool content_fills;                                      /* a tile grid: its tiles may take content fills */
+  bool section;                                            /* a panorama's section: space-l after a group title in it */
   char *tooltip;
   uint8_t cursor;                                          /* the pointer's shape over it, as its last move left it */
   rk_view *menu;                                           /* a button opens it; any other view on a right click */
@@ -452,6 +453,7 @@ void rk__menu_choose(rk_view *menu, int item);                    /* focus insid
 bool rk__is_tile(rk_view *v);
 rk_role rk__tile_fill(rk_view *v);                         /* a tile's fill now: its status's, its content's or surface */
 bool rk__is_title(rk_view *v);                             /* a label in RK_TEXT_TITLE: a place's title */
+bool rk__is_group(rk_view *v);                             /* a label in RK_TEXT_GROUP: a section's or a sheet's title */
 void rk__draw_focus(rk_canvas *c, rk_view *v, rk_rect r);
 void rk__focus_ring(rk_canvas *c, rk_rect r, float out);  /* 2px in the focus colour, out px outside r */
 bool rk__shows_focus(rk_view *v);                         /* v has focus and the keyboard is in use */

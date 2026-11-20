@@ -1147,9 +1147,12 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 /* Compact: sections stack and the page scrolls. Sideways: sections side by side, each scrolling inside itself; the
    place gives the panorama a bounded height. */
 .rk-panorama { padding-inline: var(--rk-space-m); }
-.rk-sec { padding-block: var(--rk-space-l); }
+/* A section's space (layout.md): space-xl above and below, space-l from its title to what follows, space-m between its
+   other blocks, space-xs after a kicker. Rows and tiles keep their own (space-s). */
+.rk-sec { padding-block: var(--rk-space-xl); }
 .rk-sec + .rk-sec { border-top: 1px solid var(--rk-text-contrast-low); }
 .rk-sec > * + * { margin-top: var(--rk-space-m); }
+.rk-sec > .rk-group + * { margin-top: var(--rk-space-l); }
 .rk-sec > .rk-kicker + * { margin-top: var(--rk-space-xs); }
 /* A statement on the ground: kicker, a plain sentence, a fact line, over a hairline (typography.md). */
 .rk-statement { padding-block: var(--rk-space-m); border-bottom: 1px solid var(--rk-text-contrast-low); }
@@ -1518,7 +1521,7 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
     .rk-sec { flex: 0 0 var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))); overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding-right: var(--rk-space-s); }
     .rk-sec + .rk-sec { border-top: 0; }
     /* A table head sticks to the section's top edge, not below its padding. */
-    .rk-sec .rk-table thead th { top: calc(-1 * var(--rk-space-l)); }
+    .rk-sec .rk-table thead th { top: calc(-1 * var(--rk-space-xl)); }
     /* Lets the last section reach the left edge; gone when everything fits. */
     .rk-panorama-end { flex: 0 0 max(0px, calc(100% - var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))) - var(--_rk-sec-gap, var(--rk-space-xl)))); }
     .rk-panorama[data-rk-fit] > .rk-panorama-end { display: none; }

@@ -2863,14 +2863,12 @@ static void hello_declared(void *user) {
   char builds[16];
   (void)user;
   snprintf(builds, sizeof builds, "%d", hello_declared_count);
-  RK_VSTACK() {
-    RK_LABEL("Today", .style = RK_TEXT_GROUP);
-    RK_TILES() {
-      RK_TILE(builds, .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
-      RK_TILE("0.3", .label = "release notes");
-    }
-    RK_BUTTON("build one", .on_press = hello_declared_press);
+  RK_LABEL("Today", .style = RK_TEXT_GROUP);                    /* the section's own title: space-l to what follows */
+  RK_TILES() {
+    RK_TILE(builds, .label = "finished today", .status = RK_STATUS_SUCCESS, .span = { 2, 1 });
+    RK_TILE("0.3", .label = "release notes");
   }
+  RK_BUTTON("build one", .on_press = hello_declared_press);
 }
 static bool same_pixels(rk_window *a, rk_window *b) {
   if (a->fb->w != b->fb->w || a->fb->h != b->fb->h) return false;
@@ -3726,6 +3724,25 @@ static void test_black(void) {
   rk_app_set_theme(RK_THEME_SYSTEM);
 }
 
+/* A section's space (docs/layout.md): its content space-xl from the top, its group title space-l from what follows,
+   any other two blocks the column's own gap. */
+static void test_section_space(void) {
+  rk_window *w = window(900, 600);
+  rk_controller *pano = rk_panorama();
+  rk_view *s = col(16, 0);
+  rk_view *title = rk_add(s, rk_label("Space", RK_TEXT_GROUP));
+  rk_view *one = rk_add(s, rk_label("one", RK_TEXT_BODY)), *two = rk_add(s, rk_label("two", RK_TEXT_BODY));
+  rk_panorama_add(pano, "space", s, 0);
+  rk_window_show(w, pano);
+  rk_app_run_for(100);
+  rk_rect box = rk__window_rect(s->parent), t = rk__window_rect(title), a = rk__window_rect(one), b = rk__window_rect(two);
+  float l = rk_metric_of(RK_SPACE_L), xl = rk_metric_of(RK_SPACE_XL);
+  CHECK(CLOSE_TO(t.y - box.y, xl, 0.5), "the section's content stands space-xl from its top (%g)", t.y - box.y);
+  CHECK(CLOSE_TO(a.y - (t.y + t.h), l, 0.5), "its title stands space-l from what follows (%g)", a.y - (t.y + t.h));
+  CHECK(CLOSE_TO(b.y - (a.y + a.h), 16, 0.5), "any other two blocks keep the column's gap (%g)", b.y - (a.y + a.h));
+  done(w);
+}
+
 /* The accent's rules and the named accents (docs/colour.md), and content fills in a tile grid (docs/tiles.md). */
 static void test_accents(void) {
   double chroma;
@@ -4039,6 +4056,7 @@ static void launch(void *user) {
   test_product_codes();
   test_contrast();
   test_black();
+  test_section_space();
   test_accents();
   test_type_ahead();
   test_wide_pivot();

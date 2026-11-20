@@ -377,6 +377,8 @@ float rk__host_width(rk_view *v) {
 }
 
 static bool in_flow(rk_view *k) { return !k->hidden && !k->leaving; }
+/* The room after k in a column: its gap, and in a panorama's section space-l after a group title (docs/layout.md). */
+static float gap_after(rk_view *v, rk_view *k) { return v->section && rk__is_group(k) ? RK_MAX(v->gap, rk_metric_of(RK_SPACE_L)) : v->gap; }
 
 typedef struct grid { int cols, rows; float unit, colw, gap; } grid;   /* colw: a column's width, unit stretched when compact */
 
@@ -438,14 +440,14 @@ static rk_size measure(rk_view *v, rk_size avail) {
     s = v->cls->pub.measure(v, (rk_size){ v->fixed_w > 0 ? v->fixed_w : avail.w, v->fixed_h > 0 ? v->fixed_h : avail.h }, v->state);
   } else switch (v->layout) {
     case RK_LAYOUT_VSTACK: {
-      int n = 0;
+      rk_view *prev = NULL;
       for (int i = 0; i < v->nkids; i++) {
         rk_view *k = v->kids[i];
         if (!in_flow(k)) continue;
         rk_size ks = rk__measure(k, (rk_size){ iw, INFINITY });
-        s.w = RK_MAX(s.w, ks.w); s.h += ks.h; n++;
+        s.w = RK_MAX(s.w, ks.w); s.h += ks.h + (prev ? gap_after(v, prev) : 0);
+        prev = k;
       }
-      s.h += RK_MAX(0, n - 1) * v->gap;
       s.w += p.left + p.right; s.h += p.top + p.bottom;
       break;
     }
@@ -521,7 +523,9 @@ static void stack(rk_view *v, bool column) {
     else fixed += sizes[n];
     idx[n++] = i;
   }
-  fixed += RK_MAX(0, n - 1) * v->gap;
+  float gaps = 0;
+  for (int j = 0; j + 1 < n; j++) gaps += column ? gap_after(v, v->kids[idx[j]]) : v->gap;
+  fixed += gaps;
   if (weights > 0 && isfinite(main_len)) {
     /* share what is left by weight; a view held at its floor leaves the share to the others (the freeze of CSS) */
     float left = main_len - fixed, w = weights;
@@ -537,7 +541,7 @@ static void stack(rk_view *v, bool column) {
     }
     for (int j = 0; j < n; j++) if (sizes[j] < 0) sizes[j] = w > 0 ? RK_MAX(left, 0.0f) * v->kids[idx[j]]->grow / w : 0;
   }
-  float used = RK_MAX(0, n - 1) * v->gap;
+  float used = gaps;
   for (int j = 0; j < n; j++) used += sizes[j];
   rk_align main_a = v->main, cross_a = v->cross != RK_ALIGN_AUTO ? v->cross : column ? RK_ALIGN_STRETCH : RK_ALIGN_START;
   float free_ = main_len - used, pos = 0, extra_gap = 0;
@@ -557,7 +561,7 @@ static void stack(rk_view *v, bool column) {
     }
     rk_rect f = column ? (rk_rect){ p.left + co, p.top + pos, cs, sizes[j] } : (rk_rect){ p.left + pos, p.top + co, sizes[j], cs };
     rk__set_frame(k, f);
-    pos += sizes[j] + v->gap + extra_gap;
+    pos += sizes[j] + (column ? gap_after(v, k) : v->gap) + extra_gap;
   }
   if (sizes != sbuf) free(sizes);
   if (idx != ibuf) free(idx);
