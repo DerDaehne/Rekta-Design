@@ -5,38 +5,38 @@
     "light": {
       "bg": {
         "$type": "color",
-        "$value": "#ffffff",
+        "$value": "#faf8f4",
         "$description": "Page ground. Everything sits directly on it; text-primary reads on it."
       },
       "surface": {
         "$type": "color",
-        "$value": "#eeeff2",
+        "$value": "#efeae1",
         "$description": "Neutral secondary ground: rows, inputs, tiles with no status. text-primary and text-contrast-high read on it."
       },
       "surface-2": {
         "$type": "color",
-        "$value": "#e4e5e9",
+        "$value": "#e5dfd3",
         "$description": "Hover step of surface."
       },
       "text": {
         "primary": {
           "$type": "color",
-          "$value": "#010205",
+          "$value": "#1f1a14",
           "$description": "Primary text on bg, surface, surface-2 and on every status-*-tile fill (checked AA)."
         },
         "contrast-low": {
           "$type": "color",
-          "$value": "#d8d8db",
+          "$value": "#d8d0c3",
           "$description": "Hairlines (1–2px) and disabled borders. Decorative separator, not for text."
         },
         "contrast-medium": {
           "$type": "color",
-          "$value": "#6b6d70",
+          "$value": "#6a6258",
           "$description": "Secondary borders and placeholder text on bg."
         },
         "contrast-high": {
           "$type": "color",
-          "$value": "#535457",
+          "$value": "#554e45",
           "$description": "Secondary text on bg and surface (AA). Never on a status tile."
         }
       },
@@ -115,7 +115,7 @@
           },
           "tile": {
             "$type": "color",
-            "$value": "#c86065",
+            "$value": "#cb6267",
             "$description": "Error (failed). The only large fill (a tile's whole background); text-primary on it at AA in both themes. Always the darkest status fill in both themes: failed reads apart from done without hue."
           }
         }
@@ -164,50 +164,50 @@
       },
       "shading": {
         "$type": "color",
-        "$value": "rgba(1, 2, 5, 0.67)",
+        "$value": "rgba(31, 26, 20, 0.67)",
         "$description": "Backdrop behind a sheet or dialog."
       },
       "glass": {
         "$type": "color",
-        "$value": "rgba(255, 255, 255, 0.82)",
+        "$value": "rgba(250, 248, 244, 0.82)",
         "$description": "Frosted surfaces (nav bar, app bar); use with a backdrop blur."
       }
     },
     "dark": {
       "bg": {
         "$type": "color",
-        "$value": "#0e0e12",
+        "$value": "#1b1916",
         "$description": "Page ground. Everything sits directly on it; text-primary reads on it."
       },
       "surface": {
         "$type": "color",
-        "$value": "#212225",
+        "$value": "#2a2723",
         "$description": "Neutral secondary ground: rows, inputs, tiles with no status. text-primary and text-contrast-high read on it."
       },
       "surface-2": {
         "$type": "color",
-        "$value": "#2a2b2f",
+        "$value": "#34302b",
         "$description": "Hover step of surface."
       },
       "text": {
         "primary": {
           "$type": "color",
-          "$value": "#fbfcff",
+          "$value": "#f5f1ea",
           "$description": "Primary text on bg, surface, surface-2 and on every status-*-tile fill (checked AA)."
         },
         "contrast-low": {
           "$type": "color",
-          "$value": "#404044",
+          "$value": "#4b463e",
           "$description": "Hairlines (1–2px) and disabled borders. Decorative separator, not for text."
         },
         "contrast-medium": {
           "$type": "color",
-          "$value": "#88898c",
+          "$value": "#9a9285",
           "$description": "Secondary borders and placeholder text on bg."
         },
         "contrast-high": {
           "$type": "color",
-          "$value": "#afb0b3",
+          "$value": "#b8b0a4",
           "$description": "Secondary text on bg and surface (AA). Never on a status tile."
         }
       },
@@ -276,7 +276,7 @@
         "error": {
           "full": {
             "$type": "color",
-            "$value": "#fc4040",
+            "$value": "#ff4d49",
             "$description": "Error (failed). Small marks only: tag square, pulse, sparkline, progress bar. At least 3:1 on bg and surface in both themes. In light it is the darkest status mark, so it parts from success by lightness too."
           },
           "soft": {
@@ -335,12 +335,12 @@
       },
       "shading": {
         "$type": "color",
-        "$value": "rgba(38, 38, 41, 0.67)",
+        "$value": "rgba(41, 38, 34, 0.67)",
         "$description": "Backdrop behind a sheet or dialog."
       },
       "glass": {
         "$type": "color",
-        "$value": "rgba(14, 14, 18, 0.82)",
+        "$value": "rgba(27, 25, 22, 0.82)",
         "$description": "Frosted surfaces (nav bar, app bar); use with a backdrop blur. Only text-primary and text-contrast-high stand on it: checked over white and over black. Under reduced transparency it is the ground (bg), with no blur."
       }
     },
@@ -349,27 +349,34 @@
       "text": {
         "contrast-medium": {
           "$type": "color",
-          "$value": "#4d4e51",
+          "$value": "#534c42",
           "$description": "Raised to 7:1 on bg and surface."
         },
         "contrast-high": {
           "$type": "color",
-          "$value": "#424346",
+          "$value": "#494239",
           "$description": "Raised to 7:1 on bg and surface, still a step from text-primary."
         }
       },
       "status": {
+        "info": {
+          "tile": {
+            "$type": "color",
+            "$value": "#83a7fa",
+            "$description": "Lightened until text-primary holds 7:1 on it, and a little past the error tile, which stays the darkest status fill."
+          }
+        },
         "success": {
           "tile": {
             "$type": "color",
-            "$value": "#74d8b0",
+            "$value": "#7ce0b8",
             "$description": "Lightened so the error tile can lighten and still part from it under red-green colour blindness."
           }
         },
         "error": {
           "tile": {
             "$type": "color",
-            "$value": "#dd7b7b",
+            "$value": "#ed8a89",
             "$description": "Lightened until text-primary holds 7:1 on it, its hue kept; still the darkest status fill."
           }
         }
@@ -412,12 +419,12 @@
       "text": {
         "contrast-medium": {
           "$type": "color",
-          "$value": "#aeafb1",
+          "$value": "#bab2a4",
           "$description": "Raised to 7:1 on bg and surface."
         },
         "contrast-high": {
           "$type": "color",
-          "$value": "#c2c3c5",
+          "$value": "#d1c9bc",
           "$description": "Raised to 9:1 on surface, still a step from text-primary."
         }
       },
@@ -425,14 +432,14 @@
         "success": {
           "tile": {
             "$type": "color",
-            "$value": "#245f5b",
+            "$value": "#1e5a56",
             "$description": "Darkened until text-primary holds 7:1 on it, toward blue to stay apart from warning and error; still lighter than status-error-tile."
           }
         },
         "warning": {
           "tile": {
             "$type": "color",
-            "$value": "#6c5310",
+            "$value": "#664d06",
             "$description": "Darkened until text-primary holds 7:1 on it."
           }
         },

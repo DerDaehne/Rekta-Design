@@ -3,8 +3,16 @@
 ## Neutral surfaces
 
 The ground (`color.*.bg`), surface (`color.*.surface`) and its hover
-step (`color.*.surface-2`) are all neutral — near-white/near-black and
-two close greys. Rekta Design does not pick a hue to represent "the
+step (`color.*.surface-2`) are all neutral, and so are the text steps
+on them (`text-primary`, `text-contrast-high`, `-medium`, `-low`):
+paper and two close warm greys in light, a warm near-black and two close
+steps above it in dark. The neutrals carry a **warm cast**, one
+yellow-red hue (OKLCH about 72° to 85°) at a chroma of at most 0.022, so
+the frame stays quiet and the content is what stands out. The cast is
+not a hue: it stays below 0.05, the chroma under which Rekta counts a
+colour as grey ([Apart from status](#apart-from-status)), it never
+stands for the product, a status or a selection, and nothing is told
+apart by it. Rekta Design does not pick a hue to represent "the
 product": its one product slot, the **accent** (`color.*.accent` with
 `on-accent`), is ink until a product sets it per theme or picks a named
 one. It fills the primary button, checked controls, a selected item and
@@ -78,9 +86,9 @@ to read.
 
 `color.dark.*` is an independently chosen token set, not a formula
 applied to `color.light.*`, and the margins are not symmetric. Primary
-text on the tile fills measures, at the time of writing: dark success
-4.99:1, the tightest pair; light error 5.25:1, the next; dark warning
-6.62:1 against light warning 14.83:1. That is why the self-check measures
+text on the tile fills measures, at the time of writing: light error
+4.51:1, the tightest pair; dark success 4.55:1, the next; dark warning
+6.03:1 against light warning 12.34:1. That is why the self-check measures
 every pair rather than assuming symmetry, and why the numbers here are an
 illustration: `node scripts/build.mjs --check` is the authority.
 Under more contrast every one of them holds 7:1 (below).
@@ -94,10 +102,11 @@ the normal case no value changes.
   the prefs): each theme takes its contrast set, `color.light-contrast`
   or `color.dark-contrast`, which holds only the values that change.
   Every text pair holds **7:1** (WCAG AAA): `text-contrast-high` and
-  `text-contrast-medium` are raised, ink on every tile and soft tint
-  holds 7:1, and the tiles where it did not (light error, dark success
-  and warning) are shifted until it does, with their neighbours moved
-  just enough to stay 0.09 apart under red-green colour blindness. Each
+  `text-contrast-medium` are raised (in the same warm cast), ink on
+  every tile and soft tint holds 7:1, and the tiles where it did not
+  (light info and error, dark success and warning) are shifted until it
+  does, with their neighbours moved just enough to stay 0.09 apart under
+  red-green colour blindness and the error tile still the darkest. Each
   status tile gains a **2px frame in its full colour**, and its word
   stays: the frame and the word now carry the status, not the calm fill
   alone. A destructive button's words take ink inside its error frame.
@@ -167,12 +176,12 @@ product or its user picks a name instead of four pairs:
 | Name | Light | Dark | Text on it |
 |---|---|---|---|
 | `ink` | `text-primary` | `text-primary` | `bg`: the default |
-| `teal` | `#049896` | `#00aba9` | dark |
+| `teal` | `#009694` | `#00aba9` | dark |
 | `steel` | `#637586` | `#6c7e8f` | white in light, dark in dark |
 | `violet` | `#65389f` | `#c2a7f4` | white in light, dark in dark |
-| `mauve` | `#756089` | `#7a648e` | white |
-| `pink` | `#d858b6` | `#f472d0` | dark |
-| `magenta` | `#d70473` | `#d70473` | white |
+| `mauve` | `#756089` | `#7e6892` | white |
+| `pink` | `#d556b4` | `#f472d0` | dark |
+| `magenta` | `#d70473` | `#d90a74` | white |
 
 Under more contrast each has its own darker or lighter pair at 7:1 (in
 the file). On the web, `data-accent="teal"` on the root picks one, or

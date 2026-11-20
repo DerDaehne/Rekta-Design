@@ -13,6 +13,34 @@ README, principles.md and platforms.md say so, and platforms.md gains a
 glossary. Two motion rules are settled: the end of a scroll, and the
 dots' fade in.
 
+### Changed
+
+- **Warm neutrals** (colour.md): the seven neutral tokens of each theme
+  carry one warm cast, a yellow-red hue at a chroma of at most 0.021,
+  below the 0.05 under which Rekta counts a colour as grey. Light:
+  `bg` `#faf8f4`, `surface` `#efeae1`, `surface-2` `#e5dfd3`,
+  `text-primary` `#1f1a14`, `text-contrast-high` `#554e45`,
+  `-medium` `#6a6258`, `-low` `#d8d0c3`. Dark: `#1b1916`,
+  `#2a2723`, `#34302b`, `#f5f1ea`, `#b8b0a4`, `#9a9285`,
+  `#4b463e`. `glass` is the new ground at 82%, `shading` the warm ink
+  (light) and a warm step above the ground (dark) at 67%. The contrast
+  sets raise `text-contrast-medium` and `-high` in the same cast, at
+  7:1 or more on `bg` and `surface`. Status colours, content fills,
+  `focus`, `hover` and `disabled` keep their values, except where
+  `--check` asked: the light error tile `#cb6267` (ink at 4.5:1), the
+  dark `status-error-full` `#ff4d49` (a destructive button's words at
+  4.5:1 on the lighter surface), and under more contrast the light info
+  `#83a7fa`, success `#7ce0b8` and error `#ed8a89` tiles and the
+  dark success `#1e5a56` and warning `#664d06` tiles (ink at 7:1, 0.09
+  apart under red-green colour blindness, error still the darkest). Four
+  named accents move just enough to keep 3:1 on the new surfaces: teal
+  light `#009694`, pink light `#d556b4`, mauve dark `#7e6892`, magenta
+  dark `#d90a74`. The neutral square of a tag in the ink toast takes the
+  toast's words' colour in every contrast setting (the warm placeholder
+  grey sinks into the ink). rekta-core's reference images are drawn
+  again in the new colours; the showcase's icons and manifest take the
+  warm ink and ground.
+
 ### Added
 
 - **Opener tiles in a side panel** (states.md, tiles.md, motion.md): a

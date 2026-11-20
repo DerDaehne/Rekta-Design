@@ -1198,10 +1198,11 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 /* A toast with a status takes its fill, as a banner does: a failure whose control has gone (docs/states.md). */
 .rk-toast[data-status] { background-color: var(--_rk-fill); color: var(--rk-text-primary); }
 /* A tag in the plain (ink) toast: its word takes the toast's text colour, as on the ground it takes the ground's, and
-   its square an edge in that colour, since a status colour may sink into the ink; the neutral square's own colour
-   keeps 3:1 on the ink (--check). A soft tag keeps its tint and its ink words. */
+   its square an edge in that colour, since a status colour may sink into the ink. The neutral square is the words'
+   colour itself: the warm placeholder grey sinks into the ink. A soft tag keeps its tint and its ink words. */
 .rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft) { color: inherit; }
 .rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft)::before { box-shadow: 0 0 0 1px currentColor; }
+.rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft, [data-status], [data-rk-code])::before { background: currentColor; }
 .rk-toast-msg { flex: 1 1 auto; align-self: center; min-width: 0; padding: calc(var(--rk-space-s) + var(--rk-space-xs)) var(--rk-space-m); text-wrap: pretty; }
 /* A notification from another program (docs/states.md): its text is a button that runs the default action, tinted on
    press and ringed on focus as the action is. The sender's icon, or the notification's own picture cropped square,
@@ -1571,16 +1572,13 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
 /* More contrast (docs/colour.md): rekta.tokens.css switches to the contrast colours, every text pair at 7:1; these are
    the parts that are not colours. A status tile keeps its word and gains a 2px frame in its full colour, so the status
    no longer rests on the calm fill alone; a destructive button's words take ink inside its error frame. Forced colours
-   stay as they are (they drop the frame with every shadow). The neutral square of a tag in the ink toast takes the
-   toast's words' colour, since the darker placeholder grey of the contrast colours sinks into the ink. */
+   stay as they are (they drop the frame with every shadow). */
 @media (prefers-contrast: more) {
   :root:not([data-contrast='normal']) .rk-tile[data-status] { box-shadow: inset 0 0 0 2px var(--_rk-mark); }
   :root:not([data-contrast='normal']) .rk-btn[data-status='error']:not(:disabled, [aria-disabled='true']) { color: var(--rk-text-primary); }
-  :root:not([data-contrast='normal']) .rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft, [data-status], [data-rk-code])::before { background: currentColor; }
 }
 :root[data-contrast='more'] .rk-tile[data-status] { box-shadow: inset 0 0 0 2px var(--_rk-mark); }
 :root[data-contrast='more'] .rk-btn[data-status='error']:not(:disabled, [aria-disabled='true']) { color: var(--rk-text-primary); }
-:root[data-contrast='more'] .rk-toast:not([data-status]) .rk-tag:not(.rk-tag--soft, [data-status], [data-rk-code])::before { background: currentColor; }
 
 /* Reduced transparency: glass is the ground (rekta.tokens.css), and nothing blurs what is behind it. */
 @media (prefers-reduced-transparency: reduce) {

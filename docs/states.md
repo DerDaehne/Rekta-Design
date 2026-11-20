@@ -49,9 +49,9 @@ success carry no status: the plain toast is the success.
 A tag (`.rk-tag`) in a toast says a status in its words, as anywhere.
 In the plain, ink toast its word takes the toast's text colour and its
 square an edge in that colour, so a status colour that would sink into
-the ink still shows; the neutral square keeps 3:1 on the ink (`--check`
-holds it), and under more contrast it takes the toast's words' colour. In a toast with a status, the tag reads on the fill as on a
-tile.
+the ink still shows; the neutral square takes the toast's words' colour
+(`--check` holds it to the text's contrast on the ink). In a toast with
+a status, the tag reads on the fill as on a tile.
 
 ### A level indicator
 

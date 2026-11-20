@@ -39,7 +39,7 @@ static rk_view *col(float gap, float pad) {
 /* Tokens, easing ------------------------------------------------------------------------------------------------- */
 
 static void test_tokens(void) {
-  CHECK(rk_color_of(RK_ROLE_BG) == 0xffffffffu, "light bg %08x", rk_color_of(RK_ROLE_BG));
+  CHECK(rk_color_of(RK_ROLE_BG) == 0xfaf8f4ffu, "light bg %08x", rk_color_of(RK_ROLE_BG));
   CHECK(rk_color_of(RK_ROLE_INFO_TILE) == 0x7da1f4ffu, "info tile");
   CHECK(rk_metric_of(RK_TILE_UNIT) == 150, "tile unit");
   CHECK(rk_metric_of(RK_CONTROL_HEIGHT) == 32, "compact control height on a desktop: %g", rk_metric_of(RK_CONTROL_HEIGHT));
@@ -51,7 +51,7 @@ static void test_tokens(void) {
   CHECK(rk_duration_of(RK_DURATION_SHORT) == 0 && rk_duration_of(RK_TIMING_TOAST) == 5000, "reduced motion zeroes motion, keeps timings");
   rk_app_set_motion(RK_MOTION_PREF_SYSTEM);
   rk_app_set_theme(RK_THEME_DARK);
-  CHECK(rk_color_of(RK_ROLE_BG) == 0x0e0e12ffu, "dark bg");
+  CHECK(rk_color_of(RK_ROLE_BG) == 0x1b1916ffu, "dark bg");
   rk_app_set_theme(RK_THEME_SYSTEM);
   /* CSS ease at its half way and a few known points */
   CHECK(CLOSE_TO(rk__ease(rk__ease_base, 0.5f), 0.8024f, 0.003), "ease 0.5 = %f", rk__ease(rk__ease_base, 0.5f));
@@ -3600,7 +3600,7 @@ static void test_product_codes(void) {
   CHECK(logged > was && strstr(logged_last, "code 6") && strstr(logged_last, "3:1"), "a code too faint on the ground is said: %s", logged_last);
   CHECK(rk_series_of(6) == 0xd8d8dbffu, "and still set");
   rk_app_set_series(6, 0, 0);
-  static const rk_color zones[5][2] = { { 0x5489b6ffu, 0x4f8ac6ffu }, { 0x147175ffu, 0x3ebfc6ffu }, { 0x7d8d5effu, 0xa3e4a4ffu }, { 0x805b21ffu, 0xd79f4affu }, { 0x6d2a27ffu, 0xc9635dffu } };
+  static const rk_color zones[5][2] = { { 0x5489b6ffu, 0x4f8ac6ffu }, { 0x147175ffu, 0x3ebfc6ffu }, { 0x7c8c5dffu, 0xa3e4a4ffu }, { 0x805b21ffu, 0xd79f4affu }, { 0x6d2a27ffu, 0xc9635dffu } };
   was = logged;
   for (int i = 0; i < 5; i++) rk_app_set_series(i + 1, zones[i][0], zones[i][1]);
   CHECK(logged == was, "the showcase's five heart-rate zones pass, as build.mjs --check holds them (%s)", logged == was ? "" : logged_last);
@@ -3714,13 +3714,13 @@ static void test_accents(void) {
   int was = logged;
   rk_app_set_accent(0x7a2a8cffu, 0xd39be0ffu);
   CHECK(logged == was, "the docs' plum holds every rule (%s)", logged == was ? "" : logged_last);
-  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x7a2a8cffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0xffffffffu, "the text on a dark accent is the ground");
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x7a2a8cffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0xfaf8f4ffu, "the text on a dark accent is the ground");
   rk_app_set_accent(0x2762ecffu, 0);
   CHECK(logged > was && strstr(logged_last, "hue") && strstr(logged_last, "info"), "an accent in a status's hue is said: %s", logged_last);
   CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x2762ecffu, "and still set");
   was = logged;
   CHECK(rk_app_set_accent_named("teal") && logged == was, "a named accent");
-  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x049896ffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0x010205ffu, "teal with ink on it in light");
+  CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x009694ffu && rk_color_of(RK_ROLE_ON_ACCENT) == 0x010205ffu, "teal with ink on it in light");
   rk_app_set_theme(RK_THEME_DARK);
   CHECK(rk_color_of(RK_ROLE_ACCENT) == 0x00aba9ffu, "its dark value in dark");
   rk_app_set_contrast(true);
@@ -3728,7 +3728,7 @@ static void test_accents(void) {
   rk_app_set_contrast(false);
   rk_app_set_theme(RK_THEME_SYSTEM);
   was = logged;
-  CHECK(!rk_app_set_accent_named("plum") && logged == was + 1 && rk_color_of(RK_ROLE_ACCENT) == 0x049896ffu, "a name that is not one: said, the accent stays");
+  CHECK(!rk_app_set_accent_named("plum") && logged == was + 1 && rk_color_of(RK_ROLE_ACCENT) == 0x009694ffu, "a name that is not one: said, the accent stays");
   rk_app_set_accent(0, 0);
   CHECK(rk_color_of(RK_ROLE_ACCENT) == rk_color_of(RK_ROLE_TEXT), "0, 0: ink again");
 

@@ -10,7 +10,7 @@
     },
     "teal": {
       "$description": "Between success and info. Dark text on it in light and dark; under more contrast a deep teal with white in light.",
-      "light": { "accent": "#049896", "on-accent": "#010205" },
+      "light": { "accent": "#009694", "on-accent": "#010205" },
       "dark": { "accent": "#00aba9", "on-accent": "#0e0e12" },
       "light-contrast": { "accent": "#005f5e", "on-accent": "#ffffff" },
       "dark-contrast": { "accent": "#0daeac", "on-accent": "#0e0e12" }
@@ -32,13 +32,13 @@
     "mauve": {
       "$description": "A greyed violet.",
       "light": { "accent": "#756089", "on-accent": "#ffffff" },
-      "dark": { "accent": "#7a648e", "on-accent": "#fbfcff" },
+      "dark": { "accent": "#7e6892", "on-accent": "#fbfcff" },
       "light-contrast": { "accent": "#655078", "on-accent": "#ffffff" },
       "dark-contrast": { "accent": "#aa93c0", "on-accent": "#0e0e12" }
     },
     "pink": {
       "$description": "Between violet and error; dark text on it in light and dark.",
-      "light": { "accent": "#d858b6", "on-accent": "#010205" },
+      "light": { "accent": "#d556b4", "on-accent": "#010205" },
       "dark": { "accent": "#f472d0", "on-accent": "#0e0e12" },
       "light-contrast": { "accent": "#9e1c81", "on-accent": "#ffffff" },
       "dark-contrast": { "accent": "#f472d0", "on-accent": "#0e0e12" }
@@ -46,7 +46,7 @@
     "magenta": {
       "$description": "The nearest to error the rules allow: 27° of hue and 0.05 under deuteranopia apart.",
       "light": { "accent": "#d70473", "on-accent": "#ffffff" },
-      "dark": { "accent": "#d70473", "on-accent": "#fbfcff" },
+      "dark": { "accent": "#d90a74", "on-accent": "#fbfcff" },
       "light-contrast": { "accent": "#95004e", "on-accent": "#ffffff" },
       "dark-contrast": { "accent": "#ff9bbb", "on-accent": "#0e0e12" }
     }
