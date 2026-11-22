@@ -816,7 +816,9 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
   font: inherit; font-size: var(--rk-font-size-xs); font-weight: var(--rk-font-weight-semibold);
   transition: background-color var(--rk-duration-short) var(--rk-ease-base);
 }
-.rk-ab:active:not([aria-disabled='true'], :disabled) { background-color: var(--rk-hover); }
+/* A control whose surface is open (its menu, a month, a side panel: docs/navigation.md) holds the press tint until
+   the surface closes, as a button does. */
+.rk-ab:is(:active, [aria-expanded='true']):not([aria-disabled='true'], :disabled) { background-color: var(--rk-hover); }
 /* A control that cannot act now (disable()): glyph and word in disabled, no hover or press tint, still focusable. Its
    reason is its tooltip, as there is no room beside it in the bar (docs/forms.md). */
 .rk-ab:is([aria-disabled='true'], :disabled) { color: var(--rk-disabled); cursor: not-allowed; }

@@ -369,6 +369,20 @@ on touch when it is tapped. `disable(control, reason)` does it on a
 its item is disabled and says it in the label, "print (needs a
 printer)".
 
+### A control whose surface is open
+
+A control that opens a surface (its menu, a clock's month, the programs
+in the background, "more", a side panel) holds the press tint (`hover`)
+for as long as that surface is open, as a button whose menu is open
+does: the eye finds which control the surface belongs to. The tint
+comes and goes as every press tint does (`duration-short` ·
+`ease-base`), so under reduced motion it stands and goes at once. The
+control also tells assistive technology that it is expanded while the
+surface is open, and collapsed once it has closed. On the web:
+`aria-expanded="true"` on the `.rk-ab`; `menu()`, `palette()` and
+`appbar()`'s "more" write it on their control, and a page that opens a
+surface by itself (a popover, a side panel) writes it.
+
 ### A control in the middle
 
 A control may stand in the middle of the bar (a clock: the time over

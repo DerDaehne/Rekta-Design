@@ -708,9 +708,9 @@
           <div class="rk-appbar screen-bar" id="screen-bar" role="region" aria-label="the desktop's bar">
             <button class="rk-ab rk-ab-run" type="button" data-app="notes" aria-current="true"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-edit"/></svg><span>Notes</span></button>
             <button class="rk-ab rk-ab-run" type="button" data-app="chat"><img class="rk-picture" alt="" data-pic="chat"><span>Chat</span></button>
-            <button class="rk-ab screen-clock" id="clock" type="button" data-rk-align="center" popovertarget="clock-cal"><span class="clock-face"><b id="clock-time">–</b><span id="clock-date">–</span></span></button>
+            <button class="rk-ab screen-clock" id="clock" type="button" data-rk-align="center" popovertarget="clock-cal" aria-expanded="false"><span class="clock-face"><b id="clock-time">–</b><span id="clock-date">–</span></span></button>
             <button class="rk-ab" id="sb-notes" type="button" data-rk-priority="3"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-bell"/></svg><span data-rk-peek id="sb-count">3</span> <span>notifications</span></button>
-            <button class="rk-ab" id="sb-quick" type="button" data-rk-priority="2"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-tune"/></svg><span>quick settings</span></button>
+            <button class="rk-ab" id="sb-quick" type="button" data-rk-priority="2" aria-haspopup="dialog" aria-expanded="false"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-tune"/></svg><span>quick settings</span></button>
             <button class="rk-ab" id="sb-bg" type="button" data-rk-priority="1"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-more"/></svg><span data-rk-peek>2</span> <span>in the background</span></button>
             <button class="rk-ab" id="sb-cast" type="button"><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-window"/></svg><span>cast</span></button>
             <button class="rk-ab rk-ab-more" type="button" hidden><svg class="rk-icon" aria-hidden="true"><use href="#rk-i-more"/></svg><span>more</span></button>
@@ -747,7 +747,7 @@
           </div>
         </fieldset>
         <p class="rk-sr" role="status" id="level-said"></p>
-        <p class="note">The buttons stand in for a keyboard's volume keys: the level shows in a toast, or for a moment in place of the clock, one form per product. The clock opens this month, to read, not to choose. The window's buttons minimize, maximize and restore, and close; a press on the desktop makes the window inactive, and its name steps back. “cast” cannot act now: rest on it, or find it in “more”. In quick settings, a tile at the foot grows into its area, where it is switched; Escape shrinks it back.</p>
+        <p class="note">The buttons stand in for a keyboard's volume keys: the level shows in a toast, or for a moment in place of the clock, one form per product. The clock opens this month, to read, not to choose; like every control of the bar, it holds its tint while what it opened is open. The window's buttons minimize, maximize and restore, and close; a press on the desktop makes the window inactive, and its name steps back. “cast” cannot act now: rest on it, or find it in “more”. In quick settings, a tile at the foot grows into its area, where it is switched; Escape shrinks it back.</p>
         <p class="rk-kicker group-label">notifications, newest on top</p>
         <p class="rk-actions"><button class="rk-btn" type="button" id="n-message">a message arrives</button><button class="rk-btn" type="button" id="n-backup">a backup finishes</button></p>
         <ul class="rk-rows centre" id="centre" aria-label="notifications">
