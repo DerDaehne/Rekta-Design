@@ -155,6 +155,67 @@ End move; Shift extends the selection; letters jump to the next line that
 starts with them, as in every list whose entries take focus
 ([navigation.md](navigation.md#typing-filter-or-jump)).
 
+## A picture in a row
+
+A list whose items may be pictures (a history of what was copied,
+recent captures, received files) shows a small picture of such an item
+in its row, so the eye knows it at once. It is the item itself, not an
+icon: a picture icon says who or what the item comes from, at 20px
+([shell.md](shell.md#picture-icons)); this picture shows what the item
+is.
+
+- **Where:** at the row's leading edge, where an icon would stand,
+  centred on the row's words; the words follow it after `space-m`, the
+  row's own gap. A row whose item is not a picture keeps its own start
+  (its icon, or its words): the picture marks the rows that are
+  pictures.
+- **Size:** a square at the density's row height (`row-height`: 44px
+  comfortable, 32px compact), as the quiet icon button at a row's end
+  ([forms.md](forms.md#one-size-of-control)); the row keeps its
+  `space-s` above and below it. The compact density makes it smaller
+  with every control.
+- **Ratio:** whatever the picture's shape, it fills the square, cropped
+  about its centre and never stretched, as a toast's picture is cropped
+  square ([states.md](states.md#a-notification-from-another-program)).
+  Every such row has the same box, so their words start at one edge.
+- **Edges:** square corners, as every picture in Rekta: a radius
+  belongs to controls, toasts and dialogs, and `radius.tile` to tiles. A
+  hairline (1px `text-contrast-low`, the rows' own) lies inside its
+  edge, so a picture as light or as dark as the ground keeps its box in
+  both themes.
+- **While it loads,** its square stands in `surface`, still: the row
+  has its height from the start, and nothing moves when the picture
+  arrives. No busy line, no shimmer, no fade
+  ([states.md](states.md#data-states)).
+- **When it cannot be shown** (it is gone, or in a form the platform
+  cannot read), the square stays as it stood while loading. No
+  broken-picture sign and no error colour: the item is there and its
+  words say what it is; only its picture is missing, and that is not a
+  failure of the item.
+- **Words:** two lines. The first says what the item is, one line cut
+  with an ellipsis; for a picture without words of its own, its kind and
+  size ("image 640 × 480"). The meta line under it (`rk-meta`) says
+  where it came from and when ("Screenshot · 14 min ago").
+- **Its name** is the row's words: the first line, then the meta line
+  ("image 640 × 480, Screenshot, 14 min ago"). The picture adds nothing
+  a screen reader could say, so it is hidden from assistive technology.
+  A file name never stands in for the words, shown or read: a program
+  made it, and it rarely says what the picture shows.
+- **Selected,** a row keeps its picture as it is, beside the checkmark.
+
+On the web: `img.rk-row-pic` with `alt=""` as the row's first child
+(another element that draws a picture, such as a `canvas`, works the
+same), its words in the next one; `rekta.css` sizes, crops and frames
+the picture and gives the words the rest of the row. The two lines are
+the product's to lay out, as any row's words (the showcase stacks two
+spans, each cut with an ellipsis).
+
+```html
+<ul class="rk-rows">
+  <li><img class="rk-row-pic" src="capture.png" alt=""><span><span>image 640 × 480</span><span class="rk-meta">Screenshot · 14 min ago</span></span></li>
+</ul>
+```
+
 ## Removing entries
 
 A list whose entries a person may remove (notifications, recent files,

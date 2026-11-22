@@ -818,6 +818,18 @@
   }
   const pictures = (scope) => $$('img[data-pic]', scope).forEach((img) => { img.src = pictureOf(img.dataset.pic); });
   pictures(document);
+  // A capture of a window on a desk, wider than high, so its crop to a square shows (a picture in a row, collections.md).
+  // The copied picture whose file is gone gets a source that cannot be read: its square stays the surface.
+  function captureOf() {
+    const c = (n) => tok.value(`--rk-${n}`);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480"><rect width="640" height="480" fill="${c('content-steel')}"/>`
+      + `<rect x="140" y="100" width="360" height="280" fill="${c('bg')}"/><rect x="140" y="100" width="360" height="44" fill="${c('surface-2')}"/>`
+      + `<rect x="172" y="176" width="200" height="18" fill="${c('text-primary')}"/><rect x="172" y="216" width="290" height="14" fill="${c('text-contrast-medium')}"/>`
+      + `<rect x="172" y="246" width="250" height="14" fill="${c('text-contrast-medium')}"/><rect x="172" y="300" width="96" height="40" fill="${c('text-primary')}"/></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  }
+  $$('img[data-capture]').forEach((img) => { img.src = captureOf(); });
+  $('#copied-gone').src = 'data:image/png;base64,AAAA';
   const APPS = {
     chat: { name: 'Chat', pic: 'chat', title: 'Ana Ruiz', facts: 'The build is green again. Shall we tag it after lunch?' },
     notes: { name: 'Notes', icon: 'edit', title: 'Shopping', facts: 'coffee beans · oat milk · a new notebook' },

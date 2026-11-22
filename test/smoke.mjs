@@ -2394,6 +2394,47 @@ const sy = await open();
   ok(await until(sy, () => sy.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase]) .rk-toast-msg'); return document.querySelectorAll('#centre > li').length === 4 && !!t && /Dismissed/.test(t.textContent); })), 'dismiss removes it, and a toast offers undo');
   await sy.click('.rk-toast:not([data-rk-phase]) .rk-toast-act'); await sy.waitForTimeout(700);
   ok(await sy.evaluate(() => document.querySelectorAll('#centre > li').length === 5 && document.querySelector('#centre > li b').textContent === 'Backup'), 'undo puts it back where it was');
+  // A picture in a row (docs/collections.md): a square at the density's row height, cropped about its centre, square
+  // corners, the rows' hairline inside its edge, the words space-m after it and centred on it; the surface while it
+  // loads and when it cannot be shown; hidden from assistive technology, the words name the row.
+  const rowPic = (density) => sy.evaluate(async (d) => {
+    document.documentElement.dataset.density = d;
+    const probe = document.body.appendChild(document.createElement('i'));
+    const col = (name) => { probe.style.color = getComputedStyle(document.documentElement).getPropertyValue(name); return getComputedStyle(probe).color; };
+    const rowH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rk-row-height')) * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const [shown, gone] = document.querySelectorAll('#copied .rk-row-pic');
+    if (!shown.complete) await new Promise((r) => shown.addEventListener('load', r, { once: true }));
+    const box = (el) => el.getBoundingClientRect(), cs = (el) => getComputedStyle(el), p = box(shown), words = box(shown.nextElementSibling);
+    const out = {
+      rowH, w: p.width, h: p.height, fit: cs(shown).objectFit, pos: cs(shown).objectPosition, radius: cs(shown).borderRadius,
+      line: `${cs(shown).outlineWidth} ${cs(shown).outlineStyle} ${cs(shown).outlineOffset}`, lineOk: cs(shown).outlineColor === col('--rk-text-contrast-low'),
+      gap: Math.round(words.left - p.right), centred: Math.abs((words.top + words.bottom) / 2 - (p.top + p.bottom) / 2) <= 1,
+      ground: cs(shown).backgroundColor === col('--rk-surface'),
+      gone: { broken: gone.complete && gone.naturalWidth === 0, w: box(gone).width, h: box(gone).height, ground: cs(gone).backgroundColor === col('--rk-surface') },
+      alt: [...document.querySelectorAll('#copied .rk-row-pic')].every((i) => i.getAttribute('alt') === ''),
+      edge: Math.round(box(document.querySelector('#copied > li:first-child .copied-words')).left - box(document.querySelector('#copied')).left),
+    };
+    probe.remove(); delete document.documentElement.dataset.density;
+    return out;
+  }, density);
+  for (const d of ['compact', 'comfortable']) {
+    const r = await rowPic(d);
+    ok(Math.abs(r.w - r.rowH) < 0.5 && Math.abs(r.h - r.rowH) < 0.5 && r.fit === 'cover' && r.pos === '50% 50%' && r.radius === '0px', `a picture in a row, ${d}: a square at row-height, cropped about its centre, square corners`, JSON.stringify(r));
+    ok(r.line === '1px solid -1px' && r.lineOk && r.ground, `a picture in a row, ${d}: the rows' hairline inside its edge, on the surface`, JSON.stringify(r));
+    ok(r.gap === 16 && r.centred && r.edge === 0, `a picture in a row, ${d}: its words space-m after it, centred on it; a row without one starts at its edge`, JSON.stringify(r));
+    ok(r.gone.broken && Math.abs(r.gone.w - r.rowH) < 0.5 && Math.abs(r.gone.h - r.rowH) < 0.5 && r.gone.ground && r.alt, `a picture in a row, ${d}: one that cannot be shown keeps its square in the surface; none is named`, JSON.stringify(r));
+  }
+  // The browser's broken-picture sign stays covered: inside its hairline, the square is the surface alone.
+  const goneShot = (await (await sy.$('#copied-gone')).screenshot()).toString('base64');
+  const goneColours = await sy.evaluate(async (b64) => {
+    const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const { data } = g.getImageData(2, 2, img.width - 4, img.height - 4), seen = new Set();
+    for (let i = 0; i < data.length; i += 4) seen.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
+    return seen.size;
+  }, goneShot);
+  ok(goneColours === 1, 'a picture in a row that cannot be shown shows no broken-picture sign: its square is the surface alone', goneColours);
   // Quick settings: a side panel; a group gives its place to its list.
   await sy.evaluate(() => document.querySelector('#sb-quick').click());
   // Measured once its slide in has ended, not after a fixed wait a busy runner may not have reached.

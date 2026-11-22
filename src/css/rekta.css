@@ -78,6 +78,18 @@
 .rk-rows > li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 var(--rk-space-m); padding: var(--rk-space-s) 0; border-top: 1px solid var(--rk-text-contrast-low); }
 .rk-rows > li:last-child { border-bottom: 1px solid var(--rk-text-contrast-low); }
 .rk-rows b { font-weight: var(--rk-font-weight-semibold); }
+/* A row whose item is a picture (docs/collections.md): a small picture of it at the leading edge, a square at the
+   density's row height, cropped about its centre, square-cornered, a hairline inside its edge; the surface shows
+   while it loads and when it cannot be shown. The words take the rest of the row, centred on the picture. */
+.rk-rows > li:has(> .rk-row-pic) { flex-wrap: nowrap; justify-content: flex-start; align-items: center; }
+.rk-row-pic {
+  position: relative; flex: none; width: var(--rk-row-height); height: var(--rk-row-height); object-fit: cover;
+  background: var(--rk-surface); outline: 1px solid var(--rk-text-contrast-low); outline-offset: -1px;
+}
+/* A browser draws its broken-picture sign in an image it cannot show, and only then gives the image a pseudo-element:
+   it covers the sign inside the hairline, so the square stays the surface. */
+img.rk-row-pic::after { content: ''; position: absolute; inset: 1px; background: var(--rk-surface); }
+.rk-rows > li > .rk-row-pic + * { flex: 1 1 auto; min-width: 0; }
 /* Entries that can be dragged away (removable()): the browser keeps the vertical scroll and leaves the sideways
    movement to the script. */
 [data-rk-removable] > * { touch-action: pan-y; }
