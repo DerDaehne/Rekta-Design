@@ -115,6 +115,13 @@ dots' fade in.
   presses over the content's trailing edge. Now the content is narrower
   by the gutter while it overflows. `rekta.3` and `rekta.h` say so. Lists,
   tables, menus and the panorama draw no bar yet (platforms.md).
+- **An app-bar control whose surface is open** (navigation.md) holds the
+  press tint (`hover`) until the surface closes, as a button whose menu
+  is open does, and says it is expanded; the tint comes and goes over
+  `duration-short` · `ease-base` like every press tint. On the web:
+  `.rk-ab[aria-expanded="true"]`, which `menu()`, `palette()` and
+  `appbar()`'s "more" already write. The showcase's clock and quick
+  settings write it for their month and side panel.
 
 ### Contributing
 

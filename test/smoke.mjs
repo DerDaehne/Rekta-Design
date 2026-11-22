@@ -2365,7 +2365,22 @@ const sy = await open();
   await sy.click('#clock'); await sy.waitForTimeout(300);
   const cal = await sy.evaluate(() => { const f = document.querySelector('#clock-cal'), c = document.querySelector('#clock').getBoundingClientRect(), r = f.getBoundingClientRect(); return { open: f.matches(':popover-open'), today: +document.querySelector('#month [aria-current="date"]').textContent === new Date().getDate(), off: Math.abs(r.left + r.width / 2 - (c.left + c.width / 2)), days: document.querySelectorAll('#month thead th').length }; });
   ok(cal.open && cal.today && cal.days === 7 && cal.off <= 1, 'the clock opens this month (.rk-month), today framed, centred on the clock', JSON.stringify(cal));
+  // A control whose surface is open holds the press tint (docs/navigation.md), measured once its tint has settled and
+  // with the pointer away, so no hover tint stands in for it.
+  const tint = (sel) => sy.evaluate(async (q) => {
+    const c = document.querySelector(q);
+    await Promise.all(c.getAnimations().map((a) => a.finished.catch(() => {})));
+    const probe = document.body.appendChild(document.createElement('i'));
+    probe.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--rk-hover');
+    const hover = getComputedStyle(probe).backgroundColor; probe.remove();
+    return { expanded: c.getAttribute('aria-expanded'), held: getComputedStyle(c).backgroundColor === hover };
+  }, sel);
+  await sy.mouse.move(5, 5);
+  const calOpen = await tint('#clock');
+  ok(calOpen.expanded === 'true' && calOpen.held, 'while its month is open, the clock is expanded and holds the press tint', JSON.stringify(calOpen));
   await sy.keyboard.press('Escape'); await sy.waitForTimeout(200);
+  const calShut = await tint('#clock');
+  ok(calShut.expanded === 'false' && !calShut.held, 'once the month has closed, the clock lets the tint go', JSON.stringify(calShut));
   // The level: in a toast, then in the bar's middle in place of the clock.
   await sy.click('#vol-up'); await sy.waitForTimeout(400);
   ok(await sy.evaluate(() => { const t = document.querySelector('.rk-toast.rk-toast--level:not([data-rk-phase])'); return !!t && t.textContent.includes('volume') && t.textContent.includes('70') && !t.dataset.status; }), 'volume up: the level indicator in a toast, at 70%');
@@ -2376,11 +2391,24 @@ const sy = await open();
   await sy.evaluate(() => { const b = document.querySelector('#sb-bg'); if (b.hasAttribute('data-rk-overflow')) window.site.screenBar.layout(); });
   const bgShown = await sy.evaluate(() => !document.querySelector('#sb-bg').hasAttribute('data-rk-overflow'));
   if (bgShown) {
-    await sy.click('#sb-bg'); await sy.waitForTimeout(300); await sy.keyboard.press('Enter'); await sy.waitForTimeout(200);
+    await sy.click('#sb-bg'); await sy.waitForTimeout(300);
+    await sy.mouse.move(5, 5);
+    const bgOpen = await tint('#sb-bg');
+    ok(bgOpen.expanded === 'true' && bgOpen.held, 'in the background: while its menu is open, it holds the press tint (menu() writes aria-expanded)', JSON.stringify(bgOpen));
+    await sy.keyboard.press('Enter'); await sy.waitForTimeout(200);
     const lvl = await sy.evaluate(() => ({ level: !document.querySelector('#bg-music').hidden, back: (document.querySelector('#bg-music .rk-menu-back') || {}).textContent, focus: document.activeElement.dataset.act, icons: document.querySelectorAll('#bg-menu .rk-menu-item > .rk-icon').length }));
     ok(lvl.level && /Music/.test(lvl.back || '') && lvl.focus === 'previous' && lvl.icons >= 5, 'in the background: a program\'s own menu is a second level with icons', JSON.stringify(lvl));
     await sy.keyboard.press('Escape'); await sy.keyboard.press('Escape'); await sy.waitForTimeout(200);
-  } else ok(true, 'in the background: in "more" at this width');
+  } else {
+    // At this width "in the background" waits in "more", whose menu appbar() opens with menu(): "more" holds the tint.
+    await sy.click('#screen-bar .rk-ab-more'); await sy.waitForTimeout(300);
+    await sy.mouse.move(5, 5);
+    const moreOpen = await tint('#screen-bar .rk-ab-more');
+    ok(moreOpen.expanded === 'true' && moreOpen.held, '"more": while its menu is open, it holds the press tint', JSON.stringify(moreOpen));
+    await sy.keyboard.press('Escape');
+    const moreShut = await tint('#screen-bar .rk-ab-more');
+    ok(moreShut.expanded === 'false' && !moreShut.held, '"more": once its menu has closed, it lets the tint go', JSON.stringify(moreShut));
+  }
   // Notifications from another program: from the edge, with its picture and title; the centre takes it on top and
   // the count peeks; dismissed with undo; a tap hints at the swipe.
   await sy.click('#n-message'); await sy.waitForTimeout(400);
@@ -2404,6 +2432,8 @@ const sy = await open();
     return { open: d.open, right: r.right, vw: document.documentElement.clientWidth, h: r.height, vh: innerHeight };
   });
   ok(quick.open && Math.abs(quick.right - quick.vw) < 1 && Math.abs(quick.h - quick.vh) < 1, 'quick settings: a side panel at the trailing edge, full height', JSON.stringify(quick));
+  const quickHeld = await tint('#sb-quick');
+  ok(quickHeld.expanded === 'true' && quickHeld.held, 'quick settings: its control holds the press tint while the side panel is open', JSON.stringify(quickHeld));
   await sy.click('#qs-net'); await sy.waitForTimeout(400);
   ok(await sy.evaluate(() => !document.querySelector('#qs-nets').hidden && document.querySelector('#qs-nets > .rk-in-back').textContent === 'back · wi-fi'), 'wi-fi opens its networks in place, under "back · wi-fi"');
   await sy.click('label:has(> input[value="Office 5G"])'); await sy.waitForTimeout(400);
@@ -2435,7 +2465,8 @@ const sy = await open();
     return { n, shown };
   });
   ok(still.shown && still.n === 0, 'motion off: the level stands at once', JSON.stringify(still));
-  await sy.keyboard.press('Escape'); await sy.waitForTimeout(700);
+  await sy.keyboard.press('Escape');
+  ok(await until(sy, async () => { const t = await tint('#sb-quick'); return t.expanded === 'false' && !t.held; }), 'once the side panel has closed, its control lets the tint go');
   // The session, the lock screen and signing in again.
   await sy.click('#session-open'); await sy.waitForTimeout(400);
   ok(await sy.evaluate(() => { const d = document.querySelector('#session'); return d.open && d.querySelector('.rk-btn--primary').value === 'lock' && Math.round(d.getBoundingClientRect().width) === document.documentElement.clientWidth; }), 'session: a bar across the top, lock first');

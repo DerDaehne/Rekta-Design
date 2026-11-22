@@ -918,7 +918,8 @@
     $('#month').innerHTML = `<caption>${MONTHS[d.getMonth()]} ${d.getFullYear()}</caption><thead><tr>${DAYS.map(([s, l]) => `<th scope="col" abbr="${l}">${s}</th>`).join('')}</tr></thead><tbody>${rows}</tbody>`;
   }
   paintClock(); setInterval(paintClock, 15000);
-  $('#clock-cal').addEventListener('toggle', (e) => { if (e.newState === 'open') Rekta.place($('#clock-cal'), $('#clock')); });
+  // A control holds its press tint while what it opened is open (aria-expanded); menu() writes it, the page does here.
+  $('#clock-cal').addEventListener('toggle', (e) => { $('#clock').setAttribute('aria-expanded', String(e.newState === 'open')); if (e.newState === 'open') Rekta.place($('#clock-cal'), $('#clock')); });
   // The volume keys: the level in a toast, or for a moment in place of the clock (indicate()); one form at a time.
   let volume = 0.6, levelIn = 'toast';
   const level = document.createElement('span');
@@ -1021,8 +1022,8 @@
   paintCentre();
   // Quick settings: a side panel from the trailing edge; a group gives its place to the list it opens.
   const quick = $('#quick-panel'), quickIn = Rekta.inPlace(quick);
-  $('#sb-quick').addEventListener('click', () => quick.showModal());
-  quick.addEventListener('close', () => quickIn.reset());
+  $('#sb-quick').addEventListener('click', () => { quick.showModal(); $('#sb-quick').setAttribute('aria-expanded', 'true'); });
+  quick.addEventListener('close', () => { quickIn.reset(); $('#sb-quick').setAttribute('aria-expanded', 'false'); });
   for (const [name, out] of [['qs-net', '#qs-net-v'], ['qs-out', '#qs-out-v']]) {
     $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => { $(out).textContent = r.value; quickIn.back(); }));
   }
