@@ -188,6 +188,9 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
    button at the end; an entry with progress carries its status word and bar under the text. */
 .centre > li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; align-items: center; gap: 0 var(--rk-space-s); padding-block: var(--rk-space-xs); }
 .centre-text { display: grid; min-width: 0; }
+/* What was copied: each entry what it is over where it came from and when, each line cut. */
+.copied-words { display: grid; flex: 1 1 auto; min-width: 0; }
+.copied-words > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .centre-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rk-text-contrast-high); }
 .centre-state { grid-column: 2 / 4; grid-row: 2; display: flex; align-items: center; gap: var(--rk-space-s); }
 .centre-state > .rk-progress { flex: 1 1 auto; }

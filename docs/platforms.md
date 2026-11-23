@@ -293,6 +293,9 @@ builds it from views or does without:
 - **A launch tile:** rekta-core's tiles carry a stat, a message, a
   sparkline and progress, not an icon and a count; a tile spans any
   number of units (`rk_view_set_span`).
+- **A picture in a row** ([collections.md](collections.md#a-picture-in-a-row)):
+  rekta-core's rows and lists (`rk_rows`, `rk_list`) carry a title
+  with its meta or status at the row's end, no picture yet.
 - **Dragging a row away:** rekta-core's lists take Delete
   (`rk_list_on_remove`), not the drag; its declared lists (`RK_LIST`)
   do not offer the removal yet.

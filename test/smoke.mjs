@@ -2422,6 +2422,71 @@ const sy = await open();
   ok(await until(sy, () => sy.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase]) .rk-toast-msg'); return document.querySelectorAll('#centre > li').length === 4 && !!t && /Dismissed/.test(t.textContent); })), 'dismiss removes it, and a toast offers undo');
   await sy.click('.rk-toast:not([data-rk-phase]) .rk-toast-act'); await sy.waitForTimeout(700);
   ok(await sy.evaluate(() => document.querySelectorAll('#centre > li').length === 5 && document.querySelector('#centre > li b').textContent === 'Backup'), 'undo puts it back where it was');
+  // A picture in a row (docs/collections.md): a square at the density's row height, cropped about its centre, square
+  // corners, the rows' hairline inside its edge, the words space-m after it and centred on it; the surface while it
+  // loads and when it cannot be shown; hidden from assistive technology, the words name the row.
+  const rowPic = (density) => sy.evaluate(async (d) => {
+    document.documentElement.dataset.density = d;
+    const probe = document.body.appendChild(document.createElement('i'));
+    const col = (name) => { probe.style.color = getComputedStyle(document.documentElement).getPropertyValue(name); return getComputedStyle(probe).color; };
+    const rowH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rk-row-height')) * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const [shown, gone] = document.querySelectorAll('#copied .rk-row-pic');
+    if (!shown.complete) await new Promise((r) => shown.addEventListener('load', r, { once: true }));
+    const box = (el) => el.getBoundingClientRect(), cs = (el) => getComputedStyle(el), p = box(shown), words = box(shown.nextElementSibling);
+    const out = {
+      rowH, w: p.width, h: p.height, fit: cs(shown).objectFit, pos: cs(shown).objectPosition, radius: cs(shown).borderRadius,
+      line: `${cs(shown).outlineWidth} ${cs(shown).outlineStyle} ${cs(shown).outlineOffset}`, lineOk: cs(shown).outlineColor === col('--rk-text-contrast-low'),
+      gap: Math.round(words.left - p.right), centred: Math.abs((words.top + words.bottom) / 2 - (p.top + p.bottom) / 2) <= 1,
+      ground: cs(shown).backgroundColor === col('--rk-surface'),
+      gone: { blank: gone.naturalWidth === 1 && gone.naturalHeight === 1 && !/^data:image\/png/.test(gone.getAttribute('src')), w: box(gone).width, h: box(gone).height, ground: cs(gone).backgroundColor === col('--rk-surface') },
+      alt: [...document.querySelectorAll('#copied .rk-row-pic')].every((i) => i.getAttribute('alt') === ''),
+      edge: Math.round(box(document.querySelector('#copied > li:first-child .copied-words')).left - box(document.querySelector('#copied')).left),
+    };
+    probe.remove(); delete document.documentElement.dataset.density;
+    return out;
+  }, density);
+  for (const d of ['compact', 'comfortable']) {
+    const r = await rowPic(d);
+    ok(Math.abs(r.w - r.rowH) < 0.5 && Math.abs(r.h - r.rowH) < 0.5 && r.fit === 'cover' && r.pos === '50% 50%' && r.radius === '0px', `a picture in a row, ${d}: a square at row-height, cropped about its centre, square corners`, JSON.stringify(r));
+    ok(r.line === '1px solid -1px' && r.lineOk && r.ground, `a picture in a row, ${d}: the rows' hairline inside its edge, on the surface`, JSON.stringify(r));
+    ok(r.gap === 16 && r.centred && r.edge === 0, `a picture in a row, ${d}: its words space-m after it, centred on it; a row without one starts at its edge`, JSON.stringify(r));
+    ok(r.gone.blank && Math.abs(r.gone.w - r.rowH) < 0.5 && Math.abs(r.gone.h - r.rowH) < 0.5 && r.gone.ground && r.alt, `a picture in a row, ${d}: one that cannot be shown gets a transparent pixel from start() and keeps its square in the surface; none is named`, JSON.stringify(r));
+  }
+  // The browser's broken-picture sign stays covered: inside its hairline, the square is the surface alone.
+  const goneShot = (await (await sy.$('#copied-gone')).screenshot()).toString('base64');
+  const goneColours = await sy.evaluate(async (b64) => {
+    const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const { data } = g.getImageData(2, 2, img.width - 4, img.height - 4), seen = new Set();
+    for (let i = 0; i < data.length; i += 4) seen.add(`rgb(${data[i]}, ${data[i + 1]}, ${data[i + 2]})`);
+    const probe = document.body.appendChild(document.createElement('i'));
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--rk-surface');
+    const surface = getComputedStyle(probe).color; probe.remove();
+    return { n: seen.size, seen: [...seen].slice(0, 3), surface };
+  }, goneShot);
+  ok(goneColours.n === 1 && goneColours.seen[0] === goneColours.surface, 'a picture in a row that cannot be shown shows no broken-picture sign: its square is the surface alone', JSON.stringify(goneColours));
+  // start() also finds a row's picture that failed before it ran (by its decode), and hears one that fails after.
+  // A page of its own on the showcase's origin, so rekta.js can be imported and none of the showcase's script runs in it.
+  const lateCtx = await browser.newContext();
+  const late = await lateCtx.newPage();
+  late.on('pageerror', (e) => errors.push(`late start: ${e.message}`));
+  await late.goto(`${base}rekta.css`);
+  await late.setContent('<!doctype html><link rel="stylesheet" href="rekta.tokens.css"><link rel="stylesheet" href="rekta.css"><ul class="rk rk-rows"><li><img class="rk-row-pic" id="before" alt="" src="data:image/png;base64,AAAA"><span>image</span></li></ul>');
+  await until(late, () => late.evaluate(() => document.querySelector('#before').complete));
+  const failedFirst = await late.evaluate(() => document.querySelector('#before').naturalWidth);
+  // A picture that can be shown, whose source the page changes in the task that runs start(): its decode fails, and
+  // start() must still leave the new picture alone.
+  const pic = (w, h) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="teal"/></svg>`)}`;
+  await late.evaluate(async (src) => { const i = Object.assign(document.createElement('img'), { className: 'rk-row-pic', id: 'kept', alt: '', src }); document.querySelector('li').append(i); await i.decode(); }, pic(4, 3));
+  await late.evaluate(async ([url, next]) => { const { start } = await import(url); start(); document.getElementById('kept').src = next; document.querySelector('li').append(Object.assign(document.createElement('img'), { className: 'rk-row-pic', id: 'after', alt: '', src: 'data:image/png;base64,AAAA' })); window.rkStarted = true; }, [`${base}rekta.js`, pic(6, 5)]);
+  const blanked = await until(late, () => late.evaluate(() => !!window.rkStarted && ['before', 'after'].every((id) => { const i = document.getElementById(id); return i.naturalWidth === 1 && i.naturalHeight === 1; })));
+  ok(failedFirst === 0 && blanked, 'start() gives a transparent pixel to a row\'s picture that failed before it ran and to one that fails after', failedFirst);
+  const keptShown = await until(late, () => late.evaluate(() => document.getElementById('kept').naturalWidth === 6));
+  await late.waitForTimeout(300);   /* time for a decode that failed on the source change to settle */
+  const kept = await late.evaluate(() => { const i = document.getElementById('kept'); return { w: i.naturalWidth, h: i.naturalHeight, svg: /^data:image\/svg/.test(i.getAttribute('src')) }; });
+  ok(keptShown && kept.w === 6 && kept.h === 5 && kept.svg, 'start() leaves a row\'s picture that can be shown alone, also when the page changes its source as start() runs', JSON.stringify(kept));
+  await lateCtx.close();
   // Quick settings: a side panel; a group gives its place to its list.
   await sy.evaluate(() => document.querySelector('#sb-quick').click());
   // Measured once its slide in has ended, not after a fixed wait a busy runner may not have reached.

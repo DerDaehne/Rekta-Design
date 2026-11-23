@@ -99,6 +99,18 @@ dots' fade in.
   grows a level out of a tile that opens it and keeps the content
   `inert` under it instead of `hidden`. The showcase's quick settings
   have two.
+- **A picture in a row** (collections.md): a list whose items may be
+  pictures shows a small picture of such an item at its row's leading
+  edge, where an icon would stand: a square at `row-height`, cropped
+  about its centre, square-cornered, with the rows' hairline inside its
+  edge. While it loads and when it cannot be shown, the square stands
+  in `surface`, still. The words are two lines, what the item is over
+  where it came from and when, and they are the row's name; the picture
+  is hidden from assistive technology. On the web: `img.rk-row-pic`;
+  `start()` gives one that cannot be shown a transparent pixel for its
+  source, as WebKit draws its broken-picture sign over any cover.
+  rekta-core has no picture in a row yet (platforms.md). The showcase
+  has a list of what was copied.
 - **The thin scrollbar** (layout.md): only the grip, no track, square,
   `text-contrast-low` at rest and `text-contrast-medium` under the pointer
   and while dragged, always visible while the content overflows, in a
