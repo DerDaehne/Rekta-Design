@@ -215,8 +215,9 @@ spans, each cut with an ellipsis). A picture that cannot be shown:
 draws its broken-picture sign there. Without `rekta.js`, `rekta.css`
 covers the sign where the browser draws an image's `::after`
 (Chromium, Firefox); WebKit does not, so a page without the script
-gives the picture a transparent one itself on its `error`, as
-`start()` does.
+gives the picture a transparent 1 × 1 GIF with a colour table itself on
+its `error`, as `start()` does (under a GIF without one, WebKit shows
+the page's ground instead of `surface`).
 
 ```html
 <ul class="rk-rows">

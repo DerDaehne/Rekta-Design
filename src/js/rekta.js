@@ -4532,9 +4532,10 @@ export function start({ root = document, restore = true, locale: tag = '', strin
   root.querySelectorAll('.rk-segments').forEach((g) => segChosen.set(g, segOf(g)));
   document.addEventListener('input', onRange);
   document.addEventListener('change', onSegment);
-  // An error does not bubble: heard on its way down. A picture that failed before this ran is found by its decode.
+  // An error does not bubble: heard on its way down. A picture that failed before this ran is found by its decode; a
+  // decode also fails when the page changes the source meanwhile, so only a picture that has failed is put away.
   document.addEventListener('error', onPictureError, true);
-  root.querySelectorAll('img.rk-row-pic[src]').forEach((img) => { if (img.complete) img.decode().catch(() => noPicture(img)); });
+  root.querySelectorAll('img.rk-row-pic[src]').forEach((img) => { if (img.complete) img.decode().catch(() => { if (img.complete && !img.naturalWidth) noPicture(img); }); });
   parts.push({ destroy() { document.removeEventListener('input', onRange); document.removeEventListener('change', onSegment); document.removeEventListener('error', onPictureError, true); } });
   arrive(docEl());
   return { destroy() { parts.forEach((p) => p.destroy()); if (focusFallback && fallbackFocus === focusFallback) fallbackFocus = null; } };
