@@ -2439,15 +2439,18 @@ const sy = await open();
   }, goneShot);
   ok(goneColours.n === 1 && goneColours.seen[0] === goneColours.surface, 'a picture in a row that cannot be shown shows no broken-picture sign: its square is the surface alone', JSON.stringify(goneColours));
   // start() also finds a row's picture that failed before it ran (by its decode), and hears one that fails after.
-  const late = await open();
+  // A page of its own on the showcase's origin, so rekta.js can be imported and none of the showcase's script runs in it.
+  const lateCtx = await browser.newContext();
+  const late = await lateCtx.newPage();
+  late.on('pageerror', (e) => errors.push(`late start: ${e.message}`));
+  await late.goto(`${base}rekta.css`);
   await late.setContent('<!doctype html><link rel="stylesheet" href="rekta.tokens.css"><link rel="stylesheet" href="rekta.css"><ul class="rk rk-rows"><li><img class="rk-row-pic" id="before" alt="" src="data:image/png;base64,AAAA"><span>image</span></li></ul>');
   await until(late, () => late.evaluate(() => document.querySelector('#before').complete));
   const failedFirst = await late.evaluate(() => document.querySelector('#before').naturalWidth);
-  // The showcase's policy allows no inline script: rekta.js comes in as a module from its own origin.
   await late.evaluate(async (url) => { const { start } = await import(url); start(); document.querySelector('li').append(Object.assign(document.createElement('img'), { className: 'rk-row-pic', id: 'after', alt: '', src: 'data:image/png;base64,AAAA' })); window.rkStarted = true; }, `${base}rekta.js`);
   const blanked = await until(late, () => late.evaluate(() => !!window.rkStarted && ['before', 'after'].every((id) => { const i = document.getElementById(id); return i.naturalWidth === 1 && i.naturalHeight === 1; })));
   ok(failedFirst === 0 && blanked, 'start() gives a transparent pixel to a row\'s picture that failed before it ran and to one that fails after', failedFirst);
-  await late.close();
+  await lateCtx.close();
   // Quick settings: a side panel; a group gives its place to its list.
   await sy.evaluate(() => document.querySelector('#sb-quick').click());
   // Measured once its slide in has ended, not after a fixed wait a busy runner may not have reached.
