@@ -2410,7 +2410,7 @@ const sy = await open();
       line: `${cs(shown).outlineWidth} ${cs(shown).outlineStyle} ${cs(shown).outlineOffset}`, lineOk: cs(shown).outlineColor === col('--rk-text-contrast-low'),
       gap: Math.round(words.left - p.right), centred: Math.abs((words.top + words.bottom) / 2 - (p.top + p.bottom) / 2) <= 1,
       ground: cs(shown).backgroundColor === col('--rk-surface'),
-      gone: { broken: gone.complete && gone.naturalWidth === 0, w: box(gone).width, h: box(gone).height, ground: cs(gone).backgroundColor === col('--rk-surface') },
+      gone: { blank: gone.naturalWidth === 1 && gone.naturalHeight === 1 && !/^data:image\/png/.test(gone.getAttribute('src')), w: box(gone).width, h: box(gone).height, ground: cs(gone).backgroundColor === col('--rk-surface') },
       alt: [...document.querySelectorAll('#copied .rk-row-pic')].every((i) => i.getAttribute('alt') === ''),
       edge: Math.round(box(document.querySelector('#copied > li:first-child .copied-words')).left - box(document.querySelector('#copied')).left),
     };
@@ -2422,7 +2422,7 @@ const sy = await open();
     ok(Math.abs(r.w - r.rowH) < 0.5 && Math.abs(r.h - r.rowH) < 0.5 && r.fit === 'cover' && r.pos === '50% 50%' && r.radius === '0px', `a picture in a row, ${d}: a square at row-height, cropped about its centre, square corners`, JSON.stringify(r));
     ok(r.line === '1px solid -1px' && r.lineOk && r.ground, `a picture in a row, ${d}: the rows' hairline inside its edge, on the surface`, JSON.stringify(r));
     ok(r.gap === 16 && r.centred && r.edge === 0, `a picture in a row, ${d}: its words space-m after it, centred on it; a row without one starts at its edge`, JSON.stringify(r));
-    ok(r.gone.broken && Math.abs(r.gone.w - r.rowH) < 0.5 && Math.abs(r.gone.h - r.rowH) < 0.5 && r.gone.ground && r.alt, `a picture in a row, ${d}: one that cannot be shown keeps its square in the surface; none is named`, JSON.stringify(r));
+    ok(r.gone.blank && Math.abs(r.gone.w - r.rowH) < 0.5 && Math.abs(r.gone.h - r.rowH) < 0.5 && r.gone.ground && r.alt, `a picture in a row, ${d}: one that cannot be shown gets a transparent pixel from start() and keeps its square in the surface; none is named`, JSON.stringify(r));
   }
   // The browser's broken-picture sign stays covered: inside its hairline, the square is the surface alone.
   const goneShot = (await (await sy.$('#copied-gone')).screenshot()).toString('base64');
@@ -2431,10 +2431,23 @@ const sy = await open();
     const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
     const g = c.getContext('2d'); g.drawImage(img, 0, 0);
     const { data } = g.getImageData(2, 2, img.width - 4, img.height - 4), seen = new Set();
-    for (let i = 0; i < data.length; i += 4) seen.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
-    return seen.size;
+    for (let i = 0; i < data.length; i += 4) seen.add(`rgb(${data[i]}, ${data[i + 1]}, ${data[i + 2]})`);
+    const probe = document.body.appendChild(document.createElement('i'));
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--rk-surface');
+    const surface = getComputedStyle(probe).color; probe.remove();
+    return { n: seen.size, seen: [...seen].slice(0, 3), surface };
   }, goneShot);
-  ok(goneColours === 1, 'a picture in a row that cannot be shown shows no broken-picture sign: its square is the surface alone', goneColours);
+  ok(goneColours.n === 1 && goneColours.seen[0] === goneColours.surface, 'a picture in a row that cannot be shown shows no broken-picture sign: its square is the surface alone', JSON.stringify(goneColours));
+  // start() also finds a row's picture that failed before it ran (by its decode), and hears one that fails after.
+  const late = await open();
+  await late.setContent('<!doctype html><link rel="stylesheet" href="rekta.tokens.css"><link rel="stylesheet" href="rekta.css"><ul class="rk rk-rows"><li><img class="rk-row-pic" id="before" alt="" src="data:image/png;base64,AAAA"><span>image</span></li></ul>');
+  await until(late, () => late.evaluate(() => document.querySelector('#before').complete));
+  const failedFirst = await late.evaluate(() => document.querySelector('#before').naturalWidth);
+  // The showcase's policy allows no inline script: rekta.js comes in as a module from its own origin.
+  await late.evaluate(async (url) => { const { start } = await import(url); start(); document.querySelector('li').append(Object.assign(document.createElement('img'), { className: 'rk-row-pic', id: 'after', alt: '', src: 'data:image/png;base64,AAAA' })); window.rkStarted = true; }, `${base}rekta.js`);
+  const blanked = await until(late, () => late.evaluate(() => !!window.rkStarted && ['before', 'after'].every((id) => { const i = document.getElementById(id); return i.naturalWidth === 1 && i.naturalHeight === 1; })));
+  ok(failedFirst === 0 && blanked, 'start() gives a transparent pixel to a row\'s picture that failed before it ran and to one that fails after', failedFirst);
+  await late.close();
   // Quick settings: a side panel; a group gives its place to its list.
   await sy.evaluate(() => document.querySelector('#sb-quick').click());
   // Measured once its slide in has ended, not after a fixed wait a busy runner may not have reached.

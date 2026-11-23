@@ -185,13 +185,15 @@ is.
   both themes.
 - **While it loads,** its square stands in `surface`, still: the row
   has its height from the start, and nothing moves when the picture
-  arrives. No busy line, no shimmer, no fade
+  arrives. No busy line and no shimmer
   ([states.md](states.md#data-states)).
 - **When it cannot be shown** (it is gone, or in a form the platform
   cannot read), the square stays as it stood while loading. No
   broken-picture sign and no error colour: the item is there and its
   words say what it is; only its picture is missing, and that is not a
-  failure of the item.
+  failure of the item. A platform that draws a sign of its own in a
+  picture it cannot read (a browser does) is given no picture to draw
+  instead.
 - **Words:** two lines. The first says what the item is, one line cut
   with an ellipsis; for a picture without words of its own, its kind and
   size ("image 640 × 480"). The meta line under it (`rk-meta`) says
@@ -208,7 +210,13 @@ On the web: `img.rk-row-pic` with `alt=""` as the row's first child
 same), its words in the next one; `rekta.css` sizes, crops and frames
 the picture and gives the words the rest of the row. The two lines are
 the product's to lay out, as any row's words (the showcase stacks two
-spans, each cut with an ellipsis).
+spans, each cut with an ellipsis). A picture that cannot be shown:
+`start()` gives it a transparent pixel for its source, so no browser
+draws its broken-picture sign there. Without `rekta.js`, `rekta.css`
+covers the sign where the browser draws an image's `::after`
+(Chromium, Firefox); WebKit does not, so a page without the script
+gives the picture a transparent one itself on its `error`, as
+`start()` does.
 
 ```html
 <ul class="rk-rows">

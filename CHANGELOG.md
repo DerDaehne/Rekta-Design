@@ -106,7 +106,9 @@ dots' fade in.
   edge. While it loads and when it cannot be shown, the square stands
   in `surface`, still. The words are two lines, what the item is over
   where it came from and when, and they are the row's name; the picture
-  is hidden from assistive technology. On the web: `img.rk-row-pic`.
+  is hidden from assistive technology. On the web: `img.rk-row-pic`;
+  `start()` gives one that cannot be shown a transparent pixel for its
+  source, as WebKit draws its broken-picture sign over any cover.
   rekta-core has no picture in a row yet (platforms.md). The showcase
   has a list of what was copied.
 - **The thin scrollbar** (layout.md): only the grip, no track, square,

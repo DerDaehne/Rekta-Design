@@ -282,7 +282,10 @@ embedded page whose host owns theme, density and motion), attaches
 `stepper` to every `.rk-stepper` and `grid` to every `.rk-tiles` that
 holds a tile that opens (unless it is a selection), keeps every `input.rk-range` filled
 to its value, gives every `.rk-toggle` checkbox `role="switch"`, turns on
-tooltips (`tips()`), and marks the first paint as an arrival. Returns `{ destroy }`.
+tooltips (`tips()`), gives a row's picture (`img.rk-row-pic`) that
+cannot be shown a transparent pixel for its source, so no browser draws
+its broken-picture sign there ([collections.md](collections.md#a-picture-in-a-row)),
+and marks the first paint as an arrival. Returns `{ destroy }`.
 
 **Where focus goes back.** A toast or the banner that goes while it has
 focus returns focus to the control that raised it. When that control

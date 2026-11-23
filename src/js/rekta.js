@@ -4506,9 +4506,17 @@ export function drop(el, { onFiles = null, accept = null } = {}) {
   };
 }
 
+// A row's picture that cannot be shown (docs/collections.md): a browser draws a sign of its own in it, and WebKit draws
+// it over any cover the stylesheet puts there, so its source becomes a transparent pixel and the square stays the
+// surface. The pixel's GIF has a colour table: WebKit paints no background under one without, and the ground shows.
+const NO_PICTURE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+function noPicture(img) { if (img.matches && img.matches('img.rk-row-pic') && img.getAttribute('src') !== NO_PICTURE) img.src = NO_PICTURE; }
+const onPictureError = (e) => noPicture(e.target);
+
 // Start --------------------------------------------------------------------------------------------------------------
 // The defaults for a page: restore the user's prefs, press on tiles, sheets, steppers, sliders, switches, tile grids
-// (one tab stop, arrows), and the first paint's build-in. An embedded page whose host owns theme, density and motion passes restore: false.
+// (one tab stop, arrows), row pictures that cannot be shown, and the first paint's build-in. An embedded page whose host
+// owns theme, density and motion passes restore: false.
 export function start({ root = document, restore = true, locale: tag = '', strings: words = null, focusFallback = null } = {}) {
   if (tag) setLocale(tag);
   if (focusFallback) fallbackFocus = focusFallback;
@@ -4524,7 +4532,10 @@ export function start({ root = document, restore = true, locale: tag = '', strin
   root.querySelectorAll('.rk-segments').forEach((g) => segChosen.set(g, segOf(g)));
   document.addEventListener('input', onRange);
   document.addEventListener('change', onSegment);
-  parts.push({ destroy() { document.removeEventListener('input', onRange); document.removeEventListener('change', onSegment); } });
+  // An error does not bubble: heard on its way down. A picture that failed before this ran is found by its decode.
+  document.addEventListener('error', onPictureError, true);
+  root.querySelectorAll('img.rk-row-pic[src]').forEach((img) => { if (img.complete) img.decode().catch(() => noPicture(img)); });
+  parts.push({ destroy() { document.removeEventListener('input', onRange); document.removeEventListener('change', onSegment); document.removeEventListener('error', onPictureError, true); } });
   arrive(docEl());
   return { destroy() { parts.forEach((p) => p.destroy()); if (focusFallback && fallbackFocus === focusFallback) fallbackFocus = null; } };
 }
