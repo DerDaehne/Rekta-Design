@@ -138,11 +138,14 @@ dots' fade in.
   else (a version for a bug report, an id) stand in a statement block
   that takes focus as one stop and ends in a quiet hint, "Ctrl+C copies"
   (⌘C on Apple). Ctrl/Cmd+C copies it whole as plain lines; a selection
-  in it is copied as anywhere. A toast says "copied", or "not copied" as
-  an error toast. Each line stays one line, cut with an ellipsis, whole in
-  the overflow tip; assistive technology reads the values as they stand.
+  in it is copied as anywhere. A toast says "copied". A refusal is said
+  at the block: the hint turns into "not copied" in a field error's tone
+  for `timing.toast`, said once in a live region, then comes back. Each
+  line stays one line, cut with an ellipsis, whole in the overflow tip;
+  assistive technology reads the values as they stand.
   On the web: `copyable(el, { toaster, text })`, which writes
-  `data-rk-copyable`, and the strings `copied`, `notCopied` and
+  `data-rk-copyable`; `.rk-hint[data-status="error"]` takes the field
+  error's tone anywhere; and the strings `copied`, `notCopied` and
   `copyHint` (German "kopiert", "nicht kopiert", "… kopiert").
   rekta-core has no block to copy yet (platforms.md). The showcase's
   "get started" has one with its version and the browser.

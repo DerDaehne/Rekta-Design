@@ -92,9 +92,16 @@ value in the sentence's place, the rest as its facts.
   the hint left out, or lines the product gives in the form a reader
   pastes ("app 2.3.0", "engine 4.1"). A selection made in the block is
   the platform's to copy, as anywhere: then only what is selected goes.
-- **A toast answers:** "copied", or "not copied" as an error toast when
-  the system refuses ([states.md](states.md#pending-actions)). A copy
-  changes nothing on screen, so the toast is its only answer.
+- **A copy is answered by a toast,** "copied": it changes nothing on
+  screen, so the toast is its answer.
+- **A refusal is said at the block,** which is still on screen
+  ([states.md](states.md#pending-actions)): when the system refuses, the
+  hint turns into "not copied" in a field error's tone, primary text
+  after the error square, at once, as a field's hint turns into its
+  error ([forms.md](forms.md#fields)). It stands for `timing.toast`
+  (5s), as long as a toast would have stood, then the hint comes back
+  at once; another refusal starts it again, a copy ends it. Assistive
+  technology hears "not copied" once, politely.
 - **Pointer and touch** copy through the text selection; there is no
   copy button.
 - **Each line stays one line.** A value too long for its column ends in
@@ -115,7 +122,8 @@ value in the sentence's place, the rest as its facts.
 On the web, `copyable(el, { toaster, text })` on the block does the rest
 ([behaviour.md](behaviour.md#copyableel--toaster-text-)): it adds the
 hint, the focus stop and the name, and `data-rk-copyable`, under which
-each line keeps to one line.
+each line keeps to one line. A refusal puts `data-status="error"` on the
+hint; any `.rk-hint` with it takes the field error's tone.
 
 ## Scale
 

@@ -390,7 +390,7 @@ export declare function sortable(list: HTMLElement, options?: {
 }): Destroyable & { move(item: HTMLElement, to: number): boolean; refresh(): void };
 
 /** A statement block of values to copy: one focus stop, Ctrl/Cmd+C copies it whole as lines (`text`, else the lines it
- * shows), and the toaster says how it went. */
+ * shows) and the toaster says "copied"; a refusal is said in the block's hint. */
 export declare function copyable(el: HTMLElement, options?: {
   toaster?: Toaster | null;
   text?: string | (() => string) | null;

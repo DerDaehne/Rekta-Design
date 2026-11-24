@@ -426,8 +426,8 @@ textarea.rk-input { min-height: 88px; padding: 10px 12px; resize: vertical; }
 .rk-input:is(:disabled, [aria-disabled='true']) { border-color: var(--rk-disabled); color: var(--rk-disabled); cursor: not-allowed; }
 .rk-hint { font-size: var(--rk-font-size-xs); color: var(--rk-text-contrast-high); }
 .rk-field[data-status='error'] .rk-input { padding-inline: 11px; border: 2px solid var(--rk-status-error-full); }
-.rk-field[data-status='error'] .rk-hint { color: var(--rk-text-primary); }
-.rk-field[data-status='error'] .rk-hint::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--_rk-mark); }
+.rk-field[data-status='error'] .rk-hint, .rk-hint[data-status='error'] { color: var(--rk-text-primary); }
+.rk-field[data-status='error'] .rk-hint::before, .rk-hint[data-status='error']::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--_rk-mark); }
 /* A label may say "optional"; required fields carry no mark. */
 .rk-optional { font-weight: var(--rk-font-weight-regular); color: var(--rk-text-contrast-high); }
 /* The summary of what needs attention, first in the form: a sentence with the error square and a link to each field,
@@ -1408,7 +1408,7 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
 /* Forced colours drop fills: tiles keep an edge, marks keep their square, the meter keeps its track and value. */
 @media (forced-colors: active) {
   .rk-tile, .rk-accent-surface { outline: 1px solid CanvasText; outline-offset: -1px; }
-  .rk-tag::before, .rk-pulse, .rk-field[data-status='error'] .rk-hint::before { forced-color-adjust: none; background: CanvasText; }
+  .rk-tag::before, .rk-pulse, .rk-field[data-status='error'] .rk-hint::before, .rk-hint[data-status='error']::before { forced-color-adjust: none; background: CanvasText; }
   .rk-progress { forced-color-adjust: none; color: CanvasText; border: 1px solid CanvasText; }
   .rk-region[aria-busy='true']::before, .rk-btn[data-rk-pending]::after, .rk-empty[data-status='error'] > :first-child::before { forced-color-adjust: none; background: CanvasText; }
   .rk-ghost { forced-color-adjust: none; background: GrayText; }

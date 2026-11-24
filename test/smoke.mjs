@@ -766,7 +766,7 @@ ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s
 
 // A block to copy (typography.md): one focus stop named by its own text, a hint with the platform's key; each line one
 // line, a cut one shown whole by the overflow tip; Ctrl+C with nothing selected copies the lines and the toast says so;
-// a selection in it is the browser's; a refused clipboard says "not copied" as an error; a product's own lines.
+// a selection in it is the browser's; a refused clipboard is said in the hint; a product's own lines.
 {
   const c = await open({ permissions: ['clipboard-read', 'clipboard-write'] });
   await go(c, 'start');
@@ -794,13 +794,45 @@ ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s
   ok(await until(c, async () => (await toast(c)) === 'copied'), 'Ctrl+C on it: the toast says "copied"', await toast(c));
   const copied = await c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`);
   ok(copied, 'it copies its lines, the hint left out');
-  await c.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: () => Promise.reject(new Error('refused')) }));
-  await c.keyboard.press('Control+c');
-  ok(await until(c, async () => (await toast(c)) === 'not copied'), 'a refused clipboard: "not copied"', await toast(c));
-  const failed = await c.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase])'); return `${t.dataset.status} ${t.getAttribute('role')}`; });
-  ok(failed === 'error alert', 'as an error toast', failed);
+  // A refusal is said at the block (states.md): the hint turns into it in a field error's tone, a live region says it,
+  // no toast; it stands for timing.toast (shortened here, so a level's or a written-out time would miss it), then the
+  // hint comes back; a copy after a refusal brings the hint back at once.
   await c.evaluate(() => {
-    delete navigator.clipboard.writeText;
+    document.documentElement.style.setProperty('--rk-duration-toast', '600ms');
+    Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: () => Promise.reject(new Error('refused')) });
+    const h = document.querySelector('#about-block > .rk-hint');
+    window.hintTimes = [];
+    new MutationObserver(() => window.hintTimes.push([performance.now(), h.textContent])).observe(h, { childList: true, characterData: true, subtree: true });
+  });
+  await c.keyboard.press('Control+c');
+  ok(await until(c, async () => (await text(c, '#about-block > .rk-hint')) === 'not copied'), 'a refused clipboard: the hint says "not copied"', await text(c, '#about-block > .rk-hint'));
+  const said = await c.evaluate(async () => {
+    const h = document.querySelector('#about-block > .rk-hint'), live = document.querySelector('#about-block + .rk-sr[role=status]');
+    const probe = document.createElement('i'); probe.style.color = 'var(--rk-text-primary)'; h.after(probe);
+    const primary = getComputedStyle(probe).color; probe.style.color = 'var(--rk-status-error-full)'; const mark = getComputedStyle(probe).color; probe.remove();
+    await new Promise((r) => setTimeout(r, 100));
+    const sq = getComputedStyle(h, '::before');
+    return { status: h.dataset.status, tone: getComputedStyle(h).color === primary, square: sq.content !== 'none' && sq.backgroundColor === mark,
+      live: live && live.textContent, toast: [...document.querySelectorAll('.rk-toast')].some((t) => t.dataset.status || /not copied/.test(t.textContent)) };
+  });
+  ok(said.status === 'error' && said.tone && said.square, 'in a field error\'s tone: primary words after the error square', JSON.stringify(said));
+  ok(said.live === 'not copied' && !said.toast, 'said once in a live region, and no toast', JSON.stringify(said));
+  ok(await until(c, async () => (await text(c, '#about-block > .rk-hint')) === 'Ctrl+C copies', 3000), 'then the hint comes back');
+  const stood = await c.evaluate(() => {
+    const t = window.hintTimes, from = t.find((x) => x[1] === 'not copied'), to = t.find((x) => x[1] === 'Ctrl+C copies' && from && x[0] > from[0]);
+    const h = document.querySelector('#about-block > .rk-hint');
+    return { ms: from && to ? Math.round(to[0] - from[0]) : -1, status: h.dataset.status || '', live: document.querySelector('#about-block + .rk-sr').textContent };
+  });
+  ok(stood.ms >= 590 && stood.ms < 1300 && !stood.status && stood.live === '', 'it stood for timing.toast, and the hint is quiet again', JSON.stringify(stood));
+  await c.evaluate(() => document.documentElement.style.removeProperty('--rk-duration-toast'));
+  await c.keyboard.press('Control+c');
+  await until(c, async () => (await text(c, '#about-block > .rk-hint')) === 'not copied');
+  await c.evaluate(() => { delete navigator.clipboard.writeText; window.prevToast = document.querySelector('.rk-toast:not([data-rk-phase])'); });
+  await c.keyboard.press('Control+c');
+  const again = await until(c, async () => (await text(c, '#about-block > .rk-hint')) === 'Ctrl+C copies', 1000);
+  const fresh = await until(c, () => c.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase])'); return !!t && t !== window.prevToast && t.textContent === 'copied'; }));
+  ok(again && fresh, 'a copy after a refusal: the hint comes back at once, and a toast says "copied"', `${again} ${fresh}`);
+  await c.evaluate(() => {
     const b = document.createElement('div'); b.className = 'rk-statement'; b.id = 'copy-own'; b.innerHTML = '<p class="rk-kicker">versions</p><p>2.3.0</p>';
     document.querySelector('#about-block').after(b);
     window.copyOwn = Rekta.copyable(b, { text: () => 'app 2.3.0\nengine 4.1' });
