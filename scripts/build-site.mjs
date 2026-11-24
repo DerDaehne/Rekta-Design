@@ -81,7 +81,7 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 for (const f of readdirSync(site)) {
   if (/\.html$/.test(f)) writeFileSync(join(out, f), render(readFileSync(join(site, f), 'utf8')));
-  else if (/\.(css|js|png|svg|webmanifest)$/.test(f) && f !== 'sw.js') copyFileSync(join(site, f), join(out, f));
+  else if (/\.(css|js|png|svg|webp|webmanifest)$/.test(f) && f !== 'sw.js') copyFileSync(join(site, f), join(out, f));
 }
 for (const f of readdirSync(dist)) if (f.startsWith('rekta.')) copyFileSync(join(dist, f), join(out, f));
 cpSync(join(dist, 'fonts'), join(out, 'fonts'), { recursive: true });
@@ -106,7 +106,8 @@ if (single > 0) {
     return `<style>\n${css}</style>`;
   };
   const script = (f) => {
-    const js = read(f);
+    // The showcase's picture travels inside the page too.
+    const js = read(f).replace(/'([\w-]+\.webp)'/g, (_, p) => `'data:image/webp;base64,${readFileSync(join(out, p)).toString('base64')}'`);
     if (/<\/script/i.test(js)) throw new Error(`${f} contains a closing script tag`);
     return `<script>\n${js}</script>`;
   };
@@ -123,7 +124,7 @@ if (single > 0) {
 if (process.argv.includes('--serve')) {
   const types = {
     '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-    '.json': 'application/json', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
+    '.json': 'application/json', '.woff2': 'font/woff2', '.webp': 'image/webp', '.txt': 'text/plain; charset=utf-8',
   };
   createServer((req, res) => {
     try {

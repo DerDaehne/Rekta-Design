@@ -16,7 +16,7 @@ the same sources without reading a line of CSS. This page is the guide.
 | `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme (`light`, `dark`, and `light-contrast`, `dark-contrast` for more contrast, `black`, `black-contrast` for the black ground, each complete) and density. | Native implementations. Start here. |
 | `dist/rekta.tokens.css` | The resolved values as `--rk-` custom properties, with theme, density and reduced-motion switching. | Web projects. |
 | `tokens/rekta.accents.json` | The named accents: an accent and the text on it per theme and contrast set, checked ([colour.md](colour.md#named-accents)). Resolved as `accents` in `dist/rekta.tokens.json`. | Anyone offering an accent by name. |
-| `dist/rekta.color.js` | The colour rules as a module without dependencies: contrast, OKLab distance and colour blindness, apart from status, an accent's check and derivation. | A product that checks or derives colours at run time; the reference for porting them. |
+| `dist/rekta.color.js` | The colour rules as a module without dependencies: contrast, OKLab distance and colour blindness, apart from status, an accent's check and derivation, the advice on a workspace's ground. | A product that checks or derives colours at run time; the reference for porting them. |
 | `docs/*.md` | Rules: what each part means, how it behaves, what it must never do. The [glossary](#glossary) at the end of this page says what their words mean on each platform. | Everyone. |
 
 `npm run build` (or `node scripts/build.mjs`) writes `dist/`. The build
@@ -293,6 +293,9 @@ builds it from views or does without:
 - **A launch tile:** rekta-core's tiles carry a stat, a message, a
   sparkline and progress, not an icon and a count; a tile spans any
   number of units (`rk_view_set_span`).
+- **Advice on a ground** ([shell.md](shell.md#advice-on-a-ground)):
+  rekta-core draws no workspace's ground and has no `groundCheck`; a
+  native shell measures a candidate as shell.md describes.
 - **A picture in a row** ([collections.md](collections.md#a-picture-in-a-row)):
   rekta-core's rows and lists (`rk_rows`, `rk_list`) carry a title
   with its meta or status at the row's end, no picture yet.

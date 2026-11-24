@@ -162,10 +162,13 @@ pre.code { margin: 0; padding: var(--rk-space-m) 0; overflow-x: auto; border-blo
 
 /* A whole system in small: a screen with a desktop, one window, the bar under them and the lock screen over all of
    it. The bar is the screen's at any window width, as the phone's is; the screen is a container, so the lock screen's
-   display type and its corners follow the screen, not the window. */
-.screen { position: relative; isolation: isolate; height: 27rem; overflow: hidden; border: 1px solid var(--rk-text-contrast-low); border-radius: var(--rk-radius-s); background: var(--rk-bg); container: screen / inline-size; }
+   display type and its corners follow the screen, not the window. Its ground (docs/shell.md) is bg, or a picture
+   covering it, cropped about its centre; no word stands on it bare, so the empty desk's note lies on glass as the bar
+   does. Forced colours: the system's ground. */
+.screen { position: relative; isolation: isolate; height: 27rem; overflow: hidden; border: 1px solid var(--rk-text-contrast-low); border-radius: var(--rk-radius-s); background: var(--rk-bg) var(--screen-ground, none) center / cover no-repeat; container: screen / inline-size; }
+@media (forced-colors: active) { .screen { background-image: none; } }
 .screen-desk { position: absolute; inset: 0 0 var(--rk-appbar-height); }
-.screen-empty { position: absolute; inset: auto var(--rk-space-m) var(--rk-space-m); margin: 0; color: var(--rk-text-contrast-high); }
+.screen-empty { position: absolute; inset: auto var(--rk-space-m) var(--rk-space-m); margin: 0; padding: var(--rk-space-xs) var(--rk-space-s); color: var(--rk-text-contrast-high); background: var(--rk-glass); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 .screen-win { position: absolute; top: var(--rk-space-m); left: var(--rk-space-m); width: min(24rem, calc(100% - 2 * var(--rk-space-m))); border: 1px solid var(--rk-text-contrast-medium); border-radius: var(--rk-radius-s); background: var(--rk-bg); overflow: hidden; }
 .screen-win[data-max] { inset: 0; width: auto; border-width: 0; border-radius: 0; }
 .screen-win > .rk-titlebar { border-bottom: 1px solid var(--rk-text-contrast-low); }

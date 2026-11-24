@@ -68,6 +68,26 @@ dots' fade in.
 
 ### Added
 
+- **Any ground for a workspace** (shell.md, colour.md, platforms.md):
+  the ground behind a desktop's windows may be a picture, a pattern (an
+  imprint of tiles, say) or a gradient, the product's choice or the
+  person's; plain `bg` stays the default. No words stand on it bare.
+  Text on glass keeps its measure over white and black, the limits of
+  every ground, so no token and no number changes. Rekta advises on a
+  ground and never refuses one, measured as seen (laid over `bg`):
+  calm (no more than a quarter of 16 × 9 cells holds more than 3:1
+  inside) and grey under glass (the glass over each cell's average
+  stays below chroma 0.05); a ground the advice speaks against gets a
+  hint once, also said in a polite live region, and the choice stands. A picture
+  covers the surface, cropped about its centre or a point it names; an
+  accent may come with it, in the product's slot. `rekta.color.js`
+  gains `GROUND`, `groundSamples({ data, width, height })` and
+  `groundCheck(bands, cells, theme)`; `--check` measures the showcase's
+  picture with them in every theme and holds them to a striped and a
+  saturated ground, to the edge of a quarter, and to pictures smaller
+  than the grid. The showcase's desktop offers a plain ground, the
+  picture "sky" (CC0, see NOTICE) and a picture of your own. rekta-core
+  has no workspace ground yet (platforms.md).
 - **The black ground** (colour.md, platforms.md, behaviour.md): a
   person with an OLED screen may put the dark theme on `#000000`. A
   choice, never the default and never from a system setting; the light

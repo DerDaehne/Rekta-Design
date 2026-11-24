@@ -6,7 +6,7 @@
 //   PLAYWRIGHT=/path/to/playwright/index.mjs node test/smoke.mjs     (default: import 'playwright')
 // Run node scripts/build-site.mjs first. Screenshots go to site-shots/. Exit 1 on any failed check or page error.
 
-import { createReadStream, mkdirSync, statSync } from 'node:fs';
+import { createReadStream, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +16,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, '_site'), shots = join(root, 'site-shots');
 mkdirSync(shots, { recursive: true });
 
-const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.woff2': 'font/woff2' };
+const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.woff2': 'font/woff2', '.webp': 'image/webp' };
 const server = createServer((req, res) => {
   try {
     let file = join(out, normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)));
@@ -2576,6 +2576,93 @@ const sy = await open();
   ok(await sy.evaluate(() => !document.querySelector('[data-rk-place="home"]').hidden && document.querySelector('#win-name').textContent === 'Terminal' && document.querySelector('#screen-bar .rk-ab-run[data-app="terminal"]').getAttribute('aria-current') === 'true'), 'a launch tile opens its program on the desktop, in front, in the bar');
 }
 await sy.close();
+
+// The desktop's ground (docs/shell.md): plain by default, the picture "sky" or one of yours. The browser measures the
+// picture as --check has it (site/sky.json); no word stands on it bare; glass blurs it, and black, more contrast and
+// less transparency make the glass opaque while the picture stays. A ground the advice speaks against gets a hint.
+{
+  const g = await open();
+  await g.evaluate(() => window.site.home.goTo('system')); await g.waitForTimeout(700);
+  const ground = () => g.evaluate(() => getComputedStyle(document.querySelector('#screen')).backgroundImage);
+  const hint = () => g.evaluate(() => { const h = document.querySelector('#ground-hint'); return h.hidden ? '' : h.textContent; });
+  const pick = async (kind) => { await g.click(`label:has(> input[name=desk-ground][value=${kind}])`); await g.waitForTimeout(300); };
+  ok(await ground() === 'none' && await hint() === '', 'the desktop\'s ground is plain by default', await ground());
+  await pick('sky');
+  const live = await g.evaluate(async () => {
+    const img = new Image(); img.src = 'sky.webp'; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+    return RektaColor.groundSamples(x.getImageData(0, 0, c.width, c.height));
+  });
+  const sky = JSON.parse(readFileSync(join(root, 'site', 'sky.json'), 'utf8'));
+  const step = (a, b) => Math.max(...[1, 3, 5].map((i) => Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16))));
+  const far = Math.max(...sky.bands.map((b, i) => step(b, live.bands[i])), ...sky.cells.flatMap((c, i) => c.map((x, j) => step(x, live.cells[i][j]))));
+  ok(live.bands.length === 144 && live.cells.length === 144 && far <= 2, 'site/sky.json is site/sky.webp as the browser measures it with groundSamples, each channel within 2/255', far);
+  ok(/sky\.webp/.test(await ground()) && await hint() === '', 'sky covers the desktop and keeps the advice: no hint', `${await ground()} ${await hint()}`);
+  const look = () => g.evaluate(() => {
+    const bar = getComputedStyle(document.querySelector('#screen-bar')), alpha = (c) => +((c.match(/[\d.]+/g) || [])[3] ?? 1);
+    return { picture: /sky\.webp/.test(getComputedStyle(document.querySelector('#screen')).backgroundImage), opaque: alpha(bar.backgroundColor) === 1, blur: /blur/.test(bar.backdropFilter), noteOnGlass: getComputedStyle(document.querySelector('#desk-empty')).backgroundColor === bar.backgroundColor };
+  });
+  for (const [theme, black] of [['light', false], ['dark', false], ['dark', true]]) {
+    await g.evaluate(([t, b]) => { Rekta.prefs.set('theme', t, { remember: false }); Rekta.prefs.set('ground', b ? 'black' : 'normal', { remember: false }); }, [theme, black]); await g.waitForTimeout(400);
+    const name = black ? 'black' : theme;
+    await pick('plain');
+    ok(!(await look()).picture, `${name}, plain: no picture under the desktop`);
+    await (await g.$('#screen')).screenshot({ path: join(shots, `ground-${name}-plain.png`) });
+    await pick('sky');
+    const l = await look();
+    ok(l.picture && l.opaque === black && l.blur === !black && l.noteOnGlass, `${name}, sky: the picture stays, the bar's glass ${black ? 'is opaque and does not blur' : 'blurs it'}, the empty desk's note lies on glass`, JSON.stringify(l));
+    await (await g.$('#screen')).screenshot({ path: join(shots, `ground-${name}-sky.png`) });
+  }
+  for (const pref of ['contrast', 'transparency']) {
+    await g.evaluate((p) => { Rekta.prefs.set('theme', 'light', { remember: false }); Rekta.prefs.set('ground', 'normal', { remember: false }); Rekta.prefs.set(p, p === 'contrast' ? 'more' : 'reduce', { remember: false }); }, pref); await g.waitForTimeout(400);
+    const l = await look();
+    ok(l.picture && l.opaque && l.noteOnGlass, `${pref === 'contrast' ? 'more contrast' : 'less transparency'} over sky: the glass is opaque, so nothing of the picture shows through it, and the picture stays`, JSON.stringify(l));
+    await g.evaluate((p) => Rekta.prefs.set(p, 'system', { remember: false }), pref);
+  }
+  // A picture of yours: measured as seen in the theme on screen; busy or tinting the glass, a hint, said politely too,
+  // and the choice stands.
+  const svg = (body, w = 320, h = 180) => ({ name: 'ground.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${body}</svg>`) });
+  const stripes = svg('<defs><pattern id="s" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="2" height="4" fill="#000"/></pattern></defs><rect width="320" height="180" fill="#fff"/><rect width="320" height="180" fill="url(#s)"/>');
+  const loud = svg('<defs><linearGradient id="v"><stop offset="0" stop-color="#ff6a00"/><stop offset=".5" stop-color="#ff0062"/><stop offset="1" stop-color="#7a00ff"/></linearGradient></defs><rect width="320" height="180" fill="url(#v)"/>');
+  const lines = svg('<defs><pattern id="w" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="2" fill="#fff"/></pattern></defs><rect width="320" height="180" fill="url(#w)"/>');
+  const yours = () => g.evaluate(() => document.querySelector('#ground-yours').checked && /^url\("data:/.test(document.querySelector('#screen').style.getPropertyValue('--screen-ground')));
+  const said = () => g.evaluate(() => document.querySelector('#ground-said').textContent);
+  const measured = async (file) => { await g.setInputFiles('#ground-file', file); await until(g, yours); await g.evaluate(() => window.site.ground()); };
+  for (const [file, want] of [[{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('words') }, 'This file is not a picture this page can show.'], [loud, 'This picture tints the glass; text stays readable.'], [stripes, 'This picture is busy; glass and text stay readable.']]) {
+    await g.setInputFiles('#ground-file', file);
+    ok(await until(g, async () => (await hint()) === want) && await yours() && await said() === want, `a ${file.name === 'notes.txt' ? 'file that is no picture' : file === stripes ? 'busy picture' : 'saturated picture'} of yours: "${want}", said in the live region too, and the choice stands`, `${await hint()} | ${await said()} | ${await yours()}`);
+  }
+  await (await g.$('.fields:has(#ground-hint)')).screenshot({ path: join(shots, 'ground-hint.png') });
+  // The busy picture is measured again and plain chosen before it is done: plain stays, without its hint.
+  await g.evaluate(() => { for (const v of ['plain', 'yours', 'plain']) document.querySelector(`input[name=desk-ground][value=${v}]`).click(); }); await g.waitForTimeout(600);
+  ok(await hint() === '' && await said() === '' && await ground() === 'none', 'plain chosen while a picture is still measured: plain stays, with no hint', `${await hint()} ${await ground()}`);
+  await measured(svg('<rect width="8" height="8" fill="#888"/>', 8, 8));
+  ok(await hint() === '' && await said() === '', 'a picture smaller than the grid (8 × 8) is measured: calm, no hint, no error', await hint());
+  await measured(lines);
+  ok(await hint() === '', 'white lines on a transparent picture, laid over the light ground: calm, no hint', await hint());
+  await g.evaluate(() => Rekta.prefs.set('theme', 'dark', { remember: false })); await g.waitForTimeout(400);
+  await measured(lines);
+  ok(await hint() === 'This picture is busy; glass and text stay readable.', 'the same lines over the dark ground: busy, as seen', await hint());
+  await g.evaluate(() => Rekta.prefs.set('theme', 'light', { remember: false })); await g.waitForTimeout(400);
+  await pick('plain');
+  // A large file of yours is still being read when sky is chosen: sky stays.
+  const raced = await g.evaluate(async () => {
+    const input = document.querySelector('#ground-file'), files = new DataTransfer();
+    files.items.add(new File([`<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><!--${'x'.repeat(4e6)}--></svg>`], 'big.svg', { type: 'image/svg+xml' }));
+    input.files = files.files; input.dispatchEvent(new Event('change'));
+    document.querySelector('input[name=desk-ground][value=sky]').click();
+    await new Promise((r) => { setTimeout(r, 1500); }); await window.site.ground();
+    return { sky: document.querySelector('input[name=desk-ground][value=sky]').checked, ground: document.querySelector('#screen').style.getPropertyValue('--screen-ground') };
+  });
+  ok(raced.sky && raced.ground === 'url("sky.webp")', 'sky chosen while a large file of yours is still read: sky stays', JSON.stringify(raced));
+  await g.close();
+  const f = await open({ forcedColors: 'active' });
+  await f.evaluate(() => window.site.home.goTo('system')); await f.waitForTimeout(700);
+  await f.click('label:has(> input[name=desk-ground][value=sky])'); await f.waitForTimeout(300);
+  ok(await f.evaluate(() => getComputedStyle(document.querySelector('#screen')).backgroundImage) === 'none', 'forced colours: the system\'s ground, no picture');
+  await f.close();
+}
 
 // Reduced motion: a place change is instant, never skipped.
 const r = await open({ reducedMotion: 'reduce' });
