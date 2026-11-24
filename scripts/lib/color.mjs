@@ -180,8 +180,9 @@ export function deriveAccent(seed, themes) {
 export const GROUND = { columns: 16, rows: 9, inside: 3, busy: 0.25 };
 const LIN = Array.from({ length: 256 }, (_, v) => lin(v / 255));
 
-// A ground's bands and cells from its pixels, as a canvas's ImageData holds them (RGBA bytes, row by row): per cell of
-// the grid, its average colour (the band: what a blur leaves of it) and its darkest and lightest colour.
+// A ground's bands and cells from its pixels as seen, as a canvas's ImageData holds them (RGBA bytes, row by row) once
+// the picture is laid over the product's bg: alpha is not read. Per cell of a grid over the whole picture, its average
+// of the stored sRGB values (the band: what a blur leaves of it) and its darkest and lightest colour.
 export function groundSamples({ data, width, height }) {
   const n = GROUND.columns * GROUND.rows, sum = Array.from({ length: n }, () => [0, 0, 0, 0]);
   const dark = Array(n).fill(0), light = Array(n).fill(0), low = Array(n).fill(2), high = Array(n).fill(-1);
@@ -194,6 +195,12 @@ export function groundSamples({ data, width, height }) {
       if (Y < low[c]) { low[c] = Y; dark[c] = i; }
       if (Y > high[c]) { high[c] = Y; light[c] = i; }
     }
+  }
+  // A picture smaller than the grid leaves cells without a pixel: each takes the pixel under its centre.
+  for (let c = 0; c < n; c += 1) {
+    if (sum[c][3]) continue;
+    const x = Math.floor((((c % GROUND.columns) + 0.5) * width) / GROUND.columns), y = Math.floor(((Math.floor(c / GROUND.columns) + 0.5) * height) / GROUND.rows), i = (y * width + x) * 4;
+    sum[c] = [data[i], data[i + 1], data[i + 2], 1]; dark[c] = i; light[c] = i;
   }
   const at = (i) => toHex8({ r: data[i] / 255, g: data[i + 1] / 255, b: data[i + 2] / 255, a: 1 });
   return { bands: sum.map(([r, g, b, k]) => toHex8({ r: r / k / 255, g: g / k / 255, b: b / k / 255, a: 1 })), cells: dark.map((i, c) => [at(i), at(light[c])]) };

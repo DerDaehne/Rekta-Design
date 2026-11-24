@@ -954,36 +954,41 @@
   $('#vol-up').addEventListener('click', () => setVolume(volume + 0.1));
   $$('input[name=level-in]').forEach((r) => r.addEventListener('change', () => { levelIn = r.value; }));
   // The desktop's ground (docs/shell.md): plain, the picture "sky", or one of yours. A picture is measured as Rekta
-  // advises, in both themes; one the advice speaks against gets a hint, and stays.
-  let yourGround = null;
+  // advises, as seen in the theme on screen (laid over its ground); one the advice speaks against gets a hint, said
+  // politely too, and stays. Every choice counts, and a read or a measure that a later choice overtook gives up.
+  let yourGround = null, choice = 0, measured = Promise.resolve();
   const groundHint = $('#ground-hint');
-  async function pixels(url) {
+  const onScreen = (name) => { probe.style.color = `var(--rk-${name})`; return getComputedStyle(probe).color; };
+  async function asSeen(url, bg) {
     const img = new Image(); img.src = url; await img.decode();
     const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
-    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
-    return g.getImageData(0, 0, c.width, c.height);
+    const g = c.getContext('2d'); g.fillStyle = bg; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0);
+    return C.groundSamples(g.getImageData(0, 0, c.width, c.height));
   }
+  function say(words) { groundHint.textContent = words; groundHint.hidden = !words; $('#ground-said').textContent = words; }
   async function setGround(kind) {
-    const url = { sky: 'sky.webp', yours: yourGround }[kind], ground = url ? `url("${url}")` : 'none', screen = $('#screen');
-    screen.style.setProperty('--screen-ground', ground); groundHint.hidden = true;
+    const mine = ++choice, url = { sky: 'sky.webp', yours: yourGround }[kind];
+    $('#screen').style.setProperty('--screen-ground', url ? `url("${url}")` : 'none'); say('');
     if (!url) return;
-    let samples = null;
-    try { samples = C.groundSamples(await pixels(url)); } catch { /* not a picture: said below */ }
-    if (screen.style.getPropertyValue('--screen-ground') !== ground) return;   /* another ground was chosen meanwhile */
-    if (!samples) { groundHint.textContent = 'This file is not a picture this page can show.'; groundHint.hidden = false; return; }
-    const checks = ['light', 'dark'].map((t) => C.groundCheck(samples.bands, samples.cells, THEMES_DATA[t]));
-    const busy = checks.some((r) => !r.calm), tints = checks.some((r) => !r.grey);
-    groundHint.textContent = busy && tints ? 'This picture is busy and tints the glass; glass and text stay readable.' : busy ? 'This picture is busy; glass and text stay readable.' : 'This picture tints the glass; text stays readable.';
-    groundHint.hidden = !busy && !tints;
+    const theme = Object.fromEntries(['bg', 'glass', 'text-primary', 'text-contrast-high'].map((n) => [n, onScreen(n)]));
+    let r = null;
+    try { const s = await asSeen(url, theme.bg); r = C.groundCheck(s.bands, s.cells, theme); } catch { /* not a picture: said below */ }
+    if (mine !== choice) return;
+    if (!r) say('This file is not a picture this page can show.');
+    else if (!r.ok) say(!r.calm && !r.grey ? 'This picture is busy and tints the glass; glass and text stay readable.' : !r.calm ? 'This picture is busy; glass and text stay readable.' : 'This picture tints the glass; text stays readable.');
   }
-  $$('input[name=desk-ground]').forEach((r) => r.addEventListener('change', () => setGround(r.value)));
+  $$('input[name=desk-ground]').forEach((r) => r.addEventListener('change', () => { measured = setGround(r.value); }));
   $('#ground-choose').addEventListener('click', () => $('#ground-file').click());
   // Read as a data URL: the page's policy takes pictures from itself and data: only.
   $('#ground-file').addEventListener('change', (e) => {
     const file = e.target.files[0], reader = new FileReader();
     if (!file) return;
+    const mine = ++choice;
     e.target.value = '';
-    reader.onload = () => { yourGround = reader.result; $('#ground-yours').disabled = false; $('#ground-yours').checked = true; setGround('yours'); };
+    reader.onload = () => {
+      if (mine !== choice) return;
+      yourGround = reader.result; $('#ground-yours').disabled = false; $('#ground-yours').checked = true; measured = setGround('yours');
+    };
     reader.readAsDataURL(file);
   });
   $('#qs-vol').addEventListener('input', (e) => { if (e.isTrusted) volume = +e.target.value / 100; });
@@ -1142,7 +1147,7 @@
     job = { run: 0, state: 'running' }; paintJob();
     $('#apps-fills').checked = true; $('#apps-grid').dataset.rkFills = 'content';
     if (!$('#lock').hidden) { $('#lock').hidden = true; behind().forEach((el) => { el.inert = false; }); }
-    yourGround = null; $('#ground-yours').disabled = true; $('input[name=desk-ground][value=plain]').checked = true; setGround('plain');
+    yourGround = null; $('#ground-yours').disabled = true; $('input[name=desk-ground][value=plain]').checked = true; measured = setGround('plain');
   }
 
   /* ---------- sheet and reset ---------- */
@@ -1171,5 +1176,5 @@
   paintAccent();
   paintSeen();
   requestAnimationFrame(() => { measure(); env(); });
-  window.site = { app, router, home, facets, toasts, banner, hist, pwa: app2, lineChart, barChart, compTable, pick, files, steps, logList, feed, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard, screenBar, quickIn, centreRemove, lockForm, desk: () => desk };
+  window.site = { app, router, home, facets, toasts, banner, hist, pwa: app2, lineChart, barChart, compTable, pick, files, steps, logList, feed, tokenFind, tokTable, tokSplit, palette, accentForm, accentGuard, screenBar, quickIn, centreRemove, lockForm, desk: () => desk, ground: () => measured };
 })();

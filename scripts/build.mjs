@@ -31,7 +31,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFi
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { accentCheck, apartFromStatus, contrast, deriveAccent, distance, GROUND, groundCheck, over, parse, TEXT, toHex8 } from './lib/color.mjs';
+import { accentCheck, apartFromStatus, contrast, deriveAccent, distance, GROUND, groundCheck, groundSamples, over, parse, TEXT, toHex8 } from './lib/color.mjs';
 import { coreFonts, coreIcons, coreTokens } from './lib/core.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -492,6 +492,20 @@ function check(tokens) {
   const vivid = groundCheck(['#ff6a00', '#ff0062', '#7a00ff'], [['#ff6a00']], t.themes.light);
   if (stripes.calm) problems.push('groundCheck finds black and white stripes calm');
   if (vivid.grey) problems.push('groundCheck finds the glass over a saturated gradient grey');
+  // The edge of "more than a quarter": a quarter of the cells busy is calm, one more is not.
+  const quarter = (k) => Array.from({ length: cells }, (_, i) => (i < k ? ['#000000', '#ffffff'] : ['#808080', '#808080']));
+  if (!groundCheck(['#808080'], quarter(cells / 4), t.themes.light).calm) problems.push('groundCheck finds a ground busy with exactly a quarter of its cells over 3:1 inside');
+  if (groundCheck(['#808080'], quarter(cells / 4 + 1), t.themes.light).calm) problems.push('groundCheck finds a ground calm with more than a quarter of its cells over 3:1 inside');
+  // A picture smaller than the grid gives every empty cell the pixel under its centre. One pixel high, black with a
+  // white pixel at the middle of each column of cells: busy only in the first row, every other cell white.
+  for (const [w, h, busy, rest] of [[1, 1, 0, '#000000'], [1600, 1, GROUND.columns, '#ffffff']]) {
+    const data = Uint8Array.from({ length: w * h * 4 }, (_, i) => (i % 4 === 3 || Math.floor(i / 4) % (w / GROUND.columns) === w / GROUND.columns / 2 ? 255 : 0));
+    try {
+      const s = groundSamples({ data, width: w, height: h }), r = groundCheck(s.bands, s.cells, t.themes.light);
+      const off = s.bands.slice(GROUND.columns).find((b) => b !== rest);
+      if (s.bands.length !== cells || Math.round(r.busy * cells) !== busy || off) problems.push(`groundSamples on a ${w} × ${h} picture: ${s.bands.length} bands, ${Math.round(r.busy * cells)} busy cells, a band ${off || rest}; needs ${cells}, ${busy} and ${rest} below the first row`);
+    } catch (e) { problems.push(`groundSamples on a ${w} × ${h} picture: ${e.message}`); }
+  }
   // Every named accent holds the accent rules in each theme and contrast set (docs/colour.md).
   for (const [name, a] of Object.entries(t.accents)) {
     if (!/^[a-z][a-z-]*$/.test(name)) problems.push(`tokens/rekta.accents.json: "${name}" is not a lowercase name`);

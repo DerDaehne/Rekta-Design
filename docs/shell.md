@@ -154,10 +154,14 @@ so Rekta holds what lies on it, not the ground:
 
 ### Advice on a ground
 
-Rekta advises on a ground and never refuses one. It is measured on a
-grid of 16 × 9 cells over the ground, from each cell's average colour
-(its band: what a blur leaves of it) and its darkest and lightest
-colour:
+Rekta advises on a ground and never refuses one. It is measured as
+seen: the picture laid over the product's `bg`, so a transparent part
+counts as the colour that shows through it. A grid of 16 × 9 cells lies
+over the whole picture, not over the part a crop shows. Each cell gives
+its average colour (its band: what a blur leaves of it, the mean of the
+stored sRGB values, not of linear light) and its darkest and lightest
+colour; a cell that a picture smaller than the grid leaves empty takes
+the pixel under its centre:
 
 | Advice | Measured | Why |
 |---|---|---|
@@ -168,8 +172,9 @@ There is no advice on lightness: a ground as light as paper or as dark
 as night keeps text on glass, as white and black do.
 
 `groundSamples({ data, width, height })` in `rekta.color.js` takes a
-picture's pixels (a canvas's `ImageData`) and gives its bands and
-cells; `groundCheck(bands, cells, theme)` gives what it advises
+picture's pixels as seen (a canvas's `ImageData`, filled with `bg`
+before the picture is drawn) and gives its bands and cells;
+`groundCheck(bands, cells, theme)` gives what it advises
 against in words, the share of busy cells, the chroma of the glass,
 and, for information, the lowest contrast of text on the glass over a
 band. The showcase's picture keeps the advice in every theme, and
@@ -178,7 +183,9 @@ band. The showcase's picture keeps the advice in every theme, and
 **A hint, once.** When a person chooses a ground the advice speaks
 against, a hint beneath the choice says so in their terms, and the
 choice stands: "This picture is busy; glass and text stay readable.",
-"This picture tints the glass; text stays readable."
+"This picture tints the glass; text stays readable." It comes once the
+picture is measured, after the choice, so it is also said in a polite
+live region.
 
 ## The session
 

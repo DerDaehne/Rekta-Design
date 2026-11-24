@@ -48,7 +48,11 @@ export declare function deriveAccent(seed: string, themes: Partial<Record<ThemeN
 };
 /** The ground of a workspace: a grid of 16 × 9 cells; busy past 3:1 inside a cell, advised against past a quarter of them. */
 export declare const GROUND: { columns: number; rows: number; inside: number; busy: number };
-/** A ground's bands (each cell's average colour) and cells (each cell's darkest and lightest colour), from RGBA pixels. */
+/**
+ * A ground's bands (each cell's average of the stored sRGB values) and cells (each cell's darkest and lightest colour),
+ * on a grid over the whole picture. The pixels are the picture as seen: laid over the product's bg first, since alpha is
+ * not read. A cell a small picture leaves empty takes the pixel under its centre.
+ */
 export declare function groundSamples(image: { data: ArrayLike<number>; width: number; height: number }): { bands: string[]; cells: [string, string][] };
 /** Rekta's advice on a ground in one theme: calm, and grey under glass. It never refuses one. */
 export declare function groundCheck(bands: string[], cells: string[][], theme: Theme): {
