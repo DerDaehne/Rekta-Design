@@ -24,6 +24,11 @@
   const toasts = Rekta.toaster($('#toasts'));
   const hist = Rekta.undoStack({ toaster: toasts });
 
+  /* ---------- start: the version and the browser, a block to copy into a bug report ---------- */
+  $('#about-version').textContent = `Rekta Design ${Rekta.version}`;
+  $('#about-browser').textContent = navigator.userAgent;
+  Rekta.copyable($('#about-block'), { toaster: toasts });
+
   /* ---------- colour: contrast measured live, in the theme on screen ---------- */
   const probe = document.createElement('i');
   probe.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';

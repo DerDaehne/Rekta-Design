@@ -760,7 +760,63 @@ ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s
   });
   ok(seen.count > 2 && seen.english.length === 0, 'in German, what rekta.js writes is German', JSON.stringify(seen));
   ok(seen.locale === 'de' && seen.number === '1234,5', 'and its numbers follow the locale', JSON.stringify(seen));
+  ok((await text(de, '#about-block > .rk-hint')) === 'Ctrl+C kopiert', 'a block to copy says its key in German', await text(de, '#about-block > .rk-hint'));
   await de.close();
+}
+
+// A block to copy (typography.md): one focus stop named by its own text, a hint with the platform's key; each line one
+// line, a cut one shown whole by the overflow tip; Ctrl+C with nothing selected copies the lines and the toast says so;
+// a selection in it is the browser's; a refused clipboard says "not copied" as an error; a product's own lines.
+{
+  const c = await open({ permissions: ['clipboard-read', 'clipboard-write'] });
+  await go(c, 'start');
+  const shape = await c.evaluate(() => {
+    const b = document.querySelector('#about-block'), ua = document.querySelector('#about-browser');
+    return { tab: b.tabIndex, role: b.getAttribute('role'), hint: `${b.lastElementChild.className}: ${b.lastElementChild.textContent}`,
+      line: getComputedStyle(ua).whiteSpace, cut: ua.scrollWidth > ua.clientWidth, high: Math.round(ua.getBoundingClientRect().height) <= Math.ceil(parseFloat(getComputedStyle(ua).lineHeight)) };
+  });
+  ok(shape.tab === 0 && shape.role === 'group' && shape.hint === 'rk-hint: Ctrl+C copies', 'a block to copy: one focus stop, its hint ends it with the key', JSON.stringify(shape));
+  ok(shape.line === 'nowrap' && shape.cut && shape.high, 'a value too long for its column stays one line, cut', JSON.stringify(shape));
+  const named = await c.getByRole('group', { name: /^version Rekta Design \d+\.\d+\.\d+ Mozilla\/\S.* Ctrl\+C copies$/ }).count();
+  ok(named === 1, 'it is named by its own text, read as it stands', String(named));
+  await c.hover('#about-browser');
+  const tipped = await until(c, () => c.evaluate(() => { const t = document.querySelector('.rk-tip'); return !!t && t.matches(':popover-open') && t.textContent === navigator.userAgent; }), 3000);
+  ok(tipped, 'the overflow tip shows the cut value whole');
+  await c.mouse.move(5, 5);
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  await c.focus('#about-block');
+  await c.evaluate(() => getSelection().selectAllChildren(document.querySelector('#about-version')));
+  await c.keyboard.press('Control+c'); await c.waitForTimeout(400);
+  const left = await c.evaluate(async () => ({ toast: !!document.querySelector('.rk-toast'), clip: await navigator.clipboard.readText() }));
+  ok(!left.toast && !left.clip.includes('\n'), 'a selection in the block is the browser\'s to copy: no whole block, no toast', JSON.stringify(left));
+  await c.evaluate(() => getSelection().removeAllRanges());
+  await c.keyboard.press('Control+c');
+  ok(await until(c, async () => (await toast(c)) === 'copied'), 'Ctrl+C on it: the toast says "copied"', await toast(c));
+  const copied = await c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`);
+  ok(copied, 'it copies its lines, the hint left out');
+  await c.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: () => Promise.reject(new Error('refused')) }));
+  await c.keyboard.press('Control+c');
+  ok(await until(c, async () => (await toast(c)) === 'not copied'), 'a refused clipboard: "not copied"', await toast(c));
+  const failed = await c.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase])'); return `${t.dataset.status} ${t.getAttribute('role')}`; });
+  ok(failed === 'error alert', 'as an error toast', failed);
+  await c.evaluate(() => {
+    delete navigator.clipboard.writeText;
+    const b = document.createElement('div'); b.className = 'rk-statement'; b.id = 'copy-own'; b.innerHTML = '<p class="rk-kicker">versions</p><p>2.3.0</p>';
+    document.querySelector('#about-block').after(b);
+    window.copyOwn = Rekta.copyable(b, { text: () => 'app 2.3.0\nengine 4.1' });
+    b.focus();
+  });
+  await c.keyboard.press('Control+c');
+  const ownCopied = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()) === 'app 2.3.0\nengine 4.1'));
+  const gone = await c.evaluate(() => {
+    const b = document.querySelector('#copy-own');
+    window.copyOwn.destroy();
+    const out = !b.querySelector('.rk-hint') && !b.hasAttribute('data-rk-copyable') && !b.querySelector('[data-rk-tip]');
+    b.remove();
+    return out;
+  });
+  ok(ownCopied && gone, 'a product\'s own lines are copied; destroy() takes hint, tips and attribute away', `${ownCopied} ${gone}`);
+  await c.close();
 }
 
 // Motion: reorder, toast, reduce motion.

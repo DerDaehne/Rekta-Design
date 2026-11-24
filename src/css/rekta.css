@@ -1177,6 +1177,10 @@ select.rk-input option { background: var(--rk-bg); color: var(--rk-text-primary)
 .rk-statement > * { margin: 0; }
 .rk-statement > .rk-kicker + * { margin-top: var(--rk-space-xs); }
 .rk-statement > .rk-facts { margin-top: var(--rk-space-xs); }
+/* A block to copy (typography.md): every line stays one line, cut with an ellipsis; the hint saying the key ends it. */
+.rk-statement[data-rk-copyable] { min-width: 0; }
+.rk-statement[data-rk-copyable] > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk-statement > .rk-hint { margin-top: var(--rk-space-xs); }
 /* Compact: a section strip that is a direct child of the place sticks under the banner. It never shrinks. A top-level
    strip (rk-pivot--nav) takes the facet level here: sticking, it holds less of a small screen. */
 .rk-place > .rk-pivot {
