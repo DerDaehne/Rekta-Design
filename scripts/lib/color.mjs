@@ -1,6 +1,6 @@
 // Colour maths for the token check, and for a product that checks or derives its own colours (shipped as
 // dist/rekta.color.js): WCAG 2 contrast, OKLab distance and colour-vision-deficiency simulation
-// (Machado, Oliveira and Fernandes 2009, severity 1). No dependencies.
+// (Machado, Oliveira and Fernandes 2009, severity 1), and the advice on a workspace's ground. No dependencies.
 
 export function parse(css) {
   const s = String(css).trim();
@@ -170,4 +170,45 @@ export function deriveAccent(seed, themes) {
     }
   }
   return out;
+}
+
+// The ground of a workspace (docs/shell.md): any picture, pattern or gradient may lie under what a desktop shows, and
+// glass keeps its text over every one, as --check measures it over white and black. What Rekta adds is advice, measured
+// on a grid of 16 × 9 cells over the ground: calm, when no more than a quarter of its cells holds more than 3:1 between
+// its darkest and lightest colour; grey under glass, when the glass over each cell stays below the chroma under which
+// Rekta counts a colour as grey.
+export const GROUND = { columns: 16, rows: 9, inside: 3, busy: 0.25 };
+const LIN = Array.from({ length: 256 }, (_, v) => lin(v / 255));
+
+// A ground's bands and cells from its pixels, as a canvas's ImageData holds them (RGBA bytes, row by row): per cell of
+// the grid, its average colour (the band: what a blur leaves of it) and its darkest and lightest colour.
+export function groundSamples({ data, width, height }) {
+  const n = GROUND.columns * GROUND.rows, sum = Array.from({ length: n }, () => [0, 0, 0, 0]);
+  const dark = Array(n).fill(0), light = Array(n).fill(0), low = Array(n).fill(2), high = Array(n).fill(-1);
+  for (let y = 0; y < height; y += 1) {
+    const row = Math.floor((y * GROUND.rows) / height) * GROUND.columns;
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4, c = row + Math.floor((x * GROUND.columns) / width), s = sum[c];
+      const Y = 0.2126 * LIN[data[i]] + 0.7152 * LIN[data[i + 1]] + 0.0722 * LIN[data[i + 2]];
+      s[0] += data[i]; s[1] += data[i + 1]; s[2] += data[i + 2]; s[3] += 1;
+      if (Y < low[c]) { low[c] = Y; dark[c] = i; }
+      if (Y > high[c]) { high[c] = Y; light[c] = i; }
+    }
+  }
+  const at = (i) => toHex8({ r: data[i] / 255, g: data[i + 1] / 255, b: data[i + 2] / 255, a: 1 });
+  return { bands: sum.map(([r, g, b, k]) => toHex8({ r: r / k / 255, g: g / k / 255, b: b / k / 255, a: 1 })), cells: dark.map((i, c) => [at(i), at(light[c])]) };
+}
+
+// Rekta's advice on a ground in one theme (a theme of rekta.tokens.json, resolved): bands are the colours glass may lie
+// over, cells the colours of each cell of the grid. It never refuses a ground; what it advises against is said in words,
+// and the lowest contrast of text-primary and text-contrast-high on the glass over a band is reported, for information.
+export function groundCheck(bands, cells, theme) {
+  const glass = bands.map((b) => over(theme.glass, b));
+  const text = Math.min(...glass.flatMap((g) => [contrast(theme['text-primary'], g), contrast(theme['text-contrast-high'], g)]));
+  const chroma = Math.max(...glass.map((g) => oklch(g)[1]));
+  const busy = cells.filter((cell) => { const y = cell.map(luminance); return (Math.max(...y) + 0.05) / (Math.min(...y) + 0.05) > GROUND.inside; }).length / cells.length;
+  const calm = busy <= GROUND.busy, grey = chroma < APART.grey, advice = [];
+  if (!calm) advice.push(`busy: ${Math.round(busy * 100)}% of its cells hold more than ${GROUND.inside}:1 inside, advised at most ${GROUND.busy * 100}%`);
+  if (!grey) advice.push(`it tints the glass to a chroma of ${chroma.toFixed(3)}, advised below ${APART.grey}, a grey`);
+  return { ok: calm && grey, calm, grey, advice, busy, chroma, text };
 }

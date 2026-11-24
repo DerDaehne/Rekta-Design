@@ -46,3 +46,23 @@ export declare function deriveAccent(seed: string, themes: Partial<Record<ThemeN
   themes: Partial<Record<ThemeName, AccentPair>>;
   problems: Partial<Record<ThemeName, string[]>>;
 };
+/** The ground of a workspace: a grid of 16 × 9 cells; busy past 3:1 inside a cell, advised against past a quarter of them. */
+export declare const GROUND: { columns: number; rows: number; inside: number; busy: number };
+/** A ground's bands (each cell's average colour) and cells (each cell's darkest and lightest colour), from RGBA pixels. */
+export declare function groundSamples(image: { data: ArrayLike<number>; width: number; height: number }): { bands: string[]; cells: [string, string][] };
+/** Rekta's advice on a ground in one theme: calm, and grey under glass. It never refuses one. */
+export declare function groundCheck(bands: string[], cells: string[][], theme: Theme): {
+  ok: boolean;
+  /** No more than a quarter of the cells is busy. */
+  calm: boolean;
+  /** The glass over every band stays a grey. */
+  grey: boolean;
+  /** What it advises against, in words; empty when the ground fits. */
+  advice: string[];
+  /** The share of cells that hold more than 3:1 inside. */
+  busy: number;
+  /** The highest OKLCH chroma of the glass over a band. */
+  chroma: number;
+  /** The lowest contrast of text-primary and text-contrast-high on the glass over a band, for information. */
+  text: number;
+};

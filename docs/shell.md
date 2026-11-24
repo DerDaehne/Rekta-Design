@@ -124,11 +124,61 @@ drag area.
 
 A surface that other content lies on as a whole (a desktop behind
 windows, a kiosk's screen, a full-screen surface behind places) has the
-page's ground: plain `bg`, in both themes, without a picture, a
-pattern, a gradient or an imprint of tiles. The ground is where the eye
-rests; what lies on it carries the information. A user who picks a
-picture of their own for it is the app's to allow, as a setting, never
-the default.
+page's ground by default: plain `bg`, in both themes. Any other ground
+may take its place, as the product's choice or the person's: a picture,
+a pattern (an imprint of tiles, say) or a gradient. People like to make
+the place theirs, and what lies on the ground carries the information,
+so Rekta holds what lies on it, not the ground:
+
+- **No words on it bare.** Text, icons and marks stand on glass, a
+  surface or a sheet, never straight on a picture, a pattern or a
+  gradient.
+- **Glass holds over any ground.** Text on glass is measured over white
+  and over black, and a ground's colours lie between the two
+  ([colour.md](colour.md#text-on-glass)): what holds there holds over
+  every picture, and glass needs nothing of its own for one. Its blur
+  averages the ground under it, as it does a page. Hairlines on glass
+  vary with what lies under it, as over a page that scrolls under the
+  app bar.
+- **Settings change what lies on it.** Under more contrast and less
+  transparency, and on the black ground, glass is opaque (the ground's
+  colour, or black), so nothing of the ground shows through it; the
+  chosen ground stays where nothing lies on it. Forced colours replace
+  it as every other colour.
+- **It covers the surface:** a picture is scaled until it fills it and
+  cropped about its centre, or about a point it names, never stretched
+  or bordered, on a portrait screen as on an ultra-wide one.
+- **An accent may come with it.** A product that ships a picture may
+  set its accent with it, in its slot
+  ([colour.md](colour.md#product-slots)) and checked as every accent.
+
+### Advice on a ground
+
+Rekta advises on a ground and never refuses one. It is measured on a
+grid of 16 × 9 cells over the ground, from each cell's average colour
+(its band: what a blur leaves of it) and its darkest and lightest
+colour:
+
+| Advice | Measured | Why |
+|---|---|---|
+| Calm | No more than a quarter of the cells holds more than 3:1 between its darkest and lightest colour. | Hard edges, stripes and fine detail draw the eye from what lies on the ground. |
+| Grey under glass | The glass over each band stays below a chroma of 0.05 (OKLCH), under which Rekta counts a colour as grey ([colour.md](colour.md#apart-from-status)). | A ground that tints the glass colours the place around every word. |
+
+There is no advice on lightness: a ground as light as paper or as dark
+as night keeps text on glass, as white and black do.
+
+`groundSamples({ data, width, height })` in `rekta.color.js` takes a
+picture's pixels (a canvas's `ImageData`) and gives its bands and
+cells; `groundCheck(bands, cells, theme)` gives what it advises
+against in words, the share of busy cells, the chroma of the glass,
+and, for information, the lowest contrast of text on the glass over a
+band. The showcase's picture keeps the advice in every theme, and
+`--check` measures it there.
+
+**A hint, once.** When a person chooses a ground the advice speaks
+against, a hint beneath the choice says so in their terms, and the
+choice stands: "This picture is busy; glass and text stay readable.",
+"This picture tints the glass; text stays readable."
 
 ## The session
 

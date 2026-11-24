@@ -17,7 +17,8 @@
 //     rekta.js            the behaviour as an ES module (src/js/rekta.js)
 //     rekta.global.js     the same as a classic script that sets window.Rekta
 //     rekta.color.js      the colour rules as an ES module (scripts/lib/color.mjs), rekta.color.global.js as a classic
-//                         script that sets window.RektaColor: contrast, apart from status, an accent's check and derivation
+//                         script that sets window.RektaColor: contrast, apart from status, an accent's check and
+//                         derivation, a ground's advice
 //   and core/src/ (committed, so the C library builds without Node):
 //     rk_tokens.h         the tokens as C tables in the order of the enums in core/include/rekta.h
 //     rk_icons.h          the icons as polylines on the 20-unit grid
@@ -30,7 +31,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFi
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { accentCheck, apartFromStatus, contrast, deriveAccent, distance, over, parse, TEXT, toHex8 } from './lib/color.mjs';
+import { accentCheck, apartFromStatus, contrast, deriveAccent, distance, GROUND, groundCheck, over, parse, TEXT, toHex8 } from './lib/color.mjs';
 import { coreFonts, coreIcons, coreTokens } from './lib/core.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -406,6 +407,9 @@ function check(tokens) {
   const problems = [];
   const t = buildTokensJson(tokens, 'check');
   const STATUS = ['info', 'success', 'warning', 'error'];
+  // The showcase's ground, a picture (docs/shell.md): its bands and cells as groundSamples measures them.
+  const sky = JSON.parse(readFileSync(join(root, 'site', 'sky.json'), 'utf8')), cells = GROUND.columns * GROUND.rows;
+  if (sky.bands.length !== cells || sky.cells.length !== cells) problems.push(`site/sky.json holds ${sky.bands.length} bands and ${sky.cells.length} cells, needs ${cells} of each`);
   // A contrast set changes only colours its theme has, and never the accent: that slot is the product's.
   for (const [theme, set] of Object.entries(CONTRAST)) {
     const own = new Set();
@@ -456,6 +460,10 @@ function check(tokens) {
       const r = contrast(c[fg], over(c.glass, behind));
       if (r < text) problems.push(`${theme}: ${fg} on glass over ${behind} is ${r.toFixed(2)}:1, needs ${text}:1`);
     }
+    // Over a picture, text on glass holds as over white and black, and the showcase's own picture keeps the advice.
+    const ground = groundCheck(sky.bands, sky.cells, c);
+    if (ground.text < text) problems.push(`${theme}: text on glass over site/sky.webp is ${ground.text.toFixed(2)}:1, needs ${text}:1`);
+    for (const a of ground.advice) problems.push(`${theme}: site/sky.webp, the showcase's ground: ${a}`);
     // Statuses must stay apart under red-green colour blindness (OKLab distance of the simulated colours).
     for (const form of ['full', 'tile']) for (const kind of ['protan', 'deutan']) {
       for (let i = 0; i < STATUS.length; i += 1) for (let j = i + 1; j < STATUS.length; j += 1) {
@@ -479,6 +487,11 @@ function check(tokens) {
       if (tritan.distance < 0.09) notes.push(`${theme}: ${name} is ${tritan.distance.toFixed(3)} from status-${tritan.status}-${tritan.form} under tritan`);
     }
   }
+  // The advice speaks where it should: black and white stripes are busy, a saturated gradient tints the glass.
+  const stripes = groundCheck(['#000000', '#ffffff'], Array(cells).fill(['#000000', '#ffffff']), t.themes.light);
+  const vivid = groundCheck(['#ff6a00', '#ff0062', '#7a00ff'], [['#ff6a00']], t.themes.light);
+  if (stripes.calm) problems.push('groundCheck finds black and white stripes calm');
+  if (vivid.grey) problems.push('groundCheck finds the glass over a saturated gradient grey');
   // Every named accent holds the accent rules in each theme and contrast set (docs/colour.md).
   for (const [name, a] of Object.entries(t.accents)) {
     if (!/^[a-z][a-z-]*$/.test(name)) problems.push(`tokens/rekta.accents.json: "${name}" is not a lowercase name`);
@@ -879,7 +892,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else if (process.argv.includes('--check')) {
     const problems = checkAll();
     if (problems.length) { console.error(problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
-    console.log('✓ tokens and stylesheet pass: contrast (7:1 for more contrast), text on glass over white and black, status marks, colour-blind separation, named accents and content fills apart from status, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
+    console.log('✓ tokens and stylesheet pass: contrast (7:1 for more contrast), text on glass over white and black and over the showcase\'s picture, status marks, colour-blind separation, named accents and content fills apart from status, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
     for (const n of notes) console.log(`  i ${n}`);
   } else {
     console.log(`✓ dist/ written (Rekta Design ${buildDist()})`);

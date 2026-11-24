@@ -76,7 +76,10 @@ that combine them.
 `glass` is the app bar's frosted ground: the ground colour at 82%, with
 a blur of what scrolls under it. The blur averages that content, so the
 limits are all white and all black behind it (a light document under
-dark glass). Only `text-primary` and `text-contrast-high` stand on
+dark glass). They are the limits over the ground of a workspace too,
+a picture, a pattern or a gradient
+([shell.md](shell.md#the-ground-of-a-workspace)): its colours lie
+between them. Only `text-primary` and `text-contrast-high` stand on
 glass; `text-contrast-medium` there falls to about 3.3:1. `--check`
 measures both over white and over black (4.5:1, 7:1 under more
 contrast) and fails when `rekta.css` colours a part of the app bar in
@@ -199,7 +202,7 @@ Each number can be recomputed without JavaScript: OKLab and OKLCH from
 sRGB (Björn Ottosson's matrices), the simulation of protanopia,
 deuteranopia and tritanopia after Machado, Oliveira and Fernandes 2009
 at severity 1, and the WCAG 2 contrast ratio. `scripts/lib/color.mjs`
-has them in under 200 lines, with the matrices; it ships as `rekta.color.js`
+has them, with the matrices; it ships as `rekta.color.js`
 (and `rekta.color.global.js`, `window.RektaColor`), and rekta-core has
 the same in C. `apartFromStatus(colour, theme)` gives, per kind of
 vision, the nearest status colour and the distance to it, the nearest
