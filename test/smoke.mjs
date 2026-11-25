@@ -1292,7 +1292,7 @@ ok((await text(p, '.rk-banner-word')) === 'halted' && (await text(p, '#live')) =
 await p.uncheck('#s-halted'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear' && (await text(p, '#live')) === 'offline', 'when it ends, the hidden state stays hidden in the app bar\'s word');
 await p.check('#s-paused'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused');
-ok((await text(p, '.rk-banner-word')) === 'paused' && (await text(p, '#live')) === 'offline' && !(await hider()), 'a lesser state that starts takes the banner, the app bar keeps the most severe; a state not marked hideable has no ×');
+ok((await text(p, '.rk-banner-word')) === 'paused' && (await text(p, '#live')) === 'offline' && !(await hider()), 'a lesser state that starts takes the banner, the app bar keeps the most severe, and no × stands under the hidden state\'s word');
 await p.uncheck('#s-paused'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
 await flip('#s-offline', false); await until(p, async () => (await toast(p)) === 'Connected again. Figures are live.');
 ok((await toast(p)) === 'Connected again. Figures are live.' && (await text(p, '#live')) === 'live', 'a hidden state that ends is reported as a toast', await toast(p));
@@ -1323,6 +1323,7 @@ ok(urgent.alert, 'an alert cannot be hidden, even marked hideable');
 ok(urgent.noWord, 'without the app bar\'s word to keep it, no state can be hidden');
 ok(urgent.made && urgent.gone, 'a banner without an actions row gets one for its ×; destroy takes both away', JSON.stringify(urgent));
 await flip('#s-paused', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused');
+ok((await text(p, '#live')) === 'paused' && !(await hider()), 'a state not marked hideable has no ×, even while the app bar says its word');
 await flip('#s-offline', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline');
 if (await hider()) { await p.focus('#banner .rk-banner-hide'); await p.keyboard.press('Enter'); }
 await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused', 3000);
