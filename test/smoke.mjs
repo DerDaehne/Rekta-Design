@@ -175,6 +175,30 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
 
 const p = await open();
 ok(await p.evaluate(() => getComputedStyle(document.querySelector('#pan')).display === 'flex'), 'desktop panorama is sideways');
+
+// A section clips what runs past its sides, so the focus ring of a child flush with its edge stays whole (accessibility.md).
+{
+  const probe = () => {
+    const sec = document.createElement('section'); sec.className = 'rk-sec'; sec.id = 't-ring';
+    sec.innerHTML = '<button class="rk-btn" type="button">a</button><input class="rk-input" aria-label="b"><a class="rk-tile" href="#x" style="display:block;height:80px">c</a>'
+      + '<a href="#y" class="rk-link">d</a><div class="rk-copy" tabindex="0">e</div>';
+    document.querySelector('#pan').prepend(sec);
+    const clip = sec.getBoundingClientRect(), kinds = [];
+    for (const el of sec.children) {
+      el.focus({ focusVisible: true });
+      const s = getComputedStyle(el), reach = (parseFloat(s.outlineOffset) || 0) + (parseFloat(s.outlineWidth) || 0), r = el.getBoundingClientRect();
+      kinds.push({ kind: el.className || el.tagName, ring: s.outlineStyle === 'none' ? null : Math.round((r.left - Math.max(reach, 0)) * 100) / 100, clip: clip.left, display: getComputedStyle(sec).overflowX });
+    }
+    sec.remove();
+    return kinds;
+  };
+  for (const [name, opts] of [['light', {}], ['dark', { colorScheme: 'dark' }], ['forced colours', { forcedColors: 'active' }], ['phone', { viewport: { width: 390, height: 800 } }]]) {
+    const c = await open(opts);
+    await c.keyboard.press('Tab');
+    for (const k of await c.evaluate(probe)) ok(k.display === 'visible' || k.ring === null || k.ring >= k.clip - 0.01, `${name}: the focus ring of a flush ${k.kind} is not clipped by its section`, JSON.stringify(k));
+    await c.close();
+  }
+}
 // A section's space (layout.md): space-xl above and below its content, space-l from its title to what follows, space-m
 // between two other blocks; rows and the tile gap keep space-s.
 {
@@ -655,7 +679,8 @@ const edges = await p.evaluate(async () => {
   const pan = place.firstChild, api = Rekta.panorama(pan), out = { bad: [], changed: 0, fits: 0, worst: 0 };
   for (let w = 800; w <= 2400; w += 10) {
     place.style.width = `${w}px`; await frame();
-    const r = [...pan.querySelectorAll('.rk-sec')].map((s) => s.getBoundingClientRect()), edge = pan.getBoundingClientRect().left + pan.clientWidth;
+    // A section's leading padding holds its focus ring's reach; its content starts after it.
+    const r = [...pan.querySelectorAll('.rk-sec')].map((s) => { const b = s.getBoundingClientRect(); return { left: b.left + parseFloat(getComputedStyle(s).paddingLeft), right: b.right }; }), edge = pan.getBoundingClientRect().left + pan.clientWidth;
     const gaps = r.slice(1).map((s, i) => Math.round(s.left - r[i].right)), gap = gaps[0];
     const even = gaps.every((g) => g === gap), inside = r.some((s) => s.left + 48 <= edge + 0.5 && edge - 0.5 <= s.right - 48);
     if (pan.hasAttribute('data-rk-fit')) { out.fits += 1; if (r[3].right > edge + 1 || gap < 16 || gap > 48 || !even) out.bad.push(`${w}: fit, gap ${gap}`); continue; }

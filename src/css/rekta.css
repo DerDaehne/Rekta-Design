@@ -1536,7 +1536,9 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
       scrollbar-width: thin; scrollbar-color: var(--rk-text-contrast-low) transparent;
     }
     /* Sections are sized in tile units; more width shows more sections, never wider ones. */
-    .rk-sec { flex: 0 0 var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))); overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding-right: var(--rk-space-s); }
+    /* The section clips sideways, so the focus ring (2px, offset 2px) of a child flush with its left edge would be cut:
+       its leading 4px are padding that a negative margin takes back, the basis grows by the same 4px. */
+    .rk-sec { flex: 0 0 calc(var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))) + 4px); margin-left: -4px; padding-left: 4px; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding-right: var(--rk-space-s); }
     .rk-sec + .rk-sec { border-top: 0; }
     /* A table head sticks to the section's top edge, not below its padding. */
     .rk-sec .rk-table thead th { top: calc(-1 * var(--rk-space-xl)); }

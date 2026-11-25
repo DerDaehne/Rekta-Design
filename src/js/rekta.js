@@ -1056,7 +1056,7 @@ export function panorama(el, { pivot = null } = {}) {
   // at the start, and with any section aligned there, when they are all as wide. Says whether everything fits; then
   // nothing scrolls.
   function spread(list) {
-    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => parseFloat(getComputedStyle(s).width) || 0);
+    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => { const c = getComputedStyle(s); return (parseFloat(c.width) || 0) + (parseFloat(c.marginLeft) || 0); });
     const edge = el.clientWidth - (parseFloat(getComputedStyle(el).paddingLeft) || 0), n = sizes.length;
     const before = (j) => sizes.slice(0, j).reduce((a, w) => a + w, 0);
     const fitsWith = (g) => before(n) + (n - 1) * g <= edge + 1;

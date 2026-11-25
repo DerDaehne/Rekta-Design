@@ -27,6 +27,11 @@ which clears ≥ 3:1 against both `bg` and `surface` in every theme by
 the accent's own rule. On a fill of the accent itself (a selected row,
 the accent surface) it takes the fill's text colour, as on any fill.
 
+A container that clips its content keeps its children's focus ring
+whole: a control flush with the container's edge shows its ring in
+full, so the container leaves the ring's reach (its width plus its
+offset) free at that edge.
+
 ## Reduced motion
 
 Covered in full in [motion.md](motion.md): every duration token goes to
