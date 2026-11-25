@@ -760,7 +760,130 @@ ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s
   });
   ok(seen.count > 2 && seen.english.length === 0, 'in German, what rekta.js writes is German', JSON.stringify(seen));
   ok(seen.locale === 'de' && seen.number === '1234,5', 'and its numbers follow the locale', JSON.stringify(seen));
+  ok((await text(de, '#about-block > .rk-hint')) === 'Ctrl+C kopiert', 'a block to copy says its key in German', await text(de, '#about-block > .rk-hint'));
   await de.close();
+}
+
+// A block to copy (typography.md): one focus stop named by its own text, a hint with the platform's key; each line one
+// line, a cut one shown whole by the overflow tip; Ctrl+C with nothing selected copies the lines and the toast says so;
+// a selection in it is the browser's; a refused clipboard is said in the hint; a product's own lines.
+{
+  const c = await open({ permissions: ['clipboard-read', 'clipboard-write'] });
+  await go(c, 'start');
+  const shape = await c.evaluate(() => {
+    const b = document.querySelector('#about-block'), ua = document.querySelector('#about-browser');
+    return { tab: b.tabIndex, role: b.getAttribute('role'), hint: `${b.lastElementChild.className}: ${b.lastElementChild.textContent}`,
+      line: getComputedStyle(ua).whiteSpace, cut: ua.scrollWidth > ua.clientWidth, high: Math.round(ua.getBoundingClientRect().height) <= Math.ceil(parseFloat(getComputedStyle(ua).lineHeight)) };
+  });
+  ok(shape.tab === 0 && shape.role === 'group' && shape.hint === 'rk-hint: Ctrl+C copies', 'a block to copy: one focus stop, its hint ends it with the key', JSON.stringify(shape));
+  ok(shape.line === 'nowrap' && shape.cut && shape.high, 'a value too long for its column stays one line, cut', JSON.stringify(shape));
+  const named = await c.getByRole('group', { name: /^version Rekta Design \d+\.\d+\.\d+ Mozilla\/\S.* Ctrl\+C copies$/ }).count();
+  ok(named === 1, 'it is named by its own text, read as it stands', String(named));
+  await c.hover('#about-browser');
+  const tipped = await until(c, () => c.evaluate(() => { const t = document.querySelector('.rk-tip'); return !!t && t.matches(':popover-open') && t.textContent === navigator.userAgent; }), 3000);
+  ok(tipped, 'the overflow tip shows the cut value whole');
+  await c.mouse.move(5, 5);
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  await c.focus('#about-block');
+  await c.evaluate(() => getSelection().selectAllChildren(document.querySelector('#about-version')));
+  await c.keyboard.press('Control+c'); await c.waitForTimeout(400);
+  const left = await c.evaluate(async () => ({ toast: !!document.querySelector('.rk-toast'), clip: await navigator.clipboard.readText() }));
+  ok(!left.toast && !left.clip.includes('\n'), 'a selection in the block is the browser\'s to copy: no whole block, no toast', JSON.stringify(left));
+  await c.evaluate(() => getSelection().removeAllRanges());
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  await c.focus('#about-block'); await c.keyboard.press('Control+a');
+  const all = await c.evaluate(() => { const s = getSelection(), b = document.querySelector('#about-block'); return document.activeElement === b && s.containsNode(b, true) && !b.contains(s.anchorNode); });
+  await c.keyboard.press('Control+c');
+  const page = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()).includes('Code, tokens, CSS and script')));
+  ok(all && page && !(await c.$('.rk-toast')), 'Ctrl+A in the block selects past it: Ctrl+C copies what is selected, and no toast', `${all} ${page}`);
+  await c.evaluate(() => getSelection().removeAllRanges());
+  await c.keyboard.press('Control+c');
+  ok(await until(c, async () => (await toast(c)) === 'copied'), 'Ctrl+C on it: the toast says "copied"', await toast(c));
+  const copied = await c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`);
+  ok(copied, 'it copies its lines, the hint left out');
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  const elsewhere = await c.evaluate(() => { const b = document.querySelector('#about-block'); getSelection().selectAllChildren(b.previousElementSibling); b.focus(); return !getSelection().isCollapsed; });
+  await c.keyboard.press('Control+c');
+  const whole = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`));
+  ok(elsewhere && whole, 'a selection elsewhere on the page: Ctrl+C on the block still copies it whole', `${elsewhere} ${whole}`);
+  await c.evaluate(() => getSelection().removeAllRanges());
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  await c.click('#about-version');
+  const caret = await c.evaluate(() => { const s = getSelection(), b = document.querySelector('#about-block'); return document.activeElement === b && s.rangeCount > 0 && s.isCollapsed && b.contains(s.anchorNode); });
+  await c.keyboard.press('Control+c');
+  const pressed = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`));
+  await c.evaluate(() => getSelection().removeAllRanges());
+  ok(caret && pressed, 'a press in the block leaves a caret there: Ctrl+C still copies the block whole', `${caret} ${pressed}`);
+  // A refusal is said at the block (states.md): the hint turns into it in a field error's tone, a live region says it,
+  // no toast; a copy after it brings the hint back at once. It stands for timing.toast: measured in the page with the
+  // token shortened, so a level's or a written-out time would miss it, then the hint comes back quiet. Each change is
+  // logged as it happens, so a slow runner cannot look too late.
+  const refuse = () => c.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: () => Promise.reject(new Error('refused')) }));
+  const hintNow = () => text(c, '#about-block > .rk-hint');
+  await c.evaluate(() => {
+    const h = document.querySelector('#about-block > .rk-hint'), live = document.querySelector('#about-block + .rk-sr[role=status]');
+    const probe = document.createElement('i'); document.querySelector('.rk').append(probe);
+    probe.style.color = 'var(--rk-text-primary)'; const primary = getComputedStyle(probe).color;
+    probe.style.color = 'var(--rk-status-error-full)'; const mark = getComputedStyle(probe).color; probe.remove();
+    window.hintLog = []; window.liveLog = [];
+    new MutationObserver(() => {
+      const sq = getComputedStyle(h, '::before');
+      window.hintLog.push({ at: performance.now(), text: h.textContent, status: h.dataset.status || '', tone: getComputedStyle(h).color === primary, square: sq.content !== 'none' && sq.backgroundColor === mark });
+    }).observe(h, { childList: true, attributes: true, characterData: true, subtree: true });
+    if (live) new MutationObserver(() => { if (live.textContent) window.liveLog.push(live.textContent); }).observe(live, { childList: true, characterData: true, subtree: true });
+  });
+  await refuse();
+  await c.keyboard.press('Control+c');
+  ok(await until(c, () => c.evaluate(() => window.hintLog.some((x) => x.text === 'not copied'))), 'a refused clipboard: the hint says "not copied"', await hintNow());
+  await until(c, () => c.evaluate(() => window.liveLog.length > 0));
+  const said = await c.evaluate(() => {
+    const r = window.hintLog.find((x) => x.text === 'not copied') || {};
+    return { status: r.status, tone: r.tone, square: r.square, live: window.liveLog.join('|'),
+      toast: [...document.querySelectorAll('.rk-toast')].some((t) => t.dataset.status || /not copied/.test(t.textContent)) };
+  });
+  ok(said.status === 'error' && said.tone && said.square, 'in a field error\'s tone: primary words after the error square', JSON.stringify(said));
+  ok(said.live === 'not copied' && !said.toast, 'said once in a live region, and no toast', JSON.stringify(said));
+  await c.evaluate(() => { delete navigator.clipboard.writeText; window.prevToast = document.querySelector('.rk-toast:not([data-rk-phase])'); });
+  await c.keyboard.press('Control+c');
+  const again = await until(c, async () => (await hintNow()) === 'Ctrl+C copies', 1000);
+  const fresh = await until(c, () => c.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase])'); return !!t && t !== window.prevToast && t.textContent === 'copied'; }));
+  ok(again && fresh, 'a copy after a refusal: the hint comes back at once, and a toast says "copied"', `${again} ${fresh}`);
+  await c.evaluate(() => { document.documentElement.style.setProperty('--rk-duration-toast', '300ms'); window.hintLog = []; window.liveLog = []; });
+  await refuse();
+  await c.keyboard.press('Control+c');
+  ok(await until(c, () => c.evaluate(() => window.hintLog.some((x) => x.text === 'Ctrl+C copies')), 3000), 'then the hint comes back');
+  const stood = await c.evaluate(() => {
+    const t = window.hintLog, from = t.find((x) => x.text === 'not copied'), to = t.find((x) => x.text === 'Ctrl+C copies' && from && x.at > from.at);
+    return { ms: from && to ? Math.round(to.at - from.at) : -1, status: to ? to.status : '?', live: document.querySelector('#about-block + .rk-sr').textContent };
+  });
+  ok(stood.ms >= 290 && stood.ms < 1200 && !stood.status && stood.live === '', 'it stood for timing.toast, and the hint is quiet again', JSON.stringify(stood));
+  await c.evaluate(() => { document.documentElement.style.removeProperty('--rk-duration-toast'); delete navigator.clipboard.writeText; });
+  await c.evaluate(() => {
+    const b = document.createElement('div'); b.className = 'rk-statement'; b.id = 'copy-own'; b.innerHTML = '<p class="rk-kicker">versions</p><p>2.3.0</p>';
+    document.querySelector('#about-block').after(b);
+    window.copyOwn = Rekta.copyable(b, { text: () => 'app 2.3.0\nengine 4.1' });
+    b.focus();
+  });
+  await c.keyboard.press('Control+c');
+  const ownCopied = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()) === 'app 2.3.0\nengine 4.1'));
+  const gone = await c.evaluate(() => {
+    const b = document.querySelector('#copy-own');
+    window.copyOwn.destroy();
+    const out = !b.querySelector('.rk-hint') && !b.hasAttribute('data-rk-copyable') && !b.querySelector('[data-rk-tip]');
+    b.remove();
+    return out;
+  });
+  ok(ownCopied && gone, 'a product\'s own lines are copied; destroy() takes hint, tips and attribute away', `${ownCopied} ${gone}`);
+  const lives = await c.evaluate(() => document.querySelectorAll('.rk-sr[role=status]').length);
+  await c.evaluate(async () => {
+    const b = document.createElement('div'); b.className = 'rk-statement'; b.id = 'copy-gone'; b.innerHTML = '<p>2.3.0</p>';
+    document.querySelector('#about-block').after(b);
+    Rekta.copyable(b).destroy(); b.focus(); await navigator.clipboard.writeText('before');
+  });
+  await c.keyboard.press('Control+c'); await c.waitForTimeout(300);
+  const after = await c.evaluate(async () => { document.querySelector('#copy-gone').remove(); return { clip: await navigator.clipboard.readText(), lives: document.querySelectorAll('.rk-sr[role=status]').length }; });
+  ok(after.clip === 'before' && after.lives === lives, 'after destroy() Ctrl+C on the block copies nothing of its own, and its live region is gone', JSON.stringify(after));
+  await c.close();
 }
 
 // Motion: reorder, toast, reduce motion.

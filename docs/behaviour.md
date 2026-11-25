@@ -141,6 +141,9 @@ state's `word`) are the caller's, in its own language.
 | `keyMeta` | `tips()`, `appbar()` | ("windows") → “Win”, ("other") → “Super”: the Meta key outside Apple |
 | `cannotAct` | `appbar()` | ("print", "needs a printer") → “print (needs a printer)”: a disabled control's item in "more" |
 | `back` | `menu()` | “back”: the row over a menu's second level, read with the level's name |
+| `copied` | `copyable()` | “copied” |
+| `notCopied` | `copyable()` | “not copied” |
+| `copyHint` | `copyable()` | ("Ctrl+C") → “Ctrl+C copies”: the key as the platform writes it, ⌘C on Apple |
 
 ## The contract
 
@@ -234,6 +237,8 @@ them:
 | `data-rk-places` | the app bar, the root | The bar holds the places (`appbar()`, compact). |
 | `data-rk-inactive` | a title bar | Another window is the active one: the name steps back (`titlebar()`). |
 | `data-rk-removable` | a list | Its entries can be dragged away (`removable()`): the browser keeps only the vertical scroll on them. |
+| `data-rk-copyable` | a statement block | Its values are copied whole (`copyable()`): each line stays one line, cut with an ellipsis. |
+| `data-status="error"` | a block to copy's hint | The clipboard refused (`copyable()`): the hint says so in a field error's tone for `timing.toast`. |
 | `data-rk-held` | a toast | Its window holds: the pointer rests on it or focus is in it. |
 | `data-theme`, `data-ground`, `data-density`, `data-motion`, `data-contrast`, `data-transparency`, `data-accent` | the root | Prefs overrides (see `prefs`). |
 
@@ -391,6 +396,7 @@ status word is left out.
 | `split()` handle | ← → (Shift: four steps), Home End |
 | `sortable()` | Space/Enter picks up and puts down, ↑ ↓ move, Escape puts back; Alt+↑ ↓ moves at once |
 | `removable()` | Delete or Backspace on an entry (not in a text field, no modifier) removes it; focus moves to the next |
+| `copyable()` | Ctrl/Cmd+C copies the whole block, unless text is selected in it |
 | `inPlace()` | Escape, ← (not in a text field, a slider, a tree or a tab list) go back one level; Escape here comes before the sheet's |
 | `chart()` | ← → Home End |
 
@@ -1168,6 +1174,24 @@ ways call it:
   the click that ends it is cancelled.
 
 The list gets `data-rk-removable`. Returns `{ remove(item), destroy }`.
+
+### `copyable(el, { toaster, text })`
+
+`el` is a `.rk-statement` of values to copy
+([typography.md](typography.md#a-block-to-copy)). It gets a
+`.rk-hint` at its end with `copyHint` ("Ctrl+C copies", ⌘C on Apple),
+`tabindex="0"`, `role="group"` and, unless it has a name, its own text as
+its name (`aria-labelledby` on itself), so it is read as it stands. Its
+lines get `data-rk-tip="overflow"`, and `data-rk-copyable` keeps each to
+one line. Ctrl/Cmd+C on it, with no text selected in it, writes the
+lines to the clipboard (`text`, a string or a function returning one;
+else the text of each line it shows, one per line, the hint left out)
+and shows `copied` in `toaster`. When the clipboard refuses (no secure
+context, no permission), the hint says `notCopied` with
+`data-status="error"` for `timing.toast`, and a live region after the
+block (`.rk-sr`, `role="status"`) says it once; then the hint comes
+back. Returns `{ destroy }`, which takes the hint, the live region, the
+tips and the attribute away.
 
 ### `virtual(el, { count, render, text, onShow, onChange, appbar, label })`
 
