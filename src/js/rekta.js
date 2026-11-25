@@ -133,6 +133,9 @@ export const strings = {
   keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
   cannotAct: (label, reason) => `${label} (${reason})`,
   back: 'back',
+  copied: 'copied',
+  notCopied: 'not copied',
+  copyHint: (keys) => `${keys} copies`,
 };
 // rk-strings-end
 const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
@@ -954,9 +957,11 @@ export function panorama(el, { pivot = null } = {}) {
   const links = () => (pivot ? [...pivot.querySelectorAll('a[href^="#"]')] : []);
   const linkFor = (sec) => links().find((a) => a.hash === `#${sec.id}`);
 
+  // A section's margin edge, where it stands in the row: its box starts a ring's reach before its content.
+  const marginEdge = (sec) => sec.getBoundingClientRect().left - (parseFloat(getComputedStyle(sec).marginLeft) || 0);
   function startOf(sec) {
     const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
-    return Math.min(el.scrollLeft + sec.getBoundingClientRect().left - el.getBoundingClientRect().left - pad, el.scrollWidth - el.clientWidth);
+    return Math.min(el.scrollLeft + marginEdge(sec) - el.getBoundingClientRect().left - pad, el.scrollWidth - el.clientWidth);
   }
   function mark(sec) {
     if (!sec) return;
@@ -980,7 +985,7 @@ export function panorama(el, { pivot = null } = {}) {
     let active = list[0];
     if (sideways()) {
       const edge = el.getBoundingClientRect().left, reach = el.clientWidth / 3;
-      for (const s of list) if (s.getBoundingClientRect().left - edge <= reach) active = s;
+      for (const s of list) if (marginEdge(s) - edge <= reach) active = s;
       // At either end the end's section is the one, however narrow the sections are (several edges may lie in the
       // first third of the width).
       if (Math.abs(el.scrollLeft) <= 1) active = list[0];
@@ -1058,7 +1063,7 @@ export function panorama(el, { pivot = null } = {}) {
   // at the start, and with any section aligned there, when they are all as wide. Says whether everything fits; then
   // nothing scrolls.
   function spread(list) {
-    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => parseFloat(getComputedStyle(s).width) || 0);
+    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => { const c = getComputedStyle(s); return (parseFloat(c.width) || 0) + (parseFloat(c.marginLeft) || 0); });
     const edge = el.clientWidth - (parseFloat(getComputedStyle(el).paddingLeft) || 0), n = sizes.length;
     const before = (j) => sizes.slice(0, j).reduce((a, w) => a + w, 0);
     const fitsWith = (g) => before(n) + (n - 1) * g <= edge + 1;
@@ -3079,8 +3084,10 @@ function keyName(k) {
   if (k === 'Meta') return tx('keyMeta', isWindows ? 'windows' : 'other');
   return KEY_NAMES[k] || (k.length === 1 ? k.toUpperCase() : k);
 }
-function shortcutText(el) {
-  const all = (el.getAttribute('aria-keyshortcuts') || '').split(/\s+/).filter(Boolean);
+function shortcutText(el) { return keysText(el.getAttribute('aria-keyshortcuts')); }
+// keysText('Control+C Meta+C'): the platform's one of these combinations ("Ctrl+C", ⌘C on Apple), written that way.
+function keysText(spec) {
+  const all = (spec || '').split(/\s+/).filter(Boolean);
   const pick = all.find((k) => (isMac ? /Meta/.test(k) : !/Meta/.test(k))) || all[0];
   if (!pick) return '';
   const rank = (k) => { const i = MODIFIERS.indexOf(k); return i < 0 ? MODIFIERS.length : i; };
@@ -3449,6 +3456,9 @@ export function tree(el, { onShow = null, onToggle = null } = {}) {
   };
 }
 
+// A live region says the same words again only once it has been empty: emptied, then written a moment later.
+function speak(live, t) { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); }
+
 // Sortable ---------------------------------------------------------------------------------------------------------
 // sortable(list, { items, handle, onMove }): items reordered by dragging their grip (.rk-grip, a button): the item
 // lifts as a floating surface, the others make room, and on release everything settles (FLIP). Keys on the grip:
@@ -3460,7 +3470,7 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
   const live = document.createElement('span');
   live.className = 'rk-sr'; live.setAttribute('role', 'status');
   list.after(live);
-  const say = (t) => { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
+  const say = (t) => speak(live, t);
   const name = (it) => (it.querySelector('b, a, span:not(.rk-grip)') || it).textContent.trim();
   let drag = null, grabbed = null, moving = false;
   function flip(change) {
@@ -3541,6 +3551,69 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
     destroy() {
       list.removeEventListener('pointerdown', down); list.removeEventListener('pointermove', move); list.removeEventListener('pointerup', end);
       list.removeEventListener('pointercancel', end); list.removeEventListener('keydown', key); list.removeEventListener('focusout', blur); live.remove();
+    },
+  };
+}
+
+// Copyable -----------------------------------------------------------------------------------------------------------
+// copyable(el, { toaster, text }): a statement block of values meant to be copied, such as versions, ids or
+// diagnostics (docs/typography.md). It takes focus as one stop and is named by its own text, so it is read as it
+// stands; a hint at its end says the key. Ctrl/Cmd+C copies it whole as plain lines (text, else one per line it shows),
+// and the toaster says "copied". A refusal is said at the block, which is still on screen (states.md): the hint turns
+// into "not copied" in a field error's tone (forms.md) for as long as a toast would stand (timing.toast), said once in
+// a live region after the block. A selection in it is the platform's to copy. Each line stays one line, cut with an
+// ellipsis, and shows the overflow tip while it is cut.
+export function copyable(el, { toaster = null, text = null } = {}) {
+  const hint = document.createElement('p');
+  hint.className = 'rk-hint';
+  const live = document.createElement('span');
+  live.className = 'rk-sr'; live.setAttribute('role', 'status');
+  const tipped = [...el.children].filter((c) => !c.hasAttribute('data-rk-tip'));
+  tipped.forEach((c) => c.setAttribute('data-rk-tip', 'overflow'));
+  el.append(hint);
+  el.after(live);
+  el.setAttribute('data-rk-copyable', '');
+  if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+  if (!el.hasAttribute('role')) el.setAttribute('role', 'group');
+  if (!el.hasAttribute('aria-label') && !el.hasAttribute('aria-labelledby')) {
+    if (!el.id) el.id = uid('rk-copy');
+    el.setAttribute('aria-labelledby', el.id);
+  }
+  let back = 0;
+  function rest() {
+    clearTimeout(back);
+    hint.textContent = tx('copyHint', keysText('Control+C Meta+C'));
+    delete hint.dataset.status;
+    live.textContent = '';
+  }
+  function refused() {
+    clearTimeout(back);
+    hint.textContent = tx('notCopied');
+    hint.dataset.status = 'error';
+    speak(live, tx('notCopied'));
+    back = setTimeout(rest, ms('--rk-duration-toast'));
+  }
+  rest();
+  const lines = () => [...el.children].filter((c) => c !== hint && !c.hidden).map((c) => c.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
+  async function copy() {
+    try { await navigator.clipboard.writeText(typeof text === 'function' ? text() : text || lines()); }
+    catch { refused(); return; }                                    // no clipboard here: not a secure page, or refused
+    rest();
+    if (toaster) toaster.show(tx('copied'), { key: 'rk-copy', from: el });
+  }
+  const key = (e) => {
+    if (e.defaultPrevented || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'c') return;
+    const sel = getSelection();
+    if (sel && !sel.isCollapsed && sel.containsNode(el, true)) return;
+    e.preventDefault();
+    copy();
+  };
+  el.addEventListener('keydown', key);
+  return {
+    destroy() {
+      clearTimeout(back);
+      el.removeEventListener('keydown', key); hint.remove(); live.remove(); el.removeAttribute('data-rk-copyable');
+      tipped.forEach((c) => c.removeAttribute('data-rk-tip'));
     },
   };
 }

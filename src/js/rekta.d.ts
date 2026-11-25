@@ -393,6 +393,13 @@ export declare function sortable(list: HTMLElement, options?: {
   onMove?: ((from: number, to: number, item: HTMLElement) => void) | null;
 }): Destroyable & { move(item: HTMLElement, to: number): boolean; refresh(): void };
 
+/** A statement block of values to copy: one focus stop, Ctrl/Cmd+C copies it whole as lines (`text`, else the lines it
+ * shows) and the toaster says "copied"; a refusal is said in the block's hint. */
+export declare function copyable(el: HTMLElement, options?: {
+  toaster?: Toaster | null;
+  text?: string | (() => string) | null;
+}): Destroyable;
+
 /** Entries a person may remove: a `data-rk-remove` button, Delete, or a drag towards the trailing edge. `left`: the
  * entry has already gone from sight (a drag), so remove it at once. */
 export declare function removable(list: HTMLElement, options?: {

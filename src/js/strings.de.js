@@ -48,4 +48,7 @@ export const de = {
   keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
   cannotAct: (label, reason) => `${label} (${reason})`,
   back: 'zurück',
+  copied: 'kopiert',
+  notCopied: 'nicht kopiert',
+  copyHint: (keys) => `${keys} kopiert`,
 };

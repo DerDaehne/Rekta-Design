@@ -286,6 +286,11 @@ builds it from views or does without:
 - **The thin scrollbar outside `rk_scroll`:** rekta-core's lists and
   tables (`rk_list`), menus, the panorama and its sections scroll
   without a bar; only `rk_scroll` draws the grip.
+- **A section's clip and the focus ring:** a container that clips its
+  content keeps its children's focus ring whole ([accessibility.md](accessibility.md#focus-on-fills)).
+  rekta-core's panorama sections clip to their box, so the ring of a
+  control flush with a section's edge is cut there until the section
+  leaves the ring's reach free; the web's `.rk-sec` does.
 - **The pointer leaving the window:** no platform layer sends
   `RK_EVENT_POINTER_LEAVE` yet, so a view that draws itself lit under the
   pointer (the scrollbar's grip) stays lit when the pointer leaves the
@@ -304,6 +309,10 @@ builds it from views or does without:
 - **Dragging a row away:** rekta-core's lists take Delete
   (`rk_list_on_remove`), not the drag; its declared lists (`RK_LIST`)
   do not offer the removal yet.
+- **A block to copy** ([typography.md](typography.md#a-block-to-copy)):
+  rekta-core's labels take no focus and no selection, so a statement
+  block cannot be copied yet; its text fields copy what is selected in
+  them.
 - **A family of the product's:** rekta-core draws Barlow, built in.
 - **The inactive title on macOS:** the system draws that title bar's
   buttons; the name does not step back there yet.
