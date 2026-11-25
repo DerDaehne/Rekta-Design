@@ -76,6 +76,37 @@ the web, `rk_window_level()` in rekta-core.
   [behaviour.md](behaviour.md)): the same parts in one line. One form
   per product, never both.
 
+## A lasting state
+
+A state of the whole app or system that lasts (offline, halted,
+paused, read-only, a disk nearly full) is the banner's: one at a time
+across the top, the most severe first, its word also in the app bar
+([navigation.md](navigation.md#app-bar)), its end reported as a toast.
+
+**A state the person knows may be hidden.** Someone offline on purpose
+should not give up the room for as long as that lasts. A product marks,
+per state, which ones the person may hide:
+
+- **A quiet × after the action,** named "hide" (an icon button,
+  [forms.md](forms.md)). Pressed, the banner leaves as it does when its
+  state ends ([motion.md](motion.md)) and gives its room back. The state
+  stays said: its word stays in the app bar, and assistive technology
+  hears politely that it was hidden and where it stays ("offline hidden.
+  The app bar keeps showing it until it ends."). Focus goes back as when
+  any banner goes.
+- **Until it ends.** A hidden state that ends is reported as a toast, as
+  any state that ends; a new start of it shows the banner again.
+- **What has not been hidden still shows.** The banner shows the most
+  severe state that is on and not hidden, so a more severe state that
+  starts takes it, and so does any other state that starts; the app
+  bar's word stays the most severe state that is on.
+- **Never an urgent state.** A halt (the banner's alert) and every state
+  the product does not mark keep the banner until they end: what needs
+  the person now stays in view. In a desktop shell, say, a battery about
+  to run out is urgent; offline and a disk filling up are not.
+- **Only where the word stays.** A product without the app bar's live
+  word has nowhere to keep a hidden state, so it offers no ×.
+
 ## A notification from another program
 
 A product that shows what other programs report (a desktop shell, a

@@ -1269,6 +1269,56 @@ ok((await text(p, '#data-now')) === 'frozen', 'offline freezes the figures');
 await p.click('#remedy'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 5000);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'retry reconnects');
 
+// A state the person knows may be hidden: its quiet × folds it into the app bar's word until it ends.
+const bannerRoom = () => p.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rk-banner-h')) || 0);
+const hider = () => p.evaluate(() => { const b = document.querySelector('#banner .rk-banner-hide'); return !!b && b.checkVisibility(); });
+await p.check('#s-offline'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline' && (await bannerRoom()) > 0);
+const hx = await p.evaluate(() => { const b = document.querySelector('#banner .rk-banner-hide'); return { quiet: b.matches('.rk-btn.rk-btn--icon.rk-btn--quiet') && b.parentElement === document.querySelector('#remedy').parentElement && !b.nextElementSibling, label: b.getAttribute('aria-label'), tip: b.dataset.rkTip }; });
+ok(await hider() && hx.quiet && hx.label === 'hide' && hx.tip === 'hide', 'a hideable state has a quiet × named "hide" after its action', JSON.stringify(hx));
+await p.focus('#banner .rk-banner-hide'); await p.keyboard.press('Enter');
+await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear' && (await bannerRoom()) === 0, 3000);
+const hid = await p.evaluate(() => ({ phase: document.querySelector('#banner').dataset.rkPhase, hidden: site.banner.hidden('offline'), on: site.banner.is('offline'), word: document.querySelector('#live').textContent, state: document.querySelector('#bar').getAttribute('data-rk-state'), said: document.querySelector('#banner [role=status]').textContent, focus: document.activeElement.id }));
+ok(hid.phase === 'clear' && hid.hidden && hid.on, 'the × hides the banner; the state stays on', JSON.stringify(hid));
+ok((await bannerRoom()) === 0, 'a hidden state frees the banner\'s room (--rk-banner-h)', await bannerRoom());
+ok(hid.word === 'offline' && hid.state === 'paused', 'a hidden state keeps its word in the app bar', `${hid.word} ${hid.state}`);
+ok(hid.said === 'offline hidden. The app bar keeps showing it until it ends.', 'hiding is said in the polite region', hid.said);
+ok(hid.focus === 's-offline', 'hidden with focus on its ×, focus goes back to the control that raised the state', hid.focus);
+await p.check('#s-halted'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'halted');
+ok((await text(p, '.rk-banner-word')) === 'halted' && (await text(p, '#live')) === 'halted' && !(await hider()), 'a more severe state shows over a hidden one; a halt has no ×');
+await p.uncheck('#s-halted'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
+ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear' && (await text(p, '#live')) === 'offline', 'when it ends, the hidden state stays hidden in the app bar\'s word');
+await p.check('#s-paused'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused');
+ok((await text(p, '.rk-banner-word')) === 'paused' && (await text(p, '#live')) === 'offline' && !(await hider()), 'a lesser state that starts takes the banner, the app bar keeps the most severe; a state not marked hideable has no ×');
+await p.uncheck('#s-paused'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
+await p.uncheck('#s-offline'); await until(p, async () => (await toast(p)) === 'Connected again. Figures are live.');
+ok((await toast(p)) === 'Connected again. Figures are live.' && (await text(p, '#live')) === 'live', 'a hidden state that ends is reported as a toast', await toast(p));
+await p.check('#s-offline'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline');
+ok((await text(p, '.rk-banner-word')) === 'offline' && await hider() && !(await p.evaluate(() => site.banner.hidden('offline'))), 'a new start of a hidden state shows the banner again');
+const hiddenLine = () => text(p, '#banner [role=status]');
+if (await hider()) await p.click('#banner .rk-banner-hide');
+await until(p, async () => (await hiddenLine()).startsWith('offline hidden'), 3000);
+const lineBefore = await hiddenLine();
+await p.uncheck('#s-offline'); await until(p, async () => (await hiddenLine()) === '', 3000);
+ok(lineBefore.startsWith('offline hidden') && (await hiddenLine()) === '' && (await text(p, '#live')) === 'live', 'once a hidden state ends, its hidden line goes', `${lineBefore} / ${await hiddenLine()}`);
+const urgent = await p.evaluate(() => {
+  const h = document.documentElement.style.getPropertyValue('--rk-banner-h'), word = document.createElement('span');
+  const mount = () => { const el = document.createElement('div'); el.className = 'rk-banner'; el.innerHTML = '<div class="rk-banner-live"><p role="alert"></p><p role="status"></p></div>'; document.querySelector('.rk').prepend(el); return el; };
+  const storage = { word: 'storage', status: 'warning', hideable: true, text: 'The disk is nearly full.' };
+  const r = {};
+  let el = mount(), b = Rekta.banner(el, { liveWord: word, states: { critical: { word: 'battery critical', status: 'error', alert: true, hideable: true, text: 'Plug in now.' } } });
+  b.set('critical', true); r.alert = !el.querySelector('.rk-banner-hide'); b.destroy(); el.remove();
+  el = mount(); b = Rekta.banner(el, { states: { storage } });
+  b.set('storage', true); r.noWord = !el.querySelector('.rk-banner-hide'); b.destroy(); el.remove();
+  el = mount(); b = Rekta.banner(el, { liveWord: word, states: { storage } });
+  b.set('storage', true); const x = el.querySelector('.rk-actions > .rk-banner-hide');
+  r.made = !!x && x.checkVisibility(); b.destroy(); r.gone = !el.querySelector('.rk-actions'); el.remove();
+  document.documentElement.style.setProperty('--rk-banner-h', h);
+  return r;
+});
+ok(urgent.alert, 'an alert cannot be hidden, even marked hideable');
+ok(urgent.noWord, 'without the app bar\'s word to keep it, no state can be hidden');
+ok(urgent.made && urgent.gone, 'a banner without an actions row gets one for its ×; destroy takes both away', JSON.stringify(urgent));
+
 // The toaster for server-side undo and failures; the focus fallback; the banner's real start and a remedy that links.
 const tst = await p.evaluate(async () => {
   const wait = (t) => new Promise((r) => setTimeout(r, t));
