@@ -93,7 +93,9 @@ per state, which ones the person may hide:
   stays said: its word stays in the app bar, and assistive technology
   hears politely that it was hidden and where it stays ("offline hidden.
   The app bar keeps showing it until it ends."). Focus goes back as when
-  any banner goes.
+  any banner goes, also when another state takes the banner. Hiding
+  changes where the state is said, not what it does: a hidden offline or
+  paused state still stops live drawing ([live.md](live.md)).
 - **Until it ends.** A hidden state that ends is reported as a toast, as
   any state that ends; a new start of it shows the banner again.
 - **What has not been hidden still shows.** The banner shows the most
@@ -104,8 +106,13 @@ per state, which ones the person may hide:
   the product does not mark keep the banner until they end: what needs
   the person now stays in view. In a desktop shell, say, a battery about
   to run out is urgent; offline and a disk filling up are not.
-- **Only where the word stays.** A product without the app bar's live
-  word has nowhere to keep a hidden state, so it offers no ×.
+- **Only while the app bar says its word.** A state can be hidden only
+  while the app bar says its word; a product whose bar says several
+  states may let each of them be hidden. With one word, the most severe
+  state that is on, only that state offers its ×; a lesser state that
+  takes the banner under a hidden one offers it once its word is the
+  bar's. A product without the app bar's live word has nowhere to keep
+  a hidden state, so it offers no ×.
 
 ## A notification from another program
 

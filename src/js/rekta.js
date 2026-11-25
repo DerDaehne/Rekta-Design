@@ -1697,7 +1697,7 @@ export function toaster(region) {
 // glides to its new height; an ending state is an event, so the toaster says so once the banner has gone. Both live
 // regions stay mounted. The app bar follows with data-rk-state (halted for error, paused for warning). A hideable state
 // the person already knows folds into the app bar's word on a quiet × until it ends: the banner shows the most severe
-// state that is on and not hidden, the app bar the most severe that is on.
+// state that is on and not hidden, the app bar the most severe that is on, and only that one may be hidden.
 export function banner(el, { states, order = Object.keys(states), appbar = null, liveWord = null, toaster: toasts = null, onAction = null } = {}) {
   states = { ...states };                                               // the banner's own copy: update() writes to it
   const alertRegion = el.querySelector('[role=alert]'), statusRegion = el.querySelector('[role=status]');
@@ -1708,6 +1708,8 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
   if (!el.hasAttribute('data-rk-phase') && !el.querySelector('.rk-banner-word')) el.setAttribute('data-rk-phase', 'clear');
   // Only where the app bar's word keeps saying it, and never an alert (a halt).
   const canHide = (n) => !!liveWord && !!states[n].hideable && !states[n].alert;
+  const topOn = () => order.find((n) => on[n]) || null;
+  const labelOf = (s) => (s.action && typeof s.action === 'object' ? s.action.label : s.action);
   let hider = null, madeRow = null;
   if (order.some(canHide)) {
     const row = el.querySelector('.rk-actions') || (madeRow = el.appendChild(Object.assign(document.createElement('p'), { className: 'rk-actions' })));
@@ -1749,18 +1751,14 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
     if (s.status) el.dataset.status = s.status; else delete el.dataset.status;
     el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
     write(name);
-    const label = s.action && typeof s.action === 'object' ? s.action.label : s.action, href = s.action && s.action.href;
+    const label = labelOf(s), href = s.action && s.action.href;
     if (remedy) {
       if (href && !remedyLink) { remedyLink = document.createElement('a'); remedyLink.className = remedy.className; remedy.after(remedyLink); }
       if (remedyLink) { remedyLink.hidden = !href; if (href) { remedyLink.href = href; remedyLink.textContent = label; } }
       remedy.hidden = !!href; remedy.textContent = href ? '' : label || '';
       remedy.parentElement.hidden = !label; remedy.removeAttribute('aria-disabled');
     }
-    if (hider) {
-      hider.hidden = !canHide(name);
-      hider.setAttribute('aria-label', tx('hide')); hider.setAttribute('data-rk-tip', tx('hide'));
-      hider.parentElement.hidden = !label && hider.hidden;
-    }
+    offer();
     // A change of kind, or a state that returns while the banner leaves, glides to its new height.
     const h1 = el.getBoundingClientRect().height, d = ms('--rk-duration-short');
     if (standing && d && Math.abs(h1 - h0) >= 1) el.animate([{ height: `${h0}px` }, { height: `${h1}px` }], { duration: d, easing: css('--rk-ease-in') });
@@ -1775,8 +1773,22 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
       if (then) then();
     }, ms('--rk-duration-short'));
   }
+  // The × only on the state whose word the app bar says: hidden, it stays said there.
+  function offer() {
+    if (!hider || !shown) return;
+    hider.hidden = shown !== topOn() || !canHide(shown);
+    hider.setAttribute('aria-label', tx('hide')); hider.setAttribute('data-rk-tip', tx('hide'));
+    hider.parentElement.hidden = !labelOf(states[shown]) && hider.hidden;
+  }
+  // A control of the standing banner that goes from under the focus (the × once another state takes the banner) sends
+  // focus back as the banner's going does.
   function sync(changed, from) {
-    const top = order.find((n) => on[n]) || null, name = order.find((n) => on[n] && !hidden[n]) || null;
+    const focused = el.contains(document.activeElement) ? document.activeElement : null;
+    paint(changed, from); offer();
+    if (focused && shown && !focused.getClientRects().length) returnFocus(setBy);
+  }
+  function paint(changed, from) {
+    const top = topOn(), name = order.find((n) => on[n] && !hidden[n]) || null;
     if (appbar) {
       const status = top && states[top].status;
       if (status === 'error') appbar.setAttribute('data-rk-state', 'halted');
@@ -1804,7 +1816,7 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
   }
   const act = () => { if (shown && remedy.getAttribute('aria-disabled') !== 'true') (onAction ? onAction(shown) : set(shown, false)); };
   if (remedy) remedy.addEventListener('click', act);
-  const hide = () => { if (shown && canHide(shown)) { hidden[shown] = true; sync(null, null); } };
+  const hide = () => { if (shown && shown === topOn() && canHide(shown)) { hidden[shown] = true; sync(null, null); } };
   if (hider) hider.addEventListener('click', hide);
   // A state that is on gets a new sentence (a figure that changes): it is written in place, not announced again, and
   // its start stays.

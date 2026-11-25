@@ -228,8 +228,8 @@ implementation needs the same:
 - **Toast and banner**: one toast at a time, the undo window held while
   hovered or focused; one banner at a time, the most severe state first,
   its end reported as a toast; a state the product marks hideable folds
-  into the app bar's word on a quiet × until it ends, never a halt
-  ([states.md](states.md#a-lasting-state)).
+  into the app bar's word on a quiet × until it ends, only while the bar
+  says its word and never a halt ([states.md](states.md#a-lasting-state)).
 - **Desktop patterns**: a place called up (a launcher) turns at half the
   pace; a month to look at; the display step; an icon per menu item.
   rekta-core has these (`rk_controller_set_called`, `rk_month`,

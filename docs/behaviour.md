@@ -290,8 +290,9 @@ its broken-picture sign there ([collections.md](collections.md#a-picture-in-a-ro
 and marks the first paint as an arrival. Returns `{ destroy }`.
 
 **Where focus goes back.** A toast or the banner that goes while it has
-focus (its state ended, or the person hid it) returns focus to the
-control that raised it. When that control
+focus (its state ended, or the person hid it), or a control of a banner
+that stays and goes from under the focus (the × once another state
+takes the banner), returns focus to the control that raised the state. When that control
 is gone (or hidden), focus goes to the first of these that exists and
 shows:
 
@@ -787,7 +788,7 @@ sentence share a line and the action goes under them, about 105px on a
   link (`a.rk-btn`, with the same classes as the markup's button) that
   navigates (sign in → `/login`) instead of calling `onAction`.
 - `order`: most severe first. One banner at a time; the most severe
-  state that is on holds it.
+  state that is on and not hidden holds it.
 - `appbar` gets `data-rk-state`; `liveWord` gets the state's word.
 - A state that ends is an event: `toaster` reports it once the banner
   has gone.
@@ -803,13 +804,17 @@ sentence share a line and the action goes under them, about 105px on a
   with the `hide` string. Pressed, the banner leaves as when its state
   ends, `--rk-banner-h` goes to 0, the app bar keeps the state's word and
   `data-rk-state`, and the `[role=status]` region says `bannerHidden`.
-  Focus goes back as below. The state stays on (`is(name)`) and hidden
-  (`hidden(name)`) until it ends: `set(name, false)` reports its end as a
-  toast, and the next `set(name, true)` shows the banner again. The
-  banner shows the most severe state that is on and not hidden; the
-  app bar's word, the most severe that is on. An `alert` state is never
-  hidden, and without `liveWord` no state is: the word is where a hidden
-  state stays said.
+  Focus goes back as below, also when another state takes the banner
+  and the × goes from under the focus. The state stays on (`is(name)`,
+  so it still stops live drawing) and hidden (`hidden(name)`) until it
+  ends: `set(name, false)` reports its end as a toast, and the next
+  `set(name, true)` shows the banner again. The banner shows the most
+  severe state that is on and not hidden; the app bar's word, the most
+  severe that is on. A state can be hidden only while the app bar says
+  its word: `liveWord` says one, so the × shows only on the most severe
+  state that is on, and a lesser state that takes the banner under a
+  hidden one gets its × once its word is the app bar's. An `alert`
+  state is never hidden, and without `liveWord` no state is.
 
 Returns `{ set(name, on, { from, since, text }), update(name, text), toggle(name), is(name), hidden(name), shown, destroy }`.
 

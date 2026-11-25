@@ -162,6 +162,9 @@ dots' fade in.
   announcement says where the state stays. A new start of the state
   shows the banner again, and so does any state not hidden that starts
   (the banner shows the most severe state that is on and not hidden).
+  A state can be hidden only while the app bar says its word (with one
+  word, only the most severe state that is on), and hidden it still
+  does what it did (a hidden offline state still stops live drawing).
   A halt is never hidden, nor any state the product does not mark, and
   no state where there is no app-bar word to keep it. On the web:
   `banner()` states take `hideable: true`; the handle gains

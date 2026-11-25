@@ -1283,6 +1283,10 @@ ok((await bannerRoom()) === 0, 'a hidden state frees the banner\'s room (--rk-ba
 ok(hid.word === 'offline' && hid.state === 'paused', 'a hidden state keeps its word in the app bar', `${hid.word} ${hid.state}`);
 ok(hid.said === 'offline hidden. The app bar keeps showing it until it ends.', 'hiding is said in the polite region', hid.said);
 ok(hid.focus === 's-offline', 'hidden with focus on its ×, focus goes back to the control that raised the state', hid.focus);
+ok((await text(p, '#data-now')) === 'frozen', 'a hidden offline state still stops live drawing', await text(p, '#data-now'));
+// The switch follows is(): a script that let a hidden state read as off would leave it unchanged, and Playwright would
+// throw; the assertions below say what went wrong instead.
+const flip = (sel, want) => (want ? p.check(sel) : p.uncheck(sel)).catch(() => {});
 await p.check('#s-halted'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'halted');
 ok((await text(p, '.rk-banner-word')) === 'halted' && (await text(p, '#live')) === 'halted' && !(await hider()), 'a more severe state shows over a hidden one; a halt has no ×');
 await p.uncheck('#s-halted'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
@@ -1290,15 +1294,15 @@ ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear' && (await text
 await p.check('#s-paused'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused');
 ok((await text(p, '.rk-banner-word')) === 'paused' && (await text(p, '#live')) === 'offline' && !(await hider()), 'a lesser state that starts takes the banner, the app bar keeps the most severe; a state not marked hideable has no ×');
 await p.uncheck('#s-paused'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
-await p.uncheck('#s-offline'); await until(p, async () => (await toast(p)) === 'Connected again. Figures are live.');
+await flip('#s-offline', false); await until(p, async () => (await toast(p)) === 'Connected again. Figures are live.');
 ok((await toast(p)) === 'Connected again. Figures are live.' && (await text(p, '#live')) === 'live', 'a hidden state that ends is reported as a toast', await toast(p));
-await p.check('#s-offline'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline');
+await flip('#s-offline', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline');
 ok((await text(p, '.rk-banner-word')) === 'offline' && await hider() && !(await p.evaluate(() => site.banner.hidden('offline'))), 'a new start of a hidden state shows the banner again');
 const hiddenLine = () => text(p, '#banner [role=status]');
 if (await hider()) await p.click('#banner .rk-banner-hide');
 await until(p, async () => (await hiddenLine()).startsWith('offline hidden'), 3000);
 const lineBefore = await hiddenLine();
-await p.uncheck('#s-offline'); await until(p, async () => (await hiddenLine()) === '', 3000);
+await flip('#s-offline', false); await until(p, async () => (await hiddenLine()) === '', 3000);
 ok(lineBefore.startsWith('offline hidden') && (await hiddenLine()) === '' && (await text(p, '#live')) === 'live', 'once a hidden state ends, its hidden line goes', `${lineBefore} / ${await hiddenLine()}`);
 const urgent = await p.evaluate(() => {
   const h = document.documentElement.style.getPropertyValue('--rk-banner-h'), word = document.createElement('span');
@@ -1318,6 +1322,34 @@ const urgent = await p.evaluate(() => {
 ok(urgent.alert, 'an alert cannot be hidden, even marked hideable');
 ok(urgent.noWord, 'without the app bar\'s word to keep it, no state can be hidden');
 ok(urgent.made && urgent.gone, 'a banner without an actions row gets one for its ×; destroy takes both away', JSON.stringify(urgent));
+await flip('#s-paused', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused');
+await flip('#s-offline', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline');
+if (await hider()) { await p.focus('#banner .rk-banner-hide'); await p.keyboard.press('Enter'); }
+await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused', 3000);
+const keptFocus = await p.evaluate(() => { const a = document.activeElement; return a !== document.body && a.checkVisibility() ? a.id || a.className : 'lost'; });
+ok(keptFocus === 's-offline', 'hiding a state while a lesser one takes the banner sends focus back to the control that raised it', keptFocus);
+await flip('#s-offline', false); await flip('#s-paused', false); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
+const twoHidden = await p.evaluate(async () => {
+  const w = (t) => new Promise((r) => setTimeout(r, t)), h = document.documentElement.style.getPropertyValue('--rk-banner-h');
+  const word = document.createElement('span'), el = document.createElement('div');
+  el.className = 'rk-banner'; el.innerHTML = '<div class="rk-banner-live"><p role="alert"></p><p role="status"></p></div>'; document.querySelector('.rk').prepend(el);
+  const b = Rekta.banner(el, { liveWord: word, states: {
+    offline: { word: 'offline', status: 'warning', hideable: true, text: 'No connection.' },
+    storage: { word: 'storage', status: 'warning', hideable: true, text: 'The disk is nearly full.' } } });
+  b.set('offline', true); b.set('storage', true); await w(400);
+  const offered = () => { const x = el.querySelector('.rk-banner-hide'); return !!x && x.checkVisibility(); };
+  const hide = async () => { if (offered()) { el.querySelector('.rk-banner-hide').click(); await w(600); } };
+  await hide();
+  const r = { shown: b.shown, offeredUnder: offered() };
+  await hide();
+  Object.assign(r, { word: word.textContent, said: el.querySelector('[role=status]').textContent, storageHidden: b.hidden('storage') });
+  b.set('offline', false); await w(100);
+  Object.assign(r, { offeredOnTop: offered(), wordAfter: word.textContent });
+  b.destroy(); el.remove(); document.documentElement.style.setProperty('--rk-banner-h', h);
+  return r;
+});
+ok(twoHidden.shown === 'storage' && !twoHidden.offeredUnder && !twoHidden.storageHidden && twoHidden.word === 'offline', 'a state is hidden only into the word the app bar shows: no × under a hidden state\'s word', JSON.stringify(twoHidden));
+ok(twoHidden.offeredOnTop && twoHidden.wordAfter === 'storage', 'once its word is the app bar\'s, the state in the banner offers its ×', JSON.stringify(twoHidden));
 
 // The toaster for server-side undo and failures; the focus fallback; the banner's real start and a remedy that links.
 const tst = await p.evaluate(async () => {
