@@ -219,6 +219,8 @@ export interface BannerState {
   until?: string;
   on?: string;
   off?: string;
+  /** The person may hide it with a quiet × until it ends (never an alert; only with `liveWord`). */
+  hideable?: boolean;
 }
 export declare function banner(el: HTMLElement, options: {
   states: Record<string, BannerState>;
@@ -234,6 +236,8 @@ export declare function banner(el: HTMLElement, options: {
   update(name: string, text: string): void;
   toggle(name: string, options?: { from?: HTMLElement | null; since?: Date | string | number | false | null }): void;
   is(name: string): boolean;
+  /** The person hid this state; it shows again once it ends and starts anew. */
+  hidden(name: string): boolean;
   readonly shown: string | null;
 };
 

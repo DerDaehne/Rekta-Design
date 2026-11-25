@@ -116,6 +116,9 @@ drag area.
   takes over only when asked, never under someone mid-task.
 - **Offline says so:** the banner's offline state, and live regions turn
   offline (see [live.md](live.md)); what the app saved keeps working.
+  Someone offline on purpose may hide the banner: it folds into the app
+  bar's word until the connection is back
+  ([states.md](states.md#a-lasting-state)).
 - **Install** stays the browser's offer: the app keeps the prompt and
   offers it on its own button; where the browser does not offer it, the
   button says why.
