@@ -390,11 +390,12 @@ export declare function sortable(list: HTMLElement, options?: {
 }): Destroyable & { move(item: HTMLElement, to: number): boolean; refresh(): void };
 
 /** Entries a person may remove: a `data-rk-remove` button, Delete, or a drag towards the trailing edge. `left`: the
- * entry has already gone from sight (a drag), so remove it at once. */
+ * entry has already gone from sight (a drag), so remove it at once. When no entry is left, focus goes to the control
+ * before the list, else to the place's focus fallback; `focusBefore()` does that for a control that empties the list. */
 export declare function removable(list: HTMLElement, options?: {
   items?: string;
   onRemove?: (item: HTMLElement, how: { left: boolean }) => void;
-}): Destroyable & { remove(item: HTMLElement): void };
+}): Destroyable & { remove(item: HTMLElement): void; focusBefore(): void };
 
 export declare function virtual(el: HTMLElement, options: {
   count?: number;

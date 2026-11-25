@@ -15,6 +15,13 @@ dots' fade in.
 
 ### Changed
 
+- **Focus when the last entry goes** (collections.md, live.md,
+  behaviour.md): when no entry of a removable list is left, focus moves
+  to the control before the list in the focus order, else to the
+  place's focus fallback. `removable()` does it for Delete, the row's
+  button and a drag, and gains `focusBefore()` for a control that
+  empties the list and hides with it ("dismiss all"). rekta-core does
+  not yet (platforms.md).
 - **Warm neutrals** (colour.md): the seven neutral tokens of each theme
   carry one warm cast, a yellow-red hue at a chroma of at most 0.021,
   below the 0.05 under which Rekta counts a colour as grey. Light:

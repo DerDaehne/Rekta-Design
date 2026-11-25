@@ -299,6 +299,11 @@ shows:
 4. the page's `h1` (in `main` first);
 5. `main`.
 
+The same chain serves a list whose last entry goes while it has focus,
+and a control that empties the list and hides with it ("dismiss all"):
+focus goes to the control before the list in the focus order, outside
+it, and when there is none, to the chain above.
+
 An app with a framework router renders no `.rk-place`: it marks its
 page heading with `data-rk-focus-fallback`, or relies on its `h1`. An
 element that cannot take focus gets `tabindex="-1"`.
@@ -390,7 +395,7 @@ its `aria-label`, else a table row's `th`, else its text; a tile's
 status word is left out.
 | `split()` handle | ← → (Shift: four steps), Home End |
 | `sortable()` | Space/Enter picks up and puts down, ↑ ↓ move, Escape puts back; Alt+↑ ↓ moves at once |
-| `removable()` | Delete or Backspace on an entry (not in a text field, no modifier) removes it; focus moves to the next |
+| `removable()` | Delete or Backspace on an entry (not in a text field, no modifier) removes it; focus moves to the next, and with none left to the control before the list, else to the focus fallback |
 | `inPlace()` | Escape, ← (not in a text field, a slider, a tree or a tab list) go back one level; Escape here comes before the sheet's |
 | `chart()` | ← → Home End |
 
@@ -1159,6 +1164,9 @@ ways call it:
 - a button marked `data-rk-remove` inside the entry;
 - Delete or Backspace on the entry focus is in (not in a text field),
   after which focus moves to the next entry, or the one before at the end;
+  when none is left, to the control before the list in the focus order
+  (the last focusable element before it, outside it, shown), else to the
+  focus fallback (see above);
 - a drag towards the trailing edge: the entry follows the pointer, and
   let go past half its width it leaves that way, with a fade over
   0.6 × `duration-short`; `left` is then true, and the entry, already out
@@ -1167,7 +1175,12 @@ ways call it:
   the entry, and on touch never within `space-l` of the window's edges;
   the click that ends it is cancelled.
 
-The list gets `data-rk-removable`. Returns `{ remove(item), destroy }`.
+The same holds when the button or a drag removes the entry that has
+focus. `focusBefore()` does the same for a control that empties the
+list and hides with it (a "dismiss all" button): call it when the
+control has focus and goes.
+
+The list gets `data-rk-removable`. Returns `{ remove(item), focusBefore(), destroy }`.
 
 ### `virtual(el, { count, render, text, onShow, onChange, appbar, label })`
 

@@ -214,6 +214,13 @@ function returnFocus(from) {
   if (!t.hasAttribute('tabindex') && !t.matches('a[href], button, input, select, textarea, summary')) t.setAttribute('tabindex', '-1');
   t.focus();
 }
+// The control before `el` in document order, outside it: where focus goes when the last of a list's entries goes.
+function controlBefore(el) {
+  const shown = (c) => c.getClientRects().length && !c.closest('[hidden], [inert]');
+  const focusable = 'a[href], button:not(:disabled), input:not([type=hidden]):not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"])';
+  return [...document.querySelectorAll(focusable)]
+    .filter((c) => !el.contains(c) && !c.contains(el) && el.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_PRECEDING && shown(c)).pop() || null;
+}
 function focusHeading(scope) {
   const h = scope && scope.querySelector('.rk-title, .rk-group, h1, h2, h3');
   if (!h) return null;
@@ -3509,7 +3516,8 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
 // removable(list, { items, onRemove }): entries a person may remove, each removal reversible (docs/collections.md).
 // Three ways, all calling onRemove(item, { left }): a button marked data-rk-remove inside the entry; Delete (or ⌫,
 // outside a text field) on the entry focus is in, after which focus moves to the next entry, or the one before at the
-// end; and dragging the entry towards its trailing edge, a shortcut beside the other two. Dragged, the entry follows
+// end; when none is left, to the control before the list, else to the place's focus fallback (focusBefore(), which a
+// control that empties the list, such as "dismiss all", calls itself); and dragging the entry towards its trailing edge, a shortcut beside the other two. Dragged, the entry follows
 // the pointer sideways; let go past half its width it leaves that way (left: true: it has gone from sight, so remove it
 // at once, with no leave() of its own), else it glides back. A drag starts only sideways and never from the window's
 // edges, where a phone's back gesture begins; a click that ends one is cancelled, so dragging never activates.
@@ -3522,8 +3530,11 @@ export function removable(list, { items = ':scope > li, :scope > tr', onRemove =
     const all = entries(), i = all.indexOf(item), next = all[i + 1] || all[i - 1] || null;
     const hadFocus = item.contains(document.activeElement);
     onRemove(item, { left });
-    if (hadFocus && next && next.isConnected) { const f = focusable(next); if (f.tabIndex < 0 && !f.hasAttribute('tabindex')) f.tabIndex = -1; f.focus(); }
+    if (!hadFocus) return;
+    if (!next || !next.isConnected) { focusBefore(); return; }
+    const f = focusable(next); if (f.tabIndex < 0 && !f.hasAttribute('tabindex')) f.tabIndex = -1; f.focus();
   }
+  const focusBefore = () => returnFocus(controlBefore(list));
   const click = (e) => {
     const b = e.target.closest && e.target.closest('[data-rk-remove]'), item = b && entryOf(b);
     if (item) { e.preventDefault(); remove(item, false); }
@@ -3582,6 +3593,7 @@ export function removable(list, { items = ':scope > li, :scope > tr', onRemove =
   list.addEventListener('click', stopClick, true);
   return {
     remove: (item) => remove(item, false),
+    focusBefore,
     destroy() {
       list.removeAttribute('data-rk-removable');
       list.removeEventListener('click', click); list.removeEventListener('keydown', key);

@@ -2229,6 +2229,45 @@ ok(Math.round(followed) === 60 && short.removed === 2 && short.there && short.x 
 await dragRow('#t-r-d', 200);
 ok(await until(sp, async () => (await sp.evaluate(() => window.tRemoved.join())) === 'b:false,a:false,d:true'), 'dragged past half its width, it leaves that way and is removed', await sp.evaluate(() => window.tRemoved.join()));
 await sp.evaluate(() => document.querySelector('#t-rem').remove());
+// When no entry is left, focus goes to the control before the list, else to the focus fallback: Delete, the row's
+// button, a swipe, and a "dismiss all" that hides itself with the list.
+const lastGone = async (how) => {
+  await sp.evaluate(() => {
+    const box = document.createElement('div'); box.id = 't-last'; box.style.cssText = 'position:fixed;left:200px;top:200px;width:300px;background:var(--rk-bg);z-index:5';
+    box.innerHTML = '<button id="t-l-pre" class="rk-btn" type="button">before</button><ul class="rk-rows" id="t-l-list" style="margin:0"><li id="t-l-a" tabindex="0"><span>a</span><button class="rk-btn rk-btn--icon rk-btn--quiet" type="button" data-rk-remove aria-label="dismiss">×</button></li></ul><button id="t-l-all" class="rk-btn" type="button">dismiss all</button><button id="t-l-post" class="rk-btn" type="button">after</button>';
+    document.body.append(box);
+    const handle = Rekta.removable(box.querySelector('ul'), { onRemove: (li) => li.remove() });
+    box.querySelector('#t-l-all').addEventListener('click', (e) => { const had = document.activeElement === e.currentTarget; box.querySelector('li').remove(); e.currentTarget.hidden = true; if (had) handle.focusBefore(); });
+  });
+  if (how === 'delete') { await sp.focus('#t-l-a'); await sp.keyboard.press('Delete'); }
+  if (how === 'button') { await sp.focus('#t-l-a [data-rk-remove]'); await sp.keyboard.press('Enter'); }
+  if (how === 'swipe') await dragRow('#t-l-a', 280);
+  if (how === 'all') { await sp.focus('#t-l-all'); await sp.keyboard.press('Enter'); }
+  await sp.waitForTimeout(400);
+  const at = await sp.evaluate(() => document.activeElement.id);
+  await sp.evaluate(() => document.querySelector('#t-last').remove());
+  return at;
+};
+for (const how of ['delete', 'button', 'swipe', 'all']) {
+  const at = await lastGone(how);
+  ok(at === 't-l-pre', `the last entry gone by ${how === 'all' ? '"dismiss all" by keyboard' : how}: focus goes to the control before the list`, at);
+}
+const fallback = await sp.evaluate(async () => {
+  const keep = [...document.body.children];
+  const hidden = keep.map((e) => [e, e.hidden]); keep.forEach((e) => { e.hidden = true; });
+  const ul = document.createElement('ul'); ul.className = 'rk-rows'; ul.id = 't-f-list';
+  ul.innerHTML = '<li id="t-f-a" tabindex="0"><span>a</span></li>';
+  const fb = document.createElement('h2'); fb.id = 't-f-fb'; fb.textContent = 'fallback'; fb.setAttribute('data-rk-focus-fallback', '');
+  document.body.prepend(ul); document.body.append(fb);
+  Rekta.removable(ul, { onRemove: (li) => li.remove() });
+  document.querySelector('#t-f-a').focus();
+  const was = document.activeElement.id;
+  document.querySelector('#t-f-a').dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+  const now = document.activeElement.id;
+  ul.remove(); fb.remove(); hidden.forEach(([e, h]) => { e.hidden = h; });
+  return { was, now };
+});
+ok(fallback.was === 't-f-a' && fallback.now === 't-f-fb', 'with nothing focusable before the list, focus goes to the place\'s focus fallback', JSON.stringify(fallback));
 // A launch tile: icon at the top leading corner, the count at the trailing one, the name at the foot; peek only when wide.
 const launch = await sp.evaluate(() => {
   const g = document.createElement('div'); g.className = 'rk-tiles'; g.style.cssText = 'width:700px';
@@ -2422,6 +2461,12 @@ const sy = await open();
   ok(await until(sy, () => sy.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase]) .rk-toast-msg'); return document.querySelectorAll('#centre > li').length === 4 && !!t && /Dismissed/.test(t.textContent); })), 'dismiss removes it, and a toast offers undo');
   await sy.click('.rk-toast:not([data-rk-phase]) .rk-toast-act'); await sy.waitForTimeout(700);
   ok(await sy.evaluate(() => document.querySelectorAll('#centre > li').length === 5 && document.querySelector('#centre > li b').textContent === 'Backup'), 'undo puts it back where it was');
+  await sy.focus('#centre-all'); await sy.keyboard.press('Enter');
+  ok(await until(sy, () => sy.evaluate(() => document.querySelectorAll('#centre > li').length === 0)), 'dismiss all removes every notification');
+  const lost = await sy.evaluate(() => { const a = document.activeElement, c = document.querySelector('#centre'); return { tag: a.tagName, inList: c.contains(a), hiddenAll: document.querySelector('#centre-all').hidden, after: !!(c.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING) }; });
+  ok(lost.hiddenAll && lost.tag !== 'BODY' && !lost.inList && !lost.after, 'dismiss all by keyboard hides itself with the list, and focus goes to the control before the list, not to the page', JSON.stringify(lost));
+  await sy.click('.rk-toast:not([data-rk-phase]) .rk-toast-act'); await sy.waitForTimeout(700);
+  ok(await sy.evaluate(() => document.querySelectorAll('#centre > li').length === 5), 'undo of dismiss all brings the notifications back');
   // A picture in a row (docs/collections.md): a square at the density's row height, cropped about its centre, square
   // corners, the rows' hairline inside its edge, the words space-m after it and centred on it; the surface while it
   // loads and when it cannot be shown; hidden from assistive technology, the words name the row.

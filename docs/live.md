@@ -103,7 +103,10 @@ notification protocol.
   a row may also be dragged away towards its trailing edge
   ([collections.md](collections.md#removing-entries)). Every removal is
   followed by the undo toast. "dismiss all" is a quiet button at the end
-  of the list, and its toast undoes it too.
+  of the list, and its toast undoes it too. When the list is empty and
+  the button hides with it, focus moves to the control before the list,
+  else to the place's focus fallback ([behaviour.md](behaviour.md), "Where focus goes back"),
+  as after the last entry's removal ([collections.md](collections.md#removing-entries)).
 - **Empty:** the empty state, said plainly ("No notifications.").
 
 How a product merges bursts, which screen shows the toast, and what it
