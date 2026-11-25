@@ -1351,6 +1351,13 @@ const twoHidden = await p.evaluate(async () => {
 });
 ok(twoHidden.shown === 'storage' && !twoHidden.offeredUnder && !twoHidden.storageHidden && twoHidden.word === 'offline', 'a state is hidden only into the word the app bar shows: no × under a hidden state\'s word', JSON.stringify(twoHidden));
 ok(twoHidden.offeredOnTop && twoHidden.wordAfter === 'storage', 'once its word is the app bar\'s, the state in the banner offers its ×', JSON.stringify(twoHidden));
+await flip('#s-readonly', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'read-only');
+await flip('#s-offline', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline');
+await p.focus('#remedy'); await p.keyboard.press('Enter');
+await until(p, async () => (await text(p, '.rk-banner-word')) === 'read-only', 3000);
+const afterRemedy = await p.evaluate(() => { const a = document.activeElement; return a !== document.body && a.checkVisibility() ? a.id || a.className : 'lost'; });
+ok(afterRemedy === 's-offline', 'a remedy that goes while the banner stays sends focus back to the control that raised the state', afterRemedy);
+await flip('#s-readonly', false); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
 
 // The toaster for server-side undo and failures; the focus fallback; the banner's real start and a remedy that links.
 const tst = await p.evaluate(async () => {
