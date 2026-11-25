@@ -790,7 +790,6 @@ ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s
   const left = await c.evaluate(async () => ({ toast: !!document.querySelector('.rk-toast'), clip: await navigator.clipboard.readText() }));
   ok(!left.toast && !left.clip.includes('\n'), 'a selection in the block is the browser\'s to copy: no whole block, no toast', JSON.stringify(left));
   await c.evaluate(() => getSelection().removeAllRanges());
-  // A: after "a selection in the block is the browser's to copy" and its removeAllRanges(), before the first plain Ctrl+C.
   await c.evaluate(() => navigator.clipboard.writeText('before'));
   await c.focus('#about-block'); await c.keyboard.press('Control+a');
   const all = await c.evaluate(() => { const s = getSelection(), b = document.querySelector('#about-block'); return document.activeElement === b && s.containsNode(b, true) && !b.contains(s.anchorNode); });
@@ -802,13 +801,19 @@ ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s
   ok(await until(c, async () => (await toast(c)) === 'copied'), 'Ctrl+C on it: the toast says "copied"', await toast(c));
   const copied = await c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`);
   ok(copied, 'it copies its lines, the hint left out');
-  // B: after "it copies its lines, the hint left out".
   await c.evaluate(() => navigator.clipboard.writeText('before'));
   const elsewhere = await c.evaluate(() => { const b = document.querySelector('#about-block'); getSelection().selectAllChildren(b.previousElementSibling); b.focus(); return !getSelection().isCollapsed; });
   await c.keyboard.press('Control+c');
   const whole = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`));
   ok(elsewhere && whole, 'a selection elsewhere on the page: Ctrl+C on the block still copies it whole', `${elsewhere} ${whole}`);
   await c.evaluate(() => getSelection().removeAllRanges());
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  await c.click('#about-version');
+  const caret = await c.evaluate(() => { const s = getSelection(), b = document.querySelector('#about-block'); return document.activeElement === b && s.rangeCount > 0 && s.isCollapsed && b.contains(s.anchorNode); });
+  await c.keyboard.press('Control+c');
+  const pressed = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`));
+  await c.evaluate(() => getSelection().removeAllRanges());
+  ok(caret && pressed, 'a press in the block leaves a caret there: Ctrl+C still copies the block whole', `${caret} ${pressed}`);
   // A refusal is said at the block (states.md): the hint turns into it in a field error's tone, a live region says it,
   // no toast; a copy after it brings the hint back at once. It stands for timing.toast: measured in the page with the
   // token shortened, so a level's or a written-out time would miss it, then the hint comes back quiet. Each change is
@@ -869,7 +874,6 @@ ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s
     return out;
   });
   ok(ownCopied && gone, 'a product\'s own lines are copied; destroy() takes hint, tips and attribute away', `${ownCopied} ${gone}`);
-  // C: after the destroy() check.
   const lives = await c.evaluate(() => document.querySelectorAll('.rk-sr[role=status]').length);
   await c.evaluate(async () => {
     const b = document.createElement('div'); b.className = 'rk-statement'; b.id = 'copy-gone'; b.innerHTML = '<p>2.3.0</p>';
