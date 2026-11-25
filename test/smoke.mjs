@@ -175,6 +175,65 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
 
 const p = await open();
 ok(await p.evaluate(() => getComputedStyle(document.querySelector('#pan')).display === 'flex'), 'desktop panorama is sideways');
+
+// A section clips what runs past its sides, so the focus ring of a child flush with its edge stays whole (accessibility.md).
+{
+  const probe = () => {
+    const sec = document.createElement('section'); sec.className = 'rk-sec'; sec.id = 't-ring';
+    sec.innerHTML = '<button class="rk-btn" type="button">a</button><input class="rk-input" aria-label="b"><a class="rk-tile" href="#x" style="display:block;height:80px">c</a>'
+      + '<a href="#y" class="rk-link">d</a><div class="rk-copy" tabindex="0">e</div><div class="rk-errors" tabindex="0">f</div>'
+      + '<svg class="rk-chart-svg" tabindex="0" width="100" height="40"></svg>';
+    document.querySelector('#pan').prepend(sec);
+    const clip = sec.getBoundingClientRect(), kinds = [];
+    for (const el of sec.children) {
+      el.focus({ focusVisible: true });
+      const s = getComputedStyle(el), reach = (parseFloat(s.outlineOffset) || 0) + (parseFloat(s.outlineWidth) || 0), r = el.getBoundingClientRect();
+      kinds.push({ kind: el.getAttribute('class') || el.tagName, ring: s.outlineStyle === 'none' ? null : Math.round((r.left - Math.max(reach, 0)) * 100) / 100, clip: clip.left, display: getComputedStyle(sec).overflowX });
+    }
+    sec.remove();
+    return kinds;
+  };
+  for (const [name, opts] of [['light', {}], ['dark', { colorScheme: 'dark' }], ['forced colours', { forcedColors: 'active' }], ['phone', { viewport: { width: 390, height: 800 } }]]) {
+    const c = await open(opts);
+    await c.keyboard.press('Tab');
+    for (const k of await c.evaluate(probe)) ok(k.display === 'visible' || k.ring === null || k.ring >= k.clip - 0.01, `${name}: the focus ring of a flush ${k.kind} is not clipped by its section`, JSON.stringify(k));
+    await c.close();
+  }
+}
+// A jump puts a section's content where the first section's stands, in line with the strip.
+{
+  const c = await open();
+  const off = await c.evaluate(async () => {
+    const pan = document.querySelector('#pan'), sec = document.querySelector('#roots');
+    window.site.home.goTo('roots', { focus: false, instant: true });
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return sec.getBoundingClientRect().left + parseFloat(getComputedStyle(sec).paddingLeft) - pan.getBoundingClientRect().left - parseFloat(getComputedStyle(pan).paddingLeft);
+  });
+  ok(Math.abs(off) <= 0.5, 'a jump puts a section\'s content in line with the strip', off);
+  await c.close();
+}
+// Focus scrolled into a section brings its ring along: Tab and Shift+Tab to the scrolling edges leave no ring cut at the
+// top or bottom of the section's visible box.
+{
+  const c = await open();
+  await c.evaluate(() => {
+    const sec = document.createElement('section'); sec.className = 'rk-sec'; sec.id = 't-scroll';
+    sec.innerHTML = Array.from({ length: 30 }, (_, i) => (i % 2 ? '<div class="rk-errors" tabindex="0">e</div>' : '<button class="rk-btn" type="button">b</button>')).join('');
+    document.querySelector('#pan').prepend(sec);
+    sec.firstChild.focus({ focusVisible: true });
+  });
+  const cut = () => c.evaluate(() => {
+    const el = document.activeElement, s = getComputedStyle(el), r = el.getBoundingClientRect(), box = document.querySelector('#t-scroll').getBoundingClientRect(), pan = document.querySelector('#pan').getBoundingClientRect();
+    const reach = Math.max(parseFloat(s.outlineOffset) || 0, 0) + (parseFloat(s.outlineWidth) || 0);
+    return { id: el.className, top: r.top - reach - Math.max(box.top, pan.top), bottom: Math.min(box.bottom, pan.bottom) - (r.bottom + reach) };
+  });
+  const bad = [];
+  for (const key of ['Tab', 'Shift+Tab']) {
+    for (let i = 0; i < 29; i += 1) { await c.keyboard.press(key); await c.waitForTimeout(30); const m = await cut(); if (m.id && (m.top < -0.5 || m.bottom < -0.5)) bad.push(`${key} ${i} ${JSON.stringify(m)}`); }
+  }
+  ok(!bad.length, 'a focus scrolled into a section keeps its whole ring at the top and the bottom', bad.slice(0, 3).join('; '));
+  await c.close();
+}
 // A section's space (layout.md): space-xl above and below its content, space-l from its title to what follows, space-m
 // between two other blocks; rows and the tile gap keep space-s.
 {
@@ -655,7 +714,8 @@ const edges = await p.evaluate(async () => {
   const pan = place.firstChild, api = Rekta.panorama(pan), out = { bad: [], changed: 0, fits: 0, worst: 0 };
   for (let w = 800; w <= 2400; w += 10) {
     place.style.width = `${w}px`; await frame();
-    const r = [...pan.querySelectorAll('.rk-sec')].map((s) => s.getBoundingClientRect()), edge = pan.getBoundingClientRect().left + pan.clientWidth;
+    // A section's leading padding holds its focus ring's reach; its content starts after it.
+    const r = [...pan.querySelectorAll('.rk-sec')].map((s) => { const b = s.getBoundingClientRect(); return { left: b.left + parseFloat(getComputedStyle(s).paddingLeft), right: b.right }; }), edge = pan.getBoundingClientRect().left + pan.clientWidth;
     const gaps = r.slice(1).map((s, i) => Math.round(s.left - r[i].right)), gap = gaps[0];
     const even = gaps.every((g) => g === gap), inside = r.some((s) => s.left + 48 <= edge + 0.5 && edge - 0.5 <= s.right - 48);
     if (pan.hasAttribute('data-rk-fit')) { out.fits += 1; if (r[3].right > edge + 1 || gap < 16 || gap > 48 || !even) out.bad.push(`${w}: fit, gap ${gap}`); continue; }
