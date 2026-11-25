@@ -3562,7 +3562,7 @@ export function copyable(el, { toaster = null, text = null } = {}) {
   const key = (e) => {
     if (e.defaultPrevented || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'c') return;
     const sel = getSelection();
-    if (sel && !sel.isCollapsed && el.contains(sel.anchorNode)) return;
+    if (sel && !sel.isCollapsed && sel.containsNode(el, true)) return;
     e.preventDefault();
     copy();
   };
