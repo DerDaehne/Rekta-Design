@@ -955,9 +955,11 @@ export function panorama(el, { pivot = null } = {}) {
   const links = () => (pivot ? [...pivot.querySelectorAll('a[href^="#"]')] : []);
   const linkFor = (sec) => links().find((a) => a.hash === `#${sec.id}`);
 
+  // A section's margin edge, where it stands in the row: its box starts a ring's reach before its content.
+  const marginEdge = (sec) => sec.getBoundingClientRect().left - (parseFloat(getComputedStyle(sec).marginLeft) || 0);
   function startOf(sec) {
     const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
-    return Math.min(el.scrollLeft + sec.getBoundingClientRect().left - el.getBoundingClientRect().left - pad, el.scrollWidth - el.clientWidth);
+    return Math.min(el.scrollLeft + marginEdge(sec) - el.getBoundingClientRect().left - pad, el.scrollWidth - el.clientWidth);
   }
   function mark(sec) {
     if (!sec) return;
@@ -981,7 +983,7 @@ export function panorama(el, { pivot = null } = {}) {
     let active = list[0];
     if (sideways()) {
       const edge = el.getBoundingClientRect().left, reach = el.clientWidth / 3;
-      for (const s of list) if (s.getBoundingClientRect().left - edge <= reach) active = s;
+      for (const s of list) if (marginEdge(s) - edge <= reach) active = s;
       // At either end the end's section is the one, however narrow the sections are (several edges may lie in the
       // first third of the width).
       if (Math.abs(el.scrollLeft) <= 1) active = list[0];
@@ -1059,7 +1061,7 @@ export function panorama(el, { pivot = null } = {}) {
   // at the start, and with any section aligned there, when they are all as wide. Says whether everything fits; then
   // nothing scrolls.
   function spread(list) {
-    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => parseFloat(getComputedStyle(s).width) || 0);
+    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => { const c = getComputedStyle(s); return (parseFloat(c.width) || 0) + (parseFloat(c.marginLeft) || 0); });
     const edge = el.clientWidth - (parseFloat(getComputedStyle(el).paddingLeft) || 0), n = sizes.length;
     const before = (j) => sizes.slice(0, j).reduce((a, w) => a + w, 0);
     const fitsWith = (g) => before(n) + (n - 1) * g <= edge + 1;

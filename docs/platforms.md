@@ -284,6 +284,11 @@ builds it from views or does without:
 - **The thin scrollbar outside `rk_scroll`:** rekta-core's lists and
   tables (`rk_list`), menus, the panorama and its sections scroll
   without a bar; only `rk_scroll` draws the grip.
+- **A section's clip and the focus ring:** a container that clips its
+  content keeps its children's focus ring whole ([accessibility.md](accessibility.md#focus-on-fills)).
+  rekta-core's panorama sections clip to their box, so the ring of a
+  control flush with a section's edge is cut there until the section
+  leaves the ring's reach free; the web's `.rk-sec` does.
 - **The pointer leaving the window:** no platform layer sends
   `RK_EVENT_POINTER_LEAVE` yet, so a view that draws itself lit under the
   pointer (the scrollbar's grip) stays lit when the pointer leaves the

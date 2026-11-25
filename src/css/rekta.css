@@ -1540,7 +1540,11 @@ button.rk-toast-msg:focus-visible { outline: 2px solid currentColor; outline-off
       scrollbar-width: thin; scrollbar-color: var(--rk-text-contrast-low) transparent;
     }
     /* Sections are sized in tile units; more width shows more sections, never wider ones. */
-    .rk-sec { flex: 0 0 var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))); overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding-right: var(--rk-space-s); }
+    /* The section clips sideways, so a focus ring flush with its edge would be cut. The ring's reach is its width (2px)
+       plus the largest offset any control gives it (4px, on .rk-errors and .rk-chart-svg). The section leaves that
+       reach free: leading padding taken back by a negative margin, a basis that grows by the same amount, and a
+       scroll padding so a focus scrolled into view brings its ring along. */
+    .rk-sec { --_rk-ring-reach: calc(2px + 4px); flex: 0 0 calc(var(--rk-sec-w, calc(3 * var(--rk-tile-unit) + 2 * var(--rk-space-s) + 2 * var(--rk-space-xl))) + var(--_rk-ring-reach)); margin-left: calc(-1 * var(--_rk-ring-reach)); padding-left: var(--_rk-ring-reach); scroll-padding-block: var(--_rk-ring-reach); overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding-right: var(--rk-space-s); }
     .rk-sec + .rk-sec { border-top: 0; }
     /* A table head sticks to the section's top edge, not below its padding. */
     .rk-sec .rk-table thead th { top: calc(-1 * var(--rk-space-xl)); }

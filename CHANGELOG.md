@@ -185,6 +185,13 @@ dots' fade in.
 
 ### Fixed
 
+- A sideways section's clip cut the focus ring of a control flush with
+  its leading edge (a tile, a row, a field, a button, a block). `.rk-sec`
+  now leaves the ring's reach (6px, the ring's width plus the largest offset)
+  free at that edge, scrolls a focus into view with that reach free above and
+  below too, and the section's place in the panorama stays where it was;
+  accessibility.md says that a container that clips keeps its children's
+  ring whole, platforms.md lists rekta-core's section as still clipping it.
 - The dots fade in on `dots-ease-arrive`, with their flight, as
   rekta.css does; data.md and the description of
   `motion.dots.whole-at` named `ease-base`. An implementation that
