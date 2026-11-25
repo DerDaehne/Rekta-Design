@@ -301,8 +301,10 @@ shows:
 
 The same chain serves a list whose last entry goes while it has focus,
 and a control that empties the list and hides with it ("dismiss all"):
-focus goes to the control before the list in the focus order, outside
-it, and when there is none, to the chain above.
+focus goes to the tab stop Shift+Tab reaches from the list, and when
+there is none, to the chain above. In a sheet, which holds focus, the
+search stays inside it and ends at the sheet's title. The chain ends at
+the place's title, else the page's main part, on every platform.
 
 An app with a framework router renders no `.rk-place`: it marks its
 page heading with `data-rk-focus-fallback`, or relies on its `h1`. An
@@ -1164,9 +1166,11 @@ ways call it:
 - a button marked `data-rk-remove` inside the entry;
 - Delete or Backspace on the entry focus is in (not in a text field),
   after which focus moves to the next entry, or the one before at the end;
-  when none is left, to the control before the list in the focus order
-  (the last focusable element before it, outside it, shown), else to the
-  focus fallback (see above);
+  when none is left, to the tab stop Shift+Tab reaches from the list (a
+  pivot's chosen tab, a radio group's checked radio, a collection at its
+  one stop; a stop that cannot take focus is passed over), else to the
+  focus fallback (see above); a list in a sheet looks only inside the
+  sheet and falls back to its title, as a sheet holds focus;
 - a drag towards the trailing edge: the entry follows the pointer, and
   let go past half its width it leaves that way, with a fade over
   0.6 × `duration-short`; `left` is then true, and the entry, already out

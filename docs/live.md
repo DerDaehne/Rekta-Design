@@ -104,8 +104,9 @@ notification protocol.
   ([collections.md](collections.md#removing-entries)). Every removal is
   followed by the undo toast. "dismiss all" is a quiet button at the end
   of the list, and its toast undoes it too. When the list is empty and
-  the button hides with it, focus moves to the control before the list,
-  else to the place's focus fallback ([behaviour.md](behaviour.md), "Where focus goes back"),
+  the button hides with it, focus moves to the control before the list
+  (where Shift+Tab from the list goes), else to the place's focus fallback
+  ([behaviour.md](behaviour.md), "Where focus goes back"),
   as after the last entry's removal ([collections.md](collections.md#removing-entries)).
 - **Empty:** the empty state, said plainly ("No notifications.").
 

@@ -2268,6 +2268,69 @@ const fallback = await sp.evaluate(async () => {
   return { was, now };
 });
 ok(fallback.was === 't-f-a' && fallback.now === 't-f-fb', 'with nothing focusable before the list, focus goes to the place\'s focus fallback', JSON.stringify(fallback));
+// The control before the list is the tab stop Shift+Tab would reach: a pivot's chosen tab, a group's checked radio,
+// one that can take focus; in a modal sheet, one in the sheet. With entries left, focus stays among them.
+const stopBefore = await sp.evaluate(() => {
+  const run = (html, setup) => {
+    const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:200px;top:200px;width:300px;z-index:5';
+    box.innerHTML = html; document.body.append(box); if (setup) setup(box);
+    Rekta.removable(box.querySelector('.t-s-list'), { onRemove: (li) => li.remove() });
+    const li = box.querySelector('.t-s-list > li'); li.focus();
+    li.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+    const at = document.activeElement.id || document.activeElement.tagName; box.remove(); return at;
+  };
+  const LIST = '<ul class="rk-rows t-s-list"><li tabindex="0">a</li></ul>';
+  return {
+    pivot: run(`<div class="rk-pivot" role="tablist"><button role="tab" id="t-s-a" aria-selected="true" aria-controls="t-s-pa">a</button><button role="tab" id="t-s-b" aria-selected="false" aria-controls="t-s-pb">b</button></div><div id="t-s-pa" role="tabpanel">${LIST}</div><div id="t-s-pb" role="tabpanel" hidden></div>`, (b) => Rekta.pivot(b.querySelector('[role=tablist]'))),
+    radios: run(`<div class="rk-segments" role="radiogroup" aria-label="show"><label><input type="radio" name="t-s-r" id="t-s-r1" checked>all</label><label><input type="radio" name="t-s-r" id="t-s-r2">unread</label></div>${LIST}`),
+    unfocusable: run(`<button id="t-s-pre">pre</button><button disabled tabindex="0">x</button><button style="visibility:hidden">y</button><div hidden><button>h</button></div><div inert><button>i</button></div>${LIST}`),
+  };
+});
+ok(stopBefore.pivot === 't-s-a', 'the last entry gone below a pivot: focus goes to the chosen tab, the pivot\'s tab stop', stopBefore.pivot);
+ok(stopBefore.radios === 't-s-r1', 'the last entry gone below a radio group: focus goes to its checked radio', stopBefore.radios);
+ok(stopBefore.unfocusable === 't-s-pre', 'the last entry gone: a control that cannot take focus is passed over', stopBefore.unfocusable);
+const inSheet = await sp.evaluate(() => {
+  const d = document.createElement('dialog'); d.className = 'rk-sheet';
+  d.innerHTML = '<h2>remove</h2><ul class="rk-rows"><li tabindex="0">a</li></ul><p class="rk-actions"><button type="button">close</button></p>';
+  document.body.append(d); d.showModal();
+  Rekta.removable(d.querySelector('ul'), { onRemove: (li) => li.remove() });
+  const li = d.querySelector('li'); li.focus();
+  li.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+  const kept = d.contains(document.activeElement); d.close(); d.remove(); return kept;
+});
+ok(inSheet, 'the last entry gone with nothing before it in a sheet: focus stays in the sheet');
+const rendered = await sp.evaluate(() => {
+  const ul = document.createElement('ul'); ul.className = 'rk-rows'; document.body.append(ul);
+  let model = ['t-rr-1', 't-rr-2'];
+  const render = () => { ul.innerHTML = model.map((id) => `<li id="${id}" tabindex="0">${id}</li>`).join(''); };
+  render();
+  Rekta.removable(ul, { onRemove: (li) => { model = model.filter((id) => id !== li.id); render(); } });
+  ul.firstElementChild.focus();
+  ul.firstElementChild.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+  const at = document.activeElement.id; ul.remove(); return at;
+});
+ok(rendered === 't-rr-2', 'onRemove renders the list again with an entry left: focus goes to the entry now in its place', rendered);
+const staysPut = await sp.evaluate(() => {
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:200px;top:200px;width:300px;z-index:5';
+  box.innerHTML = '<button id="t-k-pre">pre</button><input id="t-k-field" aria-label="search"><ul class="rk-rows"><li tabindex="0">a</li><li tabindex="0">b</li></ul>';
+  document.body.append(box);
+  const handle = Rekta.removable(box.querySelector('ul'), { onRemove: (li) => li.remove() });
+  box.querySelector('#t-k-field').focus();
+  const at = [];
+  for (let i = 0; i < 2; i += 1) { handle.remove(box.querySelector('li')); at.push(document.activeElement.id); }
+  box.remove(); return at.join();
+});
+ok(staysPut === 't-k-field,t-k-field', 'entries removed while focus is outside the list, the last one too: focus stays where it is', staysPut);
+const nested = await sp.evaluate(() => {
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:200px;top:200px;width:300px;z-index:5';
+  box.innerHTML = '<ul class="rk-rows" id="t-n-outer"><li tabindex="0" id="t-n-g1"><button id="t-n-x1" type="button">x1</button></li><li tabindex="0" id="t-n-g2"><ul class="rk-rows" id="t-n-inner"><li tabindex="0">a</li></ul></li></ul>';
+  document.body.append(box);
+  Rekta.removable(box.querySelector('#t-n-inner'), { onRemove: (li) => li.remove() });
+  const li = box.querySelector('#t-n-inner > li'); li.focus();
+  li.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+  const at = document.activeElement.id; box.remove(); return at;
+});
+ok(nested === 't-n-g2', 'the last entry of a list nested in a list gone: focus goes to the surrounding entry, where Shift+Tab goes', nested);
 // A launch tile: icon at the top leading corner, the count at the trailing one, the name at the foot; peek only when wide.
 const launch = await sp.evaluate(() => {
   const g = document.createElement('div'); g.className = 'rk-tiles'; g.style.cssText = 'width:700px';

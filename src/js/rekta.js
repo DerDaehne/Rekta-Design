@@ -214,12 +214,15 @@ function returnFocus(from) {
   if (!t.hasAttribute('tabindex') && !t.matches('a[href], button, input, select, textarea, summary')) t.setAttribute('tabindex', '-1');
   t.focus();
 }
-// The control before `el` in document order, outside it: where focus goes when the last of a list's entries goes.
-function controlBefore(el) {
-  const shown = (c) => c.getClientRects().length && !c.closest('[hidden], [inert]');
-  const focusable = 'a[href], button:not(:disabled), input:not([type=hidden]):not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"])';
-  return [...document.querySelectorAll(focusable)]
-    .filter((c) => !el.contains(c) && !c.contains(el) && el.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_PRECEDING && shown(c)).pop() || null;
+// Where focus goes when the last of a list's entries goes: the tab stop Shift+Tab would reach from the list (inside the
+// modal sheet it is in), else the sheet's title or the focus fallback. focus() itself tells whether a stop can take it.
+function focusStopBefore(el) {
+  const scope = el.closest('dialog:modal') || document;
+  const radioStop = (c) => c.type !== 'radio' || c.checked || !c.name || !(c.form || scope).querySelector(`input[type=radio][name="${CSS.escape(c.name)}"]:checked`);
+  const stops = [...scope.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]')]
+    .filter((c) => c.tabIndex >= 0 && !el.contains(c) && el.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_PRECEDING && radioStop(c));
+  for (const c of stops.reverse()) { c.focus(); if (document.activeElement === c) return; }
+  if (scope === document) returnFocus(null); else if (!focusHeading(scope)) scope.focus();
 }
 function focusHeading(scope) {
   const h = scope && scope.querySelector('.rk-title, .rk-group, h1, h2, h3');
@@ -3515,12 +3518,13 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
 // Removable ----------------------------------------------------------------------------------------------------------
 // removable(list, { items, onRemove }): entries a person may remove, each removal reversible (docs/collections.md).
 // Three ways, all calling onRemove(item, { left }): a button marked data-rk-remove inside the entry; Delete (or ⌫,
-// outside a text field) on the entry focus is in, after which focus moves to the next entry, or the one before at the
-// end; when none is left, to the control before the list, else to the place's focus fallback (focusBefore(), which a
-// control that empties the list, such as "dismiss all", calls itself); and dragging the entry towards its trailing edge, a shortcut beside the other two. Dragged, the entry follows
-// the pointer sideways; let go past half its width it leaves that way (left: true: it has gone from sight, so remove it
-// at once, with no leave() of its own), else it glides back. A drag starts only sideways and never from the window's
-// edges, where a phone's back gesture begins; a click that ends one is cancelled, so dragging never activates.
+// outside a text field) on the entry focus is in; and dragging the entry towards its trailing edge, a shortcut beside
+// the other two. Focus that was in the removed entry moves to the next entry, or the one before at the end; when none
+// is left, to the tab stop before the list, else to the place's focus fallback. A control that empties the list and
+// hides with it ("dismiss all") calls focusBefore() for the same. Dragged, the entry follows the pointer sideways; let
+// go past half its width it leaves that way (left: true: it has gone from sight, so remove it at once, with no
+// leave() of its own), else it glides back. A drag starts only sideways and never from the window's edges, where a
+// phone's back gesture begins; a click that ends one is cancelled, so dragging never activates.
 export function removable(list, { items = ':scope > li, :scope > tr', onRemove = () => {} } = {}) {
   const entries = () => [...list.querySelectorAll(items)].filter((x) => !x.hidden);
   const entryOf = (t) => { const x = t && t.closest && t.closest(items.split(',').map((s) => s.trim().replace(/^:scope > /, '')).join(', ')); return x && list.contains(x) && entries().includes(x) ? x : null; };
@@ -3531,10 +3535,11 @@ export function removable(list, { items = ':scope > li, :scope > tr', onRemove =
     const hadFocus = item.contains(document.activeElement);
     onRemove(item, { left });
     if (!hadFocus) return;
-    if (!next || !next.isConnected) { focusBefore(); return; }
-    const f = focusable(next); if (f.tabIndex < 0 && !f.hasAttribute('tabindex')) f.tabIndex = -1; f.focus();
+    const rest = entries().filter((x) => x !== item), to = next && next.isConnected ? next : rest[Math.min(i, rest.length - 1)];
+    if (!to) { focusBefore(); return; }
+    const f = focusable(to); if (f.tabIndex < 0 && !f.hasAttribute('tabindex')) f.tabIndex = -1; f.focus();
   }
-  const focusBefore = () => returnFocus(controlBefore(list));
+  const focusBefore = () => focusStopBefore(list);
   const click = (e) => {
     const b = e.target.closest && e.target.closest('[data-rk-remove]'), item = b && entryOf(b);
     if (item) { e.preventDefault(); remove(item, false); }
