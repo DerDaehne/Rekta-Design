@@ -208,14 +208,19 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
     for (let i = 0; i < 2; i += 1) { await u.click('#ab-theme'); await u.waitForTimeout(400); cycle.push(await text(u, '#theme-word')); }
     ok(cycle.join(' ') === 'dusk system', 'the app bar\'s theme button goes from dark to dusk, then to system', cycle.join(' '));
     await u.close();
-    const s = await open({ colorScheme: 'dark', contrast: 'more' });
-    await s.evaluate(() => Rekta.prefs.set('theme', 'dusk', { remember: false })); await s.waitForTimeout(400);
-    off = await shows(s, 'dusk-dark-contrast');
-    ok(!off.length, 'dusk under a dark system that asks for more contrast: themes.dusk-dark-contrast', off.join(', '));
-    await s.evaluate(() => Rekta.prefs.set('contrast', 'normal', { remember: false })); await s.waitForTimeout(400);
-    off = await shows(s, 'dusk-dark');
-    ok(!off.length, 'dusk, contrast "normal" against the system\'s setting: themes.dusk-dark', off.join(', '));
-    await s.close();
+    for (const scheme of ['light', 'dark']) {
+      const s = await open({ colorScheme: scheme, contrast: 'more' }), black = scheme === 'dark' ? 'dusk-black-contrast' : 'dusk-light-contrast';
+      await s.evaluate(() => Rekta.prefs.set('theme', 'dusk', { remember: false })); await s.waitForTimeout(400);
+      off = await shows(s, `dusk-${scheme}-contrast`);
+      ok(!off.length, `dusk under a ${scheme} system that asks for more contrast: themes.dusk-${scheme}-contrast`, off.join(', '));
+      await s.evaluate(() => Rekta.prefs.set('ground', 'black', { remember: false })); await s.waitForTimeout(400);
+      off = await shows(s, black);
+      ok(!off.length, `and with the ground "black": themes.${black}`, off.join(', '));
+      await s.evaluate(() => { Rekta.prefs.set('ground', 'normal', { remember: false }); Rekta.prefs.set('contrast', 'normal', { remember: false }); }); await s.waitForTimeout(400);
+      off = await shows(s, `dusk-${scheme}`);
+      ok(!off.length, `dusk ${scheme}, contrast "normal" against the system's setting: themes.dusk-${scheme}`, off.join(', '));
+      await s.close();
+    }
   }
   const c = await open();
   const shading = (page) => page.evaluate(() => { const d = document.createElement('dialog'); d.className = 'rk-recent'; document.body.append(d); d.showModal(); const b = getComputedStyle(d, '::backdrop').backdropFilter; d.remove(); return b; });
