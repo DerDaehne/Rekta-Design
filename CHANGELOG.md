@@ -95,6 +95,32 @@ dots' fade in.
   than the grid. The showcase's desktop offers a plain ground, the
   picture "sky" (CC0, see NOTICE) and a picture of your own. rekta-core
   has no workspace ground yet (platforms.md).
+- **Dusk, a third theme** (colour.md, platforms.md, behaviour.md,
+  shell.md): made from the picture sky and picked by the person beside
+  light and dark, never from a system setting; the system's light or
+  dark setting picks its variant. Token sets `color.dusk-light` and
+  `color.dusk-dark` hold only what changes from light and dark: the
+  neutrals (light: `bg` `#f5f9fc`, `surface` `#e4ecf2`,
+  `surface-2` `#d7e1e9`, `text-primary` `#10181c`,
+  `text-contrast-high` `#475157`, `-medium` `#5a666c`, `-low`
+  `#c7d3dc`; dark: `#0e1a21`, `#1d292f`, `#273238`, `#faefef`,
+  `#bdadac`, `#a08e8e`, `#3f484e`), glass (the ground at 82%) and
+  shading; status, content fills and the accent stay the theme's below.
+  `color.dusk-light-contrast` and `color.dusk-dark-contrast` raise
+  `text-contrast-high` and `-medium` to 7:1 over the contrast sets.
+  The black ground lies over the dark variant. "Neutral surfaces" lets a
+  theme made from a picture carry its casts, at the same chroma.
+  `rekta.tokens.json` gains the themes `dusk-light`, `dusk-dark`,
+  their `-contrast` forms, `dusk-black` and `dusk-black-contrast`,
+  and each named accent's pair for them (the pair of the theme below);
+  `--check` measures every pair in them, holds every theme's neutrals
+  to a chroma of 0.022 (measured to three decimal places, as
+  colour.md now says) and dusk's sets to the neutrals, glass and
+  shading, and `--check-product` measures a product's accent and codes
+  in every theme they show in, saying each fault once with the themes
+  it holds in. On the web: `prefs` `theme` `dusk`,
+  `:root[data-theme="dusk"]`; the showcase offers it. rekta-core does
+  not have it yet.
 - **The black ground** (colour.md, platforms.md, behaviour.md): a
   person with an OLED screen may put the dark theme on `#000000`. A
   choice, never the default and never from a system setting; the light

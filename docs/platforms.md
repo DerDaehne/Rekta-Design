@@ -13,7 +13,7 @@ the same sources without reading a line of CSS. This page is the guide.
 | File | What it is | Who reads it |
 |---|---|---|
 | `tokens/rekta.tokens.json` | The source, in [DTCG](https://tr.designtokens.org/format/) format, with aliases and a `$description` on every token. One type is Rekta's own, not DTCG's: `fluidDimension`, a length between `min` and `max` that follows the width of its box ([Values and units](#values-and-units)). | Token tools (Style Dictionary, Tokens Studio, Figma plugins), and anyone generating code. |
-| `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme (`light`, `dark`, and `light-contrast`, `dark-contrast` for more contrast, `black`, `black-contrast` for the black ground, each complete) and density. | Native implementations. Start here. |
+| `dist/rekta.tokens.json` | The same values **resolved** for a platform: no aliases, plain numbers in logical px and ms, colours as `#rrggbb` or `#rrggbbaa`, easings as four numbers, grouped by theme (`light`, `dark`, and `light-contrast`, `dark-contrast` for more contrast, `black`, `black-contrast` for the black ground, `dusk-light`, `dusk-dark`, `dusk-light-contrast`, `dusk-dark-contrast`, `dusk-black`, `dusk-black-contrast` for dusk, each complete) and density. | Native implementations. Start here. |
 | `dist/rekta.tokens.css` | The resolved values as `--rk-` custom properties, with theme, density and reduced-motion switching. | Web projects. |
 | `tokens/rekta.accents.json` | The named accents: an accent and the text on it per theme and contrast set, checked ([colour.md](colour.md#named-accents)). Resolved as `accents` in `dist/rekta.tokens.json`. | Anyone offering an accent by name. |
 | `dist/rekta.color.js` | The colour rules as a module without dependencies: contrast, OKLab distance and colour blindness, apart from status, an accent's check and derivation, the advice on a workspace's ground. | A product that checks or derives colours at run time; the reference for porting them. |
@@ -31,7 +31,7 @@ resource name in its own casing (`space-m` → `SpaceM`, `space_m`,
 
 | Source path | Name | Example |
 |---|---|---|
-| `color.<theme>.<a>.<b>` | `a-b` | `color.light.status.error.tile` → `status-error-tile`; `color.light-contrast.*` holds the same names, for more contrast, and `color.black.*` for the black ground |
+| `color.<theme>.<a>.<b>` | `a-b` | `color.light.status.error.tile` → `status-error-tile`; `color.light-contrast.*` holds the same names, for more contrast, `color.black.*` for the black ground, and `color.dusk-light.*`, `color.dusk-dark.*` (with their `-contrast` sets) for dusk |
 | `typography.font-family.<x>` | `font-<x>` | `font-sans` |
 | `typography.weight.<x>` | `font-weight-<x>` | `font-weight-semibold` |
 | `typography.size.<x>` | `font-size-<x>` | `font-size-title` |
@@ -71,14 +71,14 @@ no system source (below).
 
 | Input | System source | Override | Effect |
 |---|---|---|---|
-| Theme | The OS light/dark appearance. | `system`, `light`, `dark` | Picks `themes.light` or `themes.dark`. Dark is designed separately, never derived. |
-| Ground | None: a choice of the person's, for an OLED screen. | `normal`, `black` | Black, while the theme is dark: picks `themes.black` (or `themes.black-contrast` under more contrast), the dark theme on a black ground with opaque glass. The light theme keeps its own. |
+| Theme | The OS light/dark appearance. | `system`, `light`, `dark`, `dusk` | Picks `themes.light` or `themes.dark`. Dark is designed separately, never derived. Dusk, a theme the person picks, takes `themes.dusk-light` or `themes.dusk-dark` as the OS appearance says ([colour.md](colour.md#dusk)). |
+| Ground | None: a choice of the person's, for an OLED screen. | `normal`, `black` | Black, while the theme is dark: picks `themes.black` (or `themes.black-contrast` under more contrast), the dark theme on a black ground with opaque glass; in dusk's dark variant `themes.dusk-black` (`dusk-black-contrast`). A light theme keeps its own. |
 | Density | The pointer: a fine pointer with no touch screen is compact; anything with touch is comfortable. | `auto`, `comfortable`, `compact` | Picks `densities.*`: 32 or 44 px controls and rows. The app bar stays 56 px high with 48 px controls in both. |
 | Motion | The OS reduced-motion setting. | `system`, `on`, `off` | Reduced: every `motion.duration.*` becomes 0. `timing.*` stays: the undo window is wall time, not motion. |
-| Contrast | The OS "increase contrast" setting (`NSWorkspace.accessibilityDisplayShouldIncreaseContrast` on macOS, `UIAccessibility.isDarkerSystemColorsEnabled` on iOS, GNOME's `high-contrast`). Not Windows' contrast themes: those are forced colours, the system's own. | `system`, `more`, `normal` | More: picks `themes.light-contrast` or `themes.dark-contrast` (the theme with its contrast set over it): every text pair at 7:1, opaque glass. Each status tile gets a 2px frame in its `status-*-full` colour. |
+| Contrast | The OS "increase contrast" setting (`NSWorkspace.accessibilityDisplayShouldIncreaseContrast` on macOS, `UIAccessibility.isDarkerSystemColorsEnabled` on iOS, GNOME's `high-contrast`). Not Windows' contrast themes: those are forced colours, the system's own. | `system`, `more`, `normal` | More: picks `themes.light-contrast` or `themes.dark-contrast` (the theme with its contrast set over it), in dusk `themes.dusk-light-contrast` or `themes.dusk-dark-contrast`: every text pair at 7:1, opaque glass. Each status tile gets a 2px frame in its `status-*-full` colour. |
 | Transparency | The OS "reduce transparency" setting (`accessibilityDisplayShouldReduceTransparency` on macOS, `isReduceTransparencyEnabled` on iOS). | `system`, `reduce`, `normal` | Reduce: `glass` takes the value of `bg`, and nothing blurs behind it or behind a sheet's `shading`. |
 | Window-size class | The size of the place (pane) and of the window. | none | See below. |
-| Accent | None: the product's own accent, ink when it sets none. | `product`, or a named accent | Picks `accents.<name>` for the theme and contrast set in use. |
+| Accent | None: the product's own accent, ink when it sets none. | `product`, or a named accent | Picks `accents.<name>` for the theme and contrast set in use. On the black ground and in dusk it is the pair of the theme below, resolved there. |
 
 Every transition must still reach its end state with zero duration:
 instant, never skipped.
@@ -88,7 +88,9 @@ settings where the platform has them, and follows a change while it
 runs. rekta-core takes the contrast setting from the app,
 `rk_app_set_contrast(bool)`: no platform layer of it reads the system's
 yet, and it draws no glass. The black ground is the app's to pass on as
-well, `rk_app_set_black(bool)`.
+well, `rk_app_set_black(bool)`. rekta-core does not have dusk yet: its
+themes are light and dark; a native app reads `themes.dusk-*` from
+`rekta.tokens.json`.
 
 ## Product overrides
 
@@ -114,7 +116,8 @@ On the web, a length may be written in any form, `px`, `rem` or a
 `calc()` of other tokens: `rekta.js` resolves it as the browser lays it out.
 
 The accent is set per theme and contrast set, on every platform, so the
-dark value holds under the system's dark mode and the in-app theme alike.
+dark value holds under the system's dark mode and the in-app theme alike,
+and in dusk's variant of each theme (`--check-product` measures it there too).
 On the web, with the selectors `rekta.tokens.css` uses:
 
 ```css

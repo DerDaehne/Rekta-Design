@@ -325,7 +325,7 @@ element that cannot take focus gets `tabindex="-1"`.
 
 | Name | Values | Default |
 |---|---|---|
-| `theme` | `system`, `light`, `dark` | `system` |
+| `theme` | `system`, `light`, `dark`, `dusk` | `system`; `dusk` shows its light or dark variant as the system says |
 | `ground` | `normal`, `black` | `normal`: no system setting asks for black |
 | `density` | `auto`, `comfortable`, `compact` | `auto`: compact for a fine pointer with no touch screen |
 | `motion` | `system`, `on`, `off` | `system` |
@@ -333,9 +333,11 @@ element that cannot take focus gets `tabindex="-1"`.
 | `transparency` | `system`, `reduce`, `normal` | `system`: reduced when the system asks (`prefers-reduced-transparency: reduce`) |
 | `accent` | `product`, or a named accent: `ink`, `teal`, `steel`, `violet`, `mauve`, `pink`, `magenta` | `product`: the product's own `--rk-accent`, ink when it sets none |
 
-The black ground lays black under the dark theme (and its contrast
-colours), for OLED screens; its glass is the ground, so the app bar does
-not blur, and the light theme keeps its own ground
+Dusk is a theme of its own, made from a picture; the system's light or
+dark setting picks its variant ([colour.md](colour.md#dusk)). The black
+ground lays black under the dark theme and dusk's dark variant (and
+their contrast colours), for OLED screens; its glass is the ground, so
+the app bar does not blur, and a light theme keeps its own ground
 ([colour.md](colour.md#the-black-ground)). More contrast takes the
 contrast colours (every text pair at 7:1, opaque
 glass) and frames each status tile in its full colour; reduced

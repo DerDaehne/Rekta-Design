@@ -7,7 +7,9 @@
 //                         pointer (unless [data-density="comfortable"]) and for [data-density="compact"], every
 //                         motion duration 0s under reduced motion (unless [data-motion="on"]) and [data-motion="off"],
 //                         the contrast colours for more contrast (unless [data-contrast="normal"]) and for
-//                         [data-contrast="more"], the black ground over dark for [data-ground="black"], opaque glass for
+//                         [data-contrast="more"], dusk for [data-theme="dusk"] (its light variant, its dark one for a dark
+//                         system setting, each with its own contrast colours), the black ground over dark for
+//                         [data-ground="black"], opaque glass for
 //                         reduced transparency (unless [data-transparency="normal"]) and for
 //                         [data-transparency="reduce"], and each named accent
 //                         (tokens/rekta.accents.json) for [data-accent="NAME"] in each theme and contrast
@@ -31,7 +33,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFi
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { accentCheck, apartFromStatus, contrast, deriveAccent, distance, GROUND, groundCheck, groundSamples, over, parse, TEXT, toHex8 } from './lib/color.mjs';
+import { accentCheck, apartFromStatus, contrast, deriveAccent, distance, GROUND, groundCheck, groundSamples, oklch, over, parse, TEXT, toHex8 } from './lib/color.mjs';
 import { coreFonts, coreIcons, coreTokens } from './lib/core.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -128,6 +130,7 @@ export function buildTokensCss(tokens) {
   const durations = collect(tokens, tokens.motion.duration, ['motion', 'duration']);
   const zero = durations.map(({ name }) => `  --${PREFIX}-${name}: 0s;`).join('\n');
   const { contrastLight, contrastDark } = contrastLists(tokens);
+  const { duskLight, duskDark, duskLightContrast, duskDarkContrast } = duskLists(tokens);
   const black = collect(tokens, tokens.color[BLACK], ['color', BLACK]);
   return `/* Rekta Design tokens. Generated from tokens/rekta.tokens.json by scripts/build.mjs; do not edit. */
 
@@ -149,6 +152,17 @@ ${decl(tokens, dark).replace(/^/gm, '  ')}
 :root[data-theme="dark"] {
 ${decl(tokens, dark)}
   color-scheme: dark;
+}
+
+/* Dusk (prefs: theme), a theme the person picks and no system setting asks for: over light, and over dark when the
+   system is dark. Both blocks set the same names (every colour either variant changes), so no light value reaches dark. */
+:root[data-theme="dusk"] {
+${decl(tokens, duskLight)}
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="dusk"] {
+${decl(tokens, duskDark).replace(/^/gm, '  ')}
+  }
 }
 
 /* Compact density: a fine primary pointer and no coarse one, unless the page chose comfortable; and an explicit choice. */
@@ -203,8 +217,28 @@ ${decl(tokens, contrastDark).replace(/^/gm, '  ')}
 ${decl(tokens, contrastDark)}
 }
 
-/* The black ground (prefs: ground), a choice of the person's that no system setting makes: over the dark theme only,
-   after the contrast colours so it lies over them alike. */
+/* More contrast in dusk: its own contrast sets over the contrast colours above, light first, dark over it. */
+@media (prefers-contrast: more) {
+  :root:not([data-contrast="normal"])[data-theme="dusk"] {
+${decl(tokens, duskLightContrast).replace(/^/gm, '  ')}
+  }
+}
+:root[data-contrast="more"][data-theme="dusk"] {
+${decl(tokens, duskLightContrast)}
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root:not([data-contrast="normal"])[data-theme="dusk"] {
+${decl(tokens, duskDarkContrast).replace(/^/gm, '  ')}
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="more"][data-theme="dusk"] {
+${decl(tokens, duskDarkContrast).replace(/^/gm, '  ')}
+  }
+}
+
+/* The black ground (prefs: ground), a choice of the person's that no system setting makes: over a dark theme only (dark,
+   or dusk under a dark system), after the contrast colours so it lies over them alike. */
 @media (prefers-color-scheme: dark) {
   :root[data-ground="black"]:not([data-theme="light"]) {
 ${decl(tokens, black).replace(/^/gm, '  ')}
@@ -283,11 +317,31 @@ ${dc}
 // contrast set where it has one and from the theme itself where not. The accent is never in them, so a product's
 // accent stays.
 export const CONTRAST = { light: 'light-contrast', dark: 'dark-contrast' };
-// The black ground: a set over the dark theme (docs/colour.md), never a theme of its own. Its two resolved themes take
-// the dark pairs of each named accent, and the text contrast of the set below them.
+// The black ground: a set over the dark theme (docs/colour.md), never a theme of its own.
 export const BLACK = 'black';
-const BLACK_THEMES = { black: { from: 'dark', sets: [BLACK], text: TEXT.dark }, 'black-contrast': { from: 'dark-contrast', sets: [CONTRAST.dark, BLACK], text: TEXT['dark-contrast'] } };
-const ALL_TEXT = { ...TEXT, ...Object.fromEntries(Object.entries(BLACK_THEMES).map(([k, v]) => [k, v.text])) };
+// Dusk, a theme the person picks (docs/colour.md): a set over light and one over dark, the system's setting picking the
+// variant, each with its own set for more contrast. It changes only the neutrals, glass and shading.
+export const DUSK = { light: 'dusk-light', dark: 'dusk-dark', 'light-contrast': 'dusk-light-contrast', 'dark-contrast': 'dusk-dark-contrast' };
+const NEUTRALS = ['bg', 'surface', 'surface-2', 'text-primary', 'text-contrast-low', 'text-contrast-medium', 'text-contrast-high'];
+// Every resolved theme of rekta.tokens.json: the theme it starts from and the sets laid over it, in order; the pair each
+// named accent takes there (its text contrast is that pair's, TEXT); under a black ground, the theme it lies over.
+const THEMES = {
+  light: { base: 'light', sets: [], pair: 'light' },
+  dark: { base: 'dark', sets: [], pair: 'dark' },
+  'light-contrast': { base: 'light', sets: [CONTRAST.light], pair: 'light-contrast' },
+  'dark-contrast': { base: 'dark', sets: [CONTRAST.dark], pair: 'dark-contrast' },
+  black: { base: 'dark', sets: [BLACK], pair: 'dark', over: 'dark' },
+  'black-contrast': { base: 'dark', sets: [CONTRAST.dark, BLACK], pair: 'dark-contrast', over: 'dark-contrast' },
+  'dusk-light': { base: 'light', sets: [DUSK.light], pair: 'light' },
+  'dusk-dark': { base: 'dark', sets: [DUSK.dark], pair: 'dark' },
+  'dusk-light-contrast': { base: 'light', sets: [DUSK.light, CONTRAST.light, DUSK['light-contrast']], pair: 'light-contrast' },
+  'dusk-dark-contrast': { base: 'dark', sets: [DUSK.dark, CONTRAST.dark, DUSK['dark-contrast']], pair: 'dark-contrast' },
+  'dusk-black': { base: 'dark', sets: [DUSK.dark, BLACK], pair: 'dark', over: 'dusk-dark' },
+  'dusk-black-contrast': { base: 'dark', sets: [DUSK.dark, CONTRAST.dark, DUSK['dark-contrast'], BLACK], pair: 'dark-contrast', over: 'dusk-dark-contrast' },
+};
+const ALL_TEXT = Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, TEXT[v.pair]]));
+// The resolved themes a value set for one theme or contrast set shows in (a product's accent or code, a named accent).
+const shownIn = (pair) => Object.keys(THEMES).filter((k) => THEMES[k].pair === pair);
 // A theme with sets laid over it, as a token tree in which an alias to the theme resolves to the set's value: under the
 // black ground, an alias to color.dark.bg is black.
 function overlay(tokens, theme, sets) {
@@ -298,16 +352,27 @@ function overlay(tokens, theme, sets) {
   };
   return { ...tokens, color: { ...tokens.color, [theme]: sets.reduce((n, set) => lay(n, tokens.color[set]), tokens.color[theme]) } };
 }
-function contrastLists(tokens) {
+// Declarations of a theme with sets over it, for every name in names: the last set's that has it, else the theme's own.
+function layered(tokens, theme, sets, names) {
+  const by = new Map();
+  for (const node of [theme, ...sets]) for (const e of collect(tokens, tokens.color[node], ['color', node])) by.set(e.name, e);
+  return collect(tokens, tokens.color[theme], ['color', theme]).filter((e) => names.has(e.name)).map((e) => by.get(e.name));
+}
+const changes = (tokens, sets) => {
   const names = new Set();
-  for (const set of Object.values(CONTRAST)) walk(tokens.color[set], ['color', set], (p) => names.add(tokenName(p)));
-  const list = (theme) => {
-    const by = new Map();
-    for (const e of collect(tokens, tokens.color[theme], ['color', theme])) by.set(e.name, e);
-    for (const e of collect(tokens, tokens.color[CONTRAST[theme]], ['color', CONTRAST[theme]])) by.set(e.name, e);
-    return collect(tokens, tokens.color[theme], ['color', theme]).filter((e) => names.has(e.name)).map((e) => by.get(e.name));
-  };
-  return { contrastLight: list('light'), contrastDark: list('dark') };
+  for (const set of sets) walk(tokens.color[set], ['color', set], (p) => names.add(tokenName(p)));
+  return names;
+};
+function contrastLists(tokens) {
+  const names = changes(tokens, Object.values(CONTRAST));
+  return { contrastLight: layered(tokens, 'light', [CONTRAST.light], names), contrastDark: layered(tokens, 'dark', [CONTRAST.dark], names) };
+}
+// Dusk's declarations: every name either variant changes, and under more contrast every name its sets change, from the
+// theme's own sets laid as in THEMES.
+function duskLists(tokens) {
+  const names = changes(tokens, [DUSK.light, DUSK.dark]), more = changes(tokens, Object.values(DUSK));
+  const of = (theme, list) => layered(tokens, THEMES[theme].base, THEMES[theme].sets, list);
+  return { duskLight: of('dusk-light', names), duskDark: of('dusk-dark', names), duskLightContrast: of('dusk-light-contrast', more), duskDarkContrast: of('dusk-dark-contrast', more) };
 }
 
 // Resolved, platform-neutral values: colours as #rrggbb or #rrggbbaa, lengths in logical px, durations in ms,
@@ -345,12 +410,9 @@ export function buildTokensJson(tokens, version) {
     version,
     units: { length: 'logical px (CSS px, Android dp, Apple pt)', duration: 'ms', angle: 'deg', easing: 'cubic-bezier [x1, y1, x2, y2]', fluid: '{min, max, viewport}: interpolate between min and max at viewport × hosting box width' },
     // light-contrast and dark-contrast: the whole theme for more contrast, its contrast set over it; black and
-    // black-contrast: the dark ones with the black ground over them (docs/colour.md).
-    themes: {
-      light: themed('light'), dark: themed('dark'),
-      'light-contrast': themed('light', CONTRAST.light), 'dark-contrast': themed('dark', CONTRAST.dark),
-      ...Object.fromEntries(Object.entries(BLACK_THEMES).map(([k, v]) => [k, themed('dark', ...v.sets)])),
-    },
+    // black-contrast: the dark ones with the black ground over them; dusk-*: dusk's variants, each complete (THEMES,
+    // docs/colour.md).
+    themes: Object.fromEntries(Object.entries(THEMES).map(([k, v]) => [k, themed(v.base, ...v.sets)])),
     densities: { comfortable: group(tokens.density.comfortable, ['density', 'comfortable']), compact: group(tokens.density.compact, ['density', 'compact']) },
     typography: group(tokens.typography, ['typography']),
     spacing: group(tokens.spacing, ['spacing']),
@@ -363,11 +425,10 @@ export function buildTokensJson(tokens, version) {
     descriptions: all,
     hooks: Object.fromEntries(Object.entries(loadHooks()).map(([k, v]) => [`--rk-${k}`, v])),
     // The named accents (tokens/rekta.accents.json), resolved: per theme the accent and the text on it; under the black
-    // ground the dark pair, its aliases resolved there.
+    // ground and in dusk the pair of the theme below, its aliases resolved there.
     accents: Object.fromEntries(Object.entries(loadAccents()).map(([name, a]) => [name, {
       description: a.$description,
-      ...Object.fromEntries(Object.keys(TEXT).map((theme) => [theme, Object.fromEntries(Object.entries(a[theme] || {}).map(([k, v]) => [k, resolveColor(tokens, v)]))])),
-      ...Object.fromEntries(Object.entries(BLACK_THEMES).map(([theme, b]) => [theme, Object.fromEntries(Object.entries(a[b.from] || {}).map(([k, v]) => [k, resolveColor(overlay(tokens, 'dark', b.sets), v)]))])),
+      ...Object.fromEntries(Object.entries(THEMES).map(([theme, v]) => [theme, Object.fromEntries(Object.entries(a[v.pair] || {}).map(([k, c]) => [k, resolveColor(overlay(tokens, v.base, v.sets), c)]))])),
     }])),
   };
 }
@@ -426,10 +487,24 @@ function check(tokens) {
     if (!(n in t.themes.dark)) problems.push(`color.${BLACK} sets ${n}, which color.dark does not have`);
     if (n === 'accent' || n === 'on-accent') problems.push(`color.${BLACK} sets ${n}: the accent is the product's (docs/platforms.md)`);
   });
-  for (const theme of ['light', 'dark', CONTRAST.light, CONTRAST.dark, ...Object.keys(BLACK_THEMES)]) {
+  // Dusk carries its picture's cast in the neutrals, glass and shading alone: status, content fills, hover, disabled and
+  // the accent stay those of the theme below.
+  for (const set of Object.values(DUSK)) walk(tokens.color[set], ['color', set], (p) => {
+    const n = tokenName(p);
+    if (![...NEUTRALS, 'glass', 'shading'].includes(n)) problems.push(`color.${set} sets ${n}: dusk changes only the neutrals, glass and shading (docs/colour.md)`);
+  });
+  // The neutrals carry a cast, never a hue: a chroma of at most 0.022, measured to three decimal places. The rounding
+  // carries weight (dusk-dark's ground measures 0.02202), so colour.md says it, in the words checked here.
+  const CAST = 0.022, castRule = `at a chroma of at most ${CAST} (OKLCH, measured to three decimal places)`;
+  if (!readFileSync(join(root, 'docs', 'colour.md'), 'utf8').replace(/\s+/g, ' ').includes(castRule)) problems.push(`docs/colour.md (Neutral surfaces) does not say how the neutrals' chroma is measured: "${castRule}"`);
+  for (const theme of Object.keys(THEMES)) {
     const c = t.themes[theme];
     // More contrast holds every text pair at 7:1 (WCAG AAA); marks keep 3:1.
-    const text = theme.endsWith('-contrast') ? 7 : 4.5;
+    const text = ALL_TEXT[theme];
+    for (const n of NEUTRALS) {
+      const chroma = oklch(c[n])[1];
+      if (+chroma.toFixed(3) > CAST) problems.push(`${theme}: ${n} ${c[n]} has a chroma of ${chroma.toFixed(3)}, a neutral's is at most ${CAST}`);
+    }
     const need = (fg, bg, min, what) => { const r = contrast(c[fg], c[bg]); if (r < min) problems.push(`${theme}: ${what} ${fg} on ${bg} is ${r.toFixed(2)}:1, needs ${min}:1`); };
     for (const bg of ['bg', 'surface']) {
       need('text-primary', bg, text, 'text');
@@ -450,9 +525,9 @@ function check(tokens) {
       need(`status-${s}-full`, `status-${s}-soft`, 3, 'mark on its soft tint');
     }
     // On black, a surface and a hairline stand off the ground at least as far as on the dark ground (docs/colour.md).
-    if (BLACK_THEMES[theme]) {
-      const d = t.themes[BLACK_THEMES[theme].from];
-      for (const fg of ['surface', 'text-contrast-low']) need(fg, 'bg', +contrast(d[fg], d.bg).toFixed(2), `as on the dark ground, ${fg === 'surface' ? 'a surface' : 'a hairline'}`);
+    if (THEMES[theme].over) {
+      const d = t.themes[THEMES[theme].over];
+      for (const fg of ['surface', 'text-contrast-low']) need(fg, 'bg', +contrast(d[fg], d.bg).toFixed(2), `as on the ground of ${THEMES[theme].over}, ${fg === 'surface' ? 'a surface' : 'a hairline'}`);
     }
     // Text on glass: the blur averages what is behind, so all white and all black are the limits. Only text-primary
     // and text-contrast-high may stand on it (docs/colour.md); rekta.css is held to that below.
@@ -510,7 +585,7 @@ function check(tokens) {
   for (const [name, a] of Object.entries(t.accents)) {
     if (!/^[a-z][a-z-]*$/.test(name)) problems.push(`tokens/rekta.accents.json: "${name}" is not a lowercase name`);
     for (const [theme, text] of Object.entries(ALL_TEXT)) {
-      if (!a[theme] || !a[theme].accent || !a[theme]['on-accent']) { problems.push(`tokens/rekta.accents.json: ${name} has no accent and on-accent for ${BLACK_THEMES[theme]?.from ?? theme}`); continue; }
+      if (!a[theme] || !a[theme].accent || !a[theme]['on-accent']) { problems.push(`tokens/rekta.accents.json: ${name} has no accent and on-accent for ${THEMES[theme].pair}`); continue; }
       for (const p of accentCheck(a[theme].accent, a[theme]['on-accent'], t.themes[theme], text).problems) problems.push(`${theme}: accent ${name} ${a[theme].accent}: ${p}`);
     }
   }
@@ -698,6 +773,13 @@ export function checkProduct(css, file = 'product CSS') {
   const problems = [], notes = [], warnings = [], t = buildTokensJson(loadTokens(), 'check'), codes = { light: {}, dark: {} };
   const accents = Object.fromEntries(Object.keys(TEXT).map((k) => [k, {}]));
   const wides = new Set(), queries = new Set();
+  // A value shows in every theme over its own too (the black ground, dusk's variant): a fault it has in several is said
+  // once, with the first theme's numbers and the others named; a warning names no theme and is said once.
+  const faults = new Map();
+  const fault = (into, theme, text) => {
+    const key = `${into === problems ? 'problem' : 'warning'} ${text.replace(/\d+\.\d+/g, '')}`, f = faults.get(key);
+    if (f) f.also.push(theme); else faults.set(key, { into, theme, text, also: [] });
+  };
   // Walk the rules: a declaration is dark when a selector or @media around it says dark.
   const stack = [];
   let buf = '';
@@ -735,14 +817,15 @@ export function checkProduct(css, file = 'product CSS') {
     if (/^\s*--rk-font-sans\s*:/.test(decl)) notes.push(`${file}: a family of the product's (${decl.trim().slice(0, 80)}): measure the text budgets again with it (docs/typography.md)`);
   }
   for (const theme of ['light', 'dark']) {
-    const c = t.themes[theme], set = codes[theme], ns = Object.keys(set).map(Number).sort((x, y) => x - y);
+    const set = codes[theme], ns = Object.keys(set).map(Number).sort((x, y) => x - y);
     const other = codes[theme === 'light' ? 'dark' : 'light'];
     for (const n of Object.keys(other)) if (!(n in set)) problems.push(`${file}: --rk-series-${n} is set for ${theme === 'light' ? 'dark' : 'light'} but not for ${theme}`);
     for (const n of ns) {
       if (n < 1 || n > 8) problems.push(`${file}: --rk-series-${n} is outside 1 to 8`);
       let col; try { col = parse(set[n]); } catch { problems.push(`${file}: ${theme} --rk-series-${n} is not a colour the check reads (hex or rgb): ${set[n]}`); continue; }
       const hex = toHex8(col);
-      for (const bg of ['bg', 'surface']) { const r = contrast(hex, c[bg]); if (r < 3) problems.push(`${file}: ${theme} --rk-series-${n} ${set[n]} on ${bg} is ${r.toFixed(2)}:1, needs 3:1`); }
+      // A value set for light or dark shows in every theme over it too: the black ground, dusk's variant.
+      for (const shown of shownIn(theme)) for (const bg of ['bg', 'surface']) { const r = contrast(hex, t.themes[shown][bg]); if (r < 3) fault(problems, shown, `--rk-series-${n} ${set[n]} on ${bg} is ${r.toFixed(2)}:1, needs 3:1`); }
     }
     for (let i = 0; i < ns.length; i += 1) for (let j = i + 1; j < ns.length; j += 1) {
       let a, b; try { a = toHex8(parse(set[ns[i]])); b = toHex8(parse(set[ns[j]])); } catch { continue; }
@@ -759,15 +842,16 @@ export function checkProduct(css, file = 'product CSS') {
     const pair = [read(own.accent, t.themes[theme].accent), read(own['on-accent'], t.themes[theme]['on-accent'])];
     accentCount += Object.keys(own).length + Object.keys(more).length;
     if (pair.includes(null)) continue;
-    for (const p of accentCheck(pair[0], pair[1], t.themes[theme], TEXT[theme]).problems) problems.push(`${file}: ${theme} --rk-accent ${pair[0]}: ${p}`);
+    for (const shown of shownIn(theme)) for (const p of accentCheck(pair[0], pair[1], t.themes[shown], TEXT[theme]).problems) fault(problems, shown, `--rk-accent ${pair[0]}: ${p}`);
     const set = !!(more.accent || more['on-accent']);
     const hi = [read(more.accent, pair[0]), read(more['on-accent'], pair[1])];
     if (hi.includes(null)) continue;
-    for (const p of accentCheck(hi[0], hi[1], t.themes[CONTRAST[theme]], TEXT[CONTRAST[theme]]).problems) {
-      if (set) problems.push(`${file}: ${CONTRAST[theme]} --rk-accent ${hi[0]}: ${p}`);
-      else warnings.push(`${file}: under more contrast the ${theme} accent ${hi[0]} keeps its value: ${p}; set it in the contrast selectors (docs/platforms.md), or derive one with node scripts/build.mjs --accent`);
+    for (const shown of shownIn(CONTRAST[theme])) for (const p of accentCheck(hi[0], hi[1], t.themes[shown], TEXT[CONTRAST[theme]]).problems) {
+      if (set) fault(problems, shown, `--rk-accent ${hi[0]}: ${p}`);
+      else fault(warnings, null, `under more contrast the ${theme} accent ${hi[0]} keeps its value: ${p}; set it in the contrast selectors (docs/platforms.md), or derive one with node scripts/build.mjs --accent`);
     }
   }
+  for (const { into, theme, text, also } of faults.values()) into.push(`${file}: ${theme ? `${theme} ` : ''}${text}${theme && also.length ? ` (also in ${also.join(', ')})` : ''}`);
   for (const w of wides) if (!/^0(px)?$/.test(w) && !queries.has(w)) warnings.push(`${file}: --rk-pivot-wide is ${w}, but no @container (min-width: ${w}) repeats it, so the wide facets' first paint keeps size.pivot-wide (docs/behaviour.md, pivot(): the first paint)`);
   return { problems, notes, warnings, count: Object.keys(codes.light).length + Object.keys(codes.dark).length, accents: accentCount };
 }
@@ -865,6 +949,11 @@ export function checkAll() {
   // The showcase sets a domain colour code as a product would: it is held to the same rules.
   const site = checkProduct(readFileSync(join(root, 'site', 'site.css'), 'utf8'), 'site/site.css');
   problems.push(...site.problems); notes.push(...site.notes);
+  // A product's fault is said once, however many themes its value shows in, naming them: this CSS has three faults (a
+  // light code too faint on bg and on surface, a dark on-accent too faint) and two warnings (each accent under more
+  // contrast), in light and dark as on black and in dusk.
+  const once = checkProduct(':root { --rk-accent: #637586; --rk-on-accent: #ffffff; --rk-series-1: #b0b8c0; } :root[data-theme="dark"] { --rk-accent: #6c7e8f; --rk-on-accent: #555555; --rk-series-1: #6c7e8f; }', 'a product');
+  if (once.problems.length !== 3 || once.warnings.length !== 2 || !once.problems.some((x) => x.endsWith('(also in black, dusk-dark, dusk-black)'))) problems.push(`--check-product does not say each fault once, naming its themes (3 faults, 2 warnings): ${[...once.problems, ...once.warnings].join(' | ')}`);
   return problems;
 }
 
@@ -879,6 +968,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const t = buildTokensJson(loadTokens(), 'check'), r = deriveAccent(hex, t.themes);
     for (const [theme, why] of Object.entries(r.problems)) console.error(`✗ ${hex} in ${theme}: ${why.join('; ')}`);
     if (!r.ok) process.exit(1);
+    // A pair shows in every theme over its own too (the black ground, dusk's variant), and holds there as well.
+    const far = Object.entries(r.themes).flatMap(([theme, p]) => shownIn(theme).flatMap((shown) => accentCheck(p.accent, p['on-accent'], t.themes[shown], TEXT[theme]).problems.map((x) => `✗ ${hex} in ${shown}: ${x}`)));
+    if (far.length) { console.error(far.join('\n')); process.exit(1); }
     const d = (theme, indent = '') => `${indent}--rk-accent: ${r.themes[theme].accent}; --rk-on-accent: ${r.themes[theme]['on-accent']};`;
     for (const [theme, p] of Object.entries(r.themes)) {
       const a = apartFromStatus(p.accent, t.themes[theme]).nearest;
@@ -907,7 +999,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const problems = checkAll();
     if (problems.length) { console.error(problems.map((p) => `✗ ${p}`).join('\n')); process.exit(1); }
     console.log('✓ tokens and stylesheet pass: contrast (7:1 for more contrast), text on glass over white and black and over the showcase\'s picture, status marks, colour-blind separation, named accents and content fills apart from status, every --rk- read in CSS and JS is defined, every icon on the grid, one version everywhere');
-    for (const n of notes) console.log(`  i ${n}`);
+    // A note that holds in several themes alike (dusk shares its statuses with light and dark) is said once.
+    const once = new Map();
+    for (const n of notes) { const [, theme, what] = /^([\w-]+): (.*)$/.exec(n) || [, '', n]; once.set(what, [...(once.get(what) || []), theme].filter(Boolean)); }
+    for (const [what, themes] of once) console.log(`  i ${themes.length ? `${themes.join(', ')}: ` : ''}${what}`);
   } else {
     console.log(`✓ dist/ written (Rekta Design ${buildDist()})`);
   }

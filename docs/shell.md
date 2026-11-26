@@ -127,7 +127,7 @@ drag area.
 
 A surface that other content lies on as a whole (a desktop behind
 windows, a kiosk's screen, a full-screen surface behind places) has the
-page's ground by default: plain `bg`, in both themes. Any other ground
+page's ground by default: plain `bg`, in every theme. Any other ground
 may take its place, as the product's choice or the person's: a picture,
 a pattern (an imprint of tiles, say) or a gradient. People like to make
 the place theirs, and what lies on the ground carries the information,
@@ -154,6 +154,9 @@ so Rekta holds what lies on it, not the ground:
 - **An accent may come with it.** A product that ships a picture may
   set its accent with it, in its slot
   ([colour.md](colour.md#product-slots)) and checked as every accent.
+  A theme made from the picture may come with it too, as
+  [dusk](colour.md#dusk) comes from sky; the person can still pick
+  another theme.
 
 ### Advice on a ground
 

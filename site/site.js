@@ -77,8 +77,8 @@
   matchMedia('(prefers-contrast: more)').addEventListener('change', paintPrefs);
   // The accent is a pref too: a named accent of Rekta's, or "custom", the visitor's own, styled by site-head.js.
   for (const name of PREFS) $$(`input[name=${name}]`).forEach((r) => r.addEventListener('change', () => prefs.set(name, r.value)));
-  const THEMES = ['system', 'light', 'dark'];
-  $('#ab-theme').addEventListener('click', () => prefs.set('theme', THEMES[(THEMES.indexOf(prefs.get('theme')) + 1) % 3]));
+  const THEMES = ['system', 'light', 'dark', 'dusk'];
+  $('#ab-theme').addEventListener('click', () => prefs.set('theme', THEMES[(THEMES.indexOf(prefs.get('theme')) + 1) % THEMES.length]));
   $('#ab-motion').addEventListener('click', () => prefs.set('motion', prefs.get('motion') === 'off' ? 'system' : 'off'));
   $('#m-off').addEventListener('change', (e) => prefs.set('motion', e.target.checked ? 'off' : 'system'));
 
