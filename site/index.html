@@ -597,12 +597,14 @@
             <label class="rk-switch"><input type="radio" name="theme" value="system"> system</label>
             <label class="rk-switch"><input type="radio" name="theme" value="light"> light</label>
             <label class="rk-switch"><input type="radio" name="theme" value="dark"> dark</label>
+            <label class="rk-switch"><input type="radio" name="theme" value="dusk"> dusk</label>
           </fieldset>
+          <span class="rk-hint">Dusk is made from the picture sky: cool blue-grey in light, a petrol ground with rose-warm text in dark. Your system's light or dark setting picks the one you see.</span>
           <fieldset class="rk-choices"><legend class="rk-label">ground in dark</legend>
             <label class="rk-switch"><input type="radio" name="ground" value="normal"> normal</label>
             <label class="rk-switch"><input type="radio" name="ground" value="black"> black</label>
           </fieldset>
-          <span class="rk-hint">Black puts the dark theme on a black ground, for OLED screens: surfaces, text and status stay as they are, and the app bar turns solid. Light keeps its own ground.</span>
+          <span class="rk-hint">Black puts the dark theme, or dusk's dark variant, on a black ground, for OLED screens: surfaces, text and status stay as they are, and the app bar turns solid. A light theme keeps its own ground.</span>
           <fieldset class="rk-choices"><legend class="rk-label">density</legend>
             <label class="rk-switch"><input type="radio" name="density" value="auto"> by pointer</label>
             <label class="rk-switch"><input type="radio" name="density" value="comfortable"> comfortable</label>
@@ -635,7 +637,7 @@
             <label class="rk-switch"><input type="radio" name="accent" value="magenta"> magenta</label>
             <label class="rk-switch"><input type="radio" name="accent" value="custom" id="accent-custom" disabled> yours</label>
           </fieldset>
-          <span class="rk-hint">Rekta's named accents: each holds 3:1 on the ground and stays apart from every status colour, in both themes and under more contrast.</span>
+          <span class="rk-hint">Rekta's named accents: each holds 3:1 on the ground and stays apart from every status colour, in every theme and under more contrast.</span>
           <p class="rk-actions"><button class="rk-btn" type="button" id="reset">reset the demo</button></p>
         </div>
       </section>
@@ -795,7 +797,7 @@
             <tr><th scope="row">wheel</th><td>one gesture, one scroller</td><td>the native wheel event, same rule; trackpad pans left alone</td></tr>
             <tr><th scope="row">back</th><td>history: links, <kbd class="rk-key">Esc</kbd>, the browser</td><td>the shell's back command, the mouse back button, <kbd class="rk-key">Alt</kbd>+←</td></tr>
             <tr><th scope="row">reduced motion</th><td><code>prefers-reduced-motion</code> or <code>data-motion</code></td><td>the OS setting or the same in-app switch</td></tr>
-            <tr><th scope="row">theme</th><td><code>prefers-color-scheme</code> or <code>data-theme</code></td><td>the OS appearance or an in-app switch; two independent token sets</td></tr>
+            <tr><th scope="row">theme</th><td><code>prefers-color-scheme</code> or <code>data-theme</code></td><td>the OS appearance or an in-app switch; two independent token sets, and dusk laid over them</td></tr>
           </tbody>
         </table>
       </section>

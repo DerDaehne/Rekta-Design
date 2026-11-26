@@ -157,6 +157,66 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
     ok(await ground() !== '#000000' && /blur/.test((await measure(d)).blur), 'the light theme keeps its own ground and glass under "black"', await ground());
     await d.close();
   }
+  // Dusk (colour.md): a theme the person picks; the system's light or dark setting picks its variant, live. Every colour
+  // on screen is the resolved theme of rekta.tokens.json, under more contrast and on the black ground too, and each named
+  // accent shows the pair of the theme below.
+  {
+    const shows = (page, theme) => page.evaluate((want) => {
+      const { themes, accents } = JSON.parse(document.querySelector('#themes-data').textContent), root = document.documentElement;
+      const css = (hex) => { const [r, g, b, a = 255] = hex.slice(1).match(/../g).map((x) => parseInt(x, 16)); return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${+(a / 255).toFixed(2)})`; };
+      const probe = document.createElement('i'); document.body.append(probe);
+      const read = (n) => { probe.style.color = `var(--rk-${n})`; return getComputedStyle(probe).color; };
+      const off = Object.entries(themes[want]).filter(([n, v]) => read(n) !== css(v)).map(([n, v]) => `${n} ${read(n)} not ${css(v)}`);
+      const was = root.dataset.accent;
+      for (const [name, a] of Object.entries(accents)) {
+        Rekta.prefs.set('accent', name, { remember: false });
+        if (read('accent') !== css(a[want].accent) || read('on-accent') !== css(a[want]['on-accent'])) off.push(`accent ${name}: ${read('accent')} ${read('on-accent')}`);
+      }
+      Rekta.prefs.set('accent', was || 'product', { remember: false });
+      probe.remove();
+      return off;
+    }, theme);
+    const u = await open();
+    await go(u, 'look');
+    await u.check('input[name=theme][value=dusk]'); await u.waitForTimeout(400);
+    let off = await shows(u, 'dusk-light');
+    ok(await u.evaluate(() => document.documentElement.dataset.theme) === 'dusk' && !off.length, 'dusk picked in the look, the system light: the page shows themes.dusk-light, each named accent its light pair', off.join(', '));
+    await u.emulateMedia({ colorScheme: 'dark' }); await u.waitForTimeout(400);
+    off = await shows(u, 'dusk-dark');
+    ok(!off.length && await text(u, '#env-theme') === 'dusk · dark', 'the system turns dark: dusk follows it to themes.dusk-dark, each named accent its dark pair', `${off.join(', ')} ${await text(u, '#env-theme')}`);
+    const m = await measure(u);
+    ok(m.low.r >= 4.5 && m.glassLow >= 4.5 && !m.framed && !m.opaque && /blur/.test(m.blur), 'dusk dark: every text pair on screen at 4.5:1, glass with its blur', `${m.low.what} ${m.low.r.toFixed(2)} ${m.glassLow.toFixed(2)}`);
+    await u.emulateMedia({ colorScheme: 'light' }); await u.waitForTimeout(400);
+    ok(!(await shows(u, 'dusk-light')).length && await text(u, '#env-theme') === 'dusk · light', 'and back to light: dusk follows to themes.dusk-light', await text(u, '#env-theme'));
+    await u.reload(); await u.waitForTimeout(1400);
+    ok(await u.evaluate(() => document.documentElement.dataset.theme) === 'dusk' && !(await shows(u, 'dusk-light')).length, 'dusk is remembered: after a reload the page is dusk again');
+    await u.evaluate(() => Rekta.prefs.set('ground', 'black', { remember: false })); await u.waitForTimeout(400);
+    ok(!(await shows(u, 'dusk-light')).length, 'dusk light under "black": the light variant keeps its own ground');
+    await u.evaluate(() => Rekta.prefs.set('contrast', 'more', { remember: false })); await u.waitForTimeout(400);
+    off = await shows(u, 'dusk-light-contrast');
+    const ml = await measure(u);
+    ok(!off.length && ml.low.r >= 7 && ml.framed && ml.opaque, 'dusk light, more contrast from the prefs: themes.dusk-light-contrast, every text pair at 7:1, the frames, opaque glass', `${off.join(', ')} ${ml.low.what} ${ml.low.r.toFixed(2)}`);
+    await u.emulateMedia({ colorScheme: 'dark' }); await u.waitForTimeout(400);
+    off = await shows(u, 'dusk-black-contrast');
+    ok(!off.length && (await measure(u)).low.r >= 7, 'the system turns dark under "black" and more contrast: themes.dusk-black-contrast, every text pair at 7:1', off.join(', '));
+    await u.evaluate(() => Rekta.prefs.set('contrast', 'system', { remember: false })); await u.waitForTimeout(400);
+    off = await shows(u, 'dusk-black');
+    const b = await measure(u);
+    ok(!off.length && b.opaque && /^(none)?$/.test(b.blur), 'dusk dark, ground "black": themes.dusk-black, glass opaque and the bar unblurred', `${off.join(', ')} ${b.blur}`);
+    await u.evaluate(() => { Rekta.prefs.set('ground', 'normal', { remember: false }); Rekta.prefs.set('theme', 'dark', { remember: false }); }); await u.waitForTimeout(400);
+    const cycle = [];
+    for (let i = 0; i < 2; i += 1) { await u.click('#ab-theme'); await u.waitForTimeout(400); cycle.push(await text(u, '#theme-word')); }
+    ok(cycle.join(' ') === 'dusk system', 'the app bar\'s theme button goes from dark to dusk, then to system', cycle.join(' '));
+    await u.close();
+    const s = await open({ colorScheme: 'dark', contrast: 'more' });
+    await s.evaluate(() => Rekta.prefs.set('theme', 'dusk', { remember: false })); await s.waitForTimeout(400);
+    off = await shows(s, 'dusk-dark-contrast');
+    ok(!off.length, 'dusk under a dark system that asks for more contrast: themes.dusk-dark-contrast', off.join(', '));
+    await s.evaluate(() => Rekta.prefs.set('contrast', 'normal', { remember: false })); await s.waitForTimeout(400);
+    off = await shows(s, 'dusk-dark');
+    ok(!off.length, 'dusk, contrast "normal" against the system\'s setting: themes.dusk-dark', off.join(', '));
+    await s.close();
+  }
   const c = await open();
   const shading = (page) => page.evaluate(() => { const d = document.createElement('dialog'); d.className = 'rk-recent'; document.body.append(d); d.showModal(); const b = getComputedStyle(d, '::backdrop').backdropFilter; d.remove(); return b; });
   const plain = await measure(c);
@@ -2876,9 +2936,10 @@ await sy.close();
     const bar = getComputedStyle(document.querySelector('#screen-bar')), alpha = (c) => +((c.match(/[\d.]+/g) || [])[3] ?? 1);
     return { picture: /sky\.webp/.test(getComputedStyle(document.querySelector('#screen')).backgroundImage), opaque: alpha(bar.backgroundColor) === 1, blur: /blur/.test(bar.backdropFilter), noteOnGlass: getComputedStyle(document.querySelector('#desk-empty')).backgroundColor === bar.backgroundColor };
   });
-  for (const [theme, black] of [['light', false], ['dark', false], ['dark', true]]) {
+  for (const [theme, black, scheme] of [['light', false, 'light'], ['dark', false, 'light'], ['dark', true, 'light'], ['dusk', false, 'light'], ['dusk', false, 'dark'], ['dusk', true, 'dark']]) {
+    await g.emulateMedia({ colorScheme: scheme });
     await g.evaluate(([t, b]) => { Rekta.prefs.set('theme', t, { remember: false }); Rekta.prefs.set('ground', b ? 'black' : 'normal', { remember: false }); }, [theme, black]); await g.waitForTimeout(400);
-    const name = black ? 'black' : theme;
+    const name = theme === 'dusk' ? (black ? 'dusk-black' : `dusk-${scheme}`) : (black ? 'black' : theme);
     await pick('plain');
     ok(!(await look()).picture, `${name}, plain: no picture under the desktop`);
     await (await g.$('#screen')).screenshot({ path: join(shots, `ground-${name}-plain.png`) });
@@ -2887,6 +2948,7 @@ await sy.close();
     ok(l.picture && l.opaque === black && l.blur === !black && l.noteOnGlass, `${name}, sky: the picture stays, the bar's glass ${black ? 'is opaque and does not blur' : 'blurs it'}, the empty desk's note lies on glass`, JSON.stringify(l));
     await (await g.$('#screen')).screenshot({ path: join(shots, `ground-${name}-sky.png`) });
   }
+  await g.emulateMedia({ colorScheme: 'light' });
   for (const pref of ['contrast', 'transparency']) {
     await g.evaluate((p) => { Rekta.prefs.set('theme', 'light', { remember: false }); Rekta.prefs.set('ground', 'normal', { remember: false }); Rekta.prefs.set(p, p === 'contrast' ? 'more' : 'reduce', { remember: false }); }, pref); await g.waitForTimeout(400);
     const l = await look();

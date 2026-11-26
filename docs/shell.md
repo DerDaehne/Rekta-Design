@@ -154,6 +154,9 @@ so Rekta holds what lies on it, not the ground:
 - **An accent may come with it.** A product that ships a picture may
   set its accent with it, in its slot
   ([colour.md](colour.md#product-slots)) and checked as every accent.
+  A theme made from the picture may come with it too, as
+  [dusk](colour.md#dusk) comes from sky; the person can still pick
+  another theme.
 
 ### Advice on a ground
 

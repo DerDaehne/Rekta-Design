@@ -228,8 +228,9 @@ function focusHeading(scope) {
 }
 
 // Prefs --------------------------------------------------------------------------------------------------------------
-// theme: system | light | dark; ground: normal | black (black: the dark theme on a black ground, for OLED screens; the
-// light theme keeps its own); density: auto | comfortable | compact; motion: system | on | off; contrast: system |
+// theme: system | light | dark | dusk (dusk: a theme of its own, its light or its dark variant as the system's setting
+// says); ground: normal | black (black: a dark theme on a black ground, for OLED screens; a light one keeps its own);
+// density: auto | comfortable | compact; motion: system | on | off; contrast: system |
 // more | normal (more: every text pair at 7:1, a frame on status tiles); transparency: system | reduce | normal
 // (reduce: glass is the ground, nothing blurs); accent: product | a named accent (ink, teal, steel, violet, mauve,
 // pink, magenta: tokens/rekta.accents.json, which rekta.tokens.css carries as [data-accent]). The default removes the

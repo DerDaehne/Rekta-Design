@@ -1,7 +1,7 @@
 {
-  "$description": "Rekta Design tokens: the single source. W3C Design Tokens (DTCG) format. Dimensions are logical pixels (CSS px, Android dp, Apple pt); the web build converts type, control and tile sizes to rem. Colour comes in two independent sets (light, dark) and control sizes in two densities (comfortable, compact). Fluid sizes use $type \"fluidDimension\" (a documented extension): min and max in logical px plus the share of the hosting box's width between them. Every token's usage text is its $description. Generated outputs: dist/rekta.tokens.css (web, --rk- prefix), dist/rekta.tokens.json (resolved, platform-neutral). See docs/platforms.md.",
+  "$description": "Rekta Design tokens: the single source. W3C Design Tokens (DTCG) format. Dimensions are logical pixels (CSS px, Android dp, Apple pt); the web build converts type, control and tile sizes to rem. Colour comes in two independent sets (light, dark), with dusk laid over them and control sizes in two densities (comfortable, compact). Fluid sizes use $type \"fluidDimension\" (a documented extension): min and max in logical px plus the share of the hosting box's width between them. Every token's usage text is its $description. Generated outputs: dist/rekta.tokens.css (web, --rk- prefix), dist/rekta.tokens.json (resolved, platform-neutral). See docs/platforms.md.",
   "color": {
-    "$description": "Light and dark are two independent sets, not variants of one token. Status colours are corrected from the prototype for contrast and colour blindness (see CHANGELOG). light-contrast and dark-contrast hold only what changes for more contrast, black what changes for the black ground of the dark theme (docs/colour.md).",
+    "$description": "Light and dark are two independent sets, not variants of one token. Status colours are corrected from the prototype for contrast and colour blindness (see CHANGELOG). light-contrast and dark-contrast hold only what changes for more contrast, black what changes for the black ground of the dark theme. Dusk, a third theme the person picks, is two sets laid over light and dark (dusk-light, dusk-dark: its neutrals, glass and shading), each with its own for more contrast (dusk-light-contrast, dusk-dark-contrast) (docs/colour.md).",
     "light": {
       "bg": {
         "$type": "color",
@@ -495,6 +495,136 @@
         "$type": "color",
         "$value": "{color.dark.bg}",
         "$description": "Opaque: the ground, as under reduced transparency; a blur over black shows nothing."
+      }
+    },
+    "dusk-light": {
+      "$description": "Dusk, a theme of its own made from the picture sky (site/sky.webp), its light variant: the values that change from color.light when the person picks dusk (the theme pref, never from a system setting) and the system is light. Light's steps with the sky's cool cast (OKLCH hue about 240°, chroma at most 0.022). Status, content fills, hover, disabled and the accent stay the light theme's.",
+      "bg": {
+        "$type": "color",
+        "$value": "#f5f9fc",
+        "$description": "Page ground, a cool paper. Everything sits directly on it; text-primary reads on it."
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#e4ecf2",
+        "$description": "Neutral secondary ground: rows, inputs, tiles with no status. text-primary and text-contrast-high read on it."
+      },
+      "surface-2": {
+        "$type": "color",
+        "$value": "#d7e1e9",
+        "$description": "Hover step of surface."
+      },
+      "text": {
+        "primary": {
+          "$type": "color",
+          "$value": "#10181c",
+          "$description": "Primary text on bg, surface, surface-2 and on every status-*-tile fill (checked AA)."
+        },
+        "contrast-low": {
+          "$type": "color",
+          "$value": "#c7d3dc",
+          "$description": "Hairlines (1–2px) and disabled borders. Decorative separator, not for text."
+        },
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#5a666c",
+          "$description": "Secondary borders and placeholder text on bg."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#475157",
+          "$description": "Secondary text on bg and surface (AA). Never on a status tile."
+        }
+      },
+      "shading": {
+        "$type": "color",
+        "$value": "rgba(16, 24, 28, 0.67)",
+        "$description": "Behind a sheet: the theme's ink at 67%, as in light."
+      },
+      "glass": {
+        "$type": "color",
+        "$value": "rgba(245, 249, 252, 0.82)",
+        "$description": "The app bar's frosted ground: the ground at 82%, as in light."
+      }
+    },
+    "dusk-dark": {
+      "$description": "Dusk, its dark variant: the values that change from color.dark when the person picks dusk and the system is dark. A petrol ground from the foot of the picture sky (hue about 232°) and text with the warmth of its rose (hue about 20°), each at a chroma of at most 0.022; the hairline stays cool. Status, content fills, hover, disabled and the accent stay the dark theme's, and the black ground lies over it as over dark.",
+      "bg": {
+        "$type": "color",
+        "$value": "#0e1a21",
+        "$description": "Page ground, the petrol of the picture's foot. Everything sits directly on it; text-primary reads on it."
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#1d292f",
+        "$description": "Neutral secondary ground: rows, inputs, tiles with no status. text-primary and text-contrast-high read on it."
+      },
+      "surface-2": {
+        "$type": "color",
+        "$value": "#273238",
+        "$description": "Hover step of surface."
+      },
+      "text": {
+        "primary": {
+          "$type": "color",
+          "$value": "#faefef",
+          "$description": "Primary text on bg, surface, surface-2 and on every status-*-tile fill (checked AA), with the rose's warmth."
+        },
+        "contrast-low": {
+          "$type": "color",
+          "$value": "#3f484e",
+          "$description": "Hairlines (1–2px) and disabled borders, cool like the ground. Decorative separator, not for text."
+        },
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#a08e8e",
+          "$description": "Secondary borders and placeholder text on bg."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#bdadac",
+          "$description": "Secondary text on bg and surface (AA). Never on a status tile."
+        }
+      },
+      "shading": {
+        "$type": "color",
+        "$value": "rgba(32, 39, 43, 0.67)",
+        "$description": "Behind a sheet: a cool grey at 67%, as the dark theme's warm one."
+      },
+      "glass": {
+        "$type": "color",
+        "$value": "rgba(14, 26, 33, 0.82)",
+        "$description": "The app bar's frosted ground: the ground at 82%, as in dark."
+      }
+    },
+    "dusk-light-contrast": {
+      "$description": "More contrast in dusk's light variant: the values that change from dusk-light, laid over light-contrast (its status tiles, plain content fills and opaque glass) when the person asks for more contrast. Every text pair holds 7:1.",
+      "text": {
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#444f56",
+          "$description": "Raised to 7:1 on bg and surface, in the same cool cast."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#3a444a",
+          "$description": "Raised to 7:1 on bg and surface, still a step from text-primary."
+        }
+      }
+    },
+    "dusk-dark-contrast": {
+      "$description": "More contrast in dusk's dark variant: the values that change from dusk-dark, laid over dark-contrast (its status tiles, plain content fills and opaque glass) when the person asks for more contrast. Every text pair holds 7:1.",
+      "text": {
+        "contrast-medium": {
+          "$type": "color",
+          "$value": "#c0aead",
+          "$description": "Raised to 7:1 on bg and surface, in the same warm cast."
+        },
+        "contrast-high": {
+          "$type": "color",
+          "$value": "#d2c1c1",
+          "$description": "Raised to 7:1 on bg and surface, still a step from text-primary."
+        }
       }
     }
   },

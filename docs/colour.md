@@ -8,9 +8,10 @@ on them (`text-primary`, `text-contrast-high`, `-medium`, `-low`):
 paper and two close warm greys in light, a warm near-black and two close
 steps above it in dark. The neutrals carry a **warm cast**, one
 yellow-red hue (OKLCH about 72° to 85°) at a chroma of at most 0.022, so
-the frame stays quiet and the content is what stands out. The cast is
-not a hue: it stays below 0.05, the chroma under which Rekta counts a
-colour as grey ([Apart from status](#apart-from-status)), it never
+the frame stays quiet and the content is what stands out. A theme made
+from a picture ([dusk](#dusk)) carries the casts of its picture instead,
+at the same chroma. The cast is not a hue: it stays below 0.05, the
+chroma under which Rekta counts a colour as grey ([Apart from status](#apart-from-status)), it never
 stands for the product, a status or a selection, and nothing is told
 apart by it. Rekta Design does not pick a hue to represent "the
 product": its one product slot, the **accent** (`color.*.accent` with
@@ -134,7 +135,8 @@ every other shadow.
 
 A person with an OLED screen may pick the **black ground** (`ground:
 black` in the prefs; rekta-core `rk_app_set_black`): the dark theme on
-`#000000`, whose pixels stay off. It is a choice, never the default,
+`#000000`, whose pixels stay off, and [dusk](#dusk)'s dark variant
+alike. It is a choice, never the default,
 and no system setting asks for it; the light theme keeps its own ground.
 `color.black` holds only what changes from `color.dark`: the ground,
 and glass, which is the ground. Everything else stays the dark theme's,
@@ -161,6 +163,62 @@ Under more contrast the black ground lies over the dark contrast set
 transparency changes nothing that shows. Forced colours replace it as
 every other colour. `node scripts/build.mjs --check` measures both
 black sets like the themes.
+
+## Dusk
+
+**Dusk** is a theme of its own, made from the picture sky (the
+showcase's ground, [shell.md](shell.md#the-ground-of-a-workspace)): cool
+blue-grey above, rose in the middle, petrol at the foot. A person picks
+it beside light and dark (`theme: dusk` in the prefs); no system setting
+asks for it. It has a light and a dark variant, and the system's light
+or dark setting picks the one that shows. Each variant is a set laid
+over the theme below it, light or dark, and changes only the neutrals,
+glass and shading:
+
+| | Light variant (`color.dusk-light`) | Dark variant (`color.dusk-dark`) |
+|---|---|---|
+| Cast | the sky's cool blue-grey, OKLCH hue about 240° | a petrol ground from the picture's foot (about 232°), text with the warmth of its rose (17° to 22°), a cool hairline |
+| `bg`, `surface`, `surface-2` | `#f5f9fc`, `#e4ecf2`, `#d7e1e9` | `#0e1a21`, `#1d292f`, `#273238` |
+| `text-primary` | `#10181c` | `#faefef` |
+| `text-contrast-high`, `-medium`, `-low` | `#475157`, `#5a666c`, `#c7d3dc` | `#bdadac`, `#a08e8e`, `#3f484e` |
+| `glass` | the ground at 82% | the ground at 82% |
+| `shading` | the ink at 67% | a cool grey at 67% (`#20272b`) |
+| More contrast (`-contrast`) | `text-contrast-high` `#3a444a`, `-medium` `#444f56` | `text-contrast-high` `#d2c1c1`, `-medium` `#c0aead` |
+
+- **The rest is the theme below.** Status colours, tiles and soft
+  tints, content fills, `hover` and `disabled` are light's in the
+  light variant and dark's in the dark one, so a status reads the same
+  in every theme. The steps stay close to the theme's: a surface stands
+  off the ground by 1.13:1 in the light variant and 1.19:1 in the dark
+  (1.13:1 and 1.18:1 in light and dark), the hairline by 1.44:1 and
+  1.89:1 (1.44:1 and 1.87:1).
+- **Every pair holds as in its theme.** Ink on the ground measures
+  16.96:1 in the light variant and 15.70:1 in the dark,
+  `text-contrast-high` 7.68:1 and 8.19:1, ink on every tile and soft
+  tint 4.5:1 or more, text on glass over white and over black 5.04:1
+  and 4.70:1.
+- **More contrast** lays the theme's contrast set over the variant and
+  dusk's own over that (`color.dusk-light-contrast`,
+  `color.dusk-dark-contrast`): the tiles, frames, plain content fills
+  and opaque glass of more contrast, and the two text steps raised in
+  dusk's casts, every text pair at 7:1.
+- **The black ground** lies over the dark variant as over dark
+  (`themes.dusk-black`, `dusk-black-contrast`): the ground and glass
+  black, everything else dusk's; a surface stands off black by 1.41:1,
+  the hairline by 2.25:1. Under the light variant dusk keeps its ground.
+- **The accent takes the pair of the theme below.** A named accent, or a
+  product's own, shows its light pair in the light variant and its dark
+  pair in the dark one; ink is dusk's ink. Each holds the accent's
+  rules there: `--check` measures the named ones in every dusk theme,
+  and `--check-product` measures a product's in each theme its pair
+  shows in.
+- **Less transparency and forced colours** do what they do in every
+  theme.
+
+`node scripts/build.mjs --check` measures the four dusk themes and both
+on black like light and dark, holds the neutrals of every theme to a
+chroma of at most 0.022, and fails when a dusk set changes anything but
+the neutrals, glass and shading.
 
 ## The accent
 
@@ -215,7 +273,8 @@ violet to pink, and the greys.
 ### Named accents
 
 Rekta ships checked accents, each a pair per theme and per contrast set
-(`tokens/rekta.accents.json`, `accents` in `rekta.tokens.json`). A
+(`tokens/rekta.accents.json`, `accents` in `rekta.tokens.json`; the
+black ground and [dusk](#dusk) take the pair of the theme below them). A
 product or its user picks a name instead of four pairs:
 
 | Name | Light | Dark | Text on it |

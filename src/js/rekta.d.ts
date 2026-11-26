@@ -43,15 +43,16 @@ export declare const prefs: {
   key: string;
   read(): Partial<Record<PrefName, string>>;
   write(all: Partial<Record<PrefName, string>>): void;
-  get(name: 'theme'): 'system' | 'light' | 'dark';
+  get(name: 'theme'): 'system' | 'light' | 'dark' | 'dusk';
   get(name: 'ground'): 'normal' | 'black';
   get(name: 'density'): 'auto' | 'comfortable' | 'compact';
   get(name: 'motion'): 'system' | 'on' | 'off';
   get(name: 'contrast'): 'system' | 'more' | 'normal';
   get(name: 'transparency'): 'system' | 'reduce' | 'normal';
   get(name: 'accent'): AccentName | (string & {});
-  set(name: 'theme', value: 'system' | 'light' | 'dark', options?: { remember?: boolean }): void;
-  /** black: the dark theme on a black ground (for OLED screens), its glass the ground; the light theme keeps its own. */
+  /** dusk: a theme of its own, made from a picture; its light or its dark variant as the system's setting says. */
+  set(name: 'theme', value: 'system' | 'light' | 'dark' | 'dusk', options?: { remember?: boolean }): void;
+  /** black: a dark theme (dark, or dusk's dark variant) on a black ground (for OLED screens), its glass the ground; a light one keeps its own. */
   set(name: 'ground', value: 'normal' | 'black', options?: { remember?: boolean }): void;
   set(name: 'density', value: 'auto' | 'comfortable' | 'compact', options?: { remember?: boolean }): void;
   set(name: 'motion', value: 'system' | 'on' | 'off', options?: { remember?: boolean }): void;
