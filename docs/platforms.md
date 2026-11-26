@@ -309,6 +309,10 @@ builds it from views or does without:
 - **Dragging a row away:** rekta-core's lists take Delete
   (`rk_list_on_remove`), not the drag; its declared lists (`RK_LIST`)
   do not offer the removal yet.
+- **Focus after the last entry goes** ([collections.md](collections.md#removing-entries)):
+  `rk_list_on_remove` hands the removal to the app and moves no focus;
+  rekta-core does not yet send focus to the control before the list, or
+  to the place's fallback, when no entry is left.
 - **A block to copy** ([typography.md](typography.md#a-block-to-copy)):
   rekta-core's labels take no focus and no selection, so a statement
   block cannot be copied yet; its text fields copy what is selected in

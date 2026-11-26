@@ -1014,7 +1014,9 @@
   let upload = 20;
   function paintCentre() {
     const n = $$(':scope > li', centre).length;
-    $('#centre-none').hidden = n > 0; $('#centre-all').hidden = !n;
+    const all = $('#centre-all'), lost = !n && document.activeElement === all;
+    $('#centre-none').hidden = n > 0; all.hidden = !n;
+    if (lost) centreRemove.focusBefore();
     const count = $('#sb-count');
     if (count.textContent !== String(n)) Rekta.tileUpdate($('#sb-notes'), () => { count.textContent = n; });
   }

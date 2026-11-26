@@ -236,7 +236,15 @@ a queue) offers three ways, and every one is followed by the undo toast
   the other two are shortcuts, as a context menu is.
 - **Delete** (⌫ on a keyboard without Delete) removes the focused entry,
   outside text fields; focus moves to the next entry, or to the one
-  before at the end.
+  before at the end. When no entry is left, focus moves to the control
+  before the list in the focus order (where Shift+Tab from the list
+  goes), else to the place's focus fallback
+  ([behaviour.md](behaviour.md), "Where focus goes back"); in a sheet,
+  which holds focus ([states.md](states.md)), it never leaves the sheet:
+  it ends at the sheet's title. The same when
+  the button or a drag removes the entry that has focus, and when a
+  control that empties the list (live.md's "dismiss all") hides itself
+  with it.
 - **Dragging it away:** the entry follows the pointer sideways towards
   its trailing edge only; let go past half its width it leaves that way
   and the rest close the gap, let go before it glides back. The drag
