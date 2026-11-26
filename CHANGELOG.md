@@ -107,9 +107,11 @@ dots' fade in.
   their `-contrast` forms, `dusk-black` and `dusk-black-contrast`,
   and each named accent's pair for them (the pair of the theme below);
   `--check` measures every pair in them, holds every theme's neutrals
-  to a chroma of 0.022 and dusk's sets to the neutrals, glass and
+  to a chroma of 0.022 (measured to three decimal places, as
+  colour.md now says) and dusk's sets to the neutrals, glass and
   shading, and `--check-product` measures a product's accent and codes
-  in every theme they show in. On the web: `prefs` `theme` `dusk`,
+  in every theme they show in, saying each fault once with the themes
+  it holds in. On the web: `prefs` `theme` `dusk`,
   `:root[data-theme="dusk"]`; the showcase offers it. rekta-core does
   not have it yet.
 - **The black ground** (colour.md, platforms.md, behaviour.md): a

@@ -493,14 +493,17 @@ function check(tokens) {
     const n = tokenName(p);
     if (![...NEUTRALS, 'glass', 'shading'].includes(n)) problems.push(`color.${set} sets ${n}: dusk changes only the neutrals, glass and shading (docs/colour.md)`);
   });
+  // The neutrals carry a cast, never a hue: a chroma of at most 0.022, measured to three decimal places. The rounding
+  // carries weight (dusk-dark's ground measures 0.02202), so colour.md says it, in the words checked here.
+  const CAST = 0.022, castRule = `at a chroma of at most ${CAST} (OKLCH, measured to three decimal places)`;
+  if (!readFileSync(join(root, 'docs', 'colour.md'), 'utf8').replace(/\s+/g, ' ').includes(castRule)) problems.push(`docs/colour.md (Neutral surfaces) does not say how the neutrals' chroma is measured: "${castRule}"`);
   for (const theme of Object.keys(THEMES)) {
     const c = t.themes[theme];
     // More contrast holds every text pair at 7:1 (WCAG AAA); marks keep 3:1.
     const text = ALL_TEXT[theme];
-    // The neutrals carry a cast, never a hue: a chroma of at most 0.022, to the rule's three places (docs/colour.md).
     for (const n of NEUTRALS) {
       const chroma = oklch(c[n])[1];
-      if (+chroma.toFixed(3) > 0.022) problems.push(`${theme}: ${n} ${c[n]} has a chroma of ${chroma.toFixed(3)}, a neutral's is at most 0.022`);
+      if (+chroma.toFixed(3) > CAST) problems.push(`${theme}: ${n} ${c[n]} has a chroma of ${chroma.toFixed(3)}, a neutral's is at most ${CAST}`);
     }
     const need = (fg, bg, min, what) => { const r = contrast(c[fg], c[bg]); if (r < min) problems.push(`${theme}: ${what} ${fg} on ${bg} is ${r.toFixed(2)}:1, needs ${min}:1`); };
     for (const bg of ['bg', 'surface']) {
@@ -770,6 +773,13 @@ export function checkProduct(css, file = 'product CSS') {
   const problems = [], notes = [], warnings = [], t = buildTokensJson(loadTokens(), 'check'), codes = { light: {}, dark: {} };
   const accents = Object.fromEntries(Object.keys(TEXT).map((k) => [k, {}]));
   const wides = new Set(), queries = new Set();
+  // A value shows in every theme over its own too (the black ground, dusk's variant): a fault it has in several is said
+  // once, with the first theme's numbers and the others named; a warning names no theme and is said once.
+  const faults = new Map();
+  const fault = (into, theme, text) => {
+    const key = `${into === problems ? 'problem' : 'warning'} ${text.replace(/\d+\.\d+/g, '')}`, f = faults.get(key);
+    if (f) f.also.push(theme); else faults.set(key, { into, theme, text, also: [] });
+  };
   // Walk the rules: a declaration is dark when a selector or @media around it says dark.
   const stack = [];
   let buf = '';
@@ -815,7 +825,7 @@ export function checkProduct(css, file = 'product CSS') {
       let col; try { col = parse(set[n]); } catch { problems.push(`${file}: ${theme} --rk-series-${n} is not a colour the check reads (hex or rgb): ${set[n]}`); continue; }
       const hex = toHex8(col);
       // A value set for light or dark shows in every theme over it too: the black ground, dusk's variant.
-      for (const shown of shownIn(theme)) for (const bg of ['bg', 'surface']) { const r = contrast(hex, t.themes[shown][bg]); if (r < 3) problems.push(`${file}: ${shown} --rk-series-${n} ${set[n]} on ${bg} is ${r.toFixed(2)}:1, needs 3:1`); }
+      for (const shown of shownIn(theme)) for (const bg of ['bg', 'surface']) { const r = contrast(hex, t.themes[shown][bg]); if (r < 3) fault(problems, shown, `--rk-series-${n} ${set[n]} on ${bg} is ${r.toFixed(2)}:1, needs 3:1`); }
     }
     for (let i = 0; i < ns.length; i += 1) for (let j = i + 1; j < ns.length; j += 1) {
       let a, b; try { a = toHex8(parse(set[ns[i]])); b = toHex8(parse(set[ns[j]])); } catch { continue; }
@@ -832,15 +842,16 @@ export function checkProduct(css, file = 'product CSS') {
     const pair = [read(own.accent, t.themes[theme].accent), read(own['on-accent'], t.themes[theme]['on-accent'])];
     accentCount += Object.keys(own).length + Object.keys(more).length;
     if (pair.includes(null)) continue;
-    for (const shown of shownIn(theme)) for (const p of accentCheck(pair[0], pair[1], t.themes[shown], TEXT[theme]).problems) problems.push(`${file}: ${shown} --rk-accent ${pair[0]}: ${p}`);
+    for (const shown of shownIn(theme)) for (const p of accentCheck(pair[0], pair[1], t.themes[shown], TEXT[theme]).problems) fault(problems, shown, `--rk-accent ${pair[0]}: ${p}`);
     const set = !!(more.accent || more['on-accent']);
     const hi = [read(more.accent, pair[0]), read(more['on-accent'], pair[1])];
     if (hi.includes(null)) continue;
     for (const shown of shownIn(CONTRAST[theme])) for (const p of accentCheck(hi[0], hi[1], t.themes[shown], TEXT[CONTRAST[theme]]).problems) {
-      if (set) problems.push(`${file}: ${shown} --rk-accent ${hi[0]}: ${p}`);
-      else warnings.push(`${file}: under more contrast the ${theme} accent ${hi[0]} keeps its value: ${p}; set it in the contrast selectors (docs/platforms.md), or derive one with node scripts/build.mjs --accent`);
+      if (set) fault(problems, shown, `--rk-accent ${hi[0]}: ${p}`);
+      else fault(warnings, null, `under more contrast the ${theme} accent ${hi[0]} keeps its value: ${p}; set it in the contrast selectors (docs/platforms.md), or derive one with node scripts/build.mjs --accent`);
     }
   }
+  for (const { into, theme, text, also } of faults.values()) into.push(`${file}: ${theme ? `${theme} ` : ''}${text}${theme && also.length ? ` (also in ${also.join(', ')})` : ''}`);
   for (const w of wides) if (!/^0(px)?$/.test(w) && !queries.has(w)) warnings.push(`${file}: --rk-pivot-wide is ${w}, but no @container (min-width: ${w}) repeats it, so the wide facets' first paint keeps size.pivot-wide (docs/behaviour.md, pivot(): the first paint)`);
   return { problems, notes, warnings, count: Object.keys(codes.light).length + Object.keys(codes.dark).length, accents: accentCount };
 }
@@ -938,6 +949,11 @@ export function checkAll() {
   // The showcase sets a domain colour code as a product would: it is held to the same rules.
   const site = checkProduct(readFileSync(join(root, 'site', 'site.css'), 'utf8'), 'site/site.css');
   problems.push(...site.problems); notes.push(...site.notes);
+  // A product's fault is said once, however many themes its value shows in, naming them: this CSS has three faults (a
+  // light code too faint on bg and on surface, a dark on-accent too faint) and two warnings (each accent under more
+  // contrast), in light and dark as on black and in dusk.
+  const once = checkProduct(':root { --rk-accent: #637586; --rk-on-accent: #ffffff; --rk-series-1: #b0b8c0; } :root[data-theme="dark"] { --rk-accent: #6c7e8f; --rk-on-accent: #555555; --rk-series-1: #6c7e8f; }', 'a product');
+  if (once.problems.length !== 3 || once.warnings.length !== 2 || !once.problems.some((x) => x.endsWith('(also in black, dusk-dark, dusk-black)'))) problems.push(`--check-product does not say each fault once, naming its themes (3 faults, 2 warnings): ${[...once.problems, ...once.warnings].join(' | ')}`);
   return problems;
 }
 

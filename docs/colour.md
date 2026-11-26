@@ -7,9 +7,10 @@ step (`color.*.surface-2`) are all neutral, and so are the text steps
 on them (`text-primary`, `text-contrast-high`, `-medium`, `-low`):
 paper and two close warm greys in light, a warm near-black and two close
 steps above it in dark. The neutrals carry a **warm cast**, one
-yellow-red hue (OKLCH about 72° to 85°) at a chroma of at most 0.022, so
-the frame stays quiet and the content is what stands out. A theme made
-from a picture ([dusk](#dusk)) carries the casts of its picture instead,
+yellow-red hue (OKLCH about 72° to 85°) at a chroma of at most 0.022
+(OKLCH, measured to three decimal places), so the frame stays quiet and
+the content is what stands out. A theme made from a picture
+([dusk](#dusk)) carries the casts of its picture instead,
 at the same chroma. The cast is not a hue: it stays below 0.05, the
 chroma under which Rekta counts a colour as grey ([Apart from status](#apart-from-status)), it never
 stands for the product, a status or a selection, and nothing is told
@@ -54,13 +55,14 @@ soft background behind a status label in running text.
 ## Contrast rule: AA on every fill
 
 The primary text colour (`color.*.text.primary`) is used as the text
-colour on top of **every** tile fill, in both themes — never a
+colour on top of **every** tile fill, in every theme — never a
 status-specific text colour. This is a hard constraint, not a
 convenience: every tile fill was chosen so that primary-on-tile clears
 WCAG AA (≥ 4.5:1) for normal text, in both the light and dark token
-sets. `node scripts/build.mjs --check` verifies these eight pairs (four
-statuses × two themes), together with every other text, mark, focus and
-soft-tint pair, and fails the build if a future token edit breaks one.
+sets, and under dusk's ink on the same fills.
+`node scripts/build.mjs --check` verifies these pairs (four statuses in
+every theme), together with every other text, mark, focus and soft-tint
+pair, and fails the build if a future token edit breaks one.
 
 Secondary text (`color.*.text.contrast-high`) is used on neutral
 surfaces, never on a status tile — its contrast was only checked against
@@ -137,7 +139,8 @@ A person with an OLED screen may pick the **black ground** (`ground:
 black` in the prefs; rekta-core `rk_app_set_black`): the dark theme on
 `#000000`, whose pixels stay off, and [dusk](#dusk)'s dark variant
 alike. It is a choice, never the default,
-and no system setting asks for it; the light theme keeps its own ground.
+and no system setting asks for it; a light theme (light, or dusk's light
+variant) keeps its own ground.
 `color.black` holds only what changes from `color.dark`: the ground,
 and glass, which is the ground. Everything else stays the dark theme's,
 so on black each part stands off the ground by more than in dark:
@@ -217,7 +220,8 @@ glass and shading:
 
 `node scripts/build.mjs --check` measures the four dusk themes and both
 on black like light and dark, holds the neutrals of every theme to a
-chroma of at most 0.022, and fails when a dusk set changes anything but
+chroma of at most 0.022 (measured to three decimal places, as in
+[Neutral surfaces](#neutral-surfaces)), and fails when a dusk set changes anything but
 the neutrals, glass and shading.
 
 ## The accent
@@ -389,7 +393,7 @@ named accent; `--check` measures them. Where the ring stands on a fill
 of the accent itself (a selected row, the accent surface) it takes the
 fill's text colour, `on-accent`, as on a status tile it takes the
 tile's ink ([accessibility.md](accessibility.md#focus-on-fills)). `hover` is a translucent
-neutral overlay (same rgba value in both themes, since it is applied on
+neutral overlay (same rgba value in every theme, since it is applied on
 top of the theme's own surface colour). `disabled` is a single flat grey
 per theme, used for text and borders, never as a fill.
 
