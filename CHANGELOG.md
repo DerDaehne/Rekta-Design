@@ -161,6 +161,39 @@ dots' fade in.
   `.rk-ab[aria-expanded="true"]`, which `menu()`, `palette()` and
   `appbar()`'s "more" already write. The showcase's clock and quick
   settings write it for their month and side panel.
+- **Hiding a lasting state the person knows** (states.md, behaviour.md,
+  shell.md, motion.md, platforms.md): a product may mark, per state,
+  that the person may hide it. A quiet × ("hide") after the banner's
+  action folds the banner into the app bar's word until the state ends;
+  the banner leaves as when its state ends, its room freed, and a polite
+  announcement says where the state stays. A new start of the state
+  shows the banner again, and so does any state not hidden that starts
+  (the banner shows the most severe state that is on and not hidden).
+  A state can be hidden only while the app bar says its word (with one
+  word, only the most severe state that is on), and hidden it still
+  does what it did (a hidden offline state still stops live drawing).
+  A halt is never hidden, nor any state the product does not mark, and
+  no state where there is no app-bar word to keep it. On the web:
+  `banner()` states take `hideable: true`; the handle gains
+  `hidden(name)`; the × is `.rk-banner-hide`, made in `.rk-actions`;
+  strings `hide` and `bannerHidden` (en, de). Nothing changes for a
+  state without `hideable`. The showcase's offline state can be hidden.
+  rekta-core has no banner yet.
+- **A block to copy** (typography.md): values a person copies somewhere
+  else (a version for a bug report, an id) stand in a statement block
+  that takes focus as one stop and ends in a quiet hint, "Ctrl+C copies"
+  (⌘C on Apple). Ctrl/Cmd+C copies it whole as plain lines; a selection
+  in it is copied as anywhere. A toast says "copied". A refusal is said
+  at the block: the hint turns into "not copied" in a field error's tone
+  for `timing.toast`, said once in a live region, then comes back. Each
+  line stays one line, cut with an ellipsis, whole in the overflow tip;
+  assistive technology reads the values as they stand.
+  On the web: `copyable(el, { toaster, text })`, which writes
+  `data-rk-copyable`; `.rk-hint[data-status="error"]` takes the field
+  error's tone anywhere; and the strings `copied`, `notCopied` and
+  `copyHint` (German "kopiert", "nicht kopiert", "… kopiert").
+  rekta-core has no block to copy yet (platforms.md). The showcase's
+  "get started" has one with its version and the browser.
 
 ### Contributing
 
@@ -177,6 +210,13 @@ dots' fade in.
 
 ### Fixed
 
+- A sideways section's clip cut the focus ring of a control flush with
+  its leading edge (a tile, a row, a field, a button, a block). `.rk-sec`
+  now leaves the ring's reach (6px, the ring's width plus the largest offset)
+  free at that edge, scrolls a focus into view with that reach free above and
+  below too, and the section's place in the panorama stays where it was;
+  accessibility.md says that a container that clips keeps its children's
+  ring whole, platforms.md lists rekta-core's section as still clipping it.
 - The dots fade in on `dots-ease-arrive`, with their flight, as
   rekta.css does; data.md and the description of
   `motion.dots.whole-at` named `ease-base`. An implementation that

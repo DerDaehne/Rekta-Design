@@ -90,6 +90,8 @@ export const strings = {
   noValue: 'no value', reload: 'reload',
   undoWindow: { one: (seconds, again) => `, 1 second to${again ? ' undo' : ''}`, other: (seconds, again) => `, ${seconds} seconds to${again ? ' undo' : ''}` },
   bannerStill: (event, word) => `${event}. The banner keeps showing “${word}” until that ends.`,
+  hide: 'hide',
+  bannerHidden: (word) => `${word} hidden. The app bar keeps showing it until it ends.`,
   chosen: (summary, chosen) => `${summary}: ${chosen}`,
   selected: { one: (n) => `${n} selected`, other: (n) => `${n} selected` },
   columnWidth: (column) => `width of ${column}`,
@@ -131,6 +133,9 @@ export const strings = {
   keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
   cannotAct: (label, reason) => `${label} (${reason})`,
   back: 'back',
+  copied: 'copied',
+  notCopied: 'not copied',
+  copyHint: (keys) => `${keys} copies`,
 };
 // rk-strings-end
 const COUNT_ARG = { undoWindow: 0, selected: 0, guardText: 1, updatesWaiting: 0, needAttention: 0 };
@@ -962,9 +967,11 @@ export function panorama(el, { pivot = null } = {}) {
   const links = () => (pivot ? [...pivot.querySelectorAll('a[href^="#"]')] : []);
   const linkFor = (sec) => links().find((a) => a.hash === `#${sec.id}`);
 
+  // A section's margin edge, where it stands in the row: its box starts a ring's reach before its content.
+  const marginEdge = (sec) => sec.getBoundingClientRect().left - (parseFloat(getComputedStyle(sec).marginLeft) || 0);
   function startOf(sec) {
     const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
-    return Math.min(el.scrollLeft + sec.getBoundingClientRect().left - el.getBoundingClientRect().left - pad, el.scrollWidth - el.clientWidth);
+    return Math.min(el.scrollLeft + marginEdge(sec) - el.getBoundingClientRect().left - pad, el.scrollWidth - el.clientWidth);
   }
   function mark(sec) {
     if (!sec) return;
@@ -988,7 +995,7 @@ export function panorama(el, { pivot = null } = {}) {
     let active = list[0];
     if (sideways()) {
       const edge = el.getBoundingClientRect().left, reach = el.clientWidth / 3;
-      for (const s of list) if (s.getBoundingClientRect().left - edge <= reach) active = s;
+      for (const s of list) if (marginEdge(s) - edge <= reach) active = s;
       // At either end the end's section is the one, however narrow the sections are (several edges may lie in the
       // first third of the width).
       if (Math.abs(el.scrollLeft) <= 1) active = list[0];
@@ -1066,7 +1073,7 @@ export function panorama(el, { pivot = null } = {}) {
   // at the start, and with any section aligned there, when they are all as wide. Says whether everything fits; then
   // nothing scrolls.
   function spread(list) {
-    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => parseFloat(getComputedStyle(s).width) || 0);
+    const xl = num('--rk-space-xl'), least = num('--rk-space-m'), sizes = list.map((s) => { const c = getComputedStyle(s); return (parseFloat(c.width) || 0) + (parseFloat(c.marginLeft) || 0); });
     const edge = el.clientWidth - (parseFloat(getComputedStyle(el).paddingLeft) || 0), n = sizes.length;
     const before = (j) => sizes.slice(0, j).reduce((a, w) => a + w, 0);
     const fitsWith = (g) => before(n) + (n - 1) * g <= edge + 1;
@@ -1700,18 +1707,31 @@ export function toaster(region) {
 
 // Banner -------------------------------------------------------------------------------------------------------------
 // One lasting system state at a time, the most severe first (order). states: { name: { word, status, alert, text,
-// action: label | { label, href }, since: the word before the time, until, on, off } }. set(name, true, { since })
+// action: label | { label, href }, since: the word before the time, until, on, off, hideable } }. set(name, true, { since })
 // gives the real start (a Date, or false when it is unknown: no time line); without it the start is now. A new state fades in once and holds still; a change of kind
 // glides to its new height; an ending state is an event, so the toaster says so once the banner has gone. Both live
-// regions stay mounted. The app bar follows with data-rk-state (halted for error, paused for warning).
+// regions stay mounted. The app bar follows with data-rk-state (halted for error, paused for warning). A hideable state
+// the person already knows folds into the app bar's word on a quiet × until it ends: the banner shows the most severe
+// state that is on and not hidden, the app bar the most severe that is on, and only that one may be hidden.
 export function banner(el, { states, order = Object.keys(states), appbar = null, liveWord = null, toaster: toasts = null, onAction = null } = {}) {
   states = { ...states };                                               // the banner's own copy: update() writes to it
   const alertRegion = el.querySelector('[role=alert]'), statusRegion = el.querySelector('[role=status]');
   const remedy = el.querySelector('.rk-actions .rk-btn');
   let remedyLink = null;                                                // the remedy of a state whose action navigates
-  const on = Object.fromEntries(order.map((n) => [n, false])), started = {};
+  const on = Object.fromEntries(order.map((n) => [n, false])), started = {}, hidden = {};
   let shown = null, clearing = 0, setBy = null;
   if (!el.hasAttribute('data-rk-phase') && !el.querySelector('.rk-banner-word')) el.setAttribute('data-rk-phase', 'clear');
+  // Only where the app bar's word keeps saying it, and never an alert (a halt).
+  const canHide = (n) => !!liveWord && !!states[n].hideable && !states[n].alert;
+  const topOn = () => order.find((n) => on[n]) || null;
+  const labelOf = (s) => (s.action && typeof s.action === 'object' ? s.action.label : s.action);
+  let hider = null, madeRow = null;
+  if (order.some(canHide)) {
+    const row = el.querySelector('.rk-actions') || (madeRow = el.appendChild(Object.assign(document.createElement('p'), { className: 'rk-actions' })));
+    hider = row.appendChild(document.createElement('button'));
+    hider.type = 'button'; hider.className = 'rk-btn rk-btn--icon rk-btn--quiet rk-banner-hide'; hider.hidden = true;
+    hider.append(icon('close'));
+  }
   // The banner's height on the root, written once the banner has settled: scroll-padding keeps focus clear of it,
   // and toasts hang below it where anchor positioning is missing.
   let settle = 0;
@@ -1746,13 +1766,14 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
     if (s.status) el.dataset.status = s.status; else delete el.dataset.status;
     el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
     write(name);
+    const label = labelOf(s), href = s.action && s.action.href;
     if (remedy) {
-      const label = s.action && typeof s.action === 'object' ? s.action.label : s.action, href = s.action && s.action.href;
       if (href && !remedyLink) { remedyLink = document.createElement('a'); remedyLink.className = remedy.className; remedy.after(remedyLink); }
       if (remedyLink) { remedyLink.hidden = !href; if (href) { remedyLink.href = href; remedyLink.textContent = label; } }
       remedy.hidden = !!href; remedy.textContent = href ? '' : label || '';
       remedy.parentElement.hidden = !label; remedy.removeAttribute('aria-disabled');
     }
+    offer();
     // A change of kind, or a state that returns while the banner leaves, glides to its new height.
     const h1 = el.getBoundingClientRect().height, d = ms('--rk-duration-short');
     if (standing && d && Math.abs(h1 - h0) >= 1) el.animate([{ height: `${h0}px` }, { height: `${h1}px` }], { duration: d, easing: css('--rk-ease-in') });
@@ -1767,28 +1788,51 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
       if (then) then();
     }, ms('--rk-duration-short'));
   }
+  // The × only on the state whose word the app bar says: hidden, it stays said there.
+  function offer() {
+    if (!hider || !shown) return;
+    hider.hidden = shown !== topOn() || !canHide(shown);
+    hider.setAttribute('aria-label', tx('hide')); hider.setAttribute('data-rk-tip', tx('hide'));
+    hider.parentElement.hidden = !labelOf(states[shown]) && hider.hidden;
+  }
+  // A control of the standing banner that goes from under the focus (the × once another state takes the banner) sends
+  // focus back as the banner's going does.
   function sync(changed, from) {
-    const name = order.find((n) => on[n]) || null;
+    const focused = el.contains(document.activeElement) ? document.activeElement : null;
+    paint(changed, from); offer();
+    if (focused && shown && !focused.getClientRects().length) returnFocus(setBy);
+  }
+  function paint(changed, from) {
+    const top = topOn(), name = order.find((n) => on[n] && !hidden[n]) || null;
     if (appbar) {
-      const top = name && states[name].status;
-      if (top === 'error') appbar.setAttribute('data-rk-state', 'halted');
-      else if (top === 'warning') appbar.setAttribute('data-rk-state', 'paused');
+      const status = top && states[top].status;
+      if (status === 'error') appbar.setAttribute('data-rk-state', 'halted');
+      else if (status === 'warning') appbar.setAttribute('data-rk-state', 'paused');
       else appbar.removeAttribute('data-rk-state');
     }
-    if (liveWord) liveWord.textContent = name ? (states[name].word || name) : tx('live');
+    if (liveWord) liveWord.textContent = top ? (states[top].word || top) : tx('live');
     if (name === shown) {
-      if (changed && toasts) toasts.show(tx('bannerStill', on[changed] ? states[changed].on : states[changed].off.split('.')[0], states[name].word || name), { key: 'state' });
+      if (!changed) return;
+      if (!shown && el.getAttribute('data-rk-phase') === 'clear') statusRegion.replaceChildren();   // a hidden state ended: its "hidden" line goes
+      if (toasts) toasts.show(shown ? tx('bannerStill', on[changed] ? states[changed].on : states[changed].off.split('.')[0], states[name].word || name) : states[changed].off, { key: 'state' });
       return;
     }
     const before = shown;
     shown = name;
     if (from) setBy = from;
     if (name) { show(name); if (before && changed && !on[changed] && toasts) toasts.show(states[changed].off, { key: 'state' }); }
-    else clear(() => { if (changed && toasts) toasts.show(states[changed].off, { key: 'state' }); });
+    else {
+      clear(() => {
+        if (on[before] && hidden[before]) statusRegion.textContent = tx('bannerHidden', states[before].word || before);
+        else if (changed && toasts) toasts.show(states[changed].off, { key: 'state' });
+      });
+    }
     el.dispatchEvent(new CustomEvent('rk:bannerchange', { bubbles: true, detail: { state: name } }));
   }
   const act = () => { if (shown && remedy.getAttribute('aria-disabled') !== 'true') (onAction ? onAction(shown) : set(shown, false)); };
   if (remedy) remedy.addEventListener('click', act);
+  const hide = () => { if (shown && shown === topOn() && canHide(shown)) { hidden[shown] = true; sync(null, null); } };
+  if (hider) hider.addEventListener('click', hide);
   // A state that is on gets a new sentence (a figure that changes): it is written in place, not announced again, and
   // its start stays.
   function update(name, text) {
@@ -1801,7 +1845,7 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
     if (!(name in on)) throw new Error(`unknown banner state ${name}`);
     if (on[name] === !!value) { if (value && text !== undefined) update(name, text); return; }
     if (text !== undefined) states[name] = { ...states[name], text };
-    on[name] = !!value;
+    on[name] = !!value; hidden[name] = false;                            // a new start shows the banner again
     if (value) { const d = since === false || since === null ? null : since === undefined ? new Date() : new Date(since); started[name] = d && !isNaN(d) ? d : null; }
     sync(name, from);
   }
@@ -1811,8 +1855,9 @@ export function banner(el, { states, order = Object.keys(states), appbar = null,
     update,
     toggle(name, opts) { set(name, !on[name], opts); },
     is(name) { return on[name]; },
+    hidden(name) { return !!hidden[name]; },
     get shown() { return shown; },
-    destroy() { ro.disconnect(); if (remedy) remedy.removeEventListener('click', act); if (remedyLink) remedyLink.remove(); },
+    destroy() { ro.disconnect(); if (remedy) remedy.removeEventListener('click', act); if (remedyLink) remedyLink.remove(); if (hider) (madeRow || hider).remove(); },
   };
 }
 
@@ -3049,8 +3094,10 @@ function keyName(k) {
   if (k === 'Meta') return tx('keyMeta', isWindows ? 'windows' : 'other');
   return KEY_NAMES[k] || (k.length === 1 ? k.toUpperCase() : k);
 }
-function shortcutText(el) {
-  const all = (el.getAttribute('aria-keyshortcuts') || '').split(/\s+/).filter(Boolean);
+function shortcutText(el) { return keysText(el.getAttribute('aria-keyshortcuts')); }
+// keysText('Control+C Meta+C'): the platform's one of these combinations ("Ctrl+C", ⌘C on Apple), written that way.
+function keysText(spec) {
+  const all = (spec || '').split(/\s+/).filter(Boolean);
   const pick = all.find((k) => (isMac ? /Meta/.test(k) : !/Meta/.test(k))) || all[0];
   if (!pick) return '';
   const rank = (k) => { const i = MODIFIERS.indexOf(k); return i < 0 ? MODIFIERS.length : i; };
@@ -3419,6 +3466,9 @@ export function tree(el, { onShow = null, onToggle = null } = {}) {
   };
 }
 
+// A live region says the same words again only once it has been empty: emptied, then written a moment later.
+function speak(live, t) { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); }
+
 // Sortable ---------------------------------------------------------------------------------------------------------
 // sortable(list, { items, handle, onMove }): items reordered by dragging their grip (.rk-grip, a button): the item
 // lifts as a floating surface, the others make room, and on release everything settles (FLIP). Keys on the grip:
@@ -3430,7 +3480,7 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
   const live = document.createElement('span');
   live.className = 'rk-sr'; live.setAttribute('role', 'status');
   list.after(live);
-  const say = (t) => { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
+  const say = (t) => speak(live, t);
   const name = (it) => (it.querySelector('b, a, span:not(.rk-grip)') || it).textContent.trim();
   let drag = null, grabbed = null, moving = false;
   function flip(change) {
@@ -3511,6 +3561,69 @@ export function sortable(list, { items = ':scope > li', handle = '.rk-grip', onM
     destroy() {
       list.removeEventListener('pointerdown', down); list.removeEventListener('pointermove', move); list.removeEventListener('pointerup', end);
       list.removeEventListener('pointercancel', end); list.removeEventListener('keydown', key); list.removeEventListener('focusout', blur); live.remove();
+    },
+  };
+}
+
+// Copyable -----------------------------------------------------------------------------------------------------------
+// copyable(el, { toaster, text }): a statement block of values meant to be copied, such as versions, ids or
+// diagnostics (docs/typography.md). It takes focus as one stop and is named by its own text, so it is read as it
+// stands; a hint at its end says the key. Ctrl/Cmd+C copies it whole as plain lines (text, else one per line it shows),
+// and the toaster says "copied". A refusal is said at the block, which is still on screen (states.md): the hint turns
+// into "not copied" in a field error's tone (forms.md) for as long as a toast would stand (timing.toast), said once in
+// a live region after the block. A selection in it is the platform's to copy. Each line stays one line, cut with an
+// ellipsis, and shows the overflow tip while it is cut.
+export function copyable(el, { toaster = null, text = null } = {}) {
+  const hint = document.createElement('p');
+  hint.className = 'rk-hint';
+  const live = document.createElement('span');
+  live.className = 'rk-sr'; live.setAttribute('role', 'status');
+  const tipped = [...el.children].filter((c) => !c.hasAttribute('data-rk-tip'));
+  tipped.forEach((c) => c.setAttribute('data-rk-tip', 'overflow'));
+  el.append(hint);
+  el.after(live);
+  el.setAttribute('data-rk-copyable', '');
+  if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+  if (!el.hasAttribute('role')) el.setAttribute('role', 'group');
+  if (!el.hasAttribute('aria-label') && !el.hasAttribute('aria-labelledby')) {
+    if (!el.id) el.id = uid('rk-copy');
+    el.setAttribute('aria-labelledby', el.id);
+  }
+  let back = 0;
+  function rest() {
+    clearTimeout(back);
+    hint.textContent = tx('copyHint', keysText('Control+C Meta+C'));
+    delete hint.dataset.status;
+    live.textContent = '';
+  }
+  function refused() {
+    clearTimeout(back);
+    hint.textContent = tx('notCopied');
+    hint.dataset.status = 'error';
+    speak(live, tx('notCopied'));
+    back = setTimeout(rest, ms('--rk-duration-toast'));
+  }
+  rest();
+  const lines = () => [...el.children].filter((c) => c !== hint && !c.hidden).map((c) => c.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
+  async function copy() {
+    try { await navigator.clipboard.writeText(typeof text === 'function' ? text() : text || lines()); }
+    catch { refused(); return; }                                    // no clipboard here: not a secure page, or refused
+    rest();
+    if (toaster) toaster.show(tx('copied'), { key: 'rk-copy', from: el });
+  }
+  const key = (e) => {
+    if (e.defaultPrevented || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'c') return;
+    const sel = getSelection();
+    if (sel && !sel.isCollapsed && sel.containsNode(el, true)) return;
+    e.preventDefault();
+    copy();
+  };
+  el.addEventListener('keydown', key);
+  return {
+    destroy() {
+      clearTimeout(back);
+      el.removeEventListener('keydown', key); hint.remove(); live.remove(); el.removeAttribute('data-rk-copyable');
+      tipped.forEach((c) => c.removeAttribute('data-rk-tip'));
     },
   };
 }

@@ -24,6 +24,11 @@
   const toasts = Rekta.toaster($('#toasts'));
   const hist = Rekta.undoStack({ toaster: toasts });
 
+  /* ---------- start: the version and the browser, a block to copy into a bug report ---------- */
+  $('#about-version').textContent = `Rekta Design ${Rekta.version}`;
+  $('#about-browser').textContent = navigator.userAgent;
+  Rekta.copyable($('#about-block'), { toaster: toasts });
+
   /* ---------- colour: contrast measured live, in the theme on screen ---------- */
   const probe = document.createElement('i');
   probe.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
@@ -80,7 +85,7 @@
   /* ---------- the banner: lasting states, the most severe first ---------- */
   const STATES = {
     halted: { word: 'halted', status: 'error', alert: true, action: 'release stop', text: 'Everything live has stopped: an emergency stop holds every update. Release the stop to go on.', on: 'Stopped everything', off: 'Stop released. Live data goes on.' },
-    offline: { word: 'offline', status: 'warning', action: 'retry now', text: 'This page lost its connection. Figures are frozen; it retries every 10 seconds.', on: 'Connection lost', off: 'Connected again. Figures are live.' },
+    offline: { word: 'offline', status: 'warning', action: 'retry now', hideable: true, text: 'This page lost its connection. Figures are frozen; it retries every 10 seconds.', on: 'Connection lost', off: 'Connected again. Figures are live.' },
     paused: { word: 'paused', status: 'warning', action: 'resume', text: 'You paused the live data. Figures hold still until you resume.', on: 'Live data paused', off: 'Live data resumed.' },
     readonly: { word: 'read-only', since: 'until', until: '15:00', text: 'Maintenance: everything stays visible; changes open again when it ends.', on: 'Maintenance started', off: 'Maintenance finished. Changes are open again.' },
   };
@@ -103,6 +108,7 @@
   }
   function setState(name, on, from) { clearTimeout(retrying); banner.set(name, on, { from }); paintState(); }
   ORDER.forEach((n) => $(`#s-${n}`).addEventListener('change', (e) => setState(n, e.target.checked, e.target)));
+  $('#banner').addEventListener('rk:bannerchange', paintState);   /* also when the person hides a state */
   $('#ab-pause').addEventListener('click', (e) => setState('paused', !banner.is('paused'), e.currentTarget));
 
   /* ---------- live tiles: what this page measures about itself ---------- */

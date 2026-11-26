@@ -76,6 +76,55 @@ Choose a tile when the statement is one of several things side by side
 on a grid, or when it opens something; choose a statement block when it
 is read in sequence, or runs longer than a tile holds.
 
+### A block to copy
+
+Values a person copies somewhere else, such as an app's version for a
+bug report, an id or a diagnostic, stand in a statement block: the main
+value in the sentence's place, the rest as its facts.
+
+- **It takes focus** as one stop, by Tab or a press, and its text can
+  be selected like any text.
+- **A hint ends it,** under the facts and above the hairline, in the
+  hint's quiet style: "Ctrl+C copies", the key written as
+  [navigation.md](navigation.md#writing-a-key) says (⌘C on Apple).
+  Nothing else on screen tells the key.
+- **Ctrl/Cmd+C copies it whole,** as plain lines: one per line it shows,
+  the hint left out, or lines the product gives in the form a reader
+  pastes ("app 2.3.0", "engine 4.1"). A selection made in the block is
+  the platform's to copy, as anywhere: then only what is selected goes.
+- **A copy is answered by a toast,** "copied": it changes nothing on
+  screen, so the toast is its answer.
+- **A refusal is said at the block,** which is still on screen
+  ([states.md](states.md#pending-actions)): when the system refuses, the
+  hint turns into "not copied" in a field error's tone, primary text
+  after the error square, at once, as a field's hint turns into its
+  error ([forms.md](forms.md#fields)). It stands for `timing.toast`
+  (5s), as long as a toast would have stood, then the hint comes back
+  at once; another refusal starts it again, a copy ends it. Assistive
+  technology hears "not copied" once, politely.
+- **Pointer and touch** copy through the text selection; there is no
+  copy button.
+- **Each line stays one line.** A value too long for its column ends in
+  an ellipsis; the whole of it is in the overflow tip, in what is copied
+  and in what is read.
+- **Assistive technology reads the values as they stand,** in the order
+  shown, with the hint: the block is named by its own text, never by a
+  spoken rewording of it.
+
+```html
+<div class="rk-statement" id="about">
+  <p class="rk-kicker">version</p>
+  <p>2.3.0+20261124.1830.4f2a9c1</p>
+  <p class="rk-facts">engine 4.1 · toolkit 6.10</p>
+</div>
+```
+
+On the web, `copyable(el, { toaster, text })` on the block does the rest
+([behaviour.md](behaviour.md#copyableel--toaster-text-)): it adds the
+hint, the focus stop and the name, and `data-rk-copyable`, under which
+each line keeps to one line. A refusal puts `data-status="error"` on the
+hint; any `.rk-hint` with it takes the field error's tone.
+
 ## Scale
 
 All sizes are tokens (`typography.size.*`); do not hand-roll pixel

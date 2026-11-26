@@ -219,6 +219,8 @@ export interface BannerState {
   until?: string;
   on?: string;
   off?: string;
+  /** The person may hide it with a quiet × until it ends (never an alert; only with `liveWord`). */
+  hideable?: boolean;
 }
 export declare function banner(el: HTMLElement, options: {
   states: Record<string, BannerState>;
@@ -234,6 +236,8 @@ export declare function banner(el: HTMLElement, options: {
   update(name: string, text: string): void;
   toggle(name: string, options?: { from?: HTMLElement | null; since?: Date | string | number | false | null }): void;
   is(name: string): boolean;
+  /** The person hid this state; it shows again once it ends and starts anew. */
+  hidden(name: string): boolean;
   readonly shown: string | null;
 };
 
@@ -388,6 +392,13 @@ export declare function sortable(list: HTMLElement, options?: {
   handle?: string;
   onMove?: ((from: number, to: number, item: HTMLElement) => void) | null;
 }): Destroyable & { move(item: HTMLElement, to: number): boolean; refresh(): void };
+
+/** A statement block of values to copy: one focus stop, Ctrl/Cmd+C copies it whole as lines (`text`, else the lines it
+ * shows) and the toaster says "copied"; a refusal is said in the block's hint. */
+export declare function copyable(el: HTMLElement, options?: {
+  toaster?: Toaster | null;
+  text?: string | (() => string) | null;
+}): Destroyable;
 
 /** Entries a person may remove: a `data-rk-remove` button, Delete, or a drag towards the trailing edge. `left`: the
  * entry has already gone from sight (a drag), so remove it at once. When no entry is left, focus goes to the control

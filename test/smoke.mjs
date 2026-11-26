@@ -175,6 +175,65 @@ for (const [w, h, scheme] of [[1440, 900, 'light'], [1440, 900, 'dark'], [390, 8
 
 const p = await open();
 ok(await p.evaluate(() => getComputedStyle(document.querySelector('#pan')).display === 'flex'), 'desktop panorama is sideways');
+
+// A section clips what runs past its sides, so the focus ring of a child flush with its edge stays whole (accessibility.md).
+{
+  const probe = () => {
+    const sec = document.createElement('section'); sec.className = 'rk-sec'; sec.id = 't-ring';
+    sec.innerHTML = '<button class="rk-btn" type="button">a</button><input class="rk-input" aria-label="b"><a class="rk-tile" href="#x" style="display:block;height:80px">c</a>'
+      + '<a href="#y" class="rk-link">d</a><div class="rk-copy" tabindex="0">e</div><div class="rk-errors" tabindex="0">f</div>'
+      + '<svg class="rk-chart-svg" tabindex="0" width="100" height="40"></svg>';
+    document.querySelector('#pan').prepend(sec);
+    const clip = sec.getBoundingClientRect(), kinds = [];
+    for (const el of sec.children) {
+      el.focus({ focusVisible: true });
+      const s = getComputedStyle(el), reach = (parseFloat(s.outlineOffset) || 0) + (parseFloat(s.outlineWidth) || 0), r = el.getBoundingClientRect();
+      kinds.push({ kind: el.getAttribute('class') || el.tagName, ring: s.outlineStyle === 'none' ? null : Math.round((r.left - Math.max(reach, 0)) * 100) / 100, clip: clip.left, display: getComputedStyle(sec).overflowX });
+    }
+    sec.remove();
+    return kinds;
+  };
+  for (const [name, opts] of [['light', {}], ['dark', { colorScheme: 'dark' }], ['forced colours', { forcedColors: 'active' }], ['phone', { viewport: { width: 390, height: 800 } }]]) {
+    const c = await open(opts);
+    await c.keyboard.press('Tab');
+    for (const k of await c.evaluate(probe)) ok(k.display === 'visible' || k.ring === null || k.ring >= k.clip - 0.01, `${name}: the focus ring of a flush ${k.kind} is not clipped by its section`, JSON.stringify(k));
+    await c.close();
+  }
+}
+// A jump puts a section's content where the first section's stands, in line with the strip.
+{
+  const c = await open();
+  const off = await c.evaluate(async () => {
+    const pan = document.querySelector('#pan'), sec = document.querySelector('#roots');
+    window.site.home.goTo('roots', { focus: false, instant: true });
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return sec.getBoundingClientRect().left + parseFloat(getComputedStyle(sec).paddingLeft) - pan.getBoundingClientRect().left - parseFloat(getComputedStyle(pan).paddingLeft);
+  });
+  ok(Math.abs(off) <= 0.5, 'a jump puts a section\'s content in line with the strip', off);
+  await c.close();
+}
+// Focus scrolled into a section brings its ring along: Tab and Shift+Tab to the scrolling edges leave no ring cut at the
+// top or bottom of the section's visible box.
+{
+  const c = await open();
+  await c.evaluate(() => {
+    const sec = document.createElement('section'); sec.className = 'rk-sec'; sec.id = 't-scroll';
+    sec.innerHTML = Array.from({ length: 30 }, (_, i) => (i % 2 ? '<div class="rk-errors" tabindex="0">e</div>' : '<button class="rk-btn" type="button">b</button>')).join('');
+    document.querySelector('#pan').prepend(sec);
+    sec.firstChild.focus({ focusVisible: true });
+  });
+  const cut = () => c.evaluate(() => {
+    const el = document.activeElement, s = getComputedStyle(el), r = el.getBoundingClientRect(), box = document.querySelector('#t-scroll').getBoundingClientRect(), pan = document.querySelector('#pan').getBoundingClientRect();
+    const reach = Math.max(parseFloat(s.outlineOffset) || 0, 0) + (parseFloat(s.outlineWidth) || 0);
+    return { id: el.className, top: r.top - reach - Math.max(box.top, pan.top), bottom: Math.min(box.bottom, pan.bottom) - (r.bottom + reach) };
+  });
+  const bad = [];
+  for (const key of ['Tab', 'Shift+Tab']) {
+    for (let i = 0; i < 29; i += 1) { await c.keyboard.press(key); await c.waitForTimeout(30); const m = await cut(); if (m.id && (m.top < -0.5 || m.bottom < -0.5)) bad.push(`${key} ${i} ${JSON.stringify(m)}`); }
+  }
+  ok(!bad.length, 'a focus scrolled into a section keeps its whole ring at the top and the bottom', bad.slice(0, 3).join('; '));
+  await c.close();
+}
 // A section's space (layout.md): space-xl above and below its content, space-l from its title to what follows, space-m
 // between two other blocks; rows and the tile gap keep space-s.
 {
@@ -655,7 +714,8 @@ const edges = await p.evaluate(async () => {
   const pan = place.firstChild, api = Rekta.panorama(pan), out = { bad: [], changed: 0, fits: 0, worst: 0 };
   for (let w = 800; w <= 2400; w += 10) {
     place.style.width = `${w}px`; await frame();
-    const r = [...pan.querySelectorAll('.rk-sec')].map((s) => s.getBoundingClientRect()), edge = pan.getBoundingClientRect().left + pan.clientWidth;
+    // A section's leading padding holds its focus ring's reach; its content starts after it.
+    const r = [...pan.querySelectorAll('.rk-sec')].map((s) => { const b = s.getBoundingClientRect(); return { left: b.left + parseFloat(getComputedStyle(s).paddingLeft), right: b.right }; }), edge = pan.getBoundingClientRect().left + pan.clientWidth;
     const gaps = r.slice(1).map((s, i) => Math.round(s.left - r[i].right)), gap = gaps[0];
     const even = gaps.every((g) => g === gap), inside = r.some((s) => s.left + 48 <= edge + 0.5 && edge - 0.5 <= s.right - 48);
     if (pan.hasAttribute('data-rk-fit')) { out.fits += 1; if (r[3].right > edge + 1 || gap < 16 || gap > 48 || !even) out.bad.push(`${w}: fit, gap ${gap}`); continue; }
@@ -760,7 +820,130 @@ ok(cased.every((x) => x === 'uppercase 3px'), 'a pivot\'s tabs take the strip\'s
   });
   ok(seen.count > 2 && seen.english.length === 0, 'in German, what rekta.js writes is German', JSON.stringify(seen));
   ok(seen.locale === 'de' && seen.number === '1234,5', 'and its numbers follow the locale', JSON.stringify(seen));
+  ok((await text(de, '#about-block > .rk-hint')) === 'Ctrl+C kopiert', 'a block to copy says its key in German', await text(de, '#about-block > .rk-hint'));
   await de.close();
+}
+
+// A block to copy (typography.md): one focus stop named by its own text, a hint with the platform's key; each line one
+// line, a cut one shown whole by the overflow tip; Ctrl+C with nothing selected copies the lines and the toast says so;
+// a selection in it is the browser's; a refused clipboard is said in the hint; a product's own lines.
+{
+  const c = await open({ permissions: ['clipboard-read', 'clipboard-write'] });
+  await go(c, 'start');
+  const shape = await c.evaluate(() => {
+    const b = document.querySelector('#about-block'), ua = document.querySelector('#about-browser');
+    return { tab: b.tabIndex, role: b.getAttribute('role'), hint: `${b.lastElementChild.className}: ${b.lastElementChild.textContent}`,
+      line: getComputedStyle(ua).whiteSpace, cut: ua.scrollWidth > ua.clientWidth, high: Math.round(ua.getBoundingClientRect().height) <= Math.ceil(parseFloat(getComputedStyle(ua).lineHeight)) };
+  });
+  ok(shape.tab === 0 && shape.role === 'group' && shape.hint === 'rk-hint: Ctrl+C copies', 'a block to copy: one focus stop, its hint ends it with the key', JSON.stringify(shape));
+  ok(shape.line === 'nowrap' && shape.cut && shape.high, 'a value too long for its column stays one line, cut', JSON.stringify(shape));
+  const named = await c.getByRole('group', { name: /^version Rekta Design \d+\.\d+\.\d+ Mozilla\/\S.* Ctrl\+C copies$/ }).count();
+  ok(named === 1, 'it is named by its own text, read as it stands', String(named));
+  await c.hover('#about-browser');
+  const tipped = await until(c, () => c.evaluate(() => { const t = document.querySelector('.rk-tip'); return !!t && t.matches(':popover-open') && t.textContent === navigator.userAgent; }), 3000);
+  ok(tipped, 'the overflow tip shows the cut value whole');
+  await c.mouse.move(5, 5);
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  await c.focus('#about-block');
+  await c.evaluate(() => getSelection().selectAllChildren(document.querySelector('#about-version')));
+  await c.keyboard.press('Control+c'); await c.waitForTimeout(400);
+  const left = await c.evaluate(async () => ({ toast: !!document.querySelector('.rk-toast'), clip: await navigator.clipboard.readText() }));
+  ok(!left.toast && !left.clip.includes('\n'), 'a selection in the block is the browser\'s to copy: no whole block, no toast', JSON.stringify(left));
+  await c.evaluate(() => getSelection().removeAllRanges());
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  await c.focus('#about-block'); await c.keyboard.press('Control+a');
+  const all = await c.evaluate(() => { const s = getSelection(), b = document.querySelector('#about-block'); return document.activeElement === b && s.containsNode(b, true) && !b.contains(s.anchorNode); });
+  await c.keyboard.press('Control+c');
+  const page = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()).includes('Code, tokens, CSS and script')));
+  ok(all && page && !(await c.$('.rk-toast')), 'Ctrl+A in the block selects past it: Ctrl+C copies what is selected, and no toast', `${all} ${page}`);
+  await c.evaluate(() => getSelection().removeAllRanges());
+  await c.keyboard.press('Control+c');
+  ok(await until(c, async () => (await toast(c)) === 'copied'), 'Ctrl+C on it: the toast says "copied"', await toast(c));
+  const copied = await c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`);
+  ok(copied, 'it copies its lines, the hint left out');
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  const elsewhere = await c.evaluate(() => { const b = document.querySelector('#about-block'); getSelection().selectAllChildren(b.previousElementSibling); b.focus(); return !getSelection().isCollapsed; });
+  await c.keyboard.press('Control+c');
+  const whole = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`));
+  ok(elsewhere && whole, 'a selection elsewhere on the page: Ctrl+C on the block still copies it whole', `${elsewhere} ${whole}`);
+  await c.evaluate(() => getSelection().removeAllRanges());
+  await c.evaluate(() => navigator.clipboard.writeText('before'));
+  await c.click('#about-version');
+  const caret = await c.evaluate(() => { const s = getSelection(), b = document.querySelector('#about-block'); return document.activeElement === b && s.rangeCount > 0 && s.isCollapsed && b.contains(s.anchorNode); });
+  await c.keyboard.press('Control+c');
+  const pressed = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()) === `version\nRekta Design ${Rekta.version}\n${navigator.userAgent}`));
+  await c.evaluate(() => getSelection().removeAllRanges());
+  ok(caret && pressed, 'a press in the block leaves a caret there: Ctrl+C still copies the block whole', `${caret} ${pressed}`);
+  // A refusal is said at the block (states.md): the hint turns into it in a field error's tone, a live region says it,
+  // no toast; a copy after it brings the hint back at once. It stands for timing.toast: measured in the page with the
+  // token shortened, so a level's or a written-out time would miss it, then the hint comes back quiet. Each change is
+  // logged as it happens, so a slow runner cannot look too late.
+  const refuse = () => c.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: () => Promise.reject(new Error('refused')) }));
+  const hintNow = () => text(c, '#about-block > .rk-hint');
+  await c.evaluate(() => {
+    const h = document.querySelector('#about-block > .rk-hint'), live = document.querySelector('#about-block + .rk-sr[role=status]');
+    const probe = document.createElement('i'); document.querySelector('.rk').append(probe);
+    probe.style.color = 'var(--rk-text-primary)'; const primary = getComputedStyle(probe).color;
+    probe.style.color = 'var(--rk-status-error-full)'; const mark = getComputedStyle(probe).color; probe.remove();
+    window.hintLog = []; window.liveLog = [];
+    new MutationObserver(() => {
+      const sq = getComputedStyle(h, '::before');
+      window.hintLog.push({ at: performance.now(), text: h.textContent, status: h.dataset.status || '', tone: getComputedStyle(h).color === primary, square: sq.content !== 'none' && sq.backgroundColor === mark });
+    }).observe(h, { childList: true, attributes: true, characterData: true, subtree: true });
+    if (live) new MutationObserver(() => { if (live.textContent) window.liveLog.push(live.textContent); }).observe(live, { childList: true, characterData: true, subtree: true });
+  });
+  await refuse();
+  await c.keyboard.press('Control+c');
+  ok(await until(c, () => c.evaluate(() => window.hintLog.some((x) => x.text === 'not copied'))), 'a refused clipboard: the hint says "not copied"', await hintNow());
+  await until(c, () => c.evaluate(() => window.liveLog.length > 0));
+  const said = await c.evaluate(() => {
+    const r = window.hintLog.find((x) => x.text === 'not copied') || {};
+    return { status: r.status, tone: r.tone, square: r.square, live: window.liveLog.join('|'),
+      toast: [...document.querySelectorAll('.rk-toast')].some((t) => t.dataset.status || /not copied/.test(t.textContent)) };
+  });
+  ok(said.status === 'error' && said.tone && said.square, 'in a field error\'s tone: primary words after the error square', JSON.stringify(said));
+  ok(said.live === 'not copied' && !said.toast, 'said once in a live region, and no toast', JSON.stringify(said));
+  await c.evaluate(() => { delete navigator.clipboard.writeText; window.prevToast = document.querySelector('.rk-toast:not([data-rk-phase])'); });
+  await c.keyboard.press('Control+c');
+  const again = await until(c, async () => (await hintNow()) === 'Ctrl+C copies', 1000);
+  const fresh = await until(c, () => c.evaluate(() => { const t = document.querySelector('.rk-toast:not([data-rk-phase])'); return !!t && t !== window.prevToast && t.textContent === 'copied'; }));
+  ok(again && fresh, 'a copy after a refusal: the hint comes back at once, and a toast says "copied"', `${again} ${fresh}`);
+  await c.evaluate(() => { document.documentElement.style.setProperty('--rk-duration-toast', '300ms'); window.hintLog = []; window.liveLog = []; });
+  await refuse();
+  await c.keyboard.press('Control+c');
+  ok(await until(c, () => c.evaluate(() => window.hintLog.some((x) => x.text === 'Ctrl+C copies')), 3000), 'then the hint comes back');
+  const stood = await c.evaluate(() => {
+    const t = window.hintLog, from = t.find((x) => x.text === 'not copied'), to = t.find((x) => x.text === 'Ctrl+C copies' && from && x.at > from.at);
+    return { ms: from && to ? Math.round(to.at - from.at) : -1, status: to ? to.status : '?', live: document.querySelector('#about-block + .rk-sr').textContent };
+  });
+  ok(stood.ms >= 290 && stood.ms < 1200 && !stood.status && stood.live === '', 'it stood for timing.toast, and the hint is quiet again', JSON.stringify(stood));
+  await c.evaluate(() => { document.documentElement.style.removeProperty('--rk-duration-toast'); delete navigator.clipboard.writeText; });
+  await c.evaluate(() => {
+    const b = document.createElement('div'); b.className = 'rk-statement'; b.id = 'copy-own'; b.innerHTML = '<p class="rk-kicker">versions</p><p>2.3.0</p>';
+    document.querySelector('#about-block').after(b);
+    window.copyOwn = Rekta.copyable(b, { text: () => 'app 2.3.0\nengine 4.1' });
+    b.focus();
+  });
+  await c.keyboard.press('Control+c');
+  const ownCopied = await until(c, () => c.evaluate(async () => (await navigator.clipboard.readText()) === 'app 2.3.0\nengine 4.1'));
+  const gone = await c.evaluate(() => {
+    const b = document.querySelector('#copy-own');
+    window.copyOwn.destroy();
+    const out = !b.querySelector('.rk-hint') && !b.hasAttribute('data-rk-copyable') && !b.querySelector('[data-rk-tip]');
+    b.remove();
+    return out;
+  });
+  ok(ownCopied && gone, 'a product\'s own lines are copied; destroy() takes hint, tips and attribute away', `${ownCopied} ${gone}`);
+  const lives = await c.evaluate(() => document.querySelectorAll('.rk-sr[role=status]').length);
+  await c.evaluate(async () => {
+    const b = document.createElement('div'); b.className = 'rk-statement'; b.id = 'copy-gone'; b.innerHTML = '<p>2.3.0</p>';
+    document.querySelector('#about-block').after(b);
+    Rekta.copyable(b).destroy(); b.focus(); await navigator.clipboard.writeText('before');
+  });
+  await c.keyboard.press('Control+c'); await c.waitForTimeout(300);
+  const after = await c.evaluate(async () => { document.querySelector('#copy-gone').remove(); return { clip: await navigator.clipboard.readText(), lives: document.querySelectorAll('.rk-sr[role=status]').length }; });
+  ok(after.clip === 'before' && after.lives === lives, 'after destroy() Ctrl+C on the block copies nothing of its own, and its live region is gone', JSON.stringify(after));
+  await c.close();
 }
 
 // Motion: reorder, toast, reduce motion.
@@ -1268,6 +1451,96 @@ await p.check('#s-offline'); await until(p, async () => (await text(p, '#data-no
 ok((await text(p, '#data-now')) === 'frozen', 'offline freezes the figures');
 await p.click('#remedy'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 5000);
 ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 'retry reconnects');
+
+// A state the person knows may be hidden: its quiet × folds it into the app bar's word until it ends.
+const bannerRoom = () => p.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rk-banner-h')) || 0);
+const hider = () => p.evaluate(() => { const b = document.querySelector('#banner .rk-banner-hide'); return !!b && b.checkVisibility(); });
+await p.check('#s-offline'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline' && (await bannerRoom()) > 0);
+const hx = await p.evaluate(() => { const b = document.querySelector('#banner .rk-banner-hide'); return { quiet: b.matches('.rk-btn.rk-btn--icon.rk-btn--quiet') && b.parentElement === document.querySelector('#remedy').parentElement && !b.nextElementSibling, label: b.getAttribute('aria-label'), tip: b.dataset.rkTip }; });
+ok(await hider() && hx.quiet && hx.label === 'hide' && hx.tip === 'hide', 'a hideable state has a quiet × named "hide" after its action', JSON.stringify(hx));
+await p.focus('#banner .rk-banner-hide'); await p.keyboard.press('Enter');
+await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear' && (await bannerRoom()) === 0, 3000);
+const hid = await p.evaluate(() => ({ phase: document.querySelector('#banner').dataset.rkPhase, hidden: site.banner.hidden('offline'), on: site.banner.is('offline'), word: document.querySelector('#live').textContent, state: document.querySelector('#bar').getAttribute('data-rk-state'), said: document.querySelector('#banner [role=status]').textContent, focus: document.activeElement.id }));
+ok(hid.phase === 'clear' && hid.hidden && hid.on, 'the × hides the banner; the state stays on', JSON.stringify(hid));
+ok((await bannerRoom()) === 0, 'a hidden state frees the banner\'s room (--rk-banner-h)', await bannerRoom());
+ok(hid.word === 'offline' && hid.state === 'paused', 'a hidden state keeps its word in the app bar', `${hid.word} ${hid.state}`);
+ok(hid.said === 'offline hidden. The app bar keeps showing it until it ends.', 'hiding is said in the polite region', hid.said);
+ok(hid.focus === 's-offline', 'hidden with focus on its ×, focus goes back to the control that raised the state', hid.focus);
+ok((await text(p, '#data-now')) === 'frozen', 'a hidden offline state still stops live drawing', await text(p, '#data-now'));
+// The switch follows is(): a script that let a hidden state read as off would leave it unchanged, and Playwright would
+// throw; the assertions below say what went wrong instead.
+const flip = (sel, want) => (want ? p.check(sel) : p.uncheck(sel)).catch(() => {});
+await p.check('#s-halted'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'halted');
+ok((await text(p, '.rk-banner-word')) === 'halted' && (await text(p, '#live')) === 'halted' && !(await hider()), 'a more severe state shows over a hidden one; a halt has no ×');
+await p.uncheck('#s-halted'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
+ok((await p.getAttribute('#banner', 'data-rk-phase')) === 'clear' && (await text(p, '#live')) === 'offline', 'when it ends, the hidden state stays hidden in the app bar\'s word');
+await p.check('#s-paused'); await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused');
+ok((await text(p, '.rk-banner-word')) === 'paused' && (await text(p, '#live')) === 'offline' && !(await hider()), 'a lesser state that starts takes the banner, the app bar keeps the most severe, and no × stands under the hidden state\'s word');
+await p.uncheck('#s-paused'); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
+await flip('#s-offline', false); await until(p, async () => (await toast(p)) === 'Connected again. Figures are live.');
+ok((await toast(p)) === 'Connected again. Figures are live.' && (await text(p, '#live')) === 'live', 'a hidden state that ends is reported as a toast', await toast(p));
+await flip('#s-offline', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline');
+ok((await text(p, '.rk-banner-word')) === 'offline' && await hider() && !(await p.evaluate(() => site.banner.hidden('offline'))), 'a new start of a hidden state shows the banner again');
+const hiddenLine = () => text(p, '#banner [role=status]');
+if (await hider()) await p.click('#banner .rk-banner-hide');
+await until(p, async () => (await hiddenLine()).startsWith('offline hidden'), 3000);
+const lineBefore = await hiddenLine();
+await flip('#s-offline', false); await until(p, async () => (await hiddenLine()) === '', 3000);
+ok(lineBefore.startsWith('offline hidden') && (await hiddenLine()) === '' && (await text(p, '#live')) === 'live', 'once a hidden state ends, its hidden line goes', `${lineBefore} / ${await hiddenLine()}`);
+const urgent = await p.evaluate(() => {
+  const h = document.documentElement.style.getPropertyValue('--rk-banner-h'), word = document.createElement('span');
+  const mount = () => { const el = document.createElement('div'); el.className = 'rk-banner'; el.innerHTML = '<div class="rk-banner-live"><p role="alert"></p><p role="status"></p></div>'; document.querySelector('.rk').prepend(el); return el; };
+  const storage = { word: 'storage', status: 'warning', hideable: true, text: 'The disk is nearly full.' };
+  const r = {};
+  let el = mount(), b = Rekta.banner(el, { liveWord: word, states: { critical: { word: 'battery critical', status: 'error', alert: true, hideable: true, text: 'Plug in now.' } } });
+  b.set('critical', true); r.alert = !el.querySelector('.rk-banner-hide'); b.destroy(); el.remove();
+  el = mount(); b = Rekta.banner(el, { states: { storage } });
+  b.set('storage', true); r.noWord = !el.querySelector('.rk-banner-hide'); b.destroy(); el.remove();
+  el = mount(); b = Rekta.banner(el, { liveWord: word, states: { storage } });
+  b.set('storage', true); const x = el.querySelector('.rk-actions > .rk-banner-hide');
+  r.made = !!x && x.checkVisibility(); b.destroy(); r.gone = !el.querySelector('.rk-actions'); el.remove();
+  document.documentElement.style.setProperty('--rk-banner-h', h);
+  return r;
+});
+ok(urgent.alert, 'an alert cannot be hidden, even marked hideable');
+ok(urgent.noWord, 'without the app bar\'s word to keep it, no state can be hidden');
+ok(urgent.made && urgent.gone, 'a banner without an actions row gets one for its ×; destroy takes both away', JSON.stringify(urgent));
+await flip('#s-paused', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused');
+ok((await text(p, '#live')) === 'paused' && !(await hider()), 'a state not marked hideable has no ×, even while the app bar says its word');
+await flip('#s-offline', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline');
+if (await hider()) { await p.focus('#banner .rk-banner-hide'); await p.keyboard.press('Enter'); }
+await until(p, async () => (await text(p, '.rk-banner-word')) === 'paused', 3000);
+const keptFocus = await p.evaluate(() => { const a = document.activeElement; return a !== document.body && a.checkVisibility() ? a.id || a.className : 'lost'; });
+ok(keptFocus === 's-offline', 'hiding a state while a lesser one takes the banner sends focus back to the control that raised it', keptFocus);
+await flip('#s-offline', false); await flip('#s-paused', false); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
+const twoHidden = await p.evaluate(async () => {
+  const w = (t) => new Promise((r) => setTimeout(r, t)), h = document.documentElement.style.getPropertyValue('--rk-banner-h');
+  const word = document.createElement('span'), el = document.createElement('div');
+  el.className = 'rk-banner'; el.innerHTML = '<div class="rk-banner-live"><p role="alert"></p><p role="status"></p></div>'; document.querySelector('.rk').prepend(el);
+  const b = Rekta.banner(el, { liveWord: word, states: {
+    offline: { word: 'offline', status: 'warning', hideable: true, text: 'No connection.' },
+    storage: { word: 'storage', status: 'warning', hideable: true, text: 'The disk is nearly full.' } } });
+  b.set('offline', true); b.set('storage', true); await w(400);
+  const offered = () => { const x = el.querySelector('.rk-banner-hide'); return !!x && x.checkVisibility(); };
+  const hide = async () => { if (offered()) { el.querySelector('.rk-banner-hide').click(); await w(600); } };
+  await hide();
+  const r = { shown: b.shown, offeredUnder: offered() };
+  await hide();
+  Object.assign(r, { word: word.textContent, said: el.querySelector('[role=status]').textContent, storageHidden: b.hidden('storage') });
+  b.set('offline', false); await w(100);
+  Object.assign(r, { offeredOnTop: offered(), wordAfter: word.textContent });
+  b.destroy(); el.remove(); document.documentElement.style.setProperty('--rk-banner-h', h);
+  return r;
+});
+ok(twoHidden.shown === 'storage' && !twoHidden.offeredUnder && !twoHidden.storageHidden && twoHidden.word === 'offline', 'a state is hidden only into the word the app bar shows: no × under a hidden state\'s word', JSON.stringify(twoHidden));
+ok(twoHidden.offeredOnTop && twoHidden.wordAfter === 'storage', 'once its word is the app bar\'s, the state in the banner offers its ×', JSON.stringify(twoHidden));
+await flip('#s-readonly', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'read-only');
+await flip('#s-offline', true); await until(p, async () => (await text(p, '.rk-banner-word')) === 'offline');
+await p.focus('#remedy'); await p.keyboard.press('Enter');
+await until(p, async () => (await text(p, '.rk-banner-word')) === 'read-only', 3000);
+const afterRemedy = await p.evaluate(() => { const a = document.activeElement; return a !== document.body && a.checkVisibility() ? a.id || a.className : 'lost'; });
+ok(afterRemedy === 's-offline', 'a remedy that goes while the banner stays sends focus back to the control that raised the state', afterRemedy);
+await flip('#s-readonly', false); await until(p, async () => (await p.getAttribute('#banner', 'data-rk-phase')) === 'clear', 3000);
 
 // The toaster for server-side undo and failures; the focus fallback; the banner's real start and a remedy that links.
 const tst = await p.evaluate(async () => {

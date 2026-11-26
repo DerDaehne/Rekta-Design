@@ -101,6 +101,8 @@ state's `word`) are the caller's, in its own language.
 | `reload` | `pwa()` | “reload” |
 | `undoWindow` | `toaster()` | forms of (5, true) → “, 5 seconds to undo” |
 | `bannerStill` | `banner()` | ("Paused", "halted") → “Paused. The banner keeps showing “halted” until that ends.” |
+| `hide` | `banner()` | “hide” |
+| `bannerHidden` | `banner()` | ("offline") → “offline hidden. The app bar keeps showing it until it ends.” |
 | `chosen` | `menu() summary` | ("status", "failed") → “status: failed” |
 | `selected` | `select()` | forms of (3) → “3 selected” |
 | `columnWidth` | `table()` | ("status") → “width of status” |
@@ -141,6 +143,9 @@ state's `word`) are the caller's, in its own language.
 | `keyMeta` | `tips()`, `appbar()` | ("windows") → “Win”, ("other") → “Super”: the Meta key outside Apple |
 | `cannotAct` | `appbar()` | ("print", "needs a printer") → “print (needs a printer)”: a disabled control's item in "more" |
 | `back` | `menu()` | “back”: the row over a menu's second level, read with the level's name |
+| `copied` | `copyable()` | “copied” |
+| `notCopied` | `copyable()` | “not copied” |
+| `copyHint` | `copyable()` | ("Ctrl+C") → “Ctrl+C copies”: the key as the platform writes it, ⌘C on Apple |
 
 ## The contract
 
@@ -234,6 +239,8 @@ them:
 | `data-rk-places` | the app bar, the root | The bar holds the places (`appbar()`, compact). |
 | `data-rk-inactive` | a title bar | Another window is the active one: the name steps back (`titlebar()`). |
 | `data-rk-removable` | a list | Its entries can be dragged away (`removable()`): the browser keeps only the vertical scroll on them. |
+| `data-rk-copyable` | a statement block | Its values are copied whole (`copyable()`): each line stays one line, cut with an ellipsis. |
+| `data-status="error"` | a block to copy's hint | The clipboard refused (`copyable()`): the hint says so in a field error's tone for `timing.toast`. |
 | `data-rk-held` | a toast | Its window holds: the pointer rests on it or focus is in it. |
 | `data-theme`, `data-ground`, `data-density`, `data-motion`, `data-contrast`, `data-transparency`, `data-accent` | the root | Prefs overrides (see `prefs`). |
 
@@ -264,7 +271,7 @@ product that lints its own `--rk-` use can tell a hook from a typo.
 | Event | On | Detail |
 |---|---|---|
 | `rk:prefs` | `document` | `{ name, value }` after `prefs.set`. |
-| `rk:bannerchange` | the banner (bubbles) | `{ state }`, the state now shown or `null`. |
+| `rk:bannerchange` | the banner (bubbles) | `{ state }`, the state now shown or `null` (also once the person has hidden it). |
 | `rk:toasthold` | a toast (bubbles) | `{ held, remaining }` when its window starts or stops holding; `remaining` in ms. |
 | `rk:selectionchange` | a list, table body or virtual list (bubbles) | `{ count, mode, items }` (`indices` for a virtual list) after the selection changes. |
 | `rk:edit` | a table (bubbles) | `{ row, cell, value }` after an edit is kept. |
@@ -288,7 +295,9 @@ its broken-picture sign there ([collections.md](collections.md#a-picture-in-a-ro
 and marks the first paint as an arrival. Returns `{ destroy }`.
 
 **Where focus goes back.** A toast or the banner that goes while it has
-focus returns focus to the control that raised it. When that control
+focus (its state ended, or the person hid it), or a control of a banner
+that stays and goes from under the focus (the × once another state
+takes the banner), returns focus to the control that raised the state. When that control
 is gone (or hidden), focus goes to the first of these that exists and
 shows:
 
@@ -398,6 +407,7 @@ status word is left out.
 | `split()` handle | ← → (Shift: four steps), Home End |
 | `sortable()` | Space/Enter picks up and puts down, ↑ ↓ move, Escape puts back; Alt+↑ ↓ moves at once |
 | `removable()` | Delete or Backspace on an entry (not in a text field, no modifier) removes it; focus moves to the next, and with none left to the control before the list, else to the focus fallback |
+| `copyable()` | Ctrl/Cmd+C copies the whole block, unless text is selected in it |
 | `inPlace()` | Escape, ← (not in a text field, a slider, a tree or a tab list) go back one level; Escape here comes before the sheet's |
 | `chart()` | ← → Home End |
 
@@ -774,10 +784,10 @@ on the tile grid's widths; compact, the word (its time under it) and the
 sentence share a line and the action goes under them, about 105px on a
 375px phone.
 
-- `states`: `{ name: { word, status, alert, text, action, since, until, on, off } }`.
+- `states`: `{ name: { word, status, alert, text, action, since, until, on, off, hideable } }`.
   `status` is the fill; `alert: true` only for a halt; `on` and `off`
   are the toast texts for a state that starts or ends while another
-  holds the banner.
+  holds the banner; `hideable: true` lets the person hide it (below).
 - The time line says when the state started: "since 14:05" (the day
   too, when it started on another day). The start is when `set(name,
   true)` turned it on, or the one given: `set(name, true, { since })`
@@ -791,7 +801,7 @@ sentence share a line and the action goes under them, about 105px on a
   link (`a.rk-btn`, with the same classes as the markup's button) that
   navigates (sign in → `/login`) instead of calling `onAction`.
 - `order`: most severe first. One banner at a time; the most severe
-  state that is on holds it.
+  state that is on and not hidden holds it.
 - `appbar` gets `data-rk-state`; `liveWord` gets the state's word.
 - A state that ends is an event: `toaster` reports it once the banner
   has gone.
@@ -800,8 +810,26 @@ sentence share a line and the action goes under them, about 105px on a
 - A state that is on keeps its start and is not announced again when
   its sentence changes ("2 runs halted" → "3 runs halted"):
   `set(name, true, { text })` or `update(name, text)` write it in place.
+- **Hiding a state the person knows** ([states.md](states.md#a-lasting-state)):
+  a state with `hideable: true` gets a quiet icon button, `close` as
+  `.rk-btn.rk-btn--icon.rk-btn--quiet.rk-banner-hide`, last in the
+  `.rk-actions` row (made when the markup has none), named and tipped
+  with the `hide` string. Pressed, the banner leaves as when its state
+  ends, `--rk-banner-h` goes to 0, the app bar keeps the state's word and
+  `data-rk-state`, and the `[role=status]` region says `bannerHidden`.
+  Focus goes back as below, also when another state takes the banner
+  and the × goes from under the focus. The state stays on (`is(name)`,
+  so it still stops live drawing) and hidden (`hidden(name)`) until it
+  ends: `set(name, false)` reports its end as a toast, and the next
+  `set(name, true)` shows the banner again. The banner shows the most
+  severe state that is on and not hidden; the app bar's word, the most
+  severe that is on. A state can be hidden only while the app bar says
+  its word: `liveWord` says one, so the × shows only on the most severe
+  state that is on, and a lesser state that takes the banner under a
+  hidden one gets its × once its word is the app bar's. An `alert`
+  state is never hidden, and without `liveWord` no state is.
 
-Returns `{ set(name, on, { from, since, text }), update(name, text), toggle(name), is(name), shown, destroy }`.
+Returns `{ set(name, on, { from, since, text }), update(name, text), toggle(name), is(name), hidden(name), shown, destroy }`.
 
 ### `sheet(dialog, { dirty })`
 
@@ -1185,6 +1213,24 @@ list and hides with it (a "dismiss all" button): call it when the
 control has focus and goes.
 
 The list gets `data-rk-removable`. Returns `{ remove(item), focusBefore(), destroy }`.
+
+### `copyable(el, { toaster, text })`
+
+`el` is a `.rk-statement` of values to copy
+([typography.md](typography.md#a-block-to-copy)). It gets a
+`.rk-hint` at its end with `copyHint` ("Ctrl+C copies", ⌘C on Apple),
+`tabindex="0"`, `role="group"` and, unless it has a name, its own text as
+its name (`aria-labelledby` on itself), so it is read as it stands. Its
+lines get `data-rk-tip="overflow"`, and `data-rk-copyable` keeps each to
+one line. Ctrl/Cmd+C on it, with no text selected in it, writes the
+lines to the clipboard (`text`, a string or a function returning one;
+else the text of each line it shows, one per line, the hint left out)
+and shows `copied` in `toaster`. When the clipboard refuses (no secure
+context, no permission), the hint says `notCopied` with
+`data-status="error"` for `timing.toast`, and a live region after the
+block (`.rk-sr`, `role="status"`) says it once; then the hint comes
+back. Returns `{ destroy }`, which takes the hint, the live region, the
+tips and the attribute away.
 
 ### `virtual(el, { count, render, text, onShow, onChange, appbar, label })`
 

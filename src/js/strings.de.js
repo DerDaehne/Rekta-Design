@@ -5,6 +5,8 @@ export const de = {
   noValue: 'kein Wert', reload: 'neu laden',
   undoWindow: { one: (seconds, again) => `, 1 Sekunde${again ? ' zum Rückgängigmachen' : ''}`, other: (seconds, again) => `, ${seconds} Sekunden${again ? ' zum Rückgängigmachen' : ''}` },
   bannerStill: (event, word) => `${event}. Das Banner zeigt weiter „${word}“, bis das endet.`,
+  hide: 'ausblenden',
+  bannerHidden: (word) => `${word} ausgeblendet. Die App-Leiste zeigt es weiter, bis es endet.`,
   chosen: (summary, chosen) => `${summary}: ${chosen}`,
   selected: { one: (n) => `${n} ausgewählt`, other: (n) => `${n} ausgewählt` },
   columnWidth: (column) => `Breite von ${column}`,
@@ -46,4 +48,7 @@ export const de = {
   keyMeta: (os) => (os === 'windows' ? 'Win' : 'Super'),
   cannotAct: (label, reason) => `${label} (${reason})`,
   back: 'zurück',
+  copied: 'kopiert',
+  notCopied: 'nicht kopiert',
+  copyHint: (keys) => `${keys} kopiert`,
 };
